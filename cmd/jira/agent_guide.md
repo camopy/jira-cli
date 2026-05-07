@@ -284,8 +284,16 @@ schema → customfield encoding) but stops before the API call.
 
 ## Editing issues
 
-**kubectl-style default**: bare `jira issue edit KEY` (no field flags,
-no `--json-input`) opens your `$EDITOR` on the description.
+**Agents MUST use field flags or `--json-input`.** The bare
+`jira issue edit KEY` form opens an interactive editor on the
+description, which agent harnesses cannot drive. The CLI detects
+agent context (env vars like `CLAUDECODE`, `AI_AGENT`, etc.) and
+non-TTY stdin, and refuses with exit 3 plus a remediation pointer:
+
+```text
+validation: issue edit requires an interactive terminal for the editor flow;
+  in agent or non-TTY context, provide --summary, --assignee, or --json-input
+```
 
 Field flags (single-shot edits, no editor):
 
@@ -294,6 +302,12 @@ jira issue edit KEY --summary "New title" --json
 jira issue edit KEY --assignee me --json                 # or --assignee none / accountId
 jira issue edit KEY --json-input fields.json --json     # bulk JSON edit
 ```
+
+For interactive humans only: the bare form opens `$EDITOR` on the
+description. Editors that fork-and-return (e.g. `code` without
+`--wait`) are refused at spawn time with a one-line fix
+(`set EDITOR='code --wait'`) — silent strikethrough-and-data-loss
+is gone.
 
 Bulk edit payload shape:
 
