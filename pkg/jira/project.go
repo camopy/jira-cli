@@ -1,0 +1,231 @@
+package jira
+
+import (
+	"context"
+	"strconv"
+	"sync"
+	"time"
+)
+
+type ProjectService interface {
+	GetFieldSchema(context.Context, string, string) (*ProjectFieldSchema, *Response, error)
+	GetFieldSchemaForProfile(context.Context, string, string, string) (*ProjectFieldSchema, *Response, error)
+	List(context.Context, *ListOptions) ([]ProjectSummary, *Response, error)
+}
+
+// ProjectSummary is the discovery shape for `jira cache projects` (and shell
+// completion). Subset of /rest/api/3/project/search; only the keys agents
+// and humans need.
+type ProjectSummary struct {
+	ID          string `json:"id"`
+	Key         string `json:"key"`
+	Name        string `json:"name"`
+	ProjectType string `json:"project_type,omitempty"`
+	Lead        string `json:"lead,omitempty"`
+}
+
+type projectSearchPage struct {
+	StartAt    int  `json:"startAt"`
+	MaxResults int  `json:"maxResults"`
+	Total      int  `json:"total"`
+	IsLast     bool `json:"isLast"`
+	Values     []struct {
+		ID             string `json:"id"`
+		Key            string `json:"key"`
+		Name           string `json:"name"`
+		ProjectTypeKey string `json:"projectTypeKey"`
+		Lead           struct {
+			DisplayName string `json:"displayName"`
+		} `json:"lead"`
+	} `json:"values"`
+}
+
+type projectService struct {
+	client *Client
+	cache  *ProjectSchemaCache
+}
+
+func NewProjectService(client *Client, ttl time.Duration) ProjectService {
+	return &projectService{
+		client: client,
+		cache:  NewProjectSchemaCache(ttl),
+	}
+}
+
+func (s *projectService) GetFieldSchema(ctx context.Context, projectKey, issueType string) (*ProjectFieldSchema, *Response, error) {
+	return s.GetFieldSchemaForProfile(ctx, "default", projectKey, issueType)
+}
+
+// List walks /rest/api/3/project/search until isLast=true and returns the
+// merged project list. Suitable for the cache command + completion.
+func (s *projectService) List(ctx context.Context, opts *ListOptions) ([]ProjectSummary, *Response, error) {
+	page := 50
+	startAt := 0
+	if opts != nil {
+		if opts.MaxResults > 0 {
+			page = opts.MaxResults
+		}
+		if opts.StartAt > 0 {
+			startAt = opts.StartAt
+		}
+	}
+	var out []ProjectSummary
+	var lastResp *Response
+	for {
+		path := "rest/api/3/project/search?startAt=" + strconv.Itoa(startAt) + "&maxResults=" + strconv.Itoa(page)
+		req, err := s.client.NewRequest(ctx, "GET", path, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		var p projectSearchPage
+		resp, err := s.client.Do(req, &p)
+		if err != nil {
+			return nil, resp, err
+		}
+		for _, v := range p.Values {
+			out = append(out, ProjectSummary{
+				ID:          v.ID,
+				Key:         v.Key,
+				Name:        v.Name,
+				ProjectType: v.ProjectTypeKey,
+				Lead:        v.Lead.DisplayName,
+			})
+		}
+		lastResp = resp
+		if p.IsLast || len(p.Values) == 0 {
+			break
+		}
+		startAt += len(p.Values)
+	}
+	return out, lastResp, nil
+}
+
+func (s *projectService) GetFieldSchemaForProfile(ctx context.Context, profile, projectKey, issueType string) (*ProjectFieldSchema, *Response, error) {
+	if schema, ok := s.cache.Get(profile, projectKey, issueType); ok {
+		return schema, &Response{IsLast: true}, nil
+	}
+	req, err := s.client.NewRequest(ctx, "GET", "rest/api/3/issue/createmeta/"+projectKey+"/issuetypes/"+issueType, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	var raw struct {
+		ProjectKey string `json:"project_key"`
+		IssueType  string `json:"issue_type"`
+		Fields     []struct {
+			ID       string `json:"id"`
+			FieldID  string `json:"fieldId"`
+			Key      string `json:"key"`
+			Name     string `json:"name"`
+			Required bool   `json:"required"`
+			Type     string `json:"type"`
+			Schema   struct {
+				Type string `json:"type"`
+			} `json:"schema"`
+		} `json:"fields"`
+	}
+	resp, err := s.client.Do(req, &raw)
+	if err != nil {
+		return nil, resp, err
+	}
+	schema := ProjectFieldSchema{
+		ProjectKey: raw.ProjectKey,
+		IssueType:  raw.IssueType,
+		Fields:     make([]FieldSchema, 0, len(raw.Fields)),
+	}
+	for _, field := range raw.Fields {
+		id := firstNonEmpty(field.ID, field.FieldID, field.Key)
+		fieldType := firstNonEmpty(field.Type, field.Schema.Type)
+		schema.Fields = append(schema.Fields, FieldSchema{
+			ID:       id,
+			Name:     field.Name,
+			Required: field.Required,
+			Type:     fieldType,
+		})
+	}
+	if schema.ProjectKey == "" {
+		schema.ProjectKey = projectKey
+	}
+	if schema.IssueType == "" {
+		schema.IssueType = issueType
+	}
+	s.cache.Set(profile, projectKey, issueType, &schema)
+	return &schema, resp, nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+type ProjectSchemaCache struct {
+	mu      sync.Mutex
+	ttl     time.Duration
+	entries map[string]schemaEntry
+}
+
+type schemaEntry struct {
+	schema    *ProjectFieldSchema
+	expiresAt time.Time
+}
+
+func NewProjectSchemaCache(ttl time.Duration) *ProjectSchemaCache {
+	if ttl <= 0 {
+		ttl = 30 * time.Minute
+	}
+	return &ProjectSchemaCache{ttl: ttl, entries: make(map[string]schemaEntry)}
+}
+
+func (c *ProjectSchemaCache) Get(profile, projectKey, issueType string) (*ProjectFieldSchema, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.entries[schemaKey(profile, projectKey, issueType)]
+	if !ok || time.Now().After(entry.expiresAt) {
+		return nil, false
+	}
+	return cloneProjectFieldSchema(entry.schema), true
+}
+
+func (c *ProjectSchemaCache) Set(profile, projectKey, issueType string, schema *ProjectFieldSchema) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries[schemaKey(profile, projectKey, issueType)] = schemaEntry{
+		schema:    cloneProjectFieldSchema(schema),
+		expiresAt: time.Now().Add(c.ttl),
+	}
+}
+
+func (c *ProjectSchemaCache) InvalidateProfile(profile string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	prefix := profile + "\x00"
+	for key := range c.entries {
+		if len(key) >= len(prefix) && key[:len(prefix)] == prefix {
+			delete(c.entries, key)
+		}
+	}
+}
+
+func (c *ProjectSchemaCache) InvalidateAll() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries = make(map[string]schemaEntry)
+}
+
+func schemaKey(profile, projectKey, issueType string) string {
+	return profile + "\x00" + projectKey + "\x00" + issueType
+}
+
+func cloneProjectFieldSchema(schema *ProjectFieldSchema) *ProjectFieldSchema {
+	if schema == nil {
+		return nil
+	}
+	out := *schema
+	if schema.Fields != nil {
+		out.Fields = append([]FieldSchema(nil), schema.Fields...)
+	}
+	return &out
+}

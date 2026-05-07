@@ -1,0 +1,93 @@
+package contract
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestAliasSetListDeleteAndExpansion(t *testing.T) {
+	var seenJQL string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/rest/api/3/search/jql" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		var body struct {
+			JQL string `json:"jql"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode search body: %v", err)
+		}
+		seenJQL = body.JQL
+		_, _ = w.Write([]byte(`{"isLast":true,"issues":[{"key":"PROJ-1","fields":{"summary":"Alias hit"}}]}`))
+	}))
+	defer srv.Close()
+
+	cfg := jiraConfig(t, srv.URL)
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "alias", "set", "mine", "--", "issue", "list", "--jql", "project = PROJ")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("alias set error = %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), `"name":"mine"`) {
+		t.Fatalf("alias set output = %s", out)
+	}
+
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "alias", "list", "--json")
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("alias list error = %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), `"mine": "issue list --jql \"project = PROJ\""`) {
+		t.Fatalf("alias list output = %s", out)
+	}
+
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "mine", "--json")
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("alias expansion error = %v\n%s", err, out)
+	}
+	if seenJQL != "project = PROJ" || !strings.Contains(string(out), `"key": "PROJ-1"`) {
+		t.Fatalf("alias expansion seenJQL=%q output=%s", seenJQL, out)
+	}
+
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "alias", "delete", "mine")
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("alias delete error = %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), `"deleted":true`) {
+		t.Fatalf("alias delete output = %s", out)
+	}
+}
+
+func TestAliasImportFromYAML(t *testing.T) {
+	cfg := jiraConfig(t, "http://127.0.0.1:1")
+	path := filepath.Join(t.TempDir(), "aliases.yml")
+	if err := os.WriteFile(path, []byte("mine: issue list --jql \"assignee = currentUser()\"\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "alias", "import", path, "--json")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("alias import error = %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), `"imported": 1`) || !strings.Contains(string(out), `"mine"`) {
+		t.Fatalf("alias import output = %s", out)
+	}
+
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "alias", "list", "--json")
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("alias list error = %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), `"mine": "issue list --jql \"assignee = currentUser()\""`) {
+		t.Fatalf("alias list after import = %s", out)
+	}
+}

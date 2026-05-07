@@ -1,0 +1,76 @@
+---
+name: release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*.[0-9]*.[0-9]*'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  release:
+    name: GoReleaser
+    runs-on: ubuntu-latest
+    environment: deploy
+    permissions:
+      contents: write # Required to create GitHub releases and upload assets.
+      id-token: write # Required for cosign keyless signing via OIDC.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
+
+      - name: Install mise
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          cache: false
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@1a80836c5c9d9e5755a25cb59ec6f45a3b5f41a8 # v7.2.1
+        with:
+          distribution: goreleaser
+          version: ~> v2.15
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish Homebrew formula
+        uses: matcra587/github-actions/packages/homebrew-publish-formula@8b104684e72bef79fca78b294accb5f789d3f202
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          tap: matcra587/homebrew-tap
+          name: jira
+          class: Jira
+          desc: TUI-first Jira CLI for developer workflows
+          homepage: https://github.com/matcra587/jira-cli
+          version: ${{ github.ref_name }}
+          license: MIT
+          checksums-file: dist/checksums.txt
+          archive-name-template: "{name}_{version}_{os}_{arch}.tar.gz"
+          platforms: |-
+            darwin/amd64
+            darwin/arm64
+            linux/amd64
+            linux/arm64
+          binary-name: jira
+          module-path: github.com/matcra587/jira-cli
+          build-package: ./cmd/jira
+          head-url: https://github.com/matcra587/jira-cli.git
+          head-branch: main
+          head-depends-on: go
+          completion-args: completion
+          test-args: --help
+          test-match: Jira CLI
+          livecheck: "true"
+          commit-message: "jira: v{version}"

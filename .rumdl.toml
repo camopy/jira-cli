@@ -1,0 +1,12 @@
+# Markdown lint config for jira-cli.
+#
+# MD013 (line length) is enforced for prose, but code blocks and tables
+# are excluded — wrapping example JSON, shell commands, and JQL queries
+# at 80 columns either changes their meaning (JSON parses differently)
+# or makes them harder to copy-paste.
+
+[MD013]
+line-length = 80
+code-blocks = false
+tables = false
+headings = true

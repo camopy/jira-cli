@@ -1,0 +1,46 @@
+# OS and editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Go
+vendor/
+*.exe
+*.test
+*.out
+coverage.out
+# Stray `go build` at repo root without -o lands the binary at /jira;
+# ignore it so an accidental `git add -A` can't commit it.
+/jira
+
+# Builds and releases
+bin/
+dist/
+build/
+out/
+
+# Local overrides
+*.local.*
+.task/
+
+# Project-owned Claude Code skill is tracked (override global ignore of
+# .claude/). Re-ignore everything else inside .claude/skills/ so plugin-
+# installed skills stay out of the repo.
+!.claude/
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/jira-cli/
+!.claude/skills/jira-cli/**

@@ -1,0 +1,69 @@
+version: 2
+
+project_name: jira
+report_sizes: true
+
+metadata:
+  mod_timestamp: "{{ .CommitTimestamp }}"
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: jira
+    main: ./cmd/jira
+    binary: jira
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X '{{ .ModulePath }}/internal/version.Version={{ .Version }}'
+      - -X '{{ .ModulePath }}/internal/version.Commit={{ .ShortCommit }}'
+      - -X '{{ .ModulePath }}/internal/version.Branch={{ .Branch }}'
+      - -X '{{ .ModulePath }}/internal/version.BuildTime={{ .Date }}'
+      - -X '{{ .ModulePath }}/internal/version.BuildBy=goreleaser'
+
+archives:
+  - id: default
+    ids:
+      - jira
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: checksums.txt
+
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - "sign-blob"
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
