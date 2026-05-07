@@ -86,6 +86,46 @@ func NormalizeBoardName(name string) string {
 	return strings.TrimSpace(name)
 }
 
+// SanitizeBoardsForCache filters records that violate the data-model
+// hard invariants (ID > 0 and trimmed Name non-empty). Bad records are
+// dropped silently from the returned slice; the count is returned so
+// the prime path can surface a structured warning. Order is preserved
+// — this is a filter, never a sort.
+func SanitizeBoardsForCache(in []Board) (kept []Board, dropped int) {
+	kept = make([]Board, 0, len(in))
+	for _, b := range in {
+		if b.ID == nil || *b.ID <= 0 {
+			dropped++
+			continue
+		}
+		if b.Name == nil || strings.TrimSpace(*b.Name) == "" {
+			dropped++
+			continue
+		}
+		kept = append(kept, b)
+	}
+	return kept, dropped
+}
+
+// SanitizeProjectKeys drops keys that would corrupt the JQL emitted by
+// BoardScope.JQLClause (`project in (P1, P2, ...)`). The clause does
+// not quote keys, so any key carrying whitespace, commas, parens,
+// quotes, or newlines must be filtered before reaching the wire.
+// Atlassian's API constrains keys to `[A-Z][A-Z0-9_]*` server-side, so
+// this is defense-in-depth against malformed wire data, not validation
+// of canonical Jira input.
+func SanitizeProjectKeys(in []string) (kept []string, dropped int) {
+	kept = make([]string, 0, len(in))
+	for _, k := range in {
+		if k == "" || strings.ContainsAny(k, " \t\n\r,()'\"") {
+			dropped++
+			continue
+		}
+		kept = append(kept, k)
+	}
+	return kept, dropped
+}
+
 // DefaultBoardMissingMessage returns the pinned wording the CLI emits
 // when `default_board` references a name that does not resolve in the
 // boards cache. Both arguments are interpolated verbatim — `profile`

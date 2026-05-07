@@ -481,7 +481,10 @@ func primeBoards(ctx context.Context, client *jira.Client, ttlMinutes int, unbou
 		return jira.BoardsCacheFile{}, nil, err
 	}
 
-	items := make([]jira.Board, 0, len(res.Boards))
+	// Materialize the wire records (deref pointers, normalize names) so
+	// SanitizeBoardsForCache can apply the data-model invariants
+	// (ID > 0, trimmed Name non-empty) on a uniform slice.
+	materialized := make([]jira.Board, 0, len(res.Boards))
 	for _, b := range res.Boards {
 		if b == nil {
 			continue
@@ -491,18 +494,25 @@ func primeBoards(ctx context.Context, client *jira.Client, ttlMinutes int, unbou
 			n := jira.NormalizeBoardName(*clean.Name)
 			clean.Name = &n
 		}
-		// Per-board projects — only when ID is present and the walk
-		// hit the wire (i.e. didn't get truncated mid-walk by 429).
-		if clean.ID != nil {
-			keys, _, perr := svc.ProjectsForBoard(ctx, *clean.ID)
-			if perr == nil {
-				clean.ProjectKeys = keys
-			}
+		materialized = append(materialized, clean)
+	}
+	items, dropped := jira.SanitizeBoardsForCache(materialized)
+
+	// Per-board projects — only after sanitize, so we don't burn an
+	// HTTP roundtrip on a record we're about to drop. Keys are then
+	// filtered for JQL-meta characters; SanitizeBoardsForCache invariants
+	// already proved ID is set, so the dereference below is safe.
+	var droppedKeys int
+	for i := range items {
+		keys, _, perr := svc.ProjectsForBoard(ctx, *items[i].ID)
+		if perr == nil {
+			cleanKeys, dk := jira.SanitizeProjectKeys(keys)
+			droppedKeys += dk
+			items[i].ProjectKeys = cleanKeys
 		}
-		if clean.ProjectKeys == nil {
-			clean.ProjectKeys = []string{}
+		if items[i].ProjectKeys == nil {
+			items[i].ProjectKeys = []string{}
 		}
-		items = append(items, clean)
 	}
 
 	ttl := ttlMinutes * 60
@@ -533,6 +543,22 @@ func primeBoards(ctx context.Context, client *jira.Client, ttlMinutes int, unbou
 			"type":        "rate-limit-during-paginate",
 			"resource":    "boards",
 			"remediation": "Re-run `jira cache boards --refresh` after the rate-limit window resets.",
+		})
+	}
+	if dropped > 0 {
+		warnings = append(warnings, map[string]any{
+			"type":     "bad-records-dropped",
+			"resource": "boards",
+			"count":    dropped,
+			"reason":   "missing or invalid id/name",
+		})
+	}
+	if droppedKeys > 0 {
+		warnings = append(warnings, map[string]any{
+			"type":     "bad-project-keys-dropped",
+			"resource": "boards",
+			"count":    droppedKeys,
+			"reason":   "key contains JQL meta-characters",
 		})
 	}
 	return file, warnings, nil

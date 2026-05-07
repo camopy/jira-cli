@@ -114,8 +114,10 @@ func boardScopeFromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
 		// `--board ""` explicitly suppresses any default. precedence "none".
 		return jira.BoardScope{}, precedenceNone, nil
 	case boardNameSet:
-		client, _, _, _ := jiraClientForCommand(cmd)
-		svc := jira.NewBoardService(client)
+		// ResolveOne is cache-only — no client needed, no credential
+		// backend touched. Pinned by tests/unit/board_resolver_test.go
+		// which fails the test if the resolver hits the network.
+		svc := jira.NewBoardService(nil)
 		scope, err := svc.ResolveOne(cmd.Context(), profileName, boardName)
 		if err != nil {
 			return jira.BoardScope{}, precedenceFlag, classifyBoardErr(err)
@@ -128,8 +130,7 @@ func boardScopeFromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
 	// profile carries a configured default_board, resolve that against
 	// the cache. Empty / unset → no scope, precedence "none".
 	if def := strings.TrimSpace(profile.DefaultBoard); def != "" {
-		client, _, _, _ := jiraClientForCommand(cmd)
-		svc := jira.NewBoardService(client)
+		svc := jira.NewBoardService(nil)
 		scope, err := svc.ResolveOne(cmd.Context(), profileName, def)
 		if err != nil {
 			// Pinned wording when default_board doesn't resolve.
@@ -199,15 +200,24 @@ func resolveBoardByID(_ context.Context, profile string, id int) (jira.BoardScop
 }
 
 // boardScopeEnvelopeData renders a BoardScope into the envelope's
-// `data.board_scope` map per contracts/envelope-shapes.md. Returns nil
-// when the scope wasn't applied so callers can omit the field cleanly.
+// `data.board_scope` map. The `applied` flag tracks whether a JQL
+// clause was actually emitted — JQLClause returns empty when
+// ProjectKeys is empty, so a resolved-but-unscoped board surfaces with
+// `applied: false` plus the board metadata, letting the user see what
+// matched without conflating identification with scoping.
 func boardScopeEnvelopeData(scope jira.BoardScope) map[string]any {
-	if len(scope.Board.ProjectKeys) == 0 && (scope.Board.ID == nil || *scope.Board.ID == 0) && (scope.Board.Name == nil || *scope.Board.Name == "") {
+	resolved := (scope.Board.ID != nil && *scope.Board.ID != 0) ||
+		(scope.Board.Name != nil && *scope.Board.Name != "")
+	applied := len(scope.Board.ProjectKeys) > 0
+	if !resolved && !applied {
 		return map[string]any{"applied": false}
 	}
 	out := map[string]any{
-		"applied":      true,
+		"applied":      applied,
 		"project_keys": scope.Board.ProjectKeys,
+	}
+	if out["project_keys"] == nil {
+		out["project_keys"] = []string{}
 	}
 	if scope.Board.ID != nil {
 		out["id"] = *scope.Board.ID

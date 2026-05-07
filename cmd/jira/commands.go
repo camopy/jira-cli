@@ -1093,8 +1093,9 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 	scopeActive := len(scope.Board.ProjectKeys) > 0
 	if opts.asJQL {
 		// --as-jql must not require a credential — it never calls Jira.
-		// Loading the profile directly avoids tripping the secret backend
-		// (e.g. 1Password) when the user only wants to preview the JQL.
+		// boardScopeFromFlags is cache-only (no client probe), and we
+		// load the profile directly here instead of jiraClientForCommand
+		// so the secret backend (e.g. 1Password) stays untouched.
 		cfg, cfgErr := config.Load(config.WithPath(configPath(cmd)))
 		if cfgErr != nil {
 			return cfgErr
