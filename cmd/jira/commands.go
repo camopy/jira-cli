@@ -1521,11 +1521,19 @@ In headless mode (--no-input), at least one field flag MUST be provided
 			}
 			// kubectl-style default: bare `jira issue edit KEY` (no field
 			// flags, no --json-input) opens the configured external editor
-			// on the issue description. --no-input mode has no editor,
-			// so empty fields there are a validation error.
+			// on the issue description. The editor path requires an
+			// interactive terminal — agent harnesses and non-TTY pipelines
+			// can't drive a GUI editor, and EDITOR=code without --wait
+			// would silently corrupt the edit by racing the parent's
+			// tempfile cleanup. Refuse with a remediation pointer instead
+			// of falling through and producing data loss.
 			if len(fields) == 0 {
 				if noInput {
 					return fmt.Errorf("validation: no fields specified for issue edit; provide --summary, --assignee, or --json-input")
+				}
+				det := DetectorFromContext(cmd)
+				if det.Agent || !det.IsTTY {
+					return fmt.Errorf("validation: issue edit requires an interactive terminal for the editor flow; in agent or non-TTY context, provide --summary, --assignee, or --json-input")
 				}
 				return issueEditWithEditor(cmd, args[0], dryRun)
 			}

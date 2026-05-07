@@ -5,8 +5,64 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
+
+// knownNonBlockingEditors maps binary basename → wait flag names. Each
+// editor here forks a child process and returns to the shell
+// immediately by default, racing the caller's tempfile cleanup. If the
+// user's command line includes any of the listed flags, we trust they
+// configured it for blocking mode; otherwise Run refuses to spawn it.
+//
+// The first entry in the wait flags slice is the "canonical" form
+// surfaced in the refusal message.
+var knownNonBlockingEditors = map[string][]string{
+	"code":          {"--wait", "-w"},
+	"code-insiders": {"--wait", "-w"},
+	"subl":          {"--wait", "-w"},
+	"mate":          {"--wait", "-w"},
+	"gvim":          {"-f", "--nofork"},
+}
+
+// editorBaseName returns the editor binary's basename without
+// extension, suitable for matching against knownNonBlockingEditors.
+// Handles absolute paths (`/usr/bin/code`) and Windows extensions
+// (`code.exe`).
+func editorBaseName(arg string) string {
+	base := filepath.Base(arg)
+	if ext := filepath.Ext(base); ext != "" {
+		base = strings.TrimSuffix(base, ext)
+	}
+	return base
+}
+
+// refuseIfNonBlocking checks parts (the parsed editor command line)
+// against knownNonBlockingEditors and returns a non-nil error if the
+// editor would race the caller's cleanup. The error message names the
+// canonical wait flag so the user has a one-line fix.
+func refuseIfNonBlocking(parts []string) error {
+	if len(parts) == 0 {
+		return nil
+	}
+	base := editorBaseName(parts[0])
+	waitFlags, ok := knownNonBlockingEditors[base]
+	if !ok {
+		return nil
+	}
+	for _, arg := range parts[1:] {
+		for _, wf := range waitFlags {
+			if arg == wf {
+				return nil
+			}
+		}
+	}
+	canonical := waitFlags[0]
+	return fmt.Errorf(
+		"editor %q is non-blocking by default and will race the cleanup of your edit; set EDITOR='%s %s' (or pass --json-input / --description-file to skip the editor)",
+		base, base, canonical,
+	)
+}
 
 // Resolve returns the editor command to launch, given a configured
 // editor (typically pulled from profile.editor or global config.editor).
@@ -47,6 +103,9 @@ func Run(ctx context.Context, editorCommand, path string) error {
 	parts := strings.Fields(editorCommand)
 	if len(parts) == 0 {
 		return fmt.Errorf("editor command is required")
+	}
+	if err := refuseIfNonBlocking(parts); err != nil {
+		return err
 	}
 	args := append(parts[1:], path)
 	cmd := exec.CommandContext(ctx, parts[0], args...) //nolint:gosec // Editor command is explicit user configuration and exec.Command does not invoke a shell.
