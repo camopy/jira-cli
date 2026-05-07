@@ -200,15 +200,14 @@ func resolveBoardByID(_ context.Context, profile string, id int) (jira.BoardScop
 }
 
 // boardScopeEnvelopeData renders a BoardScope into the envelope's
-// `data.board_scope` map. The `applied` flag tracks whether a JQL
-// clause was actually emitted — JQLClause returns empty when
-// ProjectKeys is empty, so a resolved-but-unscoped board surfaces with
-// `applied: false` plus the board metadata, letting the user see what
-// matched without conflating identification with scoping.
+// `data.board_scope` map. The `applied` flag is sourced from
+// JQLClause — that's the single owner of the "did this scope produce
+// a clause?" decision, so any future emission rule (e.g. saved-filter
+// resolution) flows through one predicate.
 func boardScopeEnvelopeData(scope jira.BoardScope) map[string]any {
+	_, applied := scope.JQLClause()
 	resolved := (scope.Board.ID != nil && *scope.Board.ID != 0) ||
 		(scope.Board.Name != nil && *scope.Board.Name != "")
-	applied := len(scope.Board.ProjectKeys) > 0
 	if !resolved && !applied {
 		return map[string]any{"applied": false}
 	}

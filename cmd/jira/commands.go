@@ -1153,8 +1153,8 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 // onto an existing JQL string with top-level AND. Returns the input
 // unchanged when scope contributes no clause (no-flag-no-default).
 func applyBoardClauseToJQL(query string, scope jira.BoardScope) string {
-	clause := scope.JQLClause()
-	if clause == "" {
+	clause, ok := scope.JQLClause()
+	if !ok {
 		return query
 	}
 	q := strings.TrimSpace(query)

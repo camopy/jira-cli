@@ -85,8 +85,12 @@ func TestBoardsLifecycleEndToEnd(t *testing.T) {
 	if scope.Board.ID == nil || *scope.Board.ID != 42 {
 		t.Fatalf("ResolveOne id = %v; want 42", scope.Board.ID)
 	}
-	if got, want := scope.JQLClause(), "project in (ENG, PLAT)"; got != want {
-		t.Fatalf("JQLClause = %q; want %q", got, want)
+	clause, ok := scope.JQLClause()
+	if !ok {
+		t.Fatalf("JQLClause ok = false; want true (board has 2 project keys)")
+	}
+	if want := "project in (ENG, PLAT)"; clause != want {
+		t.Fatalf("JQLClause = %q; want %q", clause, want)
 	}
 
 	// 5. Resolution failure paths: not-found + ambiguous absence.

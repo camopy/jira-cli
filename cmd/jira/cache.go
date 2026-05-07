@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -481,10 +482,17 @@ func primeBoards(ctx context.Context, client *jira.Client, ttlMinutes int, unbou
 		return jira.BoardsCacheFile{}, nil, err
 	}
 
-	// Materialize the wire records (deref pointers, normalize names) so
-	// SanitizeBoardsForCache can apply the data-model invariants
-	// (ID > 0, trimmed Name non-empty) on a uniform slice.
-	materialized := make([]jira.Board, 0, len(res.Boards))
+	// One pass: dereference, normalize name, enforce data-model
+	// invariants (ID > 0, trimmed Name non-empty), fetch project keys,
+	// strip any key carrying JQL meta-characters. Bad-record drops,
+	// project-fetch failures, and key drops are counted separately so
+	// the warning surface tells the user exactly what was lost.
+	items := make([]jira.Board, 0, len(res.Boards))
+	var (
+		droppedRecords int
+		droppedKeys    int
+		failedFetches  []int
+	)
 	for _, b := range res.Boards {
 		if b == nil {
 			continue
@@ -494,25 +502,19 @@ func primeBoards(ctx context.Context, client *jira.Client, ttlMinutes int, unbou
 			n := jira.NormalizeBoardName(*clean.Name)
 			clean.Name = &n
 		}
-		materialized = append(materialized, clean)
-	}
-	items, dropped := jira.SanitizeBoardsForCache(materialized)
-
-	// Per-board projects — only after sanitize, so we don't burn an
-	// HTTP roundtrip on a record we're about to drop. Keys are then
-	// filtered for JQL-meta characters; SanitizeBoardsForCache invariants
-	// already proved ID is set, so the dereference below is safe.
-	var droppedKeys int
-	for i := range items {
-		keys, _, perr := svc.ProjectsForBoard(ctx, *items[i].ID)
-		if perr == nil {
-			cleanKeys, dk := jira.SanitizeProjectKeys(keys)
-			droppedKeys += dk
-			items[i].ProjectKeys = cleanKeys
+		if clean.ID == nil || *clean.ID <= 0 ||
+			clean.Name == nil || strings.TrimSpace(*clean.Name) == "" {
+			droppedRecords++
+			continue
 		}
-		if items[i].ProjectKeys == nil {
-			items[i].ProjectKeys = []string{}
+		keys, _, perr := svc.ProjectsForBoard(ctx, *clean.ID)
+		if perr != nil {
+			failedFetches = append(failedFetches, *clean.ID)
+			clean.ProjectKeys = []string{}
+		} else {
+			clean.ProjectKeys, droppedKeys = filterJQLSafeKeys(keys, droppedKeys)
 		}
+		items = append(items, clean)
 	}
 
 	ttl := ttlMinutes * 60
@@ -545,11 +547,11 @@ func primeBoards(ctx context.Context, client *jira.Client, ttlMinutes int, unbou
 			"remediation": "Re-run `jira cache boards --refresh` after the rate-limit window resets.",
 		})
 	}
-	if dropped > 0 {
+	if droppedRecords > 0 {
 		warnings = append(warnings, map[string]any{
 			"type":     "bad-records-dropped",
 			"resource": "boards",
-			"count":    dropped,
+			"count":    droppedRecords,
 			"reason":   "missing or invalid id/name",
 		})
 	}
@@ -561,7 +563,34 @@ func primeBoards(ctx context.Context, client *jira.Client, ttlMinutes int, unbou
 			"reason":   "key contains JQL meta-characters",
 		})
 	}
+	if len(failedFetches) > 0 {
+		warnings = append(warnings, map[string]any{
+			"type":        "project-fetch-failed",
+			"resource":    "boards",
+			"board_ids":   failedFetches,
+			"count":       len(failedFetches),
+			"remediation": "Re-run `jira cache boards --refresh` to retry the failed boards.",
+		})
+	}
 	return file, warnings, nil
+}
+
+// filterJQLSafeKeys drops project keys that would corrupt the JQL
+// emitted by BoardScope.JQLClause (`project in (P1, P2, ...)`). The
+// clause does not quote keys, so any key carrying whitespace, commas,
+// parens, quotes, or newlines must be filtered before it reaches the
+// wire. Atlassian constrains keys server-side; this is defense in
+// depth against malformed wire data.
+func filterJQLSafeKeys(keys []string, droppedSoFar int) ([]string, int) {
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		if k == "" || strings.ContainsAny(k, " \t\n\r,()'\"") {
+			droppedSoFar++
+			continue
+		}
+		out = append(out, k)
+	}
+	return out, droppedSoFar
 }
 
 // emitCachedBoardsEnvelope renders the cache-hit envelope shape

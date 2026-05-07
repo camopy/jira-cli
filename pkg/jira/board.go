@@ -41,13 +41,15 @@ type BoardScope struct {
 }
 
 // JQLClause emits `project in (P1, P2, ...)` from the board's cached
-// project keys. Empty/nil project list → empty string; caller treats
-// that as "no scope to inject".
-func (s BoardScope) JQLClause() string {
+// project keys. The bool result is the canonical "did this scope
+// produce a clause?" signal — every consumer that needs to branch on
+// emission (envelope's `applied` flag, JQL prepender) reads it from
+// here so no caller has to re-derive `len(ProjectKeys) > 0`.
+func (s BoardScope) JQLClause() (string, bool) {
 	if len(s.Board.ProjectKeys) == 0 {
-		return ""
+		return "", false
 	}
-	return "project in (" + strings.Join(s.Board.ProjectKeys, ", ") + ")"
+	return "project in (" + strings.Join(s.Board.ProjectKeys, ", ") + ")", true
 }
 
 // BoardDrainOptions configures BoardService.ListAll. Defaults:
@@ -84,46 +86,6 @@ var ErrBoardNotFound = errors.New("board not found in cache")
 // cache file holds clean names while the wire shape is left untouched.
 func NormalizeBoardName(name string) string {
 	return strings.TrimSpace(name)
-}
-
-// SanitizeBoardsForCache filters records that violate the data-model
-// hard invariants (ID > 0 and trimmed Name non-empty). Bad records are
-// dropped silently from the returned slice; the count is returned so
-// the prime path can surface a structured warning. Order is preserved
-// — this is a filter, never a sort.
-func SanitizeBoardsForCache(in []Board) (kept []Board, dropped int) {
-	kept = make([]Board, 0, len(in))
-	for _, b := range in {
-		if b.ID == nil || *b.ID <= 0 {
-			dropped++
-			continue
-		}
-		if b.Name == nil || strings.TrimSpace(*b.Name) == "" {
-			dropped++
-			continue
-		}
-		kept = append(kept, b)
-	}
-	return kept, dropped
-}
-
-// SanitizeProjectKeys drops keys that would corrupt the JQL emitted by
-// BoardScope.JQLClause (`project in (P1, P2, ...)`). The clause does
-// not quote keys, so any key carrying whitespace, commas, parens,
-// quotes, or newlines must be filtered before reaching the wire.
-// Atlassian's API constrains keys to `[A-Z][A-Z0-9_]*` server-side, so
-// this is defense-in-depth against malformed wire data, not validation
-// of canonical Jira input.
-func SanitizeProjectKeys(in []string) (kept []string, dropped int) {
-	kept = make([]string, 0, len(in))
-	for _, k := range in {
-		if k == "" || strings.ContainsAny(k, " \t\n\r,()'\"") {
-			dropped++
-			continue
-		}
-		kept = append(kept, k)
-	}
-	return kept, dropped
 }
 
 // DefaultBoardMissingMessage returns the pinned wording the CLI emits
