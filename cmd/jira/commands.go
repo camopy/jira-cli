@@ -1531,7 +1531,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 					return fmt.Errorf("validation: no fields specified for issue edit; provide --summary, --assignee, or --json-input")
 				}
 				det := DetectorFromContext(cmd)
-				if det.Agent || !terminal.Is(os.Stdin) {
+				if det.Agent || !stdininput.IsTerminal() {
 					return fmt.Errorf("validation: issue edit requires an interactive terminal for the editor flow; in agent or non-TTY context, provide --summary, --assignee, or --json-input")
 				}
 				return issueEditWithEditor(cmd, args[0], dryRun)

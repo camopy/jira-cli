@@ -16,6 +16,8 @@ import (
 	"errors"
 	"io"
 	"os"
+
+	"github.com/gechr/x/terminal"
 )
 
 // ErrEmptySecret is returned by SecretStdin when stdin yields no bytes
@@ -34,6 +36,12 @@ func JSONInput(path string) (io.ReadCloser, error) {
 		return io.NopCloser(os.Stdin), nil
 	}
 	return os.Open(path)
+}
+
+// IsTerminal reports whether stdin is attached to an interactive terminal.
+// Keep this probe here so command packages do not reach for os.Stdin directly.
+func IsTerminal() bool {
+	return terminal.Is(os.Stdin)
 }
 
 // SecretStdin reads the entire stdin and returns the trailing-newline-

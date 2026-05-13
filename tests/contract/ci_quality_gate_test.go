@@ -23,11 +23,27 @@ func TestCIQualityGateRunsRequiredGoChecks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile(hk.pkl) error = %v", err)
 	}
-	taskfile, err := os.ReadFile("../../Taskfile.yml")
+	tasks, err := os.ReadFile("../../tasks.toml")
 	if err != nil {
-		t.Fatalf("ReadFile(Taskfile.yml) error = %v", err)
+		t.Fatalf("ReadFile(tasks.toml) error = %v", err)
 	}
-	combined := string(ci) + "\n" + string(actions) + "\n" + string(mise) + "\n" + string(hk) + "\n" + string(taskfile)
+	buildTask, err := os.ReadFile("../../.mise/tasks/build")
+	if err != nil {
+		t.Fatalf("ReadFile(.mise/tasks/build) error = %v", err)
+	}
+	buildEnv, err := os.ReadFile("../../.mise/tasks/lib/build-env.sh")
+	if err != nil {
+		t.Fatalf("ReadFile(.mise/tasks/lib/build-env.sh) error = %v", err)
+	}
+	combined := strings.Join([]string{
+		string(ci),
+		string(actions),
+		string(mise),
+		string(hk),
+		string(tasks),
+		string(buildTask),
+		string(buildEnv),
+	}, "\n")
 	for _, want := range []string{
 		"-race",
 		"go vet ./...",
@@ -38,7 +54,7 @@ func TestCIQualityGateRunsRequiredGoChecks(t *testing.T) {
 		"goreleaser check",
 	} {
 		if !strings.Contains(combined, want) {
-			t.Fatalf("quality gates missing %q\nCI:\n%s\nmise:\n%s\nhk:\n%s\nTaskfile:\n%s", want, ci, mise, hk, taskfile)
+			t.Fatalf("quality gates missing %q\nCI:\n%s\nmise:\n%s\nhk:\n%s\ntasks:\n%s", want, ci, mise, hk, tasks)
 		}
 	}
 	for _, want := range []string{
@@ -47,11 +63,16 @@ func TestCIQualityGateRunsRequiredGoChecks(t *testing.T) {
 		"matcra587/github-actions/.github/workflows/md-lint.yml@8b104684e72bef79fca78b294accb5f789d3f202",
 		"matcra587/github-actions/.github/workflows/workflow-lint.yml@8b104684e72bef79fca78b294accb5f789d3f202",
 		"zizmor-persona: pedantic",
-		"actionlint = \"1.7.12\"",
-		"cosign = \"3.0.6\"",
-		"hk = \"1.44.3\"",
-		"rumdl = \"0.1.86\"",
-		"zizmor = \"1.24.1\"",
+		"lockfile = true",
+		"actionlint = \"latest\"",
+		"cosign = \"latest\"",
+		"hk = \"latest\"",
+		"pkl = \"latest\"",
+		"rumdl = \"latest\"",
+		"zizmor = \"latest\"",
+		"shellcheck = \"latest\"",
+		"[task_config]",
+		"includes = [\"tasks.toml\"]",
 		"Builtins.actionlint",
 		"Builtins.zizmor",
 	} {
@@ -59,7 +80,7 @@ func TestCIQualityGateRunsRequiredGoChecks(t *testing.T) {
 			t.Fatalf("shared workflow gate missing %q\nCI:\n%s\nActions:\n%s", want, ci, actions)
 		}
 	}
-	for _, unwanted := range []string{"biome =", "bun =", "node =", "pkl ="} {
+	for _, unwanted := range []string{"biome =", "bun =", "node ="} {
 		if strings.Contains(string(mise), unwanted) {
 			t.Fatalf("mise config should not include node-related tool %q:\n%s", unwanted, mise)
 		}

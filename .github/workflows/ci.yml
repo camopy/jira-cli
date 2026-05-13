@@ -75,4 +75,4 @@ jobs:
           cache: false
 
       - name: Check release config
-        run: task release:check
+        run: mise run release:check
