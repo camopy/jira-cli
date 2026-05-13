@@ -58,11 +58,14 @@ func TestCIQualityGateRunsRequiredGoChecks(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"matcra587/github-actions/.github/workflows/go-test.yml@8b104684e72bef79fca78b294accb5f789d3f202",
-		"matcra587/github-actions/.github/workflows/go-lint.yml@8b104684e72bef79fca78b294accb5f789d3f202",
-		"matcra587/github-actions/.github/workflows/md-lint.yml@8b104684e72bef79fca78b294accb5f789d3f202",
-		"matcra587/github-actions/.github/workflows/workflow-lint.yml@8b104684e72bef79fca78b294accb5f789d3f202",
+		"matcra587/github-actions/.github/workflows/go-test.yml@67f0de0d0ceebe69895e868207c04e5c66b3bde8",
+		"matcra587/github-actions/.github/workflows/go-lint.yml@67f0de0d0ceebe69895e868207c04e5c66b3bde8",
+		"matcra587/github-actions/.github/workflows/md-lint.yml@67f0de0d0ceebe69895e868207c04e5c66b3bde8",
+		"matcra587/github-actions/.github/workflows/workflow-lint.yml@67f0de0d0ceebe69895e868207c04e5c66b3bde8",
+		"mise-version: \"2026.5.0\"",
 		"zizmor-persona: pedantic",
+		"zizmor-advanced-security: false",
+		"zizmor-annotations: true",
 		"lockfile = true",
 		"actionlint = \"latest\"",
 		"cosign = \"latest\"",
@@ -84,5 +87,8 @@ func TestCIQualityGateRunsRequiredGoChecks(t *testing.T) {
 		if strings.Contains(string(mise), unwanted) {
 			t.Fatalf("mise config should not include node-related tool %q:\n%s", unwanted, mise)
 		}
+	}
+	if strings.Contains(combined, "8b104684e72bef79fca78b294accb5f789d3f202") {
+		t.Fatalf("shared workflow refs should use the Slack-aligned pinned SHA, not old 8b104684 refs")
 	}
 }
