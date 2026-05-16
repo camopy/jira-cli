@@ -93,13 +93,14 @@ func TestCollectLossyCommentWarningsTolerantOfNilBody(t *testing.T) {
 	}
 }
 
-// adfDocFromMarkdown is a tiny helper local to this file so the test isn't
-// brittle against pkg/adf.FromMarkdown signature changes elsewhere.
+// adfDocFromMarkdown is a tiny helper local to this file. It discards
+// conversion warnings — callers here use plain Markdown that converts
+// without loss.
 func adfDocFromMarkdown(t *testing.T, md string) adf.Document {
 	t.Helper()
-	doc, err := adf.FromMarkdown(md)
+	doc, _, err := adf.FromMarkdownLossy(md)
 	if err != nil {
-		t.Fatalf("adf.FromMarkdown(%q): %v", md, err)
+		t.Fatalf("adf.FromMarkdownLossy(%q): %v", md, err)
 	}
 	return doc
 }

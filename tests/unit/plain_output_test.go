@@ -10,9 +10,9 @@ import (
 )
 
 func TestPlainOutputExtractsADFText(t *testing.T) {
-	doc, err := adf.FromMarkdown("hello **world**")
+	doc, _, err := adf.FromMarkdownLossy("hello **world**")
 	if err != nil {
-		t.Fatalf("FromMarkdown() error = %v", err)
+		t.Fatalf("FromMarkdownLossy() error = %v", err)
 	}
 	var buf bytes.Buffer
 	if err := cli.WritePlain(&buf, map[string]any{"description": doc}); err != nil {

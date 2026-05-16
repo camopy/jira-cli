@@ -182,9 +182,9 @@ func TestIssueLifecycleEndToEnd(t *testing.T) {
 
 	// ----- comment lifecycle -------------------------------------
 	cs := jira.NewCommentService(client)
-	doc, err := adf.FromMarkdown("hi")
+	doc, _, err := adf.FromMarkdownLossy("hi")
 	if err != nil {
-		t.Fatalf("FromMarkdown: %v", err)
+		t.Fatalf("FromMarkdownLossy: %v", err)
 	}
 	added, _, err := cs.Add(ctx, "PROJ-1", &jira.CommentBody{ADF: &doc})
 	if err != nil {
@@ -200,9 +200,9 @@ func TestIssueLifecycleEndToEnd(t *testing.T) {
 	if len(page) != 1 {
 		t.Fatalf("comment.List len = %d; want 1", len(page))
 	}
-	editedDoc, err := adf.FromMarkdown("edited")
+	editedDoc, _, err := adf.FromMarkdownLossy("edited")
 	if err != nil {
-		t.Fatalf("FromMarkdown: %v", err)
+		t.Fatalf("FromMarkdownLossy: %v", err)
 	}
 	if _, _, err := cs.Edit(ctx, "PROJ-1", "500", &jira.CommentBody{ADF: &editedDoc}, jira.VisibilityChange{Mode: jira.VisibilityKeep}); err != nil {
 		t.Fatalf("comment.Edit: %v", err)

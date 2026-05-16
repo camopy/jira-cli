@@ -57,9 +57,9 @@ func TestTUIActionsSubmitThroughMutationService(t *testing.T) {
 		t.Fatalf("transition submission did not call mutation service: %+v", service)
 	}
 
-	doc, err := adf.FromMarkdown("hello")
+	doc, _, err := adf.FromMarkdownLossy("hello")
 	if err != nil {
-		t.Fatalf("FromMarkdown() error = %v", err)
+		t.Fatalf("FromMarkdownLossy() error = %v", err)
 	}
 	submitAndApply(tui.SubmitCommentMsg{IssueKey: "PROJ-1", Body: doc})
 	if service.commentKey != "PROJ-1" {

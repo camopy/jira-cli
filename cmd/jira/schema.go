@@ -31,6 +31,7 @@ func writeSchema(cmd *cobra.Command) error {
 	data := map[string]any{
 		"commands":       []commandSchema{schemaForCommand(root)},
 		"output_schemas": outputSchemas(),
+		"input_schemas":  inputSchemas(),
 	}
 	if useCompactOutput(cmd) {
 		return cli.WriteCompact(cmd.OutOrStdout(), data)
@@ -188,6 +189,67 @@ func outputSchemas() map[string]any {
 		"worklog.add": map[string]any{
 			"type":     "object",
 			"required": []string{"issue", "worklog", "dry_run"},
+		},
+	}
+}
+
+// inputSchemas publishes the canonical input shapes the mutation
+// commands accept via --json-input. The `adf_document` shape is the one
+// canonical ADF document form: every command that takes a rich-text
+// body — `issue create` (description), `issue edit` (fields.description),
+// `issue comment` (body), and `worklog add` (comment) — accepts exactly
+// this shape, and the dry-run preview and live submit both validate it.
+//
+// $ref pointers resolve against the envelope root: `adf_document` is
+// emitted at data.input_schemas.adf_document, so the JSON pointer is
+// "#/data/input_schemas/adf_document". A standard JSON-pointer resolver
+// can dereference it directly against the command's envelope output.
+func inputSchemas() map[string]any {
+	adfDocument := map[string]any{
+		"type":        "object",
+		"description": "Canonical Atlassian Document Format (ADF) document. Accepted by every rich-text body field across the CLI.",
+		"required":    []string{"type", "version", "content"},
+		"properties": map[string]any{
+			"type":    map[string]any{"type": "string", "enum": []string{"doc"}},
+			"version": map[string]any{"type": "integer", "enum": []int{1}},
+			"content": map[string]any{"type": "array", "description": "Block-level ADF nodes. May be empty."},
+		},
+		"additionalProperties": false,
+	}
+	return map[string]any{
+		"adf_document": adfDocument,
+		"issue.create": map[string]any{
+			"type":        "object",
+			"description": "issue create --json-input payload. The description may be supplied as raw ADF or as Markdown.",
+			"properties": map[string]any{
+				"summary":              map[string]any{"type": "string"},
+				"project_key":          map[string]any{"type": "string"},
+				"issue_type":           map[string]any{"type": "string"},
+				"description":          map[string]any{"$ref": "#/data/input_schemas/adf_document"},
+				"description_markdown": map[string]any{"type": "string", "description": "Markdown converted to ADF; mutually exclusive with description."},
+			},
+		},
+		"issue.edit": map[string]any{
+			"type":        "object",
+			"description": "issue edit --json-input payload. ADF-shaped values inside fields (e.g. fields.description) are validated as canonical ADF documents.",
+			"properties": map[string]any{
+				"fields": map[string]any{"type": "object"},
+			},
+		},
+		"issue.comment": map[string]any{
+			"type":        "object",
+			"description": "issue comment --json-input body. The top-level object is a canonical ADF document (or {\"body\": <adf_document>}).",
+			"$ref":        "#/data/input_schemas/adf_document",
+		},
+		"worklog.add": map[string]any{
+			"type":        "object",
+			"description": "worklog add --json-input payload.",
+			"properties": map[string]any{
+				"time_spent":       map[string]any{"type": "string"},
+				"started":          map[string]any{"type": "string"},
+				"comment":          map[string]any{"$ref": "#/data/input_schemas/adf_document"},
+				"comment_markdown": map[string]any{"type": "string", "description": "Markdown converted to ADF; mutually exclusive with comment."},
+			},
 		},
 	}
 }

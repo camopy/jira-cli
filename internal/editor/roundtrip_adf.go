@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/matcra587/jira-cli/pkg/adf"
@@ -29,14 +30,25 @@ type RoundTripADFOptions struct {
 // back, reconstitutes the opaques, and returns the resulting Document
 // plus any structured warnings emitted along the way.
 func RoundTripADF(ctx context.Context, opts RoundTripADFOptions) (adf.Document, []adf.Warning, error) {
-	md, opaques, warnings := renderToMarkdownWithOpaques(opts.Document, opts.FieldName)
+	md, opaques, warnings, err := renderToMarkdownWithOpaques(opts.Document, opts.FieldName)
+	if err != nil {
+		return adf.Document{}, nil, err
+	}
 
 	// Write to a temp file with frontmatter the user is told not to touch.
 	path, err := WriteTemp(opts.IssueKey, opts.FieldName, md)
 	if err != nil {
 		return adf.Document{}, nil, err
 	}
-	defer func() { _ = os.Remove(path) }()
+	// The temp file is removed only on success. Any failure past this
+	// point preserves the file so the user can recover the edit — a
+	// silently deleted buffer would lose Jira content.
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(path)
+		}
+	}()
 
 	// Run the editor. Tests pass an EditFn (no-op or content rewriter);
 	// production passes EditCmd.
@@ -54,7 +66,12 @@ func RoundTripADF(ctx context.Context, opts RoundTripADFOptions) (adf.Document, 
 	if err != nil {
 		return adf.Document{}, nil, err
 	}
-	doc := buildDocFromMarkdownWithOpaques(editedMD, opaques)
+	doc, mdWarnings, err := buildDocFromMarkdownWithOpaques(editedMD, opaques)
+	if err != nil {
+		cleanup = false
+		return adf.Document{}, nil, fmt.Errorf("%w; your edit is preserved at %s", err, path)
+	}
+	warnings = append(warnings, mdWarnings...)
 	return doc, warnings, nil
 }
 
@@ -70,7 +87,11 @@ var opaqueRegex = regexp.MustCompile("(?s)```" + opaqueMarker + ":(\\d+)\\s*\\n(
 // editor can usefully present, and a fenced opaque block for everything
 // else. Returns the rendered Markdown, the opaque payloads (so we can
 // reinsert them after the user edits), and any lossy-step warnings.
-func renderToMarkdownWithOpaques(doc adf.Document, field string) (string, [][]byte, []adf.Warning) {
+//
+// A block that fails to marshal is a hard error: silently dropping it
+// would erase Jira content with no warning, the exact failure this
+// helper exists to prevent.
+func renderToMarkdownWithOpaques(doc adf.Document, field string) (string, [][]byte, []adf.Warning, error) {
 	var (
 		buf      strings.Builder
 		opaques  [][]byte
@@ -85,9 +106,7 @@ func renderToMarkdownWithOpaques(doc adf.Document, field string) (string, [][]by
 		// Opaque path — emit fenced placeholder and remember the payload.
 		raw, err := json.Marshal(block)
 		if err != nil {
-			// Should not happen given Marshal contract — degrade silently
-			// to an empty paragraph rather than crash.
-			continue
+			return "", nil, nil, fmt.Errorf("ADF block %q at index %d could not be preserved for editing: %w", block.Type, i, err)
 		}
 		id := len(opaques)
 		opaques = append(opaques, raw)
@@ -98,10 +117,15 @@ func renderToMarkdownWithOpaques(doc adf.Document, field string) (string, [][]by
 			Field:    field,
 			Path:     fmt.Sprintf("/content/%d", i),
 			NodeType: block.Type,
-			Lossy:    true,
+			// Not lossy: the block is reconstituted byte-for-byte. The
+			// warning is informational — it tells the operator a subtree
+			// could not be shown as editable Markdown, not that content
+			// was dropped. Marking it lossy would abort strict-mode
+			// submission of a document that is in fact fully preserved.
+			Lossy: false,
 		})
 	}
-	return strings.TrimSpace(buf.String()) + "\n", opaques, warnings
+	return strings.TrimSpace(buf.String()) + "\n", opaques, warnings, nil
 }
 
 // isMarkdownRepresentable reports which ADF block types this round-trip
@@ -173,54 +197,105 @@ func renderInlineMarkdown(nodes []adf.Node) string {
 // buildDocFromMarkdownWithOpaques is the reverse of
 // renderToMarkdownWithOpaques: parses the edited Markdown looking for
 // opaque fence markers and reconstitutes the original ADF JSON for each.
-// The non-opaque portions are converted via the existing FromMarkdown
-// path so the user's text edits land.
-func buildDocFromMarkdownWithOpaques(md string, opaques [][]byte) adf.Document {
+// The non-opaque portions are converted via FromMarkdownLossy so the
+// user's text edits land and any lossy conversion is reported.
+//
+// An opaque fence that no longer reconstitutes — a corrupted base64
+// payload, an out-of-range id, or JSON that no longer parses — is a
+// hard error: the caller preserves the temp file and fails clearly
+// rather than silently dropping the opaque Jira content.
+func buildDocFromMarkdownWithOpaques(md string, opaques [][]byte) (adf.Document, []adf.Warning, error) {
 	out := adf.Document{Type: "doc", Version: 1}
+	var warnings []adf.Warning
 	pos := 0
 	matches := opaqueRegex.FindAllStringSubmatchIndex(md, -1)
 	for _, m := range matches {
 		start, end := m[0], m[1]
 		idStart, idEnd := m[2], m[3]
+		payStart, payEnd := m[4], m[5]
 		// Anything before the opaque is regular Markdown.
 		if start > pos {
-			plain := md[pos:start]
-			if frag := adfFromMarkdown(plain); frag != nil {
+			frag, fragWarnings, err := adfFromMarkdown(md[pos:start])
+			if err != nil {
+				return adf.Document{}, nil, err
+			}
+			if frag != nil {
 				out.Content = append(out.Content, frag.Content...)
 			}
+			warnings = append(warnings, fragWarnings...)
 		}
-		// Opaque payload — look up by id, fallback to the inline base64.
-		var idx int
-		if _, err := fmt.Sscanf(md[idStart:idEnd], "%d", &idx); err != nil {
-			continue
+		// Opaque payload — reconstitute from the id-keyed table, falling
+		// back to the inline base64 the fence carries. Either must yield
+		// the original node; a failure is fatal.
+		node, err := reconstituteOpaque(md[idStart:idEnd], md[payStart:payEnd], opaques)
+		if err != nil {
+			return adf.Document{}, nil, err
 		}
-		if idx >= 0 && idx < len(opaques) {
-			node := adf.Node{}
-			if err := json.Unmarshal(opaques[idx], &node); err == nil {
-				out.Content = append(out.Content, node)
-			}
-		}
+		out.Content = append(out.Content, node)
 		pos = end
 	}
 	if pos < len(md) {
-		plain := md[pos:]
-		if frag := adfFromMarkdown(plain); frag != nil {
+		frag, fragWarnings, err := adfFromMarkdown(md[pos:])
+		if err != nil {
+			return adf.Document{}, nil, err
+		}
+		if frag != nil {
 			out.Content = append(out.Content, frag.Content...)
 		}
+		warnings = append(warnings, fragWarnings...)
 	}
-	return out
+	return out, warnings, nil
 }
 
-// adfFromMarkdown wraps adf.FromMarkdown but tolerates errors by
-// returning nil — the caller treats nil as "skip this fragment".
-func adfFromMarkdown(md string) *adf.Document {
+// reconstituteOpaque turns one opaque fence (its id and inline base64
+// payload) back into the original ADF node. The id-keyed table is the
+// primary source; the inline base64 is the fallback. A corrupt id,
+// corrupt base64, or unparseable JSON is a hard error.
+func reconstituteOpaque(idText, payload string, opaques [][]byte) (adf.Node, error) {
+	idx, err := strconv.Atoi(strings.TrimSpace(idText))
+	if err != nil {
+		return adf.Node{}, fmt.Errorf("opaque ADF block has an unreadable id %q", idText)
+	}
+	var raw []byte
+	switch {
+	case idx >= 0 && idx < len(opaques):
+		raw = opaques[idx]
+	default:
+		decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(payload))
+		if err != nil {
+			return adf.Node{}, fmt.Errorf("opaque ADF block %d has an unreadable payload: %w", idx, err)
+		}
+		raw = decoded
+	}
+	// Cross-check the inline payload against the id-keyed table when the
+	// editor left the fence intact — a tampered base64 line must not be
+	// silently ignored.
+	if idx >= 0 && idx < len(opaques) {
+		if decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(payload)); err != nil {
+			return adf.Node{}, fmt.Errorf("opaque ADF block %d payload was edited and no longer decodes: %w", idx, err)
+		} else if string(decoded) != string(opaques[idx]) {
+			return adf.Node{}, fmt.Errorf("opaque ADF block %d payload was modified inside the protected fences", idx)
+		}
+	}
+	node := adf.Node{}
+	if err := json.Unmarshal(raw, &node); err != nil {
+		return adf.Node{}, fmt.Errorf("opaque ADF block %d no longer parses as ADF: %w", idx, err)
+	}
+	return node, nil
+}
+
+// adfFromMarkdown converts a Markdown fragment, returning nil for an
+// empty fragment. Conversion warnings are propagated so editor round
+// trips surface lossy text edits the same way direct Markdown input
+// does.
+func adfFromMarkdown(md string) (*adf.Document, []adf.Warning, error) {
 	md = strings.TrimSpace(md)
 	if md == "" {
-		return nil
+		return nil, nil, nil
 	}
-	doc, err := adf.FromMarkdown(md)
+	doc, warnings, err := adf.FromMarkdownLossy(md)
 	if err != nil {
-		return nil
+		return nil, nil, err
 	}
-	return &doc
+	return &doc, warnings, nil
 }

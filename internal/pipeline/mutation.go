@@ -51,6 +51,14 @@ type MutationInput struct {
 	// payload subfields.
 	NamedADFDocs map[string]adf.Document
 
+	// MarkdownWarnings carries warnings produced when the caller
+	// converted Markdown input to ADF (adf.FromMarkdownLossy). A lossy
+	// conversion means user content was dropped before the document
+	// even reached the pipeline. In strict mode any lossy warning here
+	// aborts the mutation at stage 2; in best-effort mode the warnings
+	// are surfaced and the partial document proceeds.
+	MarkdownWarnings []adf.Warning
+
 	// Stage 3 — field schema / screen. Either Schema (preloaded) or
 	// SchemaFetcher (lazy with refresh-once + known-safe fallback).
 	Schema        ScreenSchema
@@ -98,6 +106,22 @@ func RunMutation(in MutationInput) MutationResult {
 	}
 
 	// --- Stage 2: ADF validation + compatibility ---
+	// Markdown-conversion warnings come from before the pipeline (the
+	// caller ran adf.FromMarkdownLossy). Surface them on every path; in
+	// strict mode a lossy conversion aborts before submission so dropped
+	// user content never reaches Jira silently.
+	res.Warnings = append(res.Warnings, in.MarkdownWarnings...)
+	if in.Mode == adfmode.ModeStrict {
+		for _, w := range in.MarkdownWarnings {
+			if w.Lossy {
+				res.Aborted = true
+				res.AbortedAt = StageADF
+				res.Err = errors.New(w.Message)
+				return res
+			}
+		}
+	}
+
 	doc := in.ADFDoc
 	if doc != nil {
 		// ValidateDoc enforces root shape (always) and per-mode node/mark

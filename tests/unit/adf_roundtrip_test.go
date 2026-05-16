@@ -8,9 +8,9 @@ import (
 )
 
 func TestMarkdownADFMarkdownRoundTrip(t *testing.T) {
-	doc, err := adf.FromMarkdown("hello **world**")
+	doc, _, err := adf.FromMarkdownLossy("hello **world**")
 	if err != nil {
-		t.Fatalf("FromMarkdown() error = %v", err)
+		t.Fatalf("FromMarkdownLossy() error = %v", err)
 	}
 	out := adf.ToMarkdown(doc)
 	if !strings.Contains(out, "hello") || !strings.Contains(out, "world") {

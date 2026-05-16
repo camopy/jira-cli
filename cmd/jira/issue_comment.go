@@ -317,7 +317,7 @@ func registerCommentAddFlags(cmd *cobra.Command, flags *commentAddFlags) {
 }
 
 func runCommentAdd(cmd *cobra.Command, key string, flags commentAddFlags) error {
-	doc, err := buildCommentBody(cmd, flags.markdown, flags.jsonInput, noInputRequested(cmd))
+	doc, markdownWarnings, err := buildCommentBody(cmd, flags.markdown, flags.jsonInput, noInputRequested(cmd))
 	if err != nil {
 		return err
 	}
@@ -331,9 +331,10 @@ func runCommentAdd(cmd *cobra.Command, key string, flags commentAddFlags) error 
 		return err
 	}
 	pipeOut := pipeline.RunMutation(pipeline.MutationInput{
-		Mode:   adfModeFor(cmd, true),
-		ADFDoc: &doc,
-		DryRun: flags.dryRun,
+		Mode:             adfModeFor(cmd, true),
+		ADFDoc:           &doc,
+		MarkdownWarnings: markdownWarnings,
+		DryRun:           flags.dryRun,
 	})
 	if pipeOut.Aborted {
 		return pipeOut.Err
@@ -385,7 +386,7 @@ func runCommentAdd(cmd *cobra.Command, key string, flags commentAddFlags) error 
 //
 // The body-markdown / json-input exclusivity is enforced declaratively
 // by cmd.MarkFlagsMutuallyExclusive, so it never reaches here.
-func buildCommentBody(cmd *cobra.Command, markdown, jsonInput string, noInput bool) (adf.Document, error) {
+func buildCommentBody(cmd *cobra.Command, markdown, jsonInput string, noInput bool) (adf.Document, []adf.Warning, error) {
 	markdownSet := cmd != nil && cmd.Flags().Changed("body-markdown")
 	// Empty/missing body: prefer the explicit "body is required" wording so
 	// the validation error surfaces consistently. The --no-input rider still
@@ -393,45 +394,45 @@ func buildCommentBody(cmd *cobra.Command, markdown, jsonInput string, noInput bo
 	if strings.TrimSpace(markdown) == "" && jsonInput == "" {
 		switch {
 		case markdownSet:
-			return adf.Document{}, fmt.Errorf("validation: comment body is required: --body-markdown is empty")
+			return adf.Document{}, nil, fmt.Errorf("validation: comment body is required: --body-markdown is empty")
 		case noInput:
-			return adf.Document{}, fmt.Errorf("validation: comment body is required: --no-input requires --body-markdown or --json-input")
+			return adf.Document{}, nil, fmt.Errorf("validation: comment body is required: --no-input requires --body-markdown or --json-input")
 		default:
-			return adf.Document{}, fmt.Errorf("validation: comment body is required (use --body-markdown or --json-input)")
+			return adf.Document{}, nil, fmt.Errorf("validation: comment body is required (use --body-markdown or --json-input)")
 		}
 	}
 	if jsonInput != "" {
 		var payload map[string]any
 		if err := readJSONFile(jsonInput, &payload); err != nil {
-			return adf.Document{}, err
+			return adf.Document{}, nil, err
 		}
 		if body, ok := payload["body"].(map[string]any); ok {
 			payload = body
 		}
 		raw, err := json.Marshal(payload)
 		if err != nil {
-			return adf.Document{}, err
+			return adf.Document{}, nil, err
 		}
 		parsed, _, err := adf.Parse(raw)
 		if err != nil {
-			return adf.Document{}, fmt.Errorf("comment --json-input parse: %w", err)
+			return adf.Document{}, nil, fmt.Errorf("comment --json-input parse: %w", err)
 		}
 		if len(parsed.Content) == 0 {
-			return adf.Document{}, fmt.Errorf("validation: comment body is required: --json-input doc has no content")
+			return adf.Document{}, nil, fmt.Errorf("validation: comment body is required: --json-input doc has no content")
 		}
-		return parsed, nil
+		return parsed, nil, nil
 	}
 	if strings.TrimSpace(markdown) == "" {
-		return adf.Document{}, fmt.Errorf("validation: comment body is required: --body-markdown is empty")
+		return adf.Document{}, nil, fmt.Errorf("validation: comment body is required: --body-markdown is empty")
 	}
-	doc, err := adf.FromMarkdown(markdown)
+	doc, warnings, err := adf.FromMarkdownLossy(markdown)
 	if err != nil {
-		return adf.Document{}, err
+		return adf.Document{}, nil, err
 	}
 	if len(doc.Content) == 0 {
-		return adf.Document{}, fmt.Errorf("validation: comment body is required: Markdown produced empty ADF")
+		return adf.Document{}, nil, fmt.Errorf("validation: comment body is required: Markdown produced empty ADF")
 	}
-	return doc, nil
+	return doc, warnings, nil
 }
 
 // ---------- comment edit ----------
@@ -477,14 +478,15 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 	if err != nil {
 		return err
 	}
-	doc, err := buildCommentBody(cmd, flags.markdown, flags.jsonInput, noInputRequested(cmd))
+	doc, markdownWarnings, err := buildCommentBody(cmd, flags.markdown, flags.jsonInput, noInputRequested(cmd))
 	if err != nil {
 		return err
 	}
 	pipeOut := pipeline.RunMutation(pipeline.MutationInput{
-		Mode:   adfModeFor(cmd, true),
-		ADFDoc: &doc,
-		DryRun: flags.dryRun,
+		Mode:             adfModeFor(cmd, true),
+		ADFDoc:           &doc,
+		MarkdownWarnings: markdownWarnings,
+		DryRun:           flags.dryRun,
 	})
 	if pipeOut.Aborted {
 		return pipeOut.Err

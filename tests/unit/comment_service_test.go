@@ -28,9 +28,9 @@ func TestIssueServiceAddCommentSubmitsADF(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	doc, err := adf.FromMarkdown("hello **world**")
+	doc, _, err := adf.FromMarkdownLossy("hello **world**")
 	if err != nil {
-		t.Fatalf("FromMarkdown() error = %v", err)
+		t.Fatalf("FromMarkdownLossy() error = %v", err)
 	}
 	service := jira.NewIssueService(jira.NewClient(jira.WithBaseURL(srv.URL + "/")))
 	comment, _, err := service.AddComment(context.Background(), "PROJ-1", &jira.CommentAddRequest{Body: doc})

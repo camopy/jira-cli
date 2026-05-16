@@ -19,9 +19,9 @@ func TestFromMarkdownPreservesFencedCodeLanguage(t *testing.T) {
 	}
 	for md, want := range cases {
 		t.Run(want, func(t *testing.T) {
-			doc, err := adf.FromMarkdown(md)
+			doc, _, err := adf.FromMarkdownLossy(md)
 			if err != nil {
-				t.Fatalf("FromMarkdown: %v", err)
+				t.Fatalf("FromMarkdownLossy: %v", err)
 			}
 			var got string
 			for _, n := range doc.Content {
@@ -42,9 +42,9 @@ func TestFromMarkdownPreservesFencedCodeLanguage(t *testing.T) {
 // MUST be absent (not present-but-empty) so downstream renderers can
 // distinguish "no language" from "language=”".
 func TestFromMarkdownIndentedCodeHasNoLanguage(t *testing.T) {
-	doc, err := adf.FromMarkdown("    indented code\n    second line\n")
+	doc, _, err := adf.FromMarkdownLossy("    indented code\n    second line\n")
 	if err != nil {
-		t.Fatalf("FromMarkdown: %v", err)
+		t.Fatalf("FromMarkdownLossy: %v", err)
 	}
 	for _, n := range doc.Content {
 		if n.Type == "codeBlock" {

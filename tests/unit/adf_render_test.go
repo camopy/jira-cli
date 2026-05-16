@@ -57,9 +57,9 @@ func TestADFMarkdownRenderingAcceptsJSONNumberHeadingLevel(t *testing.T) {
 }
 
 func TestMarkdownToADFSupportsListsLinksAndCodeBlocks(t *testing.T) {
-	doc, err := adf.FromMarkdown("# Title\n\n- [item](https://example.com)\n\n```go\nfmt.Println(\"hi\")\n```")
+	doc, _, err := adf.FromMarkdownLossy("# Title\n\n- [item](https://example.com)\n\n```go\nfmt.Println(\"hi\")\n```")
 	if err != nil {
-		t.Fatalf("FromMarkdown() error = %v", err)
+		t.Fatalf("FromMarkdownLossy() error = %v", err)
 	}
 	if _, err := adf.ValidateDoc(doc, adfmode.ModeStrict); err != nil {
 		t.Fatalf("converted markdown is not valid ADF: %v\n%+v", err, doc)

@@ -1453,7 +1453,7 @@ func issueCreateCommand() *cobra.Command {
 			// submission — never as a post-pipeline conversion that
 			// skips validation. The post-pipeline SubmitADF is the only
 			// description that reaches the wire.
-			descriptionDoc, descriptionPresent, descErr := extractDescriptionDoc(payload)
+			descriptionDoc, descriptionPresent, descMarkdownWarnings, descErr := extractDescriptionDoc(payload)
 			if descErr != nil {
 				return descErr
 			}
@@ -1475,10 +1475,11 @@ func issueCreateCommand() *cobra.Command {
 			// 1+2+4 still run; stage 3 is a no-op (no schema means
 			// no "off-screen" check possible).
 			pipeIn := pipeline.MutationInput{
-				Mode:         adfModeFor(cmd, true),
-				Fields:       payload,
-				DryRun:       dryRun,
-				NamedADFDocs: namedADF,
+				Mode:             adfModeFor(cmd, true),
+				Fields:           payload,
+				DryRun:           dryRun,
+				NamedADFDocs:     namedADF,
+				MarkdownWarnings: descMarkdownWarnings,
 			}
 			if descriptionPresent {
 				// FieldCompatibility is left at its zero value with
@@ -1728,36 +1729,38 @@ func issueCreatePreview(fields map[string]any, profile config.Profile) (map[stri
 // primary ADFDoc, not as an opaque named subfield.
 //
 // Two input shapes are accepted, in priority order:
-//   - `description_markdown`: a Markdown string, converted via FromMarkdown.
+//   - `description_markdown`: a Markdown string, converted via
+//     FromMarkdownLossy. Conversion warnings are returned so the pipeline
+//     can abort (strict) or surface them (best-effort) on content loss.
 //   - `description`: a raw ADF document object.
 //
 // present is false when neither key is set. When present, the returned
 // doc is what the pipeline validates; the caller writes the pipeline's
 // SubmitADF back into the fields map under `description`.
-func extractDescriptionDoc(payload map[string]any) (doc adf.Document, present bool, err error) {
+func extractDescriptionDoc(payload map[string]any) (doc adf.Document, present bool, warnings []adf.Warning, err error) {
 	if md := stringFromAny(payload["description_markdown"]); md != "" {
 		delete(payload, "description_markdown")
 		delete(payload, "description")
-		converted, cerr := adf.FromMarkdown(md)
+		converted, convWarnings, cerr := adf.FromMarkdownLossy(md)
 		if cerr != nil {
-			return adf.Document{}, false, fmt.Errorf("convert description_markdown to ADF: %w", cerr)
+			return adf.Document{}, false, nil, fmt.Errorf("convert description_markdown to ADF: %w", cerr)
 		}
-		return converted, true, nil
+		return converted, true, convWarnings, nil
 	}
 	raw, ok := payload["description"]
 	if !ok || raw == nil {
-		return adf.Document{}, false, nil
+		return adf.Document{}, false, nil, nil
 	}
 	delete(payload, "description")
 	encoded, merr := json.Marshal(raw)
 	if merr != nil {
-		return adf.Document{}, false, fmt.Errorf("marshal description for ADF validation: %w", merr)
+		return adf.Document{}, false, nil, fmt.Errorf("marshal description for ADF validation: %w", merr)
 	}
 	parsed, _, perr := adf.Parse(encoded)
 	if perr != nil {
-		return adf.Document{}, false, fmt.Errorf("description: %w", perr)
+		return adf.Document{}, false, nil, fmt.Errorf("description: %w", perr)
 	}
-	return parsed, true, nil
+	return parsed, true, nil, nil
 }
 
 func issueEditCommand() *cobra.Command {
@@ -1819,11 +1822,21 @@ In headless mode (--no-input), at least one field flag MUST be provided
 				}
 				return issueEditWithEditor(cmd, args[0], dryRun)
 			}
+			// Any ADF-shaped value in the fields object (e.g. a raw
+			// `description` document supplied via --json-input) MUST be
+			// validated by stage 2 before submission — otherwise garbage
+			// nested ADF would only be checked structurally by the
+			// customfield encoder, which does not enforce ADF rules.
+			namedADF, adfParseErr := extractNamedADFDocs(fields)
+			if adfParseErr != nil {
+				return adfParseErr
+			}
 			// Thread the mutation through the 5-stage pipeline.
 			pipeOut := pipeline.RunMutation(pipeline.MutationInput{
-				Mode:   adfModeFor(cmd, true),
-				Fields: fields,
-				DryRun: dryRun,
+				Mode:         adfModeFor(cmd, true),
+				Fields:       fields,
+				NamedADFDocs: namedADF,
+				DryRun:       dryRun,
 			})
 			if pipeOut.Aborted {
 				return pipeOut.Err
@@ -1884,11 +1897,19 @@ func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
 	if issue != nil && issue.Fields != nil && issue.Fields.Description != nil {
 		doc = *issue.Fields.Description
 	}
-	edited, err := editorpkg.EditMarkdown(cmd.Context(), key, "description", adf.ToMarkdown(doc), configuredEditorFor(cmd))
-	if err != nil {
-		return err
-	}
-	updatedDoc, err := adf.FromMarkdown(edited)
+	// Route the edit through the opaque-preserving round-trip. Blocks
+	// with no faithful Markdown representation — panels, tables,
+	// inlineCards, mentions — are carried through the editor buffer as
+	// protected opaque fences and reconstituted byte-for-byte, so a
+	// no-op save can no longer erase rich Jira content. A plain
+	// adf.ToMarkdown render would have dropped them before the user
+	// ever saw the buffer.
+	updatedDoc, editWarnings, err := editorpkg.RoundTripADF(cmd.Context(), editorpkg.RoundTripADFOptions{
+		IssueKey:  key,
+		FieldName: "description",
+		Document:  doc,
+		EditCmd:   configuredEditorFor(cmd),
+	})
 	if err != nil {
 		return err
 	}
@@ -1900,11 +1921,17 @@ func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
 	// there is no last-write-wins reconciliation between SubmitFields
 	// and SubmitADF. Stage 4 (customfield encoding) has nothing to do
 	// for an empty Fields map.
+	//
+	// The round-trip's warnings — lossy Markdown conversions on the
+	// edited text plus opaque-preservation notices — travel as
+	// MarkdownWarnings so strict mode aborts on genuine content loss
+	// before submission.
 	pipeOut := pipeline.RunMutation(pipeline.MutationInput{
-		Mode:        adfModeFor(cmd, true),
-		ADFDoc:      &updatedDoc,
-		FieldCompat: &adf.FieldCompatibility{Field: "description", InlineCardSupported: true},
-		DryRun:      dryRun,
+		Mode:             adfModeFor(cmd, true),
+		ADFDoc:           &updatedDoc,
+		FieldCompat:      &adf.FieldCompatibility{Field: "description", InlineCardSupported: true},
+		MarkdownWarnings: editWarnings,
+		DryRun:           dryRun,
 	})
 	if pipeOut.Aborted {
 		return pipeOut.Err
@@ -2221,12 +2248,17 @@ func worklogAddCommand() *cobra.Command {
 		Short: "Add a worklog",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// commentADF carries a canonical ADF `comment` document
+			// supplied via --json-input. It is mutually exclusive with
+			// the Markdown comment form.
+			var commentADF *adf.Document
 			if jsonInput != "" {
 				var input struct {
-					TimeSpent       string `json:"time_spent"`
-					TimeSpentLegacy string `json:"timeSpent"`
-					Started         string `json:"started"`
-					CommentMarkdown string `json:"comment_markdown"`
+					TimeSpent       string          `json:"time_spent"`
+					TimeSpentLegacy string          `json:"timeSpent"`
+					Started         string          `json:"started"`
+					CommentMarkdown string          `json:"comment_markdown"`
+					Comment         json.RawMessage `json:"comment"`
 				}
 				if err := readJSONFile(jsonInput, &input); err != nil {
 					return err
@@ -2243,24 +2275,43 @@ func worklogAddCommand() *cobra.Command {
 				if input.CommentMarkdown != "" && !cmd.Flags().Changed("comment-markdown") {
 					commentMarkdown = input.CommentMarkdown
 				}
+				// `comment` is the canonical ADF document shape — the
+				// same shape `issue comment --json-input` accepts. It is
+				// parsed and validated through the pipeline below.
+				if len(input.Comment) > 0 && string(input.Comment) != "null" {
+					if input.CommentMarkdown != "" {
+						return fmt.Errorf("validation: worklog input has both 'comment' (ADF) and 'comment_markdown'; provide exactly one")
+					}
+					parsed, _, perr := adf.Parse(input.Comment)
+					if perr != nil {
+						return fmt.Errorf("worklog --json-input comment: %w", perr)
+					}
+					commentADF = &parsed
+				}
 			}
 			seconds, err := jira.ParseDuration(timeSpent, workdaySecondsForCommand(cmd))
 			if err != nil {
 				return err
 			}
 			var comment *adf.Document
-			if commentMarkdown != "" {
-				doc, err := adf.FromMarkdown(commentMarkdown)
+			var commentMarkdownWarnings []adf.Warning
+			switch {
+			case commentADF != nil:
+				comment = commentADF
+			case commentMarkdown != "":
+				doc, convWarnings, err := adf.FromMarkdownLossy(commentMarkdown)
 				if err != nil {
 					return err
 				}
 				comment = &doc
+				commentMarkdownWarnings = convWarnings
 			}
 			// Thread worklog comment ADF through the pipeline.
 			pipeOut := pipeline.RunMutation(pipeline.MutationInput{
-				Mode:   adfModeFor(cmd, true),
-				ADFDoc: comment,
-				DryRun: dryRun,
+				Mode:             adfModeFor(cmd, true),
+				ADFDoc:           comment,
+				MarkdownWarnings: commentMarkdownWarnings,
+				DryRun:           dryRun,
 			})
 			if pipeOut.Aborted {
 				return pipeOut.Err

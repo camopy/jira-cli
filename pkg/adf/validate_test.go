@@ -198,28 +198,30 @@ func TestValidateDoc_UnknownMark_BestEffort_WarnsAndPreserves(t *testing.T) {
 
 // --- valid deep nesting ---
 
-func TestValidateDoc_DeepBlockquote_NoError(t *testing.T) {
+func TestValidateDoc_DeepNesting_NoError(t *testing.T) {
 	// 100-deep is enough to confirm no stack overflow. The validator is
 	// recursive but bounded by encoding/json's depth cap (10000) — verified
-	// safe up to 5000-deep input.
+	// safe up to 5000-deep input. A nested bulletList chain is the
+	// deepest schema-legal nesting (a listItem may hold a bulletList).
 	doc := adf.Document{Type: "doc", Version: 1}
-	// Build 100-deep blockquote chain.
 	leaf := adf.Node{Type: "paragraph", Content: []adf.Node{{Type: "text", Text: "deep"}}}
 	var buildChain func(depth int) adf.Node
 	buildChain = func(depth int) adf.Node {
 		if depth == 0 {
 			return leaf
 		}
-		return adf.Node{Type: "blockquote", Content: []adf.Node{buildChain(depth - 1)}}
+		return adf.Node{Type: "bulletList", Content: []adf.Node{
+			{Type: "listItem", Content: []adf.Node{buildChain(depth - 1)}},
+		}}
 	}
 	doc.Content = []adf.Node{buildChain(100)}
 
 	warnings, err := adf.ValidateDoc(doc, adfmode.ModeStrict)
 	if err != nil {
-		t.Fatalf("100-deep blockquote: unexpected error: %v", err)
+		t.Fatalf("100-deep nesting: unexpected error: %v", err)
 	}
 	if len(warnings) != 0 {
-		t.Fatalf("100-deep blockquote: unexpected warnings: %+v", warnings)
+		t.Fatalf("100-deep nesting: unexpected warnings: %+v", warnings)
 	}
 }
 
