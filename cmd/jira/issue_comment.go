@@ -338,10 +338,14 @@ func runCommentAdd(cmd *cobra.Command, key string, flags commentAddFlags) error 
 	if pipeOut.Aborted {
 		return pipeOut.Err
 	}
+	// Submit and preview the validated SubmitADF, not the
+	// pre-pipeline document. ADFDoc was non-nil above, so the pipeline
+	// always sets SubmitADF.
+	submitDoc := pipeOut.SubmitADF
 	if flags.dryRun {
 		return writeEnvelopeWithWarnings(cmd, "issue.comment.add", map[string]any{
 			"issue":   key,
-			"comment": map[string]any{"body": doc},
+			"comment": map[string]any{"body": submitDoc},
 			"dry_run": true,
 		}, pipeOut.Warnings)
 	}
@@ -352,7 +356,7 @@ func runCommentAdd(cmd *cobra.Command, key string, flags commentAddFlags) error 
 	if !ok {
 		return fmt.Errorf("jira base URL is required for issue.comment.add")
 	}
-	body := &jira.CommentBody{ADF: &doc}
+	body := &jira.CommentBody{ADF: submitDoc}
 	svc := jira.NewCommentService(client)
 	var (
 		comment *jira.Comment
@@ -485,11 +489,14 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 	if pipeOut.Aborted {
 		return pipeOut.Err
 	}
+	// Submit and preview the validated SubmitADF. ADFDoc was
+	// non-nil above, so the pipeline always sets SubmitADF.
+	submitDoc := pipeOut.SubmitADF
 	if flags.dryRun {
 		return writeEnvelopeWithWarnings(cmd, "issue.comment.edit", map[string]any{
 			"issue":             key,
 			"comment_id":        commentID,
-			"body_adf_summary":  doc,
+			"body_adf_summary":  submitDoc,
 			"visibility_change": describeVisibilityChange(vis),
 			"dry_run":           true,
 		}, pipeOut.Warnings)
@@ -501,7 +508,7 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 	if !ok {
 		return fmt.Errorf("jira base URL is required for issue.comment.edit")
 	}
-	comment, resp, err := jira.NewCommentService(client).Edit(cmd.Context(), key, commentID, &jira.CommentBody{ADF: &doc}, vis)
+	comment, resp, err := jira.NewCommentService(client).Edit(cmd.Context(), key, commentID, &jira.CommentBody{ADF: submitDoc}, vis)
 	if err != nil {
 		return err
 	}

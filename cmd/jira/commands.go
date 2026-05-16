@@ -1445,12 +1445,26 @@ func issueCreateCommand() *cobra.Command {
 					return err
 				}
 			}
-			// : extract any *_adf subfields from the payload and
-			// parse them as adf.Document so stage 2 validates them.
-			// Without this step, garbage ADF forwarded opaquely past
-			// the pipeline. The payload map is NOT mutated here — we
-			// only build a side-map for validation; the original values
-			// are sent on the wire unchanged.
+			// The issue description is the primary ADF document for
+			// this mutation. Whether it arrived as `description_markdown`
+			// or as a raw ADF `description`, it is pulled out of the
+			// payload here and fed to the pipeline as ADFDoc so stage 2
+			// (ValidateDoc + ApplyCompatibility) runs on it BEFORE
+			// submission — never as a post-pipeline conversion that
+			// skips validation. The post-pipeline SubmitADF is the only
+			// description that reaches the wire.
+			descriptionDoc, descriptionPresent, descErr := extractDescriptionDoc(payload)
+			if descErr != nil {
+				return descErr
+			}
+			// Extract any remaining ADF-shaped subfields (e.g.
+			// `environment`, `customfield_NNNN` ADF) so stage 2 validates
+			// them. `description` was already removed above, so it is
+			// not double-validated here. These named docs are
+			// validate-only: with no per-field screen schema we cannot
+			// know their compatibility envelope, so ApplyCompatibility is
+			// not run on them — the same treatment the primary
+			// description receives (see extractDescriptionDoc).
 			namedADF, adfParseErr := extractNamedADFDocs(payload)
 			if adfParseErr != nil {
 				return adfParseErr
@@ -1466,12 +1480,35 @@ func issueCreateCommand() *cobra.Command {
 				DryRun:       dryRun,
 				NamedADFDocs: namedADF,
 			}
+			if descriptionPresent {
+				// FieldCompatibility is left at its zero value with
+				// InlineCardSupported=true: a Jira Cloud `description`
+				// field accepts inlineCard, so compatibility degradation
+				// would be wrong here. ApplyCompatibility still walks the
+				// doc; it just has nothing to degrade.
+				pipeIn.ADFDoc = &descriptionDoc
+				pipeIn.FieldCompat = &adf.FieldCompatibility{Field: "description", InlineCardSupported: true}
+			}
 			pipeOut := pipeline.RunMutation(pipeIn)
 			if pipeOut.Aborted {
 				return pipeOut.Err
 			}
+			// Every path past validation uses the pipeline's
+			// post-validation, post-encoding output — never the raw
+			// pre-pipeline payload. SubmitFields is the only map allowed
+			// downstream.
+			submitFields := pipeOut.SubmitFields
+			if submitFields == nil {
+				submitFields = map[string]any{}
+			}
+			// The validated, compatibility-applied description from the
+			// pipeline replaces whatever the payload carried — markdown
+			// and raw ADF are now handled identically.
+			if descriptionPresent && pipeOut.SubmitADF != nil {
+				submitFields["description"] = *pipeOut.SubmitADF
+			}
 			if dryRun {
-				preview, err := issueCreatePreview(payload, profile)
+				preview, err := issueCreatePreview(submitFields, profile)
 				if err != nil {
 					return err
 				}
@@ -1487,21 +1524,11 @@ func issueCreateCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.create")
 			}
-			// Convert description_markdown → description ADF before
-			// submitting. The dry-run preview already does this; the live
-			// path was silently dropping descriptions.
-			if md := stringFromAny(payload["description_markdown"]); md != "" {
-				doc, err := adf.FromMarkdown(md)
-				if err != nil {
-					return fmt.Errorf("convert description_markdown to ADF: %w", err)
-				}
-				payload["description"] = doc
-			}
 			req := &jira.IssueCreateRequest{
-				Summary:   stringFromAny(payload["summary"]),
-				Project:   firstNonEmpty(stringFromAny(payload["project_key"]), profile.DefaultProject),
-				IssueType: firstNonEmpty(stringFromAny(payload["issue_type"]), profile.DefaultIssueType),
-				Fields:    payload,
+				Summary:   stringFromAny(submitFields["summary"]),
+				Project:   firstNonEmpty(stringFromAny(submitFields["project_key"]), profile.DefaultProject),
+				IssueType: firstNonEmpty(stringFromAny(submitFields["issue_type"]), profile.DefaultIssueType),
+				Fields:    submitFields,
 			}
 			issue, resp, err := issueService(client).Create(cmd.Context(), req)
 			if err != nil {
@@ -1584,6 +1611,29 @@ func readOnlyEnabled(cmd *cobra.Command) bool {
 	return activeProfile(cmd, cfg).ReadOnly
 }
 
+// dryRunRequested reports whether the active command was invoked with
+// --dry-run. The flag is declared per-command (not persistent), so the
+// lookup tolerates its absence: commands without a --dry-run flag
+// simply return false. Threading this into the Jira client lets the
+// service layer refuse any mutating request as a dry-run safety net.
+func dryRunRequested(cmd *cobra.Command) bool {
+	if cmd == nil {
+		return false
+	}
+	if cmd.Flags().Lookup("dry-run") == nil {
+		// Command has no --dry-run flag — nothing to honor.
+		return false
+	}
+	v, err := cmd.Flags().GetBool("dry-run")
+	if err != nil {
+		// The flag exists but is not a bool (a future redefinition).
+		// Fail SAFE: a dry-run guard that cannot read its flag must
+		// assume dry-run is ON rather than silently disabling itself.
+		return true
+	}
+	return v
+}
+
 func envReadOnlyEnabled() bool {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv("JIRA_READ_ONLY")))
 	switch v {
@@ -1648,29 +1698,66 @@ func validateIssueCreateRequired(payload map[string]any, profile config.Profile)
 }
 
 // issueCreatePreview builds the dry-run preview shape per command-schemas.md.
-// Markdown descriptions are converted to ADF at this boundary; profile defaults
-// fill missing project_key / issue_type when the JSON payload omits them.
-func issueCreatePreview(payload map[string]any, profile config.Profile) (map[string]any, error) {
+// The supplied fields map is the pipeline's post-validation SubmitFields:
+// the description (whether it arrived as markdown or raw ADF) has already
+// been converted, validated, and compatibility-applied, and lands here
+// under the bare `description` key. Profile defaults fill missing
+// project_key / issue_type when the JSON payload omits them.
+func issueCreatePreview(fields map[string]any, profile config.Profile) (map[string]any, error) {
 	preview := map[string]any{
-		"project_key": firstNonEmpty(stringFromAny(payload["project_key"]), profile.DefaultProject),
-		"issue_type":  firstNonEmpty(stringFromAny(payload["issue_type"]), profile.DefaultIssueType),
-		"summary":     stringFromAny(payload["summary"]),
+		"project_key": firstNonEmpty(stringFromAny(fields["project_key"]), profile.DefaultProject),
+		"issue_type":  firstNonEmpty(stringFromAny(fields["issue_type"]), profile.DefaultIssueType),
+		"summary":     stringFromAny(fields["summary"]),
 	}
-	if md := stringFromAny(payload["description_markdown"]); md != "" {
-		doc, err := adf.FromMarkdown(md)
-		if err != nil {
-			return nil, fmt.Errorf("convert description_markdown to ADF: %w", err)
-		}
+	// description in SubmitFields is the validated ADF document. Surface
+	// it under description_adf so the preview names the wire shape.
+	if doc, ok := fields["description"]; ok && doc != nil {
 		preview["description_adf"] = doc
-	} else if raw, ok := payload["description_adf"]; ok && raw != nil {
-		preview["description_adf"] = raw
 	}
 	for _, key := range []string{"assignee_account_id", "priority", "labels", "components", "epic_key", "custom_fields"} {
-		if v, ok := payload[key]; ok {
+		if v, ok := fields[key]; ok {
 			preview[key] = v
 		}
 	}
 	return preview, nil
+}
+
+// extractDescriptionDoc pulls the issue description out of an issue-create
+// payload as a single adf.Document, removing the source key(s) from the
+// map so the description is processed exactly once — as the pipeline's
+// primary ADFDoc, not as an opaque named subfield.
+//
+// Two input shapes are accepted, in priority order:
+//   - `description_markdown`: a Markdown string, converted via FromMarkdown.
+//   - `description`: a raw ADF document object.
+//
+// present is false when neither key is set. When present, the returned
+// doc is what the pipeline validates; the caller writes the pipeline's
+// SubmitADF back into the fields map under `description`.
+func extractDescriptionDoc(payload map[string]any) (doc adf.Document, present bool, err error) {
+	if md := stringFromAny(payload["description_markdown"]); md != "" {
+		delete(payload, "description_markdown")
+		delete(payload, "description")
+		converted, cerr := adf.FromMarkdown(md)
+		if cerr != nil {
+			return adf.Document{}, false, fmt.Errorf("convert description_markdown to ADF: %w", cerr)
+		}
+		return converted, true, nil
+	}
+	raw, ok := payload["description"]
+	if !ok || raw == nil {
+		return adf.Document{}, false, nil
+	}
+	delete(payload, "description")
+	encoded, merr := json.Marshal(raw)
+	if merr != nil {
+		return adf.Document{}, false, fmt.Errorf("marshal description for ADF validation: %w", merr)
+	}
+	parsed, _, perr := adf.Parse(encoded)
+	if perr != nil {
+		return adf.Document{}, false, fmt.Errorf("description: %w", perr)
+	}
+	return parsed, true, nil
 }
 
 func issueEditCommand() *cobra.Command {
@@ -1741,6 +1828,12 @@ In headless mode (--no-input), at least one field flag MUST be provided
 			if pipeOut.Aborted {
 				return pipeOut.Err
 			}
+			// Submit and preview the validated SubmitFields, not
+			// the raw pre-pipeline fields map.
+			submitFields := pipeOut.SubmitFields
+			if submitFields == nil {
+				submitFields = map[string]any{}
+			}
 			if !dryRun {
 				client, _, hasClient, err := jiraClientForCommand(cmd)
 				if err != nil {
@@ -1749,7 +1842,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 				if !hasClient {
 					return fmt.Errorf("jira base URL is required for issue.edit")
 				}
-				issue, resp, err := issueService(client).Update(cmd.Context(), args[0], &jira.IssueUpdateRequest{Fields: fields})
+				issue, resp, err := issueService(client).Update(cmd.Context(), args[0], &jira.IssueUpdateRequest{Fields: submitFields})
 				if err != nil {
 					return err
 				}
@@ -1757,13 +1850,13 @@ In headless mode (--no-input), at least one field flag MUST be provided
 					"issue":   args[0],
 					"result":  issue,
 					"dry_run": false,
-					"fields":  fields,
+					"fields":  submitFields,
 				}, resp, pipeOut.Warnings)
 			}
 			return writeEnvelopeWithWarnings(cmd, "issue.edit", map[string]any{
 				"issue":   args[0],
 				"dry_run": true,
-				"fields":  fields,
+				"fields":  submitFields,
 			}, pipeOut.Warnings)
 		},
 	}
@@ -1799,28 +1892,37 @@ func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	fields := map[string]any{"description": updatedDoc}
 	// External-editor edits ARE mutations and MUST run through the
-	// pipeline. Stage 2 (ADF compatibility) catches inlineCard /
-	// node-type issues; stage 4 (customfield encoding) is a no-op for
-	// a pure description edit but remains in the chain for symmetry.
+	// pipeline. The edited description is the only field, and it is an
+	// ADF document — route it solely as ADFDoc so stage 2 (ValidateDoc
+	// + ApplyCompatibility) owns it. It is deliberately NOT also placed
+	// in Fields: a single field must travel one pipeline channel, so
+	// there is no last-write-wins reconciliation between SubmitFields
+	// and SubmitADF. Stage 4 (customfield encoding) has nothing to do
+	// for an empty Fields map.
 	pipeOut := pipeline.RunMutation(pipeline.MutationInput{
-		Mode:   adfModeFor(cmd, true),
-		ADFDoc: &updatedDoc,
-		Fields: fields,
-		DryRun: dryRun,
+		Mode:        adfModeFor(cmd, true),
+		ADFDoc:      &updatedDoc,
+		FieldCompat: &adf.FieldCompatibility{Field: "description", InlineCardSupported: true},
+		DryRun:      dryRun,
 	})
 	if pipeOut.Aborted {
 		return pipeOut.Err
+	}
+	// Submit the validated, compatibility-applied SubmitADF — not
+	// the pre-pipeline edit. description is the sole field on the wire.
+	submitFields := map[string]any{}
+	if pipeOut.SubmitADF != nil {
+		submitFields["description"] = *pipeOut.SubmitADF
 	}
 	if dryRun {
 		return writeEnvelopeWithWarnings(cmd, "issue.edit", map[string]any{
 			"issue":   key,
 			"dry_run": true,
-			"fields":  fields,
+			"fields":  submitFields,
 		}, pipeOut.Warnings)
 	}
-	updatedIssue, resp, err := issueService.Update(cmd.Context(), key, &jira.IssueUpdateRequest{Fields: fields})
+	updatedIssue, resp, err := issueService.Update(cmd.Context(), key, &jira.IssueUpdateRequest{Fields: submitFields})
 	if err != nil {
 		return err
 	}
@@ -1828,7 +1930,7 @@ func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
 		"issue":   key,
 		"result":  updatedIssue,
 		"dry_run": false,
-		"fields":  fields,
+		"fields":  submitFields,
 	}, resp, pipeOut.Warnings)
 }
 
@@ -1921,8 +2023,14 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 			if pipeOut.Aborted {
 				return pipeOut.Err
 			}
+			// Clone/move submit the validated SubmitFields. delete
+			// carries no field payload, so SubmitFields is an empty map.
+			submitFields := pipeOut.SubmitFields
+			if submitFields == nil {
+				submitFields = map[string]any{}
+			}
 			if dryRun {
-				return writeEnvelopeWithWarnings(cmd, "issue."+name, map[string]any{"issue": args[0], "payload": payload, "dry_run": true}, pipeOut.Warnings)
+				return writeEnvelopeWithWarnings(cmd, "issue."+name, map[string]any{"issue": args[0], "payload": map[string]any{"fields": submitFields}, "dry_run": true}, pipeOut.Warnings)
 			}
 			// Destructive op safety: in TTY mode (a human at the
 			// keyboard) require either --force OR an interactive
@@ -1956,9 +2064,9 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 				case "delete":
 					resp, err = service.Delete(cmd.Context(), args[0], &jira.IssueDeleteOptions{DeleteSubtasks: deleteSubtasks})
 				case "clone":
-					issue, resp, err = service.Clone(cmd.Context(), args[0], &jira.IssueCloneRequest{Fields: pipeFields})
+					issue, resp, err = service.Clone(cmd.Context(), args[0], &jira.IssueCloneRequest{Fields: submitFields})
 				case "move":
-					issue, resp, err = service.Move(cmd.Context(), args[0], &jira.IssueMoveRequest{Fields: pipeFields})
+					issue, resp, err = service.Move(cmd.Context(), args[0], &jira.IssueMoveRequest{Fields: submitFields})
 				}
 				if err != nil {
 					return err
@@ -2023,9 +2131,19 @@ func issueWebLinkCommand() *cobra.Command {
 			if url == "" {
 				return fmt.Errorf("validation: --url is required")
 			}
+			// Local URL syntax validation runs in BOTH dry-run and live
+			// mode. dry-run is a local preview: it checks the URL parses
+			// and carries an absolute http/https scheme, but it cannot
+			// and does not verify the target is reachable.
+			if err := validateWebLinkURL(url); err != nil {
+				return err
+			}
 			if dryRun {
 				return writeEnvelope(cmd, "issue.weblink", map[string]any{
 					"issue": args[0], "url": url, "title": title, "dry_run": true,
+					// Be explicit that dry-run did NOT contact the
+					// target URL — only its syntax was checked locally.
+					"url_remote_checked": false,
 				})
 			}
 			client, _, ok, err := jiraClientForCommand(cmd)
@@ -2050,6 +2168,24 @@ func issueWebLinkCommand() *cobra.Command {
 	cmd.Flags().StringVar(&title, "title", "", "Display title for the link")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without creating the link")
 	return cmd
+}
+
+// validateWebLinkURL performs the local, offline syntax check the
+// weblink dry-run promises: the value must parse and carry an absolute
+// http/https URL. It deliberately does NOT fetch the target — dry-run
+// is local preview only, and reachability is not its job.
+func validateWebLinkURL(raw string) error {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return fmt.Errorf("validation: --url %q is not a valid URL: %w", raw, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("validation: --url %q must be an absolute http or https URL", raw)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("validation: --url %q is missing a host", raw)
+	}
+	return nil
 }
 
 func issueFieldsFromPayload(payload map[string]any) map[string]any {
@@ -2129,6 +2265,9 @@ func worklogAddCommand() *cobra.Command {
 			if pipeOut.Aborted {
 				return pipeOut.Err
 			}
+			// Submit the validated SubmitADF (post-compatibility),
+			// not the pre-pipeline comment doc.
+			comment = pipeOut.SubmitADF
 			if !dryRun {
 				client, _, ok, err := jiraClientForCommand(cmd)
 				if err != nil {
@@ -3146,6 +3285,10 @@ func jiraClientForProfile(cmd *cobra.Command, profile config.Profile) (*jira.Cli
 		// so EVERY mutation across EVERY command is automatically refused
 		// without per-command boilerplate that's easy to forget.
 		jira.WithReadOnly(readOnlyEnabled(cmd)),
+		// Service-level dry-run guard: when --dry-run is set, the client
+		// refuses every state-changing request. Defense in depth behind
+		// the command-layer dry-run branches.
+		jira.WithDryRun(dryRunRequested(cmd)),
 		jira.WithDebug(debug),
 	}
 	if profile.AuthType == config.AuthTypeMTLS {

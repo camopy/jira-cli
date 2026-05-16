@@ -84,11 +84,8 @@ func boardsListCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a re-prime even when the cache is fresh")
 	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
 	cmd.Flags().BoolVar(&unbounded, "unbounded", false, "Walk every page (disables the default 100-page / 10 000-board cap)")
-	// Read-only commands accept --dry-run as a no-op so callers that
-	// pipeline mutation + read commands can pass the same flag set to
-	// both without conditioning on command type.
-	var dryRun bool
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "No-op on read-only commands; accepted for flag-set consistency")
+	// No --dry-run: `boards list` always performs a live read and a
+	// cache write, so a "dry-run" flag here could not be honest.
 	return cmd
 }
 

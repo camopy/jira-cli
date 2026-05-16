@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/matcra587/jira-cli/internal/cli"
@@ -44,7 +45,7 @@ func issueWatcherCommand() *cobra.Command {
 // to `watchers add --user me`. Same envelope shape so consumers don't
 // branch by command name.
 func issueWatchCommand() *cobra.Command {
-	var dryRun, noReadback bool
+	var dryRun, noReadback, validateRemote bool
 	cmd := &cobra.Command{
 		Use:         "watch KEY",
 		Short:       "Start watching an issue (alias for watchers add --user me)",
@@ -53,18 +54,20 @@ func issueWatchCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runWatcherAdd(cmd, watcherMutationArgs{
 				Key: args[0], UserIdent: "me", DryRun: dryRun, NoReadback: noReadback,
+				ValidateRemote: validateRemote,
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without calling Jira")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Local preview only — does not contact Jira")
 	cmd.Flags().BoolVar(&noReadback, "no-readback", false, "Skip the post-mutation GET")
+	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve --user against Jira (read-only); use with --dry-run")
 	return cmd
 }
 
 // issueUnwatchCommand wires `jira issue unwatch KEY` — equivalent to
 // `watchers remove --user me`.
 func issueUnwatchCommand() *cobra.Command {
-	var dryRun, noReadback bool
+	var dryRun, noReadback, validateRemote bool
 	cmd := &cobra.Command{
 		Use:         "unwatch KEY",
 		Short:       "Stop watching an issue (alias for watchers remove --user me)",
@@ -73,11 +76,13 @@ func issueUnwatchCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runWatcherRemove(cmd, watcherMutationArgs{
 				Key: args[0], UserIdent: "me", DryRun: dryRun, NoReadback: noReadback,
+				ValidateRemote: validateRemote,
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without calling Jira")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Local preview only — does not contact Jira")
 	cmd.Flags().BoolVar(&noReadback, "no-readback", false, "Skip the post-mutation GET")
+	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve --user against Jira (read-only); use with --dry-run")
 	return cmd
 }
 
@@ -89,6 +94,10 @@ type watcherMutationArgs struct {
 	UserIdent  string
 	DryRun     bool
 	NoReadback bool
+	// ValidateRemote opts a dry-run into resolving --user against Jira's
+	// read-only /myself + /user search endpoints. Plain --dry-run is
+	// local preview only and never contacts Jira.
+	ValidateRemote bool
 }
 
 // ----- list -----------------------------------------------------------------
@@ -128,7 +137,7 @@ func watcherListCommand() *cobra.Command {
 
 func watcherAddCommand() *cobra.Command {
 	var user string
-	var dryRun, noReadback bool
+	var dryRun, noReadback, validateRemote bool
 	cmd := &cobra.Command{
 		Use:           "add KEY",
 		Short:         "Add a watcher to an issue",
@@ -142,13 +151,15 @@ func watcherAddCommand() *cobra.Command {
 			}
 			return runWatcherAdd(cmd, watcherMutationArgs{
 				Key: args[0], UserIdent: user, DryRun: dryRun, NoReadback: noReadback,
+				ValidateRemote: validateRemote,
 			})
 		},
 	}
 	cmd.Flags().StringVar(&user, "user", "", "User identifier (me / accountId:<id> / email)")
 	clib.Extend(cmd.Flags().Lookup("user"), clib.FlagExtra{Placeholder: "IDENTIFIER"})
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without calling Jira")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Local preview only — does not contact Jira")
 	cmd.Flags().BoolVar(&noReadback, "no-readback", false, "Skip the post-mutation GET")
+	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve --user against Jira (read-only); use with --dry-run")
 	return cmd
 }
 
@@ -156,7 +167,7 @@ func watcherAddCommand() *cobra.Command {
 
 func watcherRemoveCommand() *cobra.Command {
 	var user string
-	var dryRun, noReadback bool
+	var dryRun, noReadback, validateRemote bool
 	cmd := &cobra.Command{
 		Use:           "remove KEY",
 		Short:         "Remove a watcher from an issue",
@@ -170,19 +181,25 @@ func watcherRemoveCommand() *cobra.Command {
 			}
 			return runWatcherRemove(cmd, watcherMutationArgs{
 				Key: args[0], UserIdent: user, DryRun: dryRun, NoReadback: noReadback,
+				ValidateRemote: validateRemote,
 			})
 		},
 	}
 	cmd.Flags().StringVar(&user, "user", "", "User identifier (me / accountId:<id> / email)")
 	clib.Extend(cmd.Flags().Lookup("user"), clib.FlagExtra{Placeholder: "IDENTIFIER"})
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without calling Jira")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Local preview only — does not contact Jira")
 	cmd.Flags().BoolVar(&noReadback, "no-readback", false, "Skip the post-mutation GET")
+	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve --user against Jira (read-only); use with --dry-run")
 	return cmd
 }
 
 // ----- shared add/remove drivers -------------------------------------------
 
 func runWatcherAdd(cmd *cobra.Command, args watcherMutationArgs) error {
+	if args.DryRun {
+		return watcherDryRunPreview(cmd, "issue.watchers.add", args)
+	}
+
 	client, _, ok, err := jiraClientForCommand(cmd)
 	if err != nil {
 		return err
@@ -191,22 +208,6 @@ func runWatcherAdd(cmd *cobra.Command, args watcherMutationArgs) error {
 		return fmt.Errorf("jira base URL is required for issue.watchers.add")
 	}
 	user := jira.NewUserService(client)
-
-	if args.DryRun {
-		// Dry-run still resolves the user when possible — gives the
-		// operator confidence the supplied --user actually maps. If the
-		// resolver hits ambiguity we surface that diagnostic so they
-		// can fix it before re-running without --dry-run.
-		accountID, rerr := user.ResolveUser(cmd.Context(), args.UserIdent)
-		if rerr != nil {
-			return handleResolveErr(cmd, "issue.watchers.add", rerr)
-		}
-		return writeEnvelope(cmd, "issue.watchers.add", map[string]any{
-			"key":                 args.Key,
-			"account_id_resolved": accountID,
-			"dry_run":             true,
-		})
-	}
 
 	// Resolve the user first — bailing on a not-found / ambiguous query
 	// before the pre-state readback avoids a wasted /watchers GET on the
@@ -249,6 +250,10 @@ func runWatcherAdd(cmd *cobra.Command, args watcherMutationArgs) error {
 }
 
 func runWatcherRemove(cmd *cobra.Command, args watcherMutationArgs) error {
+	if args.DryRun {
+		return watcherDryRunPreview(cmd, "issue.watchers.remove", args)
+	}
+
 	client, _, ok, err := jiraClientForCommand(cmd)
 	if err != nil {
 		return err
@@ -257,18 +262,6 @@ func runWatcherRemove(cmd *cobra.Command, args watcherMutationArgs) error {
 		return fmt.Errorf("jira base URL is required for issue.watchers.remove")
 	}
 	user := jira.NewUserService(client)
-
-	if args.DryRun {
-		accountID, rerr := user.ResolveUser(cmd.Context(), args.UserIdent)
-		if rerr != nil {
-			return handleResolveErr(cmd, "issue.watchers.remove", rerr)
-		}
-		return writeEnvelope(cmd, "issue.watchers.remove", map[string]any{
-			"key":                 args.Key,
-			"account_id_resolved": accountID,
-			"dry_run":             true,
-		})
-	}
 
 	accountID, err := user.ResolveUser(cmd.Context(), args.UserIdent)
 	if err != nil {
@@ -303,6 +296,77 @@ func runWatcherRemove(cmd *cobra.Command, args watcherMutationArgs) error {
 		"watch_count":          post.WatchCount,
 		"was_already_watching": wasAlready,
 	}, resp)
+}
+
+// localResolveUser resolves a watcher --user identifier WITHOUT
+// contacting Jira. It succeeds only for identifiers that are derivable
+// from local state:
+//
+//   - "accountId:<id>" → the id, parsed from the prefix.
+//   - "me" / "@me"     → the active profile's AccountID, when set.
+//
+// A bare name or email genuinely requires a /user/search hop, so it
+// returns ("", false): the caller must report it unresolved rather than
+// fabricate a result or sneak in a live call.
+func localResolveUser(cmd *cobra.Command, ident string) (string, bool) {
+	v := strings.TrimSpace(ident)
+	if id, ok := strings.CutPrefix(v, "accountId:"); ok {
+		id = strings.TrimSpace(id)
+		return id, id != ""
+	}
+	switch strings.ToLower(v) {
+	case "me", "@me":
+		profile, err := profileForCommand(cmd)
+		if err != nil {
+			return "", false
+		}
+		return profile.AccountID, profile.AccountID != ""
+	default:
+		return "", false
+	}
+}
+
+// watcherDryRunPreview renders the local preview for watch / unwatch.
+//
+// Plain --dry-run is local-only: it contacts Jira for nothing. An
+// identifier that is locally derivable (accountId:<id>, or "me" when the
+// profile carries an AccountID) is resolved here and reported in
+// `account_id_resolved`; a bare name or email cannot be resolved without
+// a live call, so it is echoed back with `user_resolved:false` and no
+// `account_id_resolved`. --validate-remote opts into resolving the user
+// against Jira's read-only /myself + /user search endpoints — never a
+// watcher POST/DELETE. The `user_resolved` flag keeps the preview honest
+// about whether resolution actually ran.
+func watcherDryRunPreview(cmd *cobra.Command, command string, args watcherMutationArgs) error {
+	data := map[string]any{
+		"key":           args.Key,
+		"user":          args.UserIdent,
+		"dry_run":       true,
+		"user_resolved": false,
+	}
+	if !args.ValidateRemote {
+		if id, ok := localResolveUser(cmd, args.UserIdent); ok {
+			data["account_id_resolved"] = id
+			data["user_resolved"] = true
+		}
+		return writeEnvelope(cmd, command, data)
+	}
+	// --validate-remote: resolve via the read-only user service. No
+	// mutation is ever issued on this path.
+	client, _, ok, err := jiraClientForCommand(cmd)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("jira base URL is required for %s --validate-remote", command)
+	}
+	accountID, rerr := jira.NewUserService(client).ResolveUser(cmd.Context(), args.UserIdent)
+	if rerr != nil {
+		return handleResolveErr(cmd, command, rerr)
+	}
+	data["account_id_resolved"] = accountID
+	data["user_resolved"] = true
+	return writeEnvelope(cmd, command, data)
 }
 
 // handleResolveErr maps the resolver's (ErrUserNotFound / *AmbiguousUserError /

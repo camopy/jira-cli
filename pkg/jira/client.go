@@ -92,6 +92,7 @@ type Client struct {
 	basicToken  string
 	debug       bool
 	readOnly    bool
+	dryRun      bool
 }
 
 type Option func(*Client)
@@ -178,6 +179,18 @@ func WithReadOnly(readOnly bool) Option {
 	}
 }
 
+// WithDryRun causes Do to refuse any state-changing HTTP method
+// (POST / PUT / PATCH / DELETE) so a --dry-run invocation cannot mutate
+// Jira. Reads still pass through, so the same client can serve a
+// dry-run preview that renders live data. This is the service-level
+// safety net behind the command-layer dry-run branches: even a command
+// path that forgets to gate a submission is stopped here.
+func WithDryRun(dryRun bool) Option {
+	return func(c *Client) {
+		c.dryRun = dryRun
+	}
+}
+
 func (c *Client) NewRequest(ctx context.Context, method, path string, body any) (*http.Request, error) {
 	rel, err := url.Parse(strings.TrimPrefix(path, "/"))
 	if err != nil {
@@ -231,6 +244,12 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 		return nil, &APIError{
 			Type:    ErrorTypeValidation,
 			Message: "read-only mode is active (JIRA_READ_ONLY env or profile read_only=true); refusing " + req.Method + " " + req.URL.Path,
+		}
+	}
+	if c.dryRun && isMutationRequest(req) {
+		return nil, &APIError{
+			Type:    ErrorTypeValidation,
+			Message: "dry-run is active; refusing to send " + req.Method + " " + req.URL.Path,
 		}
 	}
 	if c.debug {

@@ -509,6 +509,20 @@ metadata to mirror Atlassian's native shape:
 }
 ```
 
+`watchers add --dry-run` is a local preview — it contacts Jira for
+nothing. When `--user` is locally derivable (`accountId:<id>`, or `me`
+when the profile carries an account id) the preview resolves it without
+a call:
+
+```json
+{"data": {"key": "KAN-1", "user": "accountId:712020:abc", "account_id_resolved": "712020:abc", "user_resolved": true, "dry_run": true}}
+```
+
+A bare name or email needs a remote `/user/search`, so dry-run cannot
+resolve it — it is echoed back with `user_resolved: false` and no
+`account_id_resolved`. Pass `--validate-remote` alongside `--dry-run` to
+opt into a read-only resolve (still no watcher POST/DELETE).
+
 Ambiguous user resolution → exit 3 with structured candidates so the
 agent can re-run with `--user accountId:<id>`:
 

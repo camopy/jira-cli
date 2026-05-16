@@ -1,0 +1,182 @@
+package contract
+
+// --dry-run is a LOCAL PREVIEW. It must not
+// reach Jira (no writes, no hidden reads) and must not write cache.
+// Remote validation, when offered, lives behind an explicit
+// --validate-remote flag that uses read-only service paths only.
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
+	"testing"
+)
+
+// TestWatcherAddDryRunPerformsNoLiveCalls proves `issue watch --dry-run`
+// is local-only: a server that fails the test on ANY request must see
+// none. The previous behavior resolved the user via a live GET.
+func TestWatcherAddDryRunPerformsNoLiveCalls(t *testing.T) {
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		t.Errorf("dry-run made a live request: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	cfg := jiraConfig(t, srv.URL)
+	stdout, stderr, code := runJira(t, "--config", cfg, "--output=json",
+		"issue", "watch", "KAN-1", "--dry-run")
+	if code != 0 {
+		t.Fatalf("watch --dry-run exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	if n := atomic.LoadInt32(&hits); n != 0 {
+		t.Fatalf("watch --dry-run made %d live request(s); dry-run must be local-only", n)
+	}
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(stdout, &env); err != nil {
+		t.Fatalf("output not JSON: %v\n%s", err, stdout)
+	}
+	if env.Data["dry_run"] != true {
+		t.Fatalf("data.dry_run = %#v, want true", env.Data["dry_run"])
+	}
+}
+
+// TestWatcherRemoveDryRunPerformsNoLiveCalls — same contract for unwatch.
+func TestWatcherRemoveDryRunPerformsNoLiveCalls(t *testing.T) {
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		t.Errorf("dry-run made a live request: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	cfg := jiraConfig(t, srv.URL)
+	stdout, stderr, code := runJira(t, "--config", cfg, "--output=json",
+		"issue", "unwatch", "KAN-1", "--dry-run")
+	if code != 0 {
+		t.Fatalf("unwatch --dry-run exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	if n := atomic.LoadInt32(&hits); n != 0 {
+		t.Fatalf("unwatch --dry-run made %d live request(s); dry-run must be local-only", n)
+	}
+}
+
+// TestWatcherAddValidateRemoteResolvesUserButDoesNotMutate proves the
+// explicit --validate-remote flag uses a read-only path: it resolves
+// the user (a GET) but never POSTs the watcher.
+func TestWatcherAddValidateRemoteResolvesUserButDoesNotMutate(t *testing.T) {
+	var posts int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/rest/api/3/myself", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(myselfBody))
+	})
+	mux.HandleFunc("/rest/api/3/issue/KAN-1/watchers", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			atomic.AddInt32(&posts, 1)
+			t.Errorf("--validate-remote must not POST the watcher")
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cfg := jiraConfig(t, srv.URL)
+	stdout, stderr, code := runJira(t, "--config", cfg, "--output=json",
+		"issue", "watch", "KAN-1", "--dry-run", "--validate-remote")
+	if code != 0 {
+		t.Fatalf("watch --dry-run --validate-remote exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	if n := atomic.LoadInt32(&posts); n != 0 {
+		t.Fatalf("--validate-remote sent %d POST(s); it must be read-only", n)
+	}
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(stdout, &env); err != nil {
+		t.Fatalf("output not JSON: %v\n%s", err, stdout)
+	}
+	if env.Data["account_id_resolved"] == nil || env.Data["account_id_resolved"] == "" {
+		t.Fatalf("--validate-remote should report account_id_resolved: %#v", env.Data)
+	}
+}
+
+// TestWeblinkDryRunRejectsMalformedURLLocally — weblink dry-run
+// must do honest LOCAL validation. A syntactically invalid URL must be
+// caught without contacting Jira.
+func TestWeblinkDryRunRejectsMalformedURLLocally(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("weblink --dry-run made a live request: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	cfg := jiraConfig(t, srv.URL)
+	_, stderr, code := runJira(t, "--config", cfg, "--output=json",
+		"issue", "weblink", "KAN-1", "--url", "not a url", "--dry-run")
+	if code == 0 {
+		t.Fatalf("weblink --dry-run accepted a malformed URL; want local validation failure")
+	}
+	_ = stderr
+}
+
+// TestWeblinkDryRunStatesRemoteNotChecked — a valid URL passes
+// dry-run, but the preview must be honest that reachability was not
+// verified.
+func TestWeblinkDryRunStatesRemoteNotChecked(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("weblink --dry-run made a live request: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	cfg := jiraConfig(t, srv.URL)
+	stdout, stderr, code := runJira(t, "--config", cfg, "--output=json",
+		"issue", "weblink", "KAN-1", "--url", "https://example.com/page", "--dry-run")
+	if code != 0 {
+		t.Fatalf("weblink --dry-run exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(stdout, &env); err != nil {
+		t.Fatalf("output not JSON: %v\n%s", err, stdout)
+	}
+	if env.Data["dry_run"] != true {
+		t.Fatalf("data.dry_run = %#v, want true", env.Data["dry_run"])
+	}
+	checked, ok := env.Data["url_remote_checked"].(bool)
+	if !ok || checked {
+		t.Fatalf("weblink --dry-run must report url_remote_checked=false (honest about not verifying reachability): %#v", env.Data)
+	}
+}
+
+// TestBoardsListRejectsDryRunFlag — `boards list` cannot honor a
+// --dry-run flag (it always does a live read + cache write), so the
+// flag is removed. An unknown flag is a usage error.
+func TestBoardsListRejectsDryRunFlag(t *testing.T) {
+	_, stderr, code := runJira(t, "boards", "list", "--dry-run")
+	if code == 0 {
+		t.Fatalf("boards list still accepts --dry-run; the dishonest flag should be removed")
+	}
+	if !strings.Contains(string(stderr), "dry-run") && !strings.Contains(string(stderr), "unknown flag") {
+		t.Fatalf("expected an unknown-flag error for boards list --dry-run, got: %s", stderr)
+	}
+}
+
+// TestCacheBoardsRejectsDryRunFlag — same for the cache primer.
+func TestCacheBoardsRejectsDryRunFlag(t *testing.T) {
+	_, stderr, code := runJira(t, "cache", "boards", "--dry-run")
+	if code == 0 {
+		t.Fatalf("cache boards still accepts --dry-run; the dishonest flag should be removed")
+	}
+	if !strings.Contains(string(stderr), "dry-run") && !strings.Contains(string(stderr), "unknown flag") {
+		t.Fatalf("expected an unknown-flag error for cache boards --dry-run, got: %s", stderr)
+	}
+}

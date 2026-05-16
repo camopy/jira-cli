@@ -465,10 +465,8 @@ func cacheBoardsCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
 	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
 	cmd.Flags().BoolVar(&unbounded, "unbounded", false, "Walk every page (disables the default 100-page / 10 000-board cap)")
-	// Cache primer is a "read"-class command; accept --dry-run as a
-	// no-op so callers can pass uniform flag sets through pipelines.
-	var dryRun bool
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "No-op on the cache primer; accepted for flag-set consistency")
+	// No --dry-run: the cache primer's whole purpose is a live fetch
+	// plus a cache write, so a "dry-run" flag here could not be honest.
 	return cmd
 }
 

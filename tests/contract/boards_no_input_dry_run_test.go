@@ -1,10 +1,14 @@
 package contract
 
 // Every new read-only command in the boards-cache-and-default work
-// MUST accept --no-input and --dry-run as no-ops without changing
-// behavior. The parametric matrix below drives each command with three
-// flag combinations and asserts the JSON envelope is identical to the
-// unflagged baseline.
+// MUST accept --no-input as a no-op without changing behavior. The
+// parametric matrix below drives each command with --no-input and
+// asserts the JSON envelope is identical to the unflagged baseline.
+//
+// --dry-run is intentionally NOT accepted on these commands: a board
+// list / cache primer always performs a live read and a cache write,
+// so a "dry-run" flag there cannot be honest. Local-preview honesty is
+// covered by dry_run_local_preview_test.go.
 
 import (
 	"bytes"
@@ -66,7 +70,7 @@ func stripVolatile(t *testing.T, body []byte) []byte {
 	return out
 }
 
-func TestBoardsCommandsAcceptNoInputAndDryRun(t *testing.T) {
+func TestBoardsCommandsAcceptNoInput(t *testing.T) {
 	srv := boardsTestServer(t)
 	cfg := jiraConfig(t, srv.URL)
 	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
@@ -94,8 +98,6 @@ func TestBoardsCommandsAcceptNoInputAndDryRun(t *testing.T) {
 	}{
 		{"none", nil},
 		{"no-input", []string{"--no-input"}},
-		{"dry-run", []string{"--dry-run"}},
-		{"no-input+dry-run", []string{"--no-input", "--dry-run"}},
 	}
 
 	for _, c := range cases {
