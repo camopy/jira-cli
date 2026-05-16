@@ -191,6 +191,38 @@ func TestAuthLoginRejectsOAuthAsUnsupported(t *testing.T) {
 	}
 }
 
+// JIRA_DEFAULT_PROFILE still selects the active profile when no explicit
+// --profile flag is passed: the explicit-lookup hardening must not break
+// the env-driven default fallback.
+func TestAuthRefreshHonoursEnvDefaultProfile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte(`default_profile = "work"
+
+[[profiles]]
+name = "work"
+base_url = "https://work.atlassian.net"
+auth_type = "token"
+secret_backend = "keyring"
+
+[[profiles]]
+name = "play"
+base_url = "https://play.atlassian.net"
+auth_type = "token"
+secret_backend = "keyring"
+`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", path, "--json", "auth", "refresh")
+	cmd.Env = append(os.Environ(), "JIRA_DEFAULT_PROFILE=play")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("auth refresh error = %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), `"profile": "play"`) {
+		t.Fatalf("auth refresh did not honor JIRA_DEFAULT_PROFILE:\n%s", out)
+	}
+}
+
 func TestAuthRefreshReportsNoRefreshFlowForSupportedProfiles(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	if err := os.WriteFile(path, []byte(`default_profile = "work"

@@ -243,6 +243,35 @@ func isLocalHost(host string) bool {
 	}
 }
 
+// ErrProfileNotDefined is returned when a requested profile, or the
+// configured default profile, names no profile defined in the config.
+// Callers test for it with errors.Is.
+var ErrProfileNotDefined = errors.New("profile is not defined")
+
+// ProfileNotDefinedError carries the name of the profile that could not
+// be resolved. It wraps ErrProfileNotDefined, so callers can use either
+// errors.Is(err, ErrProfileNotDefined) or errors.As to recover the name.
+type ProfileNotDefinedError struct {
+	Name string
+}
+
+func (e ProfileNotDefinedError) Error() string {
+	if e.Name == "" {
+		return "no default profile is configured"
+	}
+	return fmt.Sprintf("profile %q is not defined", e.Name)
+}
+
+func (ProfileNotDefinedError) Unwrap() error { return ErrProfileNotDefined }
+
+// Profile resolves a profile by name, falling back to the default profile
+// when name is empty. A name that matches no defined profile yields a
+// synthetic Profile carrying only that name.
+//
+// This fabricating behavior is convenient for read-only display paths but
+// unsafe for credential-admin or destructive commands. Those callers must
+// use ResolveProfile, which refuses an unknown name instead of inventing
+// one.
 func (c Config) Profile(name string) Profile {
 	if name == "" {
 		name = c.DefaultProfile
@@ -253,6 +282,28 @@ func (c Config) Profile(name string) Profile {
 		}
 	}
 	return Profile{Name: name}
+}
+
+// ResolveProfile resolves the profile a command should act on. An empty
+// name resolves the configured default profile; a non-empty name must
+// match a defined profile exactly. An unknown name, or an empty name with
+// no configured default, returns a ProfileNotDefinedError wrapping
+// ErrProfileNotDefined. It never fabricates a synthetic profile, so a
+// typoed --profile cannot silently target the wrong credential namespace
+// or cache.
+func (c Config) ResolveProfile(name string) (Profile, error) {
+	if name == "" {
+		name = c.DefaultProfile
+	}
+	if name == "" {
+		return Profile{}, ProfileNotDefinedError{}
+	}
+	for _, p := range c.Profiles {
+		if p.Name == name {
+			return p, nil
+		}
+	}
+	return Profile{}, ProfileNotDefinedError{Name: name}
 }
 
 func (p Profile) Redacted() string {

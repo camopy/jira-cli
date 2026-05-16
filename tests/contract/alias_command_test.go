@@ -91,3 +91,43 @@ func TestAliasImportFromYAML(t *testing.T) {
 		t.Fatalf("alias list after import = %s", out)
 	}
 }
+
+// alias set is a read-modify-write command; like every config-write
+// command it must persist only file-backed values and never bake a
+// transient JIRA_* env overlay into the saved TOML.
+func TestAliasSetDoesNotPersistEnvOverlay(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	body := `default_profile = "work"
+
+[[profiles]]
+name = "work"
+base_url = "https://work.atlassian.net"
+auth_type = "token"
+secret_backend = "keyring"
+`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", path, "--json", "alias", "set", "mine", "issue", "list")
+	cmd.Env = append(os.Environ(),
+		"JIRA_PROFILE_WORK_DEFAULT_ISSUE_TYPE=OverlayType",
+		"JIRA_DEFAULT_PROFILE=phantom",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("alias set error = %v\n%s", err, out)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if strings.Contains(string(content), "OverlayType") {
+		t.Fatalf("alias set persisted JIRA_PROFILE_*_DEFAULT_ISSUE_TYPE env overlay into TOML:\n%s", content)
+	}
+	if strings.Contains(string(content), "phantom") {
+		t.Fatalf("alias set persisted JIRA_DEFAULT_PROFILE env overlay into TOML:\n%s", content)
+	}
+	if !strings.Contains(string(content), `mine =`) {
+		t.Fatalf("alias set did not persist the alias:\n%s", content)
+	}
+}

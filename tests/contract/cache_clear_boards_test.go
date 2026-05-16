@@ -3,9 +3,11 @@
 package contract
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -50,5 +52,37 @@ func TestCacheClearBoardsRemovesFile(t *testing.T) {
 	// Idempotent: clear again → exit 0, no error.
 	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "boards", "--json"); err != nil {
 		t.Fatalf("idempotent cache clear boards: %v", err)
+	}
+}
+
+// `cache clear --profile <typo>` must fail before touching any cache:
+// it must not fall back to deleting the default profile's cache files.
+func TestCacheClearRejectsUnknownExplicitProfile(t *testing.T) {
+	bin := buildJiraBinary(t)
+	cfg := writeTwoProfileConfig(t)
+	cacheRoot := t.TempDir()
+
+	// Seed a cache file under the *real* "work" profile so we can prove
+	// the typoed run leaves it untouched.
+	workCache := filepath.Join(cacheRoot, "jira-cli", "work")
+	if err := os.MkdirAll(workCache, 0o700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	seeded := filepath.Join(workCache, "projects.json")
+	if err := os.WriteFile(seeded, []byte("[]"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
+	c := exec.Command(bin, "--config", cfg, "--profile", "typo", "cache", "clear", "--json")
+	c.Env = env
+	var stdout, stderr bytes.Buffer
+	c.Stdout = &stdout
+	c.Stderr = &stderr
+	if err := c.Run(); err == nil {
+		t.Fatalf("cache clear with typoed profile succeeded:\nstdout=%s", stdout.String())
+	}
+	if _, err := os.Stat(seeded); err != nil {
+		t.Fatalf("cache clear with typoed profile deleted the work-profile cache: %v", err)
 	}
 }

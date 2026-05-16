@@ -50,7 +50,7 @@ func aliasSetCommand() *cobra.Command {
 				return err
 			}
 			expansion := quoteAliasExpansion(args[1:])
-			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			cfg, err := config.LoadOrInit(config.WithPath(configPath(cmd)))
 			if err != nil {
 				return err
 			}
@@ -75,7 +75,7 @@ func aliasDeleteCommand() *cobra.Command {
 		Annotations:       map[string]string{"clib": "dynamic-args='alias'"},
 		ValidArgsFunction: completeAliasNames,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			cfg, err := config.LoadOrInit(config.WithPath(configPath(cmd)))
 			if err != nil {
 				return err
 			}
@@ -104,7 +104,7 @@ func aliasImportCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			cfg, err := config.LoadOrInit(config.WithPath(configPath(cmd)))
 			if err != nil {
 				return err
 			}

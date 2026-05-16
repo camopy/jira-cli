@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cache"
+	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/pkg/jira"
 )
 
@@ -657,7 +658,14 @@ func cacheClearCommand() *cobra.Command {
 			return []string{"labels", "projects", "epics", "fields", "issuetypes", "linktypes", "boards"}, cobra.ShellCompDirectiveNoFileComp
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, profile, _, _ := jiraClientForCommand(cmd)
+			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			if err != nil {
+				return err
+			}
+			profile, err := cfg.ResolveProfile(requestedProfile(cmd))
+			if err != nil {
+				return err
+			}
 			if len(args) == 0 {
 				n, err := cache.ClearProfile(profile.Name)
 				if err != nil {

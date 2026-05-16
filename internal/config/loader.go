@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/go-viper/mapstructure/v2"
 	koanftoml "github.com/knadh/koanf/parsers/toml"
 	"github.com/knadh/koanf/providers/confmap"
 	"github.com/knadh/koanf/providers/file"
@@ -27,36 +28,106 @@ func WithPath(path string) Option {
 	}
 }
 
+// Load reads configuration for read-only and resolution paths without
+// ever creating a file. When the resolved path exists it is parsed; when
+// an explicit --config path is missing it returns an error so a path typo
+// cannot be masked; when the default path is missing it returns validated
+// defaults without touching disk.
+//
+// Commands that intend to persist config must use LoadOrInit, which
+// bootstraps a default file when none exists.
 func Load(opts ...Option) (*Config, error) {
-	var cfg loadOptions
+	var lo loadOptions
 	for _, opt := range opts {
-		opt(&cfg)
+		opt(&lo)
 	}
-	path := cfg.path
+	explicit := lo.path != ""
+	path := lo.path
+	if path == "" {
+		path = DefaultPath()
+	}
+	if _, err := os.Stat(path); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		if explicit {
+			return nil, fmt.Errorf("config file %q does not exist", path)
+		}
+		// Default path missing: serve validated defaults, write nothing.
+		return loadFromKoanf(nil, true)
+	}
+	return loadFromKoanf(&path, true)
+}
+
+// LoadOrInit loads configuration, creating a default config file when
+// none exists. Use this only for explicit init and config-write commands.
+//
+// LoadOrInit returns the persisted, file-backed config: it deliberately
+// does NOT apply JIRA_* env overlays. Read-modify-write commands Save the
+// result, and persisting a transient env overlay into TOML would corrupt
+// the user's stored config. Read-only callers that want the effective
+// runtime view (file plus env) must use Load instead.
+func LoadOrInit(opts ...Option) (*Config, error) {
+	var lo loadOptions
+	for _, opt := range opts {
+		opt(&lo)
+	}
+	path := lo.path
 	if path == "" {
 		path = DefaultPath()
 	}
 	if err := ensureConfig(path); err != nil {
 		return nil, err
 	}
+	return loadFromKoanf(&path, false)
+}
 
+// loadFromKoanf builds a Config from defaults plus an optional TOML file
+// and validates it. A nil path means defaults-only. When applyEnvOverlay
+// is true the JIRA_* environment overlay is layered onto the effective
+// runtime view; when false the persisted, file-backed config is returned
+// unchanged so callers can Save it without leaking env values.
+func loadFromKoanf(path *string, applyEnvOverlay bool) (*Config, error) {
 	k := koanf.New(".")
 	if err := k.Load(confmap.Provider(defaultMap(), "."), nil); err != nil {
 		return nil, err
 	}
-	if err := k.Load(file.Provider(path), koanftoml.Parser()); err != nil {
-		return nil, fmt.Errorf("loading config file: %w", err)
+	if path != nil {
+		if err := k.Load(file.Provider(*path), koanftoml.Parser()); err != nil {
+			return nil, fmt.Errorf("loading config file: %w", err)
+		}
 	}
 
 	var out Config
-	if err := k.Unmarshal("", &out); err != nil {
+	if err := strictUnmarshal(k, &out); err != nil {
 		return nil, fmt.Errorf("decoding config: %w", err)
 	}
-	applyEnv(&out)
+	if applyEnvOverlay {
+		applyEnv(&out)
+	}
 	if err := out.Validate(); err != nil {
 		return nil, err
 	}
 	return &out, nil
+}
+
+// strictUnmarshal decodes the koanf map into cfg, rejecting any key that
+// does not map to a known config field. An unknown key would otherwise be
+// dropped silently on the next Save, so the loader fails loudly instead
+// and names the offending key. The decode hooks mirror koanf's defaults.
+func strictUnmarshal(k *koanf.Koanf, cfg *Config) error {
+	return k.UnmarshalWithConf("", cfg, koanf.UnmarshalConf{
+		Tag: "koanf",
+		DecoderConfig: &mapstructure.DecoderConfig{
+			DecodeHook: mapstructure.ComposeDecodeHookFunc(
+				mapstructure.StringToTimeDurationHookFunc(),
+				mapstructure.TextUnmarshallerHookFunc(),
+			),
+			WeaklyTypedInput: true,
+			ErrorUnused:      true,
+			Result:           cfg,
+		},
+	})
 }
 
 // Save atomically writes cfg to path using a temp-file + rename idiom, so

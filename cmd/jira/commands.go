@@ -119,9 +119,44 @@ func authWhoamiCommand() *cobra.Command {
 		Short: "Show the authenticated user's identity from /myself",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, profile, ok, err := jiraClientForCommand(cmd)
-			if err != nil {
-				return err
+			// Without --save, fetch /myself for the env-overlaid active
+			// profile (a read-only view). With --save, both the live
+			// request and the persisted record must come from the same
+			// file-backed profile, so resolve and Save that profile here
+			// and build the client from it: a JIRA_PROFILE_*_BASE_URL
+			// overlay must not redirect the request to a different tenant
+			// whose account_id would then be written into the file.
+			var cfg *config.Config
+			var profile config.Profile
+			var clientErr error
+			var client *jira.Client
+			var ok bool
+			if save {
+				var loadErr error
+				cfg, loadErr = config.LoadOrInit(config.WithPath(configPath(cmd)))
+				if loadErr != nil {
+					return loadErr
+				}
+				resolved, resolveErr := cfg.ResolveProfile(requestedProfile(cmd))
+				if resolveErr != nil {
+					if errors.Is(resolveErr, config.ErrProfileNotDefined) {
+						return fmt.Errorf("validation: cannot --save profile %q: it is not defined in the config file (it exists only via a JIRA_* env overlay)", requestedProfile(cmd))
+					}
+					return resolveErr
+				}
+				// A base_url env overlay would point the request — and the
+				// profile's credential — at a tenant other than the
+				// file-backed one. --save must operate only on a purely
+				// file-backed profile, so refuse before any request.
+				if envVar := profileBaseURLEnvVar(resolved.Name); os.Getenv(envVar) != "" {
+					return fmt.Errorf("validation: cannot --save profile %q while %s is set: unset that environment variable so --save targets the file-backed Jira tenant", resolved.Name, envVar)
+				}
+				client, profile, ok, clientErr = jiraClientForProfile(cmd, resolved)
+			} else {
+				client, profile, ok, clientErr = jiraClientForCommand(cmd)
+			}
+			if clientErr != nil {
+				return clientErr
 			}
 			if !ok {
 				return fmt.Errorf("jira base URL is required for auth.whoami")
@@ -140,18 +175,19 @@ func authWhoamiCommand() *cobra.Command {
 				"saved":         false,
 			}
 			if save {
-				cfg, err := config.Load(config.WithPath(configPath(cmd)))
-				if err != nil {
-					return err
-				}
+				saved := false
 				for i := range cfg.Profiles {
 					if cfg.Profiles[i].Name == profile.Name {
 						cfg.Profiles[i].AccountID = user.AccountID
 						if cfg.Profiles[i].Email == "" && user.EmailAddress != "" {
 							cfg.Profiles[i].Email = user.EmailAddress
 						}
+						saved = true
 						break
 					}
+				}
+				if !saved {
+					return fmt.Errorf("validation: cannot --save profile %q: it is not defined in the config file (it exists only via a JIRA_* env overlay)", profile.Name)
 				}
 				if err := config.Save(configPath(cmd), cfg); err != nil {
 					return err
@@ -262,7 +298,7 @@ func authLoginCommand() *cobra.Command {
 					return fmt.Errorf("credential environment variable %q is empty", credentialEnv)
 				}
 			}
-			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			cfg, err := config.LoadOrInit(config.WithPath(configPath(cmd)))
 			if err != nil {
 				return err
 			}
@@ -762,7 +798,10 @@ func authLogoutCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			profile := cfg.Profile(args[0])
+			profile, err := cfg.ResolveProfile(args[0])
+			if err != nil {
+				return err
+			}
 			err = credentialStoreFor(profile.SecretBackend).Delete(cmd.Context(), secretRefFor(profile, profile.SecretBackend))
 			removed := err == nil
 			if errors.Is(err, config.ErrCredentialNotFound) {
@@ -771,7 +810,7 @@ func authLogoutCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return writeEnvelope(cmd, "auth.logout", map[string]any{"profile": args[0], "removed": removed})
+			return writeEnvelope(cmd, "auth.logout", map[string]any{"profile": profile.Name, "removed": removed})
 		},
 	}
 }
@@ -784,18 +823,19 @@ func authSwitchCommand() *cobra.Command {
 		Annotations:       map[string]string{"clib": "dynamic-args='profile'"},
 		ValidArgsFunction: completeProfileNames,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			cfg, err := config.LoadOrInit(config.WithPath(configPath(cmd)))
 			if err != nil {
 				return err
 			}
-			if !profileExists(cfg.Profiles, args[0]) {
-				return fmt.Errorf("profile %q not found", args[0])
+			profile, err := cfg.ResolveProfile(args[0])
+			if err != nil {
+				return err
 			}
-			cfg.DefaultProfile = args[0]
+			cfg.DefaultProfile = profile.Name
 			if err := config.Save(configPath(cmd), cfg); err != nil {
 				return err
 			}
-			return writeEnvelope(cmd, "auth.switch", map[string]any{"active": args[0]})
+			return writeEnvelope(cmd, "auth.switch", map[string]any{"active": profile.Name})
 		},
 	}
 }
@@ -834,11 +874,21 @@ func authMigrateCommand() *cobra.Command {
 			if target != config.SecretBackendKeyring && target != config.SecretBackendOnePassword {
 				return fmt.Errorf("unsupported secret backend %q", backend)
 			}
-			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			cfg, err := config.LoadOrInit(config.WithPath(configPath(cmd)))
 			if err != nil {
 				return err
 			}
+			// When --profile is explicitly set, resolve it so a typo is
+			// rejected here rather than silently matching no profile and
+			// returning success with an empty result.
 			profileName := requestedProfile(cmd)
+			if profileName != "" {
+				resolved, rerr := cfg.ResolveProfile(profileName)
+				if rerr != nil {
+					return rerr
+				}
+				profileName = resolved.Name
+			}
 			ops := make([]map[string]any, 0, len(cfg.Profiles))
 			for i := range cfg.Profiles {
 				profile := &cfg.Profiles[i]
@@ -1234,7 +1284,14 @@ func issueCreateCommand() *cobra.Command {
 					return err
 				}
 			}
-			_, profile, _, _ := jiraClientForCommand(cmd)
+			// Resolve the profile WITHOUT building a client: --assignee me,
+			// --no-input validation, and the dry-run preview only need
+			// profile metadata. Credentials are resolved later, at the
+			// live-submit boundary.
+			profile, err := profileForCommand(cmd)
+			if err != nil {
+				return err
+			}
 			// --assignee shortcut: feeds the spec's assignee_account_id input
 			// when "me" / a literal account-id is supplied. "none" clears it.
 			if v := strings.TrimSpace(assignee); v != "" {
@@ -1510,7 +1567,12 @@ In headless mode (--no-input), at least one field flag MUST be provided
 				return fmt.Errorf("issue edit JSON input must contain a fields object")
 			}
 			// --summary / --assignee shortcuts, applied on top of any --json-input.
-			_, _, profile, _ := profileForEditCommand(cmd)
+			// Resolve the profile only — building a client here would
+			// resolve credentials even on a dry-run or editor-only path.
+			profile, err := profileForCommand(cmd)
+			if err != nil {
+				return err
+			}
 			if v := strings.TrimSpace(summary); v != "" {
 				fields["summary"] = v
 			}
@@ -1577,14 +1639,6 @@ In headless mode (--no-input), at least one field flag MUST be provided
 	cmd.Flags().StringVar(&summary, "summary", "", "Replace the issue summary")
 	cmd.Flags().StringVar(&assignee, "assignee", "", `Set assignee: "me", "none"/"unassigned", or a Jira account ID`)
 	return cmd
-}
-
-// profileForEditCommand wraps jiraClientForCommand so the edit shortcut paths
-// can resolve the active profile without the variable shadowing that the
-// existing code relies on. Returns (client, ok, profile, err).
-func profileForEditCommand(cmd *cobra.Command) (*jira.Client, bool, config.Profile, error) {
-	client, profile, ok, err := jiraClientForCommand(cmd)
-	return client, ok, profile, err
 }
 
 func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
@@ -2432,7 +2486,7 @@ func configThemeCommand() *cobra.Command {
 		Short: "Manage TUI theme configuration",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			cfg, err := config.LoadOrInit(config.WithPath(configPath(cmd)))
 			if err != nil {
 				return err
 			}
@@ -2570,7 +2624,7 @@ func configSetCommand() *cobra.Command {
 		Annotations:       map[string]string{"clib": "dynamic-args='configkey,configvalue'"},
 		ValidArgsFunction: completeConfigSetArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			cfg, err := config.LoadOrInit(config.WithPath(configPath(cmd)))
 			if err != nil {
 				return err
 			}
@@ -2700,6 +2754,19 @@ func activeProfile(cmd *cobra.Command, cfg *config.Config) config.Profile {
 	return cfg.Profile(requestedProfile(cmd))
 }
 
+// profileForCommand resolves the active profile for a command WITHOUT
+// constructing a Jira client or touching any credential backend. Local
+// preview and dry-run paths use this so a validation-only run cannot fail
+// on a locked keyring or an offline 1Password backend. Commands that make
+// live HTTP calls must still go through jiraClientForCommand.
+func profileForCommand(cmd *cobra.Command) (config.Profile, error) {
+	cfg, err := config.Load(config.WithPath(configPath(cmd)))
+	if err != nil {
+		return config.Profile{}, err
+	}
+	return cfg.ResolveProfile(requestedProfile(cmd))
+}
+
 func profileForEnvelope(cmd *cobra.Command) string {
 	if profile := requestedProfile(cmd); profile != "" {
 		return profile
@@ -2716,15 +2783,6 @@ func credentialStoreFor(backend config.SecretBackend) config.CredentialStore {
 		return config.OnePasswordStore{}
 	}
 	return config.KeyringStore{}
-}
-
-func profileExists(profiles []config.Profile, name string) bool {
-	for _, profile := range profiles {
-		if profile.Name == name {
-			return true
-		}
-	}
-	return false
 }
 
 // existingProfileOrDefault returns a copy of the named profile from cfg if it
@@ -2748,6 +2806,14 @@ func upsertProfile(cfg *config.Config, profile config.Profile) {
 		}
 	}
 	cfg.Profiles = append(cfg.Profiles, profile)
+}
+
+// profileBaseURLEnvVar returns the name of the environment variable that
+// overrides a profile's base_url. It mirrors the JIRA_PROFILE_<NAME>_*
+// convention parsed by the config loader: the profile name is uppercased
+// with '-' replaced by '_'.
+func profileBaseURLEnvVar(name string) string {
+	return "JIRA_PROFILE_" + strings.ToUpper(strings.ReplaceAll(name, "-", "_")) + "_BASE_URL"
 }
 
 func secretRefFor(profile config.Profile, backend config.SecretBackend) config.SecretRef {
@@ -2782,7 +2848,17 @@ func jiraClientForCommand(cmd *cobra.Command) (*jira.Client, config.Profile, boo
 	if err != nil {
 		return nil, config.Profile{}, false, err
 	}
-	profile := activeProfile(cmd, cfg)
+	return jiraClientForProfile(cmd, activeProfile(cmd, cfg))
+}
+
+// jiraClientForProfile builds a Jira client targeting an explicit profile
+// rather than the env-overlaid active profile. Read-modify-write commands
+// that persist server data (`auth whoami --save`) use this so the live
+// request and the saved record come from the same file-backed profile: a
+// JIRA_PROFILE_*_BASE_URL overlay cannot redirect the request to another
+// tenant whose identity would then be written into the file profile.
+// Credential env sources (token/password env vars) are still honored.
+func jiraClientForProfile(cmd *cobra.Command, profile config.Profile) (*jira.Client, config.Profile, bool, error) {
 	if profile.BaseURL == "" {
 		return nil, profile, false, nil
 	}
