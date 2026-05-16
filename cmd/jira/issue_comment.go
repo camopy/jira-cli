@@ -287,7 +287,6 @@ type commentAddFlags struct {
 	visRole   string
 	visGroup  string
 	dryRun    bool
-	noInput   bool
 }
 
 func commentAddCommand() *cobra.Command {
@@ -311,11 +310,14 @@ func registerCommentAddFlags(cmd *cobra.Command, flags *commentAddFlags) {
 	cmd.Flags().StringVar(&flags.visRole, "visibility-role", "", "Restrict comment to a Jira role (e.g. Developers)")
 	cmd.Flags().StringVar(&flags.visGroup, "visibility-group", "", "Restrict comment to a Jira group")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Preview mutation without submitting")
-	cmd.Flags().BoolVar(&flags.noInput, "no-input", false, "Run without interactive prompts")
+	// Exactly one body source: a Markdown convenience string or a native
+	// ADF JSON file. Declared as Cobra flag metadata so the conflict is
+	// rejected before RunE reads either source.
+	cmd.MarkFlagsMutuallyExclusive("body-markdown", "json-input")
 }
 
 func runCommentAdd(cmd *cobra.Command, key string, flags commentAddFlags) error {
-	doc, err := buildCommentBody(cmd, flags.markdown, flags.jsonInput, flags.noInput)
+	doc, err := buildCommentBody(cmd, flags.markdown, flags.jsonInput, noInputRequested(cmd))
 	if err != nil {
 		return err
 	}
@@ -374,14 +376,13 @@ func runCommentAdd(cmd *cobra.Command, key string, flags commentAddFlags) error 
 
 // buildCommentBody parses --body-markdown / --json-input into an ADF doc.
 // Pre-flight enforces:
-//   - exactly one of the two is supplied
 //   - the resulting ADF is non-empty
 //   - --no-input requires explicit body input
+//
+// The body-markdown / json-input exclusivity is enforced declaratively
+// by cmd.MarkFlagsMutuallyExclusive, so it never reaches here.
 func buildCommentBody(cmd *cobra.Command, markdown, jsonInput string, noInput bool) (adf.Document, error) {
 	markdownSet := cmd != nil && cmd.Flags().Changed("body-markdown")
-	if markdown != "" && jsonInput != "" {
-		return adf.Document{}, fmt.Errorf("validation: --body-markdown and --json-input are mutually exclusive")
-	}
 	// Empty/missing body: prefer the explicit "body is required" wording so
 	// the validation error surfaces consistently. The --no-input rider still
 	// appears when the caller passed neither flag *and* opted out of prompts.
@@ -438,7 +439,6 @@ type commentEditFlags struct {
 	visGroup  string
 	visClear  bool
 	dryRun    bool
-	noInput   bool
 }
 
 func commentEditCommand() *cobra.Command {
@@ -458,7 +458,7 @@ func commentEditCommand() *cobra.Command {
 	cmd.Flags().StringVar(&flags.visGroup, "visibility-group", "", "Replace visibility with a Jira group")
 	cmd.Flags().BoolVar(&flags.visClear, "clear-visibility", false, "Remove any existing visibility restriction")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Preview without calling Jira")
-	cmd.Flags().BoolVar(&flags.noInput, "no-input", false, "Run without interactive prompts")
+	cmd.MarkFlagsMutuallyExclusive("body-markdown", "json-input")
 	return cmd
 }
 
@@ -473,7 +473,7 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 	if err != nil {
 		return err
 	}
-	doc, err := buildCommentBody(cmd, flags.markdown, flags.jsonInput, flags.noInput)
+	doc, err := buildCommentBody(cmd, flags.markdown, flags.jsonInput, noInputRequested(cmd))
 	if err != nil {
 		return err
 	}
@@ -526,13 +526,14 @@ func describeVisibilityChange(vis jira.VisibilityChange) string {
 // ---------- comment delete ----------
 
 func commentDeleteCommand() *cobra.Command {
-	var force, dryRun, noInput bool
+	var force, dryRun bool
 	cmd := &cobra.Command{
 		Use:         "delete KEY COMMENT_ID",
 		Short:       "Delete a comment",
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		Args:        cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			noInput := noInputRequested(cmd)
 			if dryRun {
 				return writeEnvelope(cmd, "issue.comment.delete", map[string]any{
 					"issue":      args[0],
@@ -549,8 +550,10 @@ func commentDeleteCommand() *cobra.Command {
 				if !det.IsTTY || det.Agent || noInput {
 					return fmt.Errorf("issue comment delete requires --force in headless / agent / --no-input mode")
 				}
-				if !confirmDestructive("comment delete", args[1]) {
-					return fmt.Errorf("aborted by user")
+				if ok, err := confirmDestructive(cmd, "comment delete", args[1]); err != nil {
+					return err
+				} else if !ok {
+					return cli.NewPromptError(cli.PromptAborted, "comment delete", nil)
 				}
 			}
 			client, _, ok, err := jiraClientForCommand(cmd)
@@ -572,6 +575,5 @@ func commentDeleteCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive delete under --no-input / non-TTY")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without calling Jira")
-	cmd.Flags().BoolVar(&noInput, "no-input", false, "Run without interactive prompts")
 	return cmd
 }

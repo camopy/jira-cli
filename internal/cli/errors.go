@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -91,6 +92,12 @@ func MapError(err error) Error {
 	if err == nil {
 		return Error{}
 	}
+	if out, ok := mapPromptError(err); ok {
+		return out
+	}
+	if out, ok := mapContextError(err); ok {
+		return out
+	}
 	if out, ok := mapCredentialError(err); ok {
 		return out
 	}
@@ -104,6 +111,50 @@ func MapError(err error) Error {
 		return out
 	}
 	return classifyUntyped(err)
+}
+
+// mapPromptError adapts a *PromptError. Every interactive-prompt
+// outcome — user abort, SIGINT/timeout cancellation, or an unavailable
+// prompt — is a validation-class failure (exit 3): the command could
+// not gather the input it needed. Recognizing it here via errors.As
+// keeps it off the substring classifier, where "auth login aborted"
+// would be misbucketed as an auth failure. It must be checked before
+// mapContextError so a canceled prompt keeps its prompt identity rather
+// than collapsing into the generic timeout/canceled mapping.
+func mapPromptError(err error) (Error, bool) {
+	var pe *PromptError
+	if !errors.As(err, &pe) {
+		return Error{}, false
+	}
+	out := NewError(ErrorTypeValidation, pe.Error())
+	out.Code = pe.promptCode()
+	out.Hint = pe.promptHint()
+	return out, true
+}
+
+// mapContextError adapts a context cancellation or deadline error into a
+// typed envelope entry. Cancellation reaches MapError when --timeout
+// elapses or a SIGINT cancels the root context mid-request; classifying
+// it here with errors.Is keeps it off the substring classifier, where
+// the wrapped url.Error text would land in the wrong bucket. Both cases
+// are retryable: the request never completed.
+func mapContextError(err error) (Error, bool) {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		out := NewError(ErrorTypeServer, err.Error())
+		out.Code = "timeout"
+		out.Hint = "The invocation exceeded its --timeout deadline; raise --timeout or retry."
+		out.Retryable = true
+		return out, true
+	case errors.Is(err, context.Canceled):
+		out := NewError(ErrorTypeServer, err.Error())
+		out.Code = "canceled"
+		out.Hint = "The invocation was canceled before it completed; retry when ready."
+		out.Retryable = true
+		return out, true
+	default:
+		return Error{}, false
+	}
 }
 
 // mapCredentialError adapts a Phase 02 *config.CredentialError. The

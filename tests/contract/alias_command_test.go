@@ -43,7 +43,7 @@ func TestAliasSetListDeleteAndExpansion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("alias list error = %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), `"mine": "issue list --jql \"project = PROJ\""`) {
+	if !strings.Contains(string(out), `"mine": "issue list --jql 'project = PROJ'"`) {
 		t.Fatalf("alias list output = %s", out)
 	}
 

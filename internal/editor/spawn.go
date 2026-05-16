@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/gechr/x/shell"
 )
 
 // knownNonBlockingEditors maps binary basename → wait flag names. Each
@@ -95,12 +97,23 @@ func Resolve(configured string) string {
 // access to the config layer. Equivalent to Resolve("").
 func ResolveEditor() string { return Resolve("") }
 
+// splitEditorCommand parses an editor command line with POSIX shell
+// grammar so a quoted binary path with spaces (e.g.
+// EDITOR='"/opt/My Editor/bin/edit" --wait') stays one argument.
+// strings.Fields would shatter such a path on every space.
+func splitEditorCommand(editorCommand string) ([]string, error) {
+	return shell.Split(editorCommand)
+}
+
 func Run(ctx context.Context, editorCommand, path string) error {
 	editorCommand = Resolve(editorCommand)
 	if editorCommand == "" {
 		editorCommand = "vi"
 	}
-	parts := strings.Fields(editorCommand)
+	parts, err := splitEditorCommand(editorCommand)
+	if err != nil {
+		return fmt.Errorf("parse editor command %q: %w", editorCommand, err)
+	}
 	if len(parts) == 0 {
 		return fmt.Errorf("editor command is required")
 	}

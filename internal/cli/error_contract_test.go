@@ -1,8 +1,10 @@
 package cli_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/matcra587/jira-cli/internal/cli"
@@ -179,6 +181,58 @@ func TestErrorEnvelopeUsesNullData(t *testing.T) {
 	b, _ := json.Marshal(env)
 	if !json_contains(b, `"data":null`) {
 		t.Fatalf("error envelope data must serialize as null: %s", b)
+	}
+}
+
+// A context cancellation or deadline error must be mapped to a typed
+// envelope entry via errors.Is — not routed through the substring
+// classifier, where the wrapped url.Error text would be misbucketed.
+func TestMapErrorClassifiesContextCancellation(t *testing.T) {
+	cases := []struct {
+		name     string
+		err      error
+		wantCode string
+	}{
+		{"deadline", fmt.Errorf("Get %q: %w", "http://x", context.DeadlineExceeded), "timeout"},
+		{"canceled", fmt.Errorf("Get %q: %w", "http://x", context.Canceled), "canceled"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := cli.MapError(tc.err)
+			if got.Code != tc.wantCode {
+				t.Fatalf("code = %q, want %q", got.Code, tc.wantCode)
+			}
+			if !got.Retryable {
+				t.Fatalf("context %s error must be retryable", tc.name)
+			}
+			if got.Hint == "" {
+				t.Fatalf("context %s error must carry a remediation hint", tc.name)
+			}
+		})
+	}
+}
+
+// A prompt that the user aborts or that is canceled by SIGINT/timeout
+// must map to a typed envelope entry — not flow through the substring
+// classifier, where "auth login aborted" would be misread as an auth
+// failure (exit 1) instead of the validation-class outcome it is.
+func TestMapErrorClassifiesPromptError(t *testing.T) {
+	abort := cli.NewPromptError(cli.PromptAborted, "auth login", errors.New("user aborted"))
+	got := cli.MapError(abort)
+	if got.Type != string(cli.ErrorTypeValidation) {
+		t.Fatalf("aborted prompt type = %q, want validation", got.Type)
+	}
+	if got.Code != "prompt_aborted" {
+		t.Fatalf("aborted prompt code = %q, want prompt_aborted", got.Code)
+	}
+	if cli.ExitCode(got) != 3 {
+		t.Fatalf("aborted prompt exit = %d, want 3", cli.ExitCode(got))
+	}
+
+	canceled := cli.NewPromptError(cli.PromptCanceled, "confirm", context.Canceled)
+	gotCancel := cli.MapError(canceled)
+	if gotCancel.Code != "prompt_canceled" {
+		t.Fatalf("canceled prompt code = %q, want prompt_canceled", gotCancel.Code)
 	}
 }
 

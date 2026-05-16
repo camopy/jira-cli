@@ -205,12 +205,13 @@ func authWhoamiCommand() *cobra.Command {
 
 func authLoginCommand() *cobra.Command {
 	var profileName, baseURL, authType, email, username, backend, onePasswordAccount, vault, item, credential, credentialEnv, jsonInput string
-	var noInput, secretStdin bool
+	var secretStdin bool
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Configure authentication for a profile",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			noInput := noInputRequested(cmd)
 			if !noInput {
 				if DetectorFromContext(cmd).Mode != cli.ModePlain && DetectorFromContext(cmd).Mode != cli.ModeTUI {
 					return fmt.Errorf("login requires --no-input in JSON, agent, or non-TTY mode")
@@ -409,7 +410,6 @@ func authLoginCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&secretStdin, "secret-stdin", false, "Read credential from stdin")
 	cmd.Flags().StringVar(&credentialEnv, "credential-env", "", "Read credential from environment variable")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read auth profile metadata from JSON file")
-	cmd.Flags().BoolVar(&noInput, "no-input", false, "Run without interactive prompts")
 	// --secret-stdin and --credential-env both supply the credential. Passing
 	// both is a syntactic conflict: one would silently win by processing
 	// order, so reject it in Cobra validation before any source is read.
@@ -527,10 +527,18 @@ func promptAuthLogin(cmd *cobra.Command, profileName, baseURL, authType, email, 
 		WithInput(cmd.InOrStdin()).
 		WithOutput(cmd.ErrOrStderr())
 	if err := form.RunWithContext(cmd.Context()); err != nil {
-		if errors.Is(err, huh.ErrUserAborted) {
-			return fmt.Errorf("auth login aborted: %w", err)
+		// Return a typed PromptError so MapError classifies the outcome
+		// via errors.As — never let "aborted"/"canceled" reach the
+		// substring classifier, where it would be misread as an auth
+		// failure.
+		switch {
+		case errors.Is(err, huh.ErrUserAborted):
+			return cli.NewPromptError(cli.PromptAborted, "auth login", err)
+		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+			return cli.NewPromptError(cli.PromptCanceled, "auth login", err)
+		default:
+			return err
 		}
-		return err
 	}
 	switch config.AuthType(*authType) {
 	case config.AuthTypeBasic, config.AuthTypePAT, config.AuthTypeMTLS:
@@ -1396,13 +1404,14 @@ func fetchIssueDetails(ctx context.Context, service jira.IssueService, summaries
 }
 
 func issueCreateCommand() *cobra.Command {
-	var dryRun, noInput bool
+	var dryRun bool
 	var summary, jsonInput, assignee string
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create an issue",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			noInput := noInputRequested(cmd)
 			payload := map[string]any{"summary": summary}
 			if jsonInput != "" {
 				if err := readJSONFile(jsonInput, &payload); err != nil {
@@ -1502,7 +1511,6 @@ func issueCreateCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
-	cmd.Flags().BoolVar(&noInput, "no-input", false, "Run without interactive prompts")
 	cmd.Flags().StringVar(&summary, "summary", "", "Issue summary")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read issue create payload from JSON file")
 	cmd.Flags().StringVar(&assignee, "assignee", "", `Assign on creation: "me" or a Jira account ID`)
@@ -1666,7 +1674,7 @@ func issueCreatePreview(payload map[string]any, profile config.Profile) (map[str
 }
 
 func issueEditCommand() *cobra.Command {
-	var dryRun, noInput bool
+	var dryRun bool
 	var jsonInput, summary, assignee string
 	cmd := &cobra.Command{
 		Use:   "edit KEY",
@@ -1681,6 +1689,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 — there is no editor to open and silent no-ops are validation errors.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			noInput := noInputRequested(cmd)
 			payload := map[string]any{"fields": map[string]any{}}
 			if jsonInput != "" {
 				if err := readJSONFile(jsonInput, &payload); err != nil {
@@ -1759,7 +1768,6 @@ In headless mode (--no-input), at least one field flag MUST be provided
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
-	cmd.Flags().BoolVar(&noInput, "no-input", false, "Run without interactive prompts")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read issue edit payload from JSON file")
 	cmd.Flags().StringVar(&summary, "summary", "", "Replace the issue summary")
 	cmd.Flags().StringVar(&assignee, "assignee", "", `Set assignee: "me", "none"/"unassigned", or a Jira account ID`)
@@ -1886,14 +1894,14 @@ func issueTransitionCommand() *cobra.Command {
 }
 
 func destructiveIssueCommand(name, short string) *cobra.Command {
-	var dryRun, noInput, force, deleteSubtasks bool
+	var dryRun, force, deleteSubtasks bool
 	var jsonInput string
 	cmd := &cobra.Command{
 		Use:   name + " KEY",
 		Short: short,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = noInput
+			noInput := noInputRequested(cmd)
 			payload := map[string]any{"fields": map[string]any{}}
 			if jsonInput != "" {
 				if err := readJSONFile(jsonInput, &payload); err != nil {
@@ -1930,8 +1938,10 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 					return fmt.Errorf("issue %s requires --force in headless / agent / --no-input mode", name)
 				}
 				// TTY human → huh confirmation prompt.
-				if !confirmDestructive(name, args[0]) {
-					return fmt.Errorf("aborted by user")
+				if ok, err := confirmDestructive(cmd, name, args[0]); err != nil {
+					return err
+				} else if !ok {
+					return cli.NewPromptError(cli.PromptAborted, "issue "+name, nil)
 				}
 			}
 			client, _, ok, err := jiraClientForCommand(cmd)
@@ -1959,7 +1969,6 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
-	cmd.Flags().BoolVar(&noInput, "no-input", false, "Run without interactive prompts")
 	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive mutation")
 	cmd.Flags().BoolVar(&deleteSubtasks, "delete-subtasks", false, "(delete only) also delete the issue's subtasks (Jira refuses delete otherwise when subtasks exist)")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read mutation payload from JSON file")
@@ -1971,18 +1980,33 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 // (delete/clone/move). Only invoked in TTY mode; non-TTY callers
 // MUST pass --force and are rejected by the caller before reaching
 // this function under stdin discipline.
-func confirmDestructive(action, key string) bool {
+//
+// The prompt runs under the command context so a SIGINT or an elapsed
+// --timeout cancels the prompt instead of leaving it blocked on the
+// terminal. A canceled prompt returns a typed *cli.PromptError so the
+// envelope keeps the cancellation identity; a declined confirmation
+// returns (false, nil) and the caller turns it into an abort.
+func confirmDestructive(cmd *cobra.Command, action, key string) (bool, error) {
 	confirmed := false
-	form := huh.NewConfirm().
+	confirm := huh.NewConfirm().
 		Title(fmt.Sprintf("About to %s %s", action, key)).
 		Description("This is destructive. Continue?").
 		Affirmative("Yes, " + action).
 		Negative("Cancel").
 		Value(&confirmed)
-	if err := form.Run(); err != nil {
-		return false
+	form := huh.NewForm(huh.NewGroup(confirm))
+	if err := form.RunWithContext(cmd.Context()); err != nil {
+		switch {
+		case errors.Is(err, huh.ErrUserAborted):
+			// Esc / Ctrl-C inside the form is a decline, not a fault.
+			return false, nil
+		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+			return false, cli.NewPromptError(cli.PromptCanceled, action+" confirmation", err)
+		default:
+			return false, cli.NewPromptError(cli.PromptUnavailable, action+" confirmation", err)
+		}
 	}
-	return confirmed
+	return confirmed, nil
 }
 
 // issueWebLinkCommand wires `jira issue weblink KEY --url URL --title T`.
@@ -2055,13 +2079,12 @@ func copyAnyMap(in map[string]any) map[string]any {
 
 func worklogAddCommand() *cobra.Command {
 	var timeSpent, commentMarkdown, started, jsonInput string
-	var dryRun, noInput bool
+	var dryRun bool
 	cmd := &cobra.Command{
 		Use:   "add KEY",
 		Short: "Add a worklog",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = noInput
 			if jsonInput != "" {
 				var input struct {
 					TimeSpent       string `json:"time_spent"`
@@ -2136,7 +2159,6 @@ func worklogAddCommand() *cobra.Command {
 	cmd.Flags().StringVar(&commentMarkdown, "comment-markdown", "", "Worklog comment as Markdown")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read worklog payload from JSON file")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
-	cmd.Flags().BoolVar(&noInput, "no-input", false, "Run without interactive prompts")
 	return cmd
 }
 
@@ -2451,13 +2473,12 @@ func emptyEpicCounts() map[string]int {
 }
 
 func epicAddCommand() *cobra.Command {
-	var dryRun, noInput bool
+	var dryRun bool
 	cmd := &cobra.Command{
 		Use:   "add ISSUE_KEY EPIC_KEY",
 		Short: "Add an issue to an epic",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = noInput
 			if !dryRun {
 				client, _, ok, err := jiraClientForCommand(cmd)
 				if err != nil {
@@ -2481,18 +2502,16 @@ func epicAddCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
-	cmd.Flags().BoolVar(&noInput, "no-input", false, "Run without interactive prompts")
 	return cmd
 }
 
 func epicRemoveCommand() *cobra.Command {
-	var dryRun, noInput bool
+	var dryRun bool
 	cmd := &cobra.Command{
 		Use:   "remove ISSUE_KEY",
 		Short: "Remove an issue from its epic",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = noInput
 			if !dryRun {
 				client, _, ok, err := jiraClientForCommand(cmd)
 				if err != nil {
@@ -2515,7 +2534,6 @@ func epicRemoveCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
-	cmd.Flags().BoolVar(&noInput, "no-input", false, "Run without interactive prompts")
 	return cmd
 }
 
@@ -2681,14 +2699,13 @@ func configThemeCommand() *cobra.Command {
 }
 
 func configInitCommand() *cobra.Command {
-	var profile, baseURL, authType, email string
-	var noInput bool
+	var baseURL, authType, email string
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Create initial configuration",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			_ = noInput
+			profile := requestedProfile(cmd)
 			if profile == "" {
 				profile = "default"
 			}
@@ -2722,8 +2739,6 @@ func configInitCommand() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&noInput, "no-input", false, "Run without interactive prompts")
-	cmd.Flags().StringVar(&profile, "profile", "default", "Profile name")
 	cmd.Flags().StringVar(&baseURL, "base-url", "", "Jira base URL")
 	cmd.Flags().StringVar(&authType, "auth-type", "token", "Auth type")
 	cmd.Flags().StringVar(&email, "email", "", "Jira account email")
@@ -3252,7 +3267,21 @@ func readJSONFile(path string, dst any) error {
 		return err
 	}
 	defer func() { _ = r.Close() }()
-	return json.NewDecoder(r).Decode(dst)
+	dec := json.NewDecoder(r)
+	if err := dec.Decode(dst); err != nil {
+		return err
+	}
+	// A --json-input file must hold exactly one JSON document. Decode a
+	// second value into a throwaway target: io.EOF is the only acceptable
+	// result. Anything else — a second value, a stray trailing `}`/`]`, or
+	// a syntax error — means a malformed or concatenated payload. A
+	// Decoder.More() check is insufficient: More() reports false for a
+	// trailing structural byte, letting `{"summary":"ok"}}` through.
+	var trailing json.RawMessage
+	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return fmt.Errorf("invalid json input %q: unexpected data after the JSON value", path)
+	}
+	return nil
 }
 
 func stringFromAny(v any) string {

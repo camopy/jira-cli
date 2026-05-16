@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/gechr/x/shell"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -43,7 +44,15 @@ func aliasSetCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "set NAME EXPANSION...",
 		Short: "Create a shortcut for a jira command",
-		Args:  cobra.MinimumNArgs(2),
+		Long: `Create a shortcut for a jira command.
+
+The stored expansion is parsed back to an argv with POSIX shell grammar.
+` + "`jira alias set`" + ` quotes each argument when it writes the config,
+so a round-tripped alias is always faithful. A hand-edited config alias
+must follow the same grammar: an unquoted '#' starts a comment and
+everything after it is dropped. Quote a literal '#' (e.g. "'#tag'") to
+keep it.`,
+		Args: cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := strings.TrimSpace(args[0])
 			if err := validateAliasName(cmd.Root(), name); err != nil {
@@ -293,68 +302,21 @@ func sortedAliasNames(aliases map[string]string) []string {
 	return names
 }
 
+// quoteAliasExpansion joins argv into a single stored alias string with
+// POSIX shell quoting, so splitAliasExpansion reproduces the exact argv
+// on the way back out.
 func quoteAliasExpansion(args []string) string {
 	parts := make([]string, 0, len(args))
 	for _, arg := range args {
-		parts = append(parts, quoteAliasArg(arg))
+		parts = append(parts, shell.Quote(arg))
 	}
 	return strings.Join(parts, " ")
 }
 
-func quoteAliasArg(arg string) string {
-	if arg == "" {
-		return `""`
-	}
-	if !strings.ContainsAny(arg, " \t\n\"'\\") {
-		return arg
-	}
-	return `"` + strings.ReplaceAll(strings.ReplaceAll(arg, `\`, `\\`), `"`, `\"`) + `"`
-}
-
+// splitAliasExpansion re-splits a stored alias string into argv using
+// POSIX shell grammar. This is the canonical shell splitter shared with
+// the editor command parser — a hand-rolled grammar previously
+// mishandled backslashes inside single quotes.
 func splitAliasExpansion(value string) ([]string, error) {
-	var out []string
-	var b strings.Builder
-	var quote rune
-	escaped := false
-	inToken := false
-	for _, r := range value {
-		switch {
-		case escaped:
-			b.WriteRune(r)
-			escaped = false
-			inToken = true
-		case r == '\\':
-			escaped = true
-			inToken = true
-		case quote != 0:
-			if r == quote {
-				quote = 0
-			} else {
-				b.WriteRune(r)
-			}
-			inToken = true
-		case r == '\'' || r == '"':
-			quote = r
-			inToken = true
-		case r == ' ' || r == '\t' || r == '\n':
-			if inToken {
-				out = append(out, b.String())
-				b.Reset()
-				inToken = false
-			}
-		default:
-			b.WriteRune(r)
-			inToken = true
-		}
-	}
-	if escaped {
-		b.WriteRune('\\')
-	}
-	if quote != 0 {
-		return nil, errors.New("unterminated quote")
-	}
-	if inToken {
-		out = append(out, b.String())
-	}
-	return out, nil
+	return shell.Split(value)
 }

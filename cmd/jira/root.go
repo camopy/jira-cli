@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
+	"time"
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/gechr/clib/complete"
@@ -15,6 +17,7 @@ import (
 	"github.com/gechr/x/terminal"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 type contextKey string
@@ -120,7 +123,7 @@ $ jira search saved my-open-bugs`,
 	},
 }
 
-func Execute() error {
+func Execute(ctx context.Context) error {
 	if err := setup(); err != nil {
 		writeCommandError(rootCmd, err)
 		return err
@@ -133,12 +136,46 @@ func Execute() error {
 	if args != nil {
 		rootCmd.SetArgs(args)
 	}
-	cmd, err := rootCmd.ExecuteC()
+	// Optional whole-invocation deadline. Derive it here, where Execute
+	// already owns the root context, with a local defer cancel(): no
+	// cancel func is parked in a package var, and the context is never
+	// stored on a runtime struct. The deadline spans command execution
+	// (setup() and alias expansion above are flag/file work with no
+	// network I/O; the timeout's purpose is bounding the request).
+	if timeout := timeoutFromArgs(args); timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+	// ExecuteContext seeds cmd.Context() with the (optionally
+	// deadline-bounded) root context so every RunE that calls
+	// cmd.Context() inherits cancellation.
+	cmd, err := rootCmd.ExecuteContextC(ctx)
 	if err != nil {
 		writeCommandError(cmd, err)
 		return err
 	}
 	return nil
+}
+
+// timeoutFromArgs extracts the --timeout duration from the resolved
+// argv. It parses a throwaway flag set that tolerates every other
+// (unknown) flag, so the value is available before cobra runs. args nil
+// means "use os.Args[1:]" — the same fallback cobra applies when SetArgs
+// was not called.
+func timeoutFromArgs(args []string) time.Duration {
+	if args == nil {
+		args = os.Args[1:]
+	}
+	fs := pflag.NewFlagSet("timeout-probe", pflag.ContinueOnError)
+	fs.ParseErrorsAllowlist.UnknownFlags = true
+	fs.Usage = func() {}
+	fs.SetOutput(io.Discard)
+	timeout := fs.Duration("timeout", 0, "")
+	if err := fs.Parse(args); err != nil {
+		return 0
+	}
+	return *timeout
 }
 
 func writeCommandError(cmd *cobra.Command, err error) {
@@ -262,6 +299,7 @@ func init() {
 	pf.BoolP("interactive", "i", false, "Launch persistent dashboard from root command")
 	pf.BoolP("debug", "d", false, "Enable debug output")
 	pf.Bool("no-input", false, "Disable interactive prompts (mandatory for headless / agent invocation)")
+	pf.Duration("timeout", 0, "Whole-invocation deadline (e.g. 30s, 2m); 0 disables it")
 	pf.String("color", "auto", `Color mode: "auto", "always", or "never"`)
 	// ADF strict/best-effort selection — mutually exclusive;
 	// internal/cli/adfmode reads them ahead of env/profile/default.
@@ -287,6 +325,11 @@ func init() {
 		EnumTerse:   []string{"detect terminal", "rich text", "JSON envelope", "JSON data only"},
 		EnumDefault: "auto",
 		Terse:       "output mode",
+	})
+	clib.Extend(pf.Lookup("timeout"), clib.FlagExtra{
+		Group:       "Configuration",
+		Placeholder: "DURATION",
+		Terse:       "invocation deadline",
 	})
 	clib.Extend(pf.Lookup("interactive"), clib.FlagExtra{Group: "Dashboard", Terse: "launch dashboard"})
 	clib.Extend(pf.Lookup("debug"), clib.FlagExtra{Group: "Output", Terse: "debug output"})

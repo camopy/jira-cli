@@ -3,7 +3,6 @@ package main
 import (
 	_ "embed"
 	"fmt"
-	"os"
 	"strings"
 
 	clib "github.com/gechr/clib/cli/cobra"
@@ -103,7 +102,14 @@ func agentGuideCommand() *cobra.Command {
 			Title:   "Sections",
 			Content: []help.Content{group},
 		})
-		_ = renderer.Render(os.Stdout, final)
+		// Write through the command's own output stream so a caller's
+		// redirect (tests, pipes) is honored, instead of bypassing it
+		// straight to os.Stdout. cobra's help-func signature returns no
+		// error, so a render failure (e.g. a broken stdout pipe) is
+		// surfaced on stderr rather than silently dropped.
+		if err := renderer.Render(c.OutOrStdout(), final); err != nil {
+			_, _ = fmt.Fprintf(c.ErrOrStderr(), "agent help: render failed: %v\n", err)
+		}
 	})
 	return cmd
 }

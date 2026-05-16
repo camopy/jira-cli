@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/pkg/jira"
 	"github.com/spf13/cobra"
 )
@@ -185,7 +186,10 @@ func issueAttachmentAddCommand() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringSliceVar(&files, "file", nil, "Path to attach (repeatable)")
+	// StringArrayVar, not StringSliceVar: a slice flag splits each value
+	// on commas, which would shatter a legitimate filename like
+	// "report,final.pdf" into two bogus paths. Each --file is one path.
+	cmd.Flags().StringArrayVar(&files, "file", nil, "Path to attach (repeatable)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without uploading")
 	return cmd
 }
@@ -207,7 +211,7 @@ func issueAttachmentDeleteCommand() *cobra.Command {
 				})
 			}
 			det := DetectorFromContext(cmd)
-			noInput, _ := cmd.Root().PersistentFlags().GetBool("no-input")
+			noInput := noInputRequested(cmd)
 			// Destructive op MUST require --force under --no-input
 			// or any non-TTY / agent context. No interactive
 			// fallback in headless mode.
@@ -215,8 +219,10 @@ func issueAttachmentDeleteCommand() *cobra.Command {
 				if !det.IsTTY || det.Agent || noInput {
 					return fmt.Errorf("attachment delete requires --force in headless / agent / --no-input mode")
 				}
-				if !confirmDestructive("attachment delete", attachmentID) {
-					return fmt.Errorf("aborted by user")
+				if ok, err := confirmDestructive(cmd, "attachment delete", attachmentID); err != nil {
+					return err
+				} else if !ok {
+					return cli.NewPromptError(cli.PromptAborted, "attachment delete", nil)
 				}
 			}
 			service, ok, err := attachmentClient(cmd)

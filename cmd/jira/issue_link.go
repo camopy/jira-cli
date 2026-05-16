@@ -17,6 +17,7 @@ import (
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/spf13/cobra"
 
+	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/pkg/jira"
 )
 
@@ -81,6 +82,10 @@ Default action — no sub-command:
 	cmd.Flags().StringVar(&to, "to", "", "Outward issue key")
 	cmd.Flags().StringVar(&linkType, "type", "", "Link type name (Blocks, Relates, Cloners, …)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without creating the link")
+	// A link needs both endpoints: passing one of --to / --type without
+	// the other is always a syntax error. Declared as Cobra metadata so
+	// the half-specified link is rejected before RunE.
+	cmd.MarkFlagsRequiredTogether("to", "type")
 	// --type completion driven by the cachelinktype predictor.
 	// Cache primer: `jira cache linktypes`.
 	clib.Extend(cmd.Flags().Lookup("type"), clib.FlagExtra{Placeholder: "NAME", Complete: "predictor=cachelinktype"})
@@ -133,13 +138,14 @@ func issueLinkListCommand() *cobra.Command {
 // the wire — `DELETE /issueLink/{id}` is a global endpoint. Force-gated
 // under `--no-input`. `--dry-run` skips the HTTP call.
 func issueLinkDeleteCommand() *cobra.Command {
-	var force, dryRun, noInput bool
+	var force, dryRun bool
 	cmd := &cobra.Command{
 		Use:         "delete KEY LINK_ID",
 		Short:       "Remove an issue link by id",
 		Args:        cobra.ExactArgs(2),
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			noInput := noInputRequested(cmd)
 			key, linkID := args[0], args[1]
 			if dryRun {
 				return writeEnvelope(cmd, "issue.link.delete", map[string]any{
@@ -153,8 +159,10 @@ func issueLinkDeleteCommand() *cobra.Command {
 				if !det.IsTTY || det.Agent || noInput {
 					return fmt.Errorf("issue link delete requires --force in headless / agent / --no-input mode")
 				}
-				if !confirmDestructive("link delete", linkID) {
-					return fmt.Errorf("aborted by user")
+				if ok, err := confirmDestructive(cmd, "link delete", linkID); err != nil {
+					return err
+				} else if !ok {
+					return cli.NewPromptError(cli.PromptAborted, "link delete", nil)
 				}
 			}
 			client, _, ok, err := jiraClientForCommand(cmd)
@@ -181,7 +189,6 @@ func issueLinkDeleteCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive removal (required under --no-input)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without removing the link")
-	cmd.Flags().BoolVar(&noInput, "no-input", false, "Run without interactive prompts")
 	return cmd
 }
 
