@@ -42,12 +42,29 @@ func (c *captureServer) capturedBody() map[string]any {
 	return c.body
 }
 
+// editmetaFloatField is an editmeta response declaring customfield_10001
+// as a numeric (float) custom field. A best-effort-invalid value for it
+// is dropped by stage 4 so it never reaches the wire.
+const editmetaFloatField = `{"fields":{"customfield_10001":{"name":"Points","fieldId":"customfield_10001","required":false,"schema":{"type":"number","custom":"com.atlassian.jira.plugin.system.customfieldtypes:float"}}}}`
+
+// createmetaFloatFields is the field-metadata array for a create
+// screen carrying the wire system fields plus customfield_10001 as a
+// numeric (float) custom field.
+const createmetaFloatFields = `[` +
+	`{"fieldId":"project","name":"Project","required":true,"schema":{"type":"project"}},` +
+	`{"fieldId":"issuetype","name":"Issue Type","required":true,"schema":{"type":"issuetype"}},` +
+	`{"fieldId":"assignee","name":"Assignee","required":false,"schema":{"type":"user"}},` +
+	`{"fieldId":"summary","name":"Summary","required":true,"schema":{"type":"string"}},` +
+	`{"fieldId":"customfield_10001","name":"Points","required":false,"schema":{"type":"number","custom":"com.atlassian.jira.plugin.system.customfieldtypes:float"}}` +
+	`]`
+
 // TestIssueCreateSubmitsValidatedFields proves issue create sends the
-// pipeline's SubmitFields. A best-effort-invalid `number` customfield is
-// dropped by stage 4; the live POST body must not contain it.
+// pipeline's SubmitFields. A best-effort-invalid customfield_10001 value
+// is dropped by stage 4; the live POST body must not contain it.
 func TestIssueCreateSubmitsValidatedFields(t *testing.T) {
 	cap := &captureServer{}
 	mux := http.NewServeMux()
+	registerCreatemeta(mux, "PROJ", "Task", "10002", createmetaFloatFields)
 	mux.HandleFunc("POST /rest/api/3/issue", func(w http.ResponseWriter, r *http.Request) {
 		cap.record(r)
 		w.Header().Set("Content-Type", "application/json")
@@ -56,7 +73,7 @@ func TestIssueCreateSubmitsValidatedFields(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 
-	payload := `{"summary":"Hi","project_key":"PROJ","issue_type":"Task","number":"not-a-number"}`
+	payload := `{"summary":"Hi","project_key":"PROJ","issue_type":"Task","customfield_10001":"not-a-number"}`
 	path := filepath.Join(t.TempDir(), "create.json")
 	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
@@ -78,8 +95,8 @@ func TestIssueCreateSubmitsValidatedFields(t *testing.T) {
 		// Some shapes nest under the top-level map directly.
 		fields = body
 	}
-	if _, leaked := fields["number"]; leaked {
-		t.Fatalf("invalid customfield 'number' reached the wire — submission used pre-validation payload, not SubmitFields: %#v", body)
+	if _, leaked := fields["customfield_10001"]; leaked {
+		t.Fatalf("invalid customfield reached the wire — submission used pre-validation payload, not SubmitFields: %#v", body)
 	}
 }
 
@@ -88,6 +105,10 @@ func TestIssueCreateSubmitsValidatedFields(t *testing.T) {
 func TestIssueEditSubmitsValidatedFields(t *testing.T) {
 	cap := &captureServer{}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /rest/api/3/issue/PROJ-1/editmeta", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, editmetaFloatField)
+	})
 	mux.HandleFunc("PUT /rest/api/3/issue/PROJ-1", func(w http.ResponseWriter, r *http.Request) {
 		cap.record(r)
 		w.WriteHeader(http.StatusNoContent)
@@ -95,7 +116,7 @@ func TestIssueEditSubmitsValidatedFields(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 
-	payload := `{"fields":{"summary":"renamed","number":"not-a-number"}}`
+	payload := `{"fields":{"summary":"renamed","customfield_10001":"not-a-number"}}`
 	path := filepath.Join(t.TempDir(), "edit.json")
 	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
@@ -116,8 +137,8 @@ func TestIssueEditSubmitsValidatedFields(t *testing.T) {
 	if fields == nil {
 		t.Fatalf("PUT body missing fields object: %#v", body)
 	}
-	if _, leaked := fields["number"]; leaked {
-		t.Fatalf("invalid customfield 'number' reached the wire on issue edit — submission used pre-validation fields: %#v", fields)
+	if _, leaked := fields["customfield_10001"]; leaked {
+		t.Fatalf("invalid customfield reached the wire on issue edit — submission used pre-validation fields: %#v", fields)
 	}
 }
 
@@ -125,6 +146,10 @@ func TestIssueEditSubmitsValidatedFields(t *testing.T) {
 func TestIssueCloneSubmitsValidatedFields(t *testing.T) {
 	cap := &captureServer{}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /rest/api/3/issue/PROJ-1/editmeta", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, editmetaFloatField)
+	})
 	mux.HandleFunc("GET /rest/api/3/issue/PROJ-1", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"id":"1","key":"PROJ-1","fields":{"summary":"orig","project":{"key":"PROJ"},"issuetype":{"name":"Task"}}}`)
@@ -137,7 +162,7 @@ func TestIssueCloneSubmitsValidatedFields(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 
-	payload := `{"fields":{"number":"not-a-number"}}`
+	payload := `{"fields":{"customfield_10001":"not-a-number"}}`
 	path := filepath.Join(t.TempDir(), "clone.json")
 	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
@@ -158,8 +183,8 @@ func TestIssueCloneSubmitsValidatedFields(t *testing.T) {
 	if fields == nil {
 		fields = body
 	}
-	if _, leaked := fields["number"]; leaked {
-		t.Fatalf("invalid customfield 'number' reached the wire on issue clone: %#v", body)
+	if _, leaked := fields["customfield_10001"]; leaked {
+		t.Fatalf("invalid customfield reached the wire on issue clone: %#v", body)
 	}
 }
 

@@ -46,6 +46,14 @@ func TestIssueEditNoInputJSONInputCallsJiraUpdateWithFieldsAndADF(t *testing.T) 
 	var called bool
 	var got map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// issue edit resolves the issue's edit screen before validating
+		// fields. The editmeta must declare the fields the payload sets,
+		// otherwise strict-mode screen validation rejects them.
+		if r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/PROJ-1/editmeta" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"fields":{"summary":{"name":"Summary","fieldId":"summary","required":true,"schema":{"type":"string"}},"description":{"name":"Description","fieldId":"description","required":false,"schema":{"type":"doc"}}}}`))
+			return
+		}
 		if r.Method != http.MethodPut || r.URL.Path != "/rest/api/3/issue/PROJ-1" {
 			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
 		}

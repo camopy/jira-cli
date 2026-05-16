@@ -1445,6 +1445,28 @@ func issueCreateCommand() *cobra.Command {
 					return err
 				}
 			}
+			// Fill project / issue type from profile defaults BEFORE
+			// normalizing aliases so a default-only create still carries
+			// the target into the wire payload.
+			if firstNonEmpty(stringFromAny(payload["project_key"])) == "" && profile.DefaultProject != "" {
+				payload["project_key"] = profile.DefaultProject
+			}
+			if firstNonEmpty(stringFromAny(payload["issue_type"])) == "" && profile.DefaultIssueType != "" {
+				payload["issue_type"] = profile.DefaultIssueType
+			}
+			// Normalize the CLI create aliases (project_key / issue_type /
+			// assignee_account_id) to the Jira wire field ids
+			// (project / issuetype / assignee) BEFORE the pipeline runs.
+			// Screen validation keys on the wire ids; an un-normalized
+			// alias would be flagged off-screen even for a default
+			// create. A conflict (alias and wire key both set) is fatal.
+			projectForSchema := firstNonEmpty(stringFromAny(payload["project_key"]), profile.DefaultProject)
+			issueTypeForSchema := firstNonEmpty(stringFromAny(payload["issue_type"]), profile.DefaultIssueType)
+			normalizedPayload, normErr := pipeline.NormalizeCreateAliasesChecked(payload)
+			if normErr != nil {
+				return normErr
+			}
+			payload = normalizedPayload
 			// The issue description is the primary ADF document for
 			// this mutation. Whether it arrived as `description_markdown`
 			// or as a raw ADF `description`, it is pulled out of the
@@ -1471,15 +1493,38 @@ func issueCreateCommand() *cobra.Command {
 			}
 
 			// Route through the 5-stage validation pipeline before
-			// submission. Without an active screen schema, stages
-			// 1+2+4 still run; stage 3 is a no-op (no schema means
-			// no "off-screen" check possible).
+			// submission. For a live create we resolve the client up
+			// front and attach a screen-schema fetcher so stage 3
+			// validates the payload against the project / issue-type
+			// create screen. A dry-run preview runs without credentials,
+			// so it has no fetcher: stages 1+2+4 still run; stage 3 is a
+			// no-op when no schema is reachable.
+			var client *jira.Client
+			if !dryRun {
+				var ok bool
+				var err error
+				client, profile, ok, err = jiraClientForCommand(cmd)
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return fmt.Errorf("jira base URL is required for issue.create")
+				}
+			}
 			pipeIn := pipeline.MutationInput{
 				Mode:             adfModeFor(cmd, true),
 				Fields:           payload,
 				DryRun:           dryRun,
 				NamedADFDocs:     namedADF,
 				MarkdownWarnings: descMarkdownWarnings,
+			}
+			if client != nil && !readOnlyEnabled(cmd) {
+				// Skip the schema fetch in read-only mode: the client
+				// refuses the create itself, so resolving its screen is
+				// wasted work and would emit a stray read request.
+				pipeIn.SchemaFetcher = newScreenSchemaFetcher(
+					cmd.Context(), servicesForClient(client).Project(0),
+					profileForEnvelope(cmd), projectForSchema, issueTypeForSchema)
 			}
 			if descriptionPresent {
 				// FieldCompatibility is left at its zero value with
@@ -1518,18 +1563,14 @@ func issueCreateCommand() *cobra.Command {
 					"dry_run": true,
 				}, pipeOut.Warnings)
 			}
-			client, profile, ok, err := jiraClientForCommand(cmd)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				return fmt.Errorf("jira base URL is required for issue.create")
-			}
+			// submitFields already carries project / issuetype / assignee
+			// in their Jira wire shapes — alias normalization ran before
+			// the pipeline. IssueCreateRequest forwards the fields map
+			// verbatim; Project / IssueType are left empty so it does not
+			// re-wrap a value that is already wire-shaped.
 			req := &jira.IssueCreateRequest{
-				Summary:   stringFromAny(submitFields["summary"]),
-				Project:   firstNonEmpty(stringFromAny(submitFields["project_key"]), profile.DefaultProject),
-				IssueType: firstNonEmpty(stringFromAny(submitFields["issue_type"]), profile.DefaultIssueType),
-				Fields:    submitFields,
+				Summary: stringFromAny(submitFields["summary"]),
+				Fields:  submitFields,
 			}
 			issue, resp, err := issueService(client).Create(cmd.Context(), req)
 			if err != nil {
@@ -1700,14 +1741,15 @@ func validateIssueCreateRequired(payload map[string]any, profile config.Profile)
 
 // issueCreatePreview builds the dry-run preview shape per command-schemas.md.
 // The supplied fields map is the pipeline's post-validation SubmitFields:
-// the description (whether it arrived as markdown or raw ADF) has already
-// been converted, validated, and compatibility-applied, and lands here
-// under the bare `description` key. Profile defaults fill missing
-// project_key / issue_type when the JSON payload omits them.
+// the create aliases have been normalized to the Jira wire field ids
+// (project / issuetype / assignee) and the description (whether it
+// arrived as markdown or raw ADF) has been converted, validated, and
+// compatibility-applied under the bare `description` key. Profile
+// defaults fill project / issue type when the payload omits them.
 func issueCreatePreview(fields map[string]any, profile config.Profile) (map[string]any, error) {
 	preview := map[string]any{
-		"project_key": firstNonEmpty(stringFromAny(fields["project_key"]), profile.DefaultProject),
-		"issue_type":  firstNonEmpty(stringFromAny(fields["issue_type"]), profile.DefaultIssueType),
+		"project_key": firstNonEmpty(wireObjectString(fields["project"], "key"), profile.DefaultProject),
+		"issue_type":  firstNonEmpty(wireObjectString(fields["issuetype"], "name"), profile.DefaultIssueType),
 		"summary":     stringFromAny(fields["summary"]),
 	}
 	// description in SubmitFields is the validated ADF document. Surface
@@ -1715,7 +1757,10 @@ func issueCreatePreview(fields map[string]any, profile config.Profile) (map[stri
 	if doc, ok := fields["description"]; ok && doc != nil {
 		preview["description_adf"] = doc
 	}
-	for _, key := range []string{"assignee_account_id", "priority", "labels", "components", "epic_key", "custom_fields"} {
+	if acct := wireObjectString(fields["assignee"], "accountId"); acct != "" {
+		preview["assignee_account_id"] = acct
+	}
+	for _, key := range []string{"priority", "labels", "components", "epic_key", "custom_fields"} {
 		if v, ok := fields[key]; ok {
 			preview[key] = v
 		}
@@ -1831,13 +1876,34 @@ In headless mode (--no-input), at least one field flag MUST be provided
 			if adfParseErr != nil {
 				return adfParseErr
 			}
+			// For a live edit, resolve the client up front and attach an
+			// edit-screen schema fetcher (editmeta) so stage 3 validates
+			// the fields against the issue's edit screen. A dry-run runs
+			// without credentials and therefore without a fetcher.
+			var editClient *jira.Client
+			if !dryRun {
+				var hasClient bool
+				editClient, _, hasClient, err = jiraClientForCommand(cmd)
+				if err != nil {
+					return err
+				}
+				if !hasClient {
+					return fmt.Errorf("jira base URL is required for issue.edit")
+				}
+			}
 			// Thread the mutation through the 5-stage pipeline.
-			pipeOut := pipeline.RunMutation(pipeline.MutationInput{
+			editIn := pipeline.MutationInput{
 				Mode:         adfModeFor(cmd, true),
 				Fields:       fields,
 				NamedADFDocs: namedADF,
 				DryRun:       dryRun,
-			})
+			}
+			if editClient != nil && !readOnlyEnabled(cmd) {
+				editIn.SchemaFetcher = newEditScreenSchemaFetcher(
+					cmd.Context(), servicesForClient(editClient).Project(0),
+					profileForEnvelope(cmd), args[0])
+			}
+			pipeOut := pipeline.RunMutation(editIn)
 			if pipeOut.Aborted {
 				return pipeOut.Err
 			}
@@ -1848,14 +1914,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 				submitFields = map[string]any{}
 			}
 			if !dryRun {
-				client, _, hasClient, err := jiraClientForCommand(cmd)
-				if err != nil {
-					return err
-				}
-				if !hasClient {
-					return fmt.Errorf("jira base URL is required for issue.edit")
-				}
-				issue, resp, err := issueService(client).Update(cmd.Context(), args[0], &jira.IssueUpdateRequest{Fields: submitFields})
+				issue, resp, err := issueService(editClient).Update(cmd.Context(), args[0], &jira.IssueUpdateRequest{Fields: submitFields})
 				if err != nil {
 					return err
 				}
@@ -2039,14 +2098,37 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 			}
 			// Destructive commands ARE mutations and MUST run through
 			// the pipeline. delete has no fields to validate (stages
-			// 2-4 no-op); clone/move carry a fields payload that stage
-			// 4 (customfield encoding) rejects on malformed values.
+			// 2-4 no-op); clone/move carry a fields payload that stages
+			// 3 (screen schema) and 4 (customfield encoding) validate.
 			pipeFields := issueFieldsFromPayload(payload)
-			pipeOut := pipeline.RunMutation(pipeline.MutationInput{
+			// For a live clone/move, resolve the client up front and
+			// attach an edit-screen schema fetcher (editmeta on the
+			// source issue) so stage 3 validates the override fields
+			// against a real screen. delete carries no fields, and a
+			// dry-run runs without credentials — neither gets a fetcher.
+			var destructiveClient *jira.Client
+			var err error
+			if !dryRun && name != "delete" {
+				var hasClient bool
+				destructiveClient, _, hasClient, err = jiraClientForCommand(cmd)
+				if err != nil {
+					return err
+				}
+				if !hasClient {
+					return fmt.Errorf("jira base URL is required for issue.%s", name)
+				}
+			}
+			destructiveIn := pipeline.MutationInput{
 				Mode:   adfModeFor(cmd, true),
 				Fields: pipeFields,
 				DryRun: dryRun,
-			})
+			}
+			if destructiveClient != nil && !readOnlyEnabled(cmd) {
+				destructiveIn.SchemaFetcher = newEditScreenSchemaFetcher(
+					cmd.Context(), servicesForClient(destructiveClient).Project(0),
+					profileForEnvelope(cmd), args[0])
+			}
+			pipeOut := pipeline.RunMutation(destructiveIn)
 			if pipeOut.Aborted {
 				return pipeOut.Err
 			}
@@ -2079,9 +2161,14 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 					return cli.NewPromptError(cli.PromptAborted, "issue "+name, nil)
 				}
 			}
-			client, _, ok, err := jiraClientForCommand(cmd)
-			if err != nil {
-				return err
+			// clone/move already resolved a client up front to drive the
+			// schema fetcher; delete resolves one here.
+			client, ok := destructiveClient, destructiveClient != nil
+			if client == nil {
+				client, _, ok, err = jiraClientForCommand(cmd)
+				if err != nil {
+					return err
+				}
 			}
 			if ok && !dryRun {
 				service := issueService(client)
@@ -3485,6 +3572,17 @@ func stringFromAny(v any) string {
 	default:
 		return ""
 	}
+}
+
+// wireObjectString reads a string field out of a Jira wire object value
+// (e.g. the "key" of a {"key":"KAN"} project object). It returns "" when
+// the value is not an object or the field is absent / not a string.
+func wireObjectString(v any, key string) string {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return ""
+	}
+	return stringFromAny(m[key])
 }
 
 func firstNonEmpty(values ...string) string {

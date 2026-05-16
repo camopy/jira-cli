@@ -2,11 +2,11 @@ package pipeline
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 
 	"github.com/matcra587/jira-cli/internal/cli/adfmode"
 	"github.com/matcra587/jira-cli/pkg/adf"
-	"github.com/matcra587/jira-cli/pkg/jira/customfield"
 )
 
 // MutationInput is the realistic, command-facing input shape for the
@@ -173,15 +173,27 @@ func RunMutation(in MutationInput) MutationResult {
 	}
 
 	// --- Stage 3: field schema / screen ---
+	// Flatten contract-level custom_fields into top-level
+	// customfield_NNNNN keys BEFORE screen validation so nested and raw
+	// custom fields share one namespace and one validation path. A
+	// malformed wrapper or a colliding key is fatal at this boundary.
+	flatFields, flattenErr := FlattenCustomFields(in.Fields)
+	if flattenErr != nil {
+		res.Aborted = true
+		res.AbortedAt = StageFieldSchema
+		res.Err = flattenErr
+		return res
+	}
+
 	schema := in.Schema
 	var fields map[string]any
 	if in.SchemaFetcher != nil {
-		// Resolve via fetcher; refresh once on unknown.
+		// Resolve via fetcher; refresh once on a transient unknown.
 		s, _, err := ResolveScreenSchemaStrict(in.SchemaFetcher)
 		switch {
 		case err == nil:
 			schema = s
-			validated, warnings, err := ValidateFields(in.Fields, schema, in.Mode)
+			validated, warnings, err := ValidateFields(flatFields, schema, in.Mode)
 			res.Warnings = append(res.Warnings, warnings...)
 			if err != nil {
 				res.Aborted = true
@@ -190,11 +202,32 @@ func RunMutation(in MutationInput) MutationResult {
 				return res
 			}
 			fields = validated
+		case errors.Is(err, ErrSchemaNotFound):
+			// A 404 / unknown project or issue type. This is a definite
+			// user error, never transient — fatal in every mode. The
+			// known-safe fallback must not mask a typo'd target.
+			res.Aborted = true
+			res.AbortedAt = StageFieldSchema
+			res.Err = fmt.Errorf("screen schema unavailable: project or issue type not found: %w", err)
+			return res
 		case errors.Is(err, ErrSchemaUnknown) && in.Mode == adfmode.ModeBestEffort:
-			// Known-safe fallback.
-			f, warnings := ApplyKnownSafeFallback(in.Fields)
+			// Best-effort + a transient miss: strip to the known-safe
+			// field set so an unresolved screen never lets an unverified
+			// field through.
+			f, warnings := ApplyKnownSafeFallback(flatFields)
 			res.Warnings = append(res.Warnings, warnings...)
 			fields = f
+		case errors.Is(err, ErrSchemaUnknown):
+			// Strict + a transient miss (no createmeta access, transport
+			// failure, timeout). The CLI cannot tell which custom fields
+			// are off-screen, so forwarding them would let unvalidated
+			// fields reach Jira. Strict mode aborts: a missing schema is
+			// fatal in strict mode. The underlying transport cause is
+			// preserved in the error.
+			res.Aborted = true
+			res.AbortedAt = StageFieldSchema
+			res.Err = fmt.Errorf("screen schema could not be resolved in strict mode: %w", err)
+			return res
 		default:
 			res.Aborted = true
 			res.AbortedAt = StageFieldSchema
@@ -205,7 +238,7 @@ func RunMutation(in MutationInput) MutationResult {
 		// Preloaded schema (non-nil ValidFields means caller actually
 		// supplied one; empty map vs nil distinguishes "valid empty
 		// schema rejects everything" from "no schema, skip stage 3").
-		validated, warnings, err := ValidateFields(in.Fields, schema, in.Mode)
+		validated, warnings, err := ValidateFields(flatFields, schema, in.Mode)
 		res.Warnings = append(res.Warnings, warnings...)
 		if err != nil {
 			res.Aborted = true
@@ -218,11 +251,11 @@ func RunMutation(in MutationInput) MutationResult {
 		// No schema provided — caller intentionally bypassed stage 3.
 		// Stage 4 still runs; the customfield registry will reject any
 		// malformed values regardless of screen membership.
-		fields = in.Fields
+		fields = flatFields
 	}
 
 	// --- Stage 4: customfield registry ---
-	encoded, warnings, err := encodeCustomFields(fields, in.Mode)
+	encoded, warnings, err := encodeCustomFields(fields, schema, in.Mode)
 	res.Warnings = append(res.Warnings, warnings...)
 	if err != nil {
 		res.Aborted = true
@@ -242,55 +275,62 @@ func RunMutation(in MutationInput) MutationResult {
 }
 
 // customfieldIDPattern matches Jira customfield ID keys (customfield_NNNN).
-// These are unregistered by type name in the registry — they get a forwarding
-// warning"behavior must be consistent and surface
-// in the warnings array if forwarded" (attack 3 pass criterion).
 var customfieldIDPattern = regexp.MustCompile(`^customfield_\d+$`)
 
-// encodeCustomFields routes every fields[k] through the customfield
-// registry. Keys matching the registry type names are validated; unmatched
-// keys that look like Jira customfield IDs (customfield_NNNN) get a
-// forwarding warning per ; all other native keys pass silently.
-func encodeCustomFields(fields map[string]any, mode adfmode.Mode) (map[string]any, []adf.Warning, error) {
+// encodeCustomFields runs stage 4: it validates and encodes every
+// customfield_NNNNN value in fields against the type the screen schema
+// declares for it, then routes the outcome through the single shared
+// CustomFieldDropPolicy so create/edit/clone/move all behave the same.
+//
+//   - When the schema declares a known schema.custom type for the
+//     field, the customfield registry validates and encodes the value.
+//     A malformed value is fatal in strict mode and dropped with a
+//     warning in best-effort mode.
+//   - When no type is known (no schema, or a marketplace/vendor field
+//     the registry cannot map), the value is forwarded opaquely with a
+//     warning — never silently dropped.
+//
+// Native (non customfield_NNNNN) keys pass straight through: they are
+// not custom fields and stage 3 already screen-validated them.
+func encodeCustomFields(fields map[string]any, schema ScreenSchema, mode adfmode.Mode) (map[string]any, []adf.Warning, error) {
 	if len(fields) == 0 {
 		return fields, nil, nil
 	}
-	reg := customfield.Registry()
 	out := make(map[string]any, len(fields))
 	var warnings []adf.Warning
 	for k, v := range fields {
-		entry, ok := reg.Lookup(k)
-		if !ok {
-			// Native or unregistered field — pass through. When the key
-			// matches the customfield_NNNN pattern the type is unknown to
-			// the registry; emit a warning so callers can see what was
-			// forwarded opaquely (: "surface in warnings if forwarded").
-			if customfieldIDPattern.MatchString(k) {
-				warnings = append(warnings, adf.Warning{
-					Type:    "customfield_unknown_type",
-					Message: "customfield " + k + " has no registered type validator; forwarded opaquely — value not checked",
-					Field:   k,
-					Lossy:   false,
-				})
-			}
+		if !customfieldIDPattern.MatchString(k) {
+			// Native field — not a custom field. Pass through.
 			out[k] = v
 			continue
 		}
-		if err := entry.Validator(v); err != nil {
-			if mode == adfmode.ModeBestEffort {
-				warnings = append(warnings, adf.Warning{
-					Type:    "customfield_invalid",
-					Message: err.Error(),
-					Field:   k,
-					Lossy:   true,
-				})
-				continue
-			}
-			return nil, warnings, &CustomFieldError{Field: k, Reason: err.Error()}
+		fieldType := fieldTypeFor(schema, k)
+		encoded, knownType, encErr := encodeCustomFieldByType(fieldType, v)
+		if !knownType {
+			// Unknown / unmappable type — opaque pass-through with a
+			// warning, per the shared policy.
+			decision := CustomFieldDropPolicy(k, "", false, mode)
+			warnings = append(warnings, adf.Warning{
+				Type:    "customfield_unknown_type",
+				Message: decision.Warning,
+				Field:   k,
+				Lossy:   false,
+			})
+			out[k] = v
+			continue
 		}
-		encoded, err := entry.Encoder(v)
-		if err != nil {
-			return nil, warnings, &CustomFieldError{Field: k, Reason: err.Error()}
+		if encErr != nil {
+			decision := CustomFieldDropPolicy(k, fieldType, true, mode)
+			if decision.Fatal {
+				return nil, warnings, &CustomFieldError{Field: k, Reason: encErr.Error()}
+			}
+			warnings = append(warnings, adf.Warning{
+				Type:    "customfield_invalid",
+				Message: decision.Warning + ": " + encErr.Error(),
+				Field:   k,
+				Lossy:   true,
+			})
+			continue
 		}
 		out[k] = encoded
 	}

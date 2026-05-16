@@ -127,6 +127,13 @@ type FieldSchema struct {
 	Name     string `json:"name"`
 	Required bool   `json:"required"`
 	Type     string `json:"type"`
+	// Custom is the schema.custom token Jira reports for a custom
+	// field — the trailing identifier of
+	// com.atlassian.jira.plugin.system.customfieldtypes:* (e.g.
+	// "select", "datepicker", "float"). Empty for system fields and for
+	// custom fields whose type Jira does not expose. It is the branch
+	// key the mutation pipeline uses to encode a custom-field value.
+	Custom string `json:"custom,omitempty"`
 }
 
 func (f *IssueFields) UnmarshalJSON(data []byte) error {

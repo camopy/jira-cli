@@ -3,6 +3,7 @@ package jira
 import (
 	"context"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -10,6 +11,11 @@ import (
 type ProjectService interface {
 	GetFieldSchema(context.Context, string, string) (*ProjectFieldSchema, *Response, error)
 	GetFieldSchemaForProfile(context.Context, string, string, string) (*ProjectFieldSchema, *Response, error)
+	// GetEditSchemaForProfile resolves the edit-screen field schema for
+	// one issue via GET /rest/api/3/issue/{idOrKey}/editmeta. The
+	// edit/move flows validate against this; createmeta covers
+	// create/clone. Cached per profile + issue key.
+	GetEditSchemaForProfile(context.Context, string, string) (*ProjectFieldSchema, *Response, error)
 	List(context.Context, *ListOptions) ([]ProjectSummary, *Response, error)
 }
 
@@ -100,26 +106,184 @@ func (s *projectService) List(ctx context.Context, opts *ListOptions) ([]Project
 	return out, lastResp, nil
 }
 
+// createMetaFieldPage is one page of the paginated REST v3
+// createmeta/{project}/issuetypes/{issueTypeId} field-metadata endpoint.
+type createMetaFieldPage struct {
+	StartAt    int `json:"startAt"`
+	MaxResults int `json:"maxResults"`
+	Total      int `json:"total"`
+	Fields     []struct {
+		ID       string `json:"id"`
+		FieldID  string `json:"fieldId"`
+		Key      string `json:"key"`
+		Name     string `json:"name"`
+		Required bool   `json:"required"`
+		Type     string `json:"type"`
+		Schema   struct {
+			Type   string `json:"type"`
+			Custom string `json:"custom"`
+		} `json:"schema"`
+	} `json:"fields"`
+}
+
+// createMetaIssueTypePage is one page of the paginated REST v3
+// createmeta/{project}/issuetypes endpoint. It carries both the id and
+// the name of every issue type on the project's create screen — the
+// field-metadata endpoint is keyed by id, not name.
+type createMetaIssueTypePage struct {
+	StartAt    int `json:"startAt"`
+	MaxResults int `json:"maxResults"`
+	Total      int `json:"total"`
+	IssueTypes []struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"issueTypes"`
+}
+
 func (s *projectService) GetFieldSchemaForProfile(ctx context.Context, profile, projectKey, issueType string) (*ProjectFieldSchema, *Response, error) {
 	if schema, ok := s.cache.Get(profile, projectKey, issueType); ok {
 		return schema, &Response{IsLast: true}, nil
 	}
-	req, err := s.client.NewRequest(ctx, "GET", "rest/api/3/issue/createmeta/"+projectKey+"/issuetypes/"+issueType, nil)
+	// The REST v3 field-metadata endpoint is keyed by issueTypeId. This
+	// repo addresses issue types by NAME (e.g. "Task"), so the name is
+	// resolved to its id via the issuetypes page before the
+	// field-metadata call.
+	issueTypeID, err := s.resolveIssueTypeID(ctx, projectKey, issueType)
+	if err != nil {
+		return nil, nil, err
+	}
+	schema := ProjectFieldSchema{
+		ProjectKey: projectKey,
+		IssueType:  issueType,
+		Fields:     make([]FieldSchema, 0),
+	}
+	var lastResp *Response
+	startAt := 0
+	for {
+		path := "rest/api/3/issue/createmeta/" + projectKey + "/issuetypes/" + issueTypeID +
+			"?startAt=" + strconv.Itoa(startAt) + "&maxResults=50"
+		req, err := s.client.NewRequest(ctx, "GET", path, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		var page createMetaFieldPage
+		resp, err := s.client.Do(req, &page)
+		if err != nil {
+			return nil, resp, err
+		}
+		lastResp = resp
+		for _, field := range page.Fields {
+			id := firstNonEmpty(field.ID, field.FieldID, field.Key)
+			fieldType := firstNonEmpty(field.Type, field.Schema.Type)
+			schema.Fields = append(schema.Fields, FieldSchema{
+				ID:       id,
+				Name:     field.Name,
+				Required: field.Required,
+				Type:     fieldType,
+				Custom:   customFieldToken(field.Schema.Custom),
+			})
+		}
+		startAt += len(page.Fields)
+		if len(page.Fields) == 0 || startAt >= page.Total {
+			break
+		}
+	}
+	s.cache.Set(profile, projectKey, issueType, &schema)
+	return &schema, lastResp, nil
+}
+
+// resolveIssueTypeID walks the paginated createmeta issuetypes endpoint
+// and returns the id of the issue type whose name matches issueType. An
+// issueType value that already looks like a numeric id is returned
+// as-is. An unknown name is an error: calling the field-metadata
+// endpoint with a name in the id slot would 404 on real Cloud.
+func (s *projectService) resolveIssueTypeID(ctx context.Context, projectKey, issueType string) (string, error) {
+	if isNumericID(issueType) {
+		return issueType, nil
+	}
+	startAt := 0
+	for {
+		path := "rest/api/3/issue/createmeta/" + projectKey + "/issuetypes" +
+			"?startAt=" + strconv.Itoa(startAt) + "&maxResults=50"
+		req, err := s.client.NewRequest(ctx, "GET", path, nil)
+		if err != nil {
+			return "", err
+		}
+		var page createMetaIssueTypePage
+		if _, err := s.client.Do(req, &page); err != nil {
+			return "", err
+		}
+		for _, it := range page.IssueTypes {
+			if it.Name == issueType {
+				return it.ID, nil
+			}
+		}
+		startAt += len(page.IssueTypes)
+		if len(page.IssueTypes) == 0 || startAt >= page.Total {
+			break
+		}
+	}
+	return "", &APIError{
+		Type:       ErrorTypeNotFound,
+		StatusCode: 404,
+		Message:    "issue type " + issueType + " not found on the create screen for project " + projectKey,
+	}
+}
+
+// isNumericID reports whether s is a non-empty all-digit string — the
+// shape of a Jira issue-type id.
+func isNumericID(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// customFieldToken reduces a Jira schema.custom value to its trailing
+// type token. Atlassian system custom fields report a fully-qualified
+// identifier (com.atlassian.jira.plugin.system.customfieldtypes:select);
+// the pipeline branches on the bare token (select). Marketplace fields
+// use vendor-namespaced identifiers — their trailing token is kept as-is
+// and the pipeline treats it as unknown, forwarding the value opaquely.
+func customFieldToken(custom string) string {
+	if custom == "" {
+		return ""
+	}
+	if i := strings.LastIndexByte(custom, ':'); i >= 0 {
+		return custom[i+1:]
+	}
+	return custom
+}
+
+// GetEditSchemaForProfile resolves the edit screen for one issue via
+// GET /rest/api/3/issue/{idOrKey}/editmeta. EditMetaBean carries a
+// `fields` map (NOT a paginated list) keyed by field id. The result is
+// cached per profile under a synthetic "issue type" of the issue key so
+// edit/move share the per-profile ProjectSchemaCache without colliding
+// with createmeta entries.
+func (s *projectService) GetEditSchemaForProfile(ctx context.Context, profile, issueKey string) (*ProjectFieldSchema, *Response, error) {
+	const editScope = "@editmeta"
+	if schema, ok := s.cache.Get(profile, issueKey, editScope); ok {
+		return schema, &Response{IsLast: true}, nil
+	}
+	req, err := s.client.NewRequest(ctx, "GET", "rest/api/3/issue/"+issueKey+"/editmeta", nil)
 	if err != nil {
 		return nil, nil, err
 	}
 	var raw struct {
-		ProjectKey string `json:"project_key"`
-		IssueType  string `json:"issue_type"`
-		Fields     []struct {
-			ID       string `json:"id"`
-			FieldID  string `json:"fieldId"`
-			Key      string `json:"key"`
+		Fields map[string]struct {
 			Name     string `json:"name"`
+			Key      string `json:"key"`
+			FieldID  string `json:"fieldId"`
 			Required bool   `json:"required"`
-			Type     string `json:"type"`
 			Schema   struct {
-				Type string `json:"type"`
+				Type   string `json:"type"`
+				Custom string `json:"custom"`
 			} `json:"schema"`
 		} `json:"fields"`
 	}
@@ -128,27 +292,20 @@ func (s *projectService) GetFieldSchemaForProfile(ctx context.Context, profile, 
 		return nil, resp, err
 	}
 	schema := ProjectFieldSchema{
-		ProjectKey: raw.ProjectKey,
-		IssueType:  raw.IssueType,
-		Fields:     make([]FieldSchema, 0, len(raw.Fields)),
+		IssueType: issueKey,
+		Fields:    make([]FieldSchema, 0, len(raw.Fields)),
 	}
-	for _, field := range raw.Fields {
-		id := firstNonEmpty(field.ID, field.FieldID, field.Key)
-		fieldType := firstNonEmpty(field.Type, field.Schema.Type)
+	for id, field := range raw.Fields {
+		fieldID := firstNonEmpty(field.FieldID, field.Key, id)
 		schema.Fields = append(schema.Fields, FieldSchema{
-			ID:       id,
+			ID:       fieldID,
 			Name:     field.Name,
 			Required: field.Required,
-			Type:     fieldType,
+			Type:     field.Schema.Type,
+			Custom:   customFieldToken(field.Schema.Custom),
 		})
 	}
-	if schema.ProjectKey == "" {
-		schema.ProjectKey = projectKey
-	}
-	if schema.IssueType == "" {
-		schema.IssueType = issueType
-	}
-	s.cache.Set(profile, projectKey, issueType, &schema)
+	s.cache.Set(profile, issueKey, editScope, &schema)
 	return &schema, resp, nil
 }
 

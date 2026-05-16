@@ -16,6 +16,16 @@ import (
 	"testing"
 )
 
+// createmetaDescriptionFields is the field-metadata array for a create
+// screen carrying the wire system fields plus a description field.
+const createmetaDescriptionFields = `[` +
+	`{"fieldId":"project","name":"Project","required":true,"schema":{"type":"project"}},` +
+	`{"fieldId":"issuetype","name":"Issue Type","required":true,"schema":{"type":"issuetype"}},` +
+	`{"fieldId":"assignee","name":"Assignee","required":false,"schema":{"type":"user"}},` +
+	`{"fieldId":"summary","name":"Summary","required":true,"schema":{"type":"string"}},` +
+	`{"fieldId":"description","name":"Description","required":false,"schema":{"type":"doc"}}` +
+	`]`
+
 // TestIssueCreateMarkdownDescriptionSubmittedAsValidatedADF proves a
 // `description_markdown` payload key is converted to ADF and submitted
 // as a structured ADF document — not as the raw markdown string and not
@@ -23,6 +33,7 @@ import (
 func TestIssueCreateMarkdownDescriptionSubmittedAsValidatedADF(t *testing.T) {
 	cap := &captureServer{}
 	mux := http.NewServeMux()
+	registerCreatemeta(mux, "PROJ", "Task", "10002", createmetaDescriptionFields)
 	mux.HandleFunc("POST /rest/api/3/issue", func(w http.ResponseWriter, r *http.Request) {
 		cap.record(r)
 		w.Header().Set("Content-Type", "application/json")
@@ -73,6 +84,7 @@ func TestIssueCreateMarkdownDescriptionSubmittedAsValidatedADF(t *testing.T) {
 func TestIssueCreateRawADFDescriptionStrictRejectsBeforeWire(t *testing.T) {
 	var posts int32
 	mux := http.NewServeMux()
+	registerCreatemeta(mux, "PROJ", "Task", "10002", createmetaDescriptionFields)
 	mux.HandleFunc("POST /rest/api/3/issue", func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(&posts, 1)
 		w.Header().Set("Content-Type", "application/json")
@@ -116,6 +128,7 @@ func TestIssueCreateRawADFDescriptionStrictRejectsBeforeWire(t *testing.T) {
 func TestIssueCreateRawADFDescriptionBestEffortWarnsAndSubmits(t *testing.T) {
 	cap := &captureServer{}
 	mux := http.NewServeMux()
+	registerCreatemeta(mux, "PROJ", "Task", "10002", createmetaDescriptionFields)
 	mux.HandleFunc("POST /rest/api/3/issue", func(w http.ResponseWriter, r *http.Request) {
 		cap.record(r)
 		w.Header().Set("Content-Type", "application/json")

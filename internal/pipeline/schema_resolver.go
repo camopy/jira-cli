@@ -8,10 +8,18 @@ import (
 )
 
 // ErrSchemaUnknown is returned by a schema fetcher when the project /
-// issue-type / screen schema cannot be resolved. Callers respond by
-// attempting one refresh, then either strict-aborting or falling back to
-// the known-safe field set.
+// issue-type / screen schema cannot be resolved for a transient reason
+// (transport failure, timeout, missing-permission). It is recoverable:
+// callers attempt one refresh, then strict-abort or fall back to the
+// known-safe field set.
 var ErrSchemaUnknown = errors.New("pipeline: project/issue-type schema unknown")
+
+// ErrSchemaNotFound is returned by a schema fetcher when the project or
+// issue type does not exist (a 404 / unknown-project). Unlike
+// ErrSchemaUnknown this is a definite user error, never transient, so
+// it is fatal in EVERY mode — the best-effort known-safe fallback must
+// not paper over a typo'd project or issue type.
+var ErrSchemaNotFound = errors.New("pipeline: project/issue-type schema not found")
 
 // SchemaFetcher returns the active screen schema. It MAY return
 // ErrSchemaUnknown to indicate a stale/missing cache.

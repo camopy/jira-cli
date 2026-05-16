@@ -30,6 +30,14 @@ func TestForcedCloneAndMoveAreHTTPBackedOrExplicitUnsupported(t *testing.T) {
 					_, _ = w.Write([]byte(`{"key":"PROJ-1","fields":{"summary":"Original","issuetype":{"name":"Task"},"project":{"key":"PROJ"}}}`))
 					return
 				}
+				// clone/move resolve the issue's edit screen before
+				// validating override fields. The editmeta must declare the
+				// fields the override payload sets, otherwise strict-mode
+				// screen validation rejects them.
+				if r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/PROJ-1/editmeta" {
+					_, _ = w.Write([]byte(`{"fields":{"summary":{"name":"Summary","fieldId":"summary","required":true,"schema":{"type":"string"}}}}`))
+					return
+				}
 				called = true
 				if r.Method != tc.wantMethod || r.URL.Path != tc.wantPath {
 					t.Fatalf("unexpected request for issue %s: %s %s", tc.sub, r.Method, r.URL.Path)

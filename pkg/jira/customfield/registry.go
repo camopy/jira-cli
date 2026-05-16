@@ -114,6 +114,97 @@ func Registry() RegistryView {
 // accepts in its native shape (number, string, date, datetime, labels).
 func passThrough(v any) (any, error) { return v, nil }
 
+// liftScalarObject returns an Encoder that lifts a bare scalar into the
+// typed object shape {key: value} Jira expects. A value that is already
+// an object (an explicit {"value":...} / {"id":...} / {"name":...}
+// supplied by the caller) is passed through unchanged so explicit
+// input is honored. The companion validator must already have
+// accepted both shapes.
+func liftScalarObject(key string) Encoder {
+	return func(v any) (any, error) {
+		if s, ok := v.(string); ok {
+			return map[string]any{key: s}, nil
+		}
+		return v, nil
+	}
+}
+
+// liftScalarSlice returns an Encoder for array custom fields: a bare
+// list of scalars is lifted element-wise into typed objects
+// ([]any{"A","B"} -> [{key:"A"},{key:"B"}]); an element that is already
+// an object is kept as-is. A non-slice value is returned unchanged for
+// the validator to have caught.
+func liftScalarSlice(key string) Encoder {
+	return func(v any) (any, error) {
+		s, ok := v.([]any)
+		if !ok {
+			return v, nil
+		}
+		out := make([]any, len(s))
+		for i, el := range s {
+			if str, isStr := el.(string); isStr {
+				out[i] = map[string]any{key: str}
+				continue
+			}
+			out[i] = el
+		}
+		return out, nil
+	}
+}
+
+// acceptScalarOrObject returns a Validator that accepts EITHER a
+// non-empty bare string (a human label / id the encoder will lift) OR
+// an object carrying any one of objKeys with a non-empty string value.
+// It is the input contract for select-family, user, group, version and
+// project custom fields where the CLI lifts a bare label to the typed
+// wire shape but also honors an explicit object.
+func acceptScalarOrObject(objKeys ...string) Validator {
+	return func(v any) error {
+		if s, ok := v.(string); ok {
+			if s == "" {
+				return fmt.Errorf("expected a non-empty string")
+			}
+			return nil
+		}
+		m, ok := v.(map[string]any)
+		if !ok {
+			return fmt.Errorf("expected a string or object, got %T", v)
+		}
+		for _, k := range objKeys {
+			if raw, has := m[k]; has {
+				s, ok := raw.(string)
+				if !ok {
+					return fmt.Errorf("key %q must be a string, got %T", k, raw)
+				}
+				if s == "" {
+					return fmt.Errorf("key %q must be non-empty", k)
+				}
+				return nil
+			}
+		}
+		return fmt.Errorf("object must carry one of %v", objKeys)
+	}
+}
+
+// acceptScalarSliceOrObjects returns a Validator for array custom
+// fields: it accepts a slice whose every element is either a non-empty
+// bare string or an object carrying one of objKeys.
+func acceptScalarSliceOrObjects(objKeys ...string) Validator {
+	element := acceptScalarOrObject(objKeys...)
+	return func(v any) error {
+		s, ok := v.([]any)
+		if !ok {
+			return fmt.Errorf("expected array, got %T", v)
+		}
+		for i, el := range s {
+			if err := element(el); err != nil {
+				return fmt.Errorf("element %d: %w", i, err)
+			}
+		}
+		return nil
+	}
+}
+
 // requireString returns nil iff v is a non-empty string.
 func requireString(v any) error {
 	s, ok := v.(string)
@@ -299,20 +390,30 @@ var entries = []Entry{
 		"ISO-8601 datetime string with timezone offset."),
 	row("labels", requireSliceOf(func(v any) error { return requireString(v) }), passThrough,
 		"Array of plain string labels."),
-	row("select", requireObjectField("value"), passThrough,
-		"Single-select; payload is {\"value\":\"<option>\"}."),
-	row("multiselect", requireSliceOf(requireObjectField("value")), passThrough,
-		"Multi-select; payload is array of {\"value\":\"<option>\"}."),
-	row("user", requireObjectField("accountId"), passThrough,
-		"User picker; accountId is the Jira identifier."),
-	row("group", requireObjectField("name"), passThrough,
-		"Group picker; group name in {\"name\":\"<group>\"}."),
+	row("select", acceptScalarOrObject("value", "id"), liftScalarObject("value"),
+		"Single-select; a bare label is encoded as {\"value\":\"<option>\"}; an explicit {\"value\"}/{\"id\"} object is kept."),
+	row("multiselect", acceptScalarSliceOrObjects("value", "id"), liftScalarSlice("value"),
+		"Multi-select; a bare label list is encoded as an array of {\"value\":\"<option>\"}."),
+	row("user", acceptScalarOrObject("accountId", "id"), liftScalarObject("accountId"),
+		"User picker; a bare account id is encoded as {\"accountId\":\"<id>\"}."),
+	row("multiuser", acceptScalarSliceOrObjects("accountId", "id"), liftScalarSlice("accountId"),
+		"Multi-user picker; a bare account-id list is encoded as an array of {\"accountId\":\"<id>\"}."),
+	row("group", acceptScalarOrObject("name"), liftScalarObject("name"),
+		"Group picker; a bare group name is encoded as {\"name\":\"<group>\"}."),
+	row("multigroup", acceptScalarSliceOrObjects("name"), liftScalarSlice("name"),
+		"Multi-group picker; a bare group-name list is encoded as an array of {\"name\":\"<group>\"}."),
 	row("components", requireSliceOf(requireObjectField("name")), passThrough,
 		"Array of {\"name\":\"<component>\"}."),
 	row("version", requireSliceOf(requireObjectField("name")), passThrough,
 		"Affects-version array."),
 	row("fixversions", requireSliceOf(requireObjectField("name")), passThrough,
 		"Fix-version array."),
+	row("versionpicker", acceptScalarOrObject("name", "id"), liftScalarObject("name"),
+		"Single-version custom field; a bare version name is encoded as {\"name\":\"<version>\"}."),
+	row("multiversionpicker", acceptScalarSliceOrObjects("name", "id"), liftScalarSlice("name"),
+		"Multi-version custom field; a bare version-name list is encoded as an array of {\"name\":\"<version>\"}."),
+	row("projectpicker", acceptScalarOrObject("key", "id"), liftScalarObject("key"),
+		"Project-picker custom field; a bare project key is encoded as {\"key\":\"<project>\"}."),
 	row("parent", requireParentKey(), passThrough,
 		"Parent issue link by Jira key (matches PROJ-123 shape)."),
 	row("cascadingselect", requireCascading, passThrough,
