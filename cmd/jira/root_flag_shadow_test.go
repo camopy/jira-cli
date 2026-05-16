@@ -25,6 +25,10 @@ func rootPersistentFlagNames(root *cobra.Command) map[string]bool {
 // root persistent flag. Such a collision splits the effective flag value
 // across two flag objects.
 func TestNoSubcommandShadowsRootPersistentFlag(t *testing.T) {
+	rootCmd, _, err := NewRootCommandForTest()
+	if err != nil {
+		t.Fatalf("NewRootCommandForTest: %v", err)
+	}
 	rootNames := rootPersistentFlagNames(rootCmd)
 
 	var walk func(cmd *cobra.Command)

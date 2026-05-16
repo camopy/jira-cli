@@ -16,6 +16,7 @@ import (
 	"github.com/gechr/clog"
 	"github.com/gechr/x/terminal"
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/runtime"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -28,11 +29,27 @@ const (
 	credentialWarnSinkKey contextKey = "credential-warn-sink"
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "jira",
-	Short: "Jira CLI",
-	Long:  "TUI-first, agent-ready CLI for Jira developer workflows.",
-	Example: `# Launch the persistent dashboard
+// errCompletionHandled is returned by Execute when a shell-completion
+// preflight request was fully serviced. main translates it into a
+// zero-exit termination; no command runs. Keeping this as a returned
+// sentinel — rather than an os.Exit deep in construction — leaves main
+// the sole owner of process exit.
+var errCompletionHandled = errors.New("completion request handled")
+
+// newRootCommand builds the bare root *cobra.Command: its metadata,
+// persistent flags, groups, help renderer, and PersistentPreRunE/RunE.
+// It does NOT attach subcommands or the completion command — that is
+// NewRootCommand's job, so the bare root can also seed the completion
+// generator before its own completion subcommand exists.
+//
+// Each call returns an independent command with its own persistent flag
+// set: there is no shared process-global command object.
+func newRootCommand(rt *runtime.Runtime) *cobra.Command {
+	root := &cobra.Command{
+		Use:   "jira",
+		Short: "Jira CLI",
+		Long:  "TUI-first, agent-ready CLI for Jira developer workflows.",
+		Example: `# Launch the persistent dashboard
 	$ jira -i
 
 	# List issues as structured JSON
@@ -40,108 +57,278 @@ var rootCmd = &cobra.Command{
 
 # Run a saved JQL query
 $ jira search saved my-open-bugs`,
-	SilenceErrors: true,
-	SilenceUsage:  true,
-	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
-		if cmd.Name() == "completion" || (cmd.Parent() != nil && cmd.Parent().Name() == "completion") {
-			return nil
-		}
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			return rootPersistentPreRun(cmd, rt)
+		},
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return rootRun(cmd, rt)
+		},
+	}
 
-		pf := cmd.Root().PersistentFlags()
-		debug, _ := pf.GetBool("debug")
-		clog.SetEnvPrefix("JIRA")
-		clog.SetVerbose(debug)
+	// Route command IO through the runtime streams so output capture is
+	// per-instance: a test (or an embedding caller) supplying buffers via
+	// runtime options sees every command write land in those buffers, and
+	// two roots in one process never share an output destination.
+	root.SetOut(rt.Stdout())
+	root.SetErr(rt.Stderr())
+	root.SetIn(rt.Stdin())
 
-		if colorMode, _ := pf.GetString("color"); colorMode != "" {
-			switch colorMode {
-			case "auto":
-				clog.SetOutput(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAuto))
-			case "always":
-				clog.SetOutput(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAlways))
-				clog.SetColorMode(clog.ColorAlways)
-			case "never":
-				clog.SetOutput(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorNever))
-				clog.SetColorMode(clog.ColorNever)
-			default:
-				return fmt.Errorf("invalid color mode %q: must be \"auto\", \"always\" or \"never\"", colorMode)
-			}
-		} else {
-			clog.SetOutput(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAuto))
-		}
+	configureRootFlags(root)
+	configureRootGroups(root)
+	configureRootHelp(root)
 
-		outputRaw, _ := pf.GetString("output")
-		outputMode, err := cli.ParseOutputMode(outputRaw)
-		if err != nil {
-			return err
-		}
-		det := cli.Detect(os.Stdout)
-		det.Mode = cli.ResolveOutputMode(outputMode, det)
-		interactive, _ := pf.GetBool("interactive")
-		if interactive {
-			det.Mode = cli.ModeTUI
-		}
-		ctx := cmd.Context()
-		if ctx == nil {
-			ctx = context.Background()
-		}
-		ctx = context.WithValue(ctx, detectorKey, det)
-		// Install a fresh credential-warning sink for this command invocation
-		// so a legacy-keyring-fallback warning is scoped to the command that
-		// produced it and cannot bleed into another.
-		ctx = withCredentialWarnSink(ctx)
-		cmd.SetContext(ctx)
-		event := clog.Debug().Str("mode", string(det.Mode))
-		if det.AgentName != "" {
-			event.Str("agent", det.AgentName)
-		} else {
-			event.Str("agent", "null")
-		}
-		event.Msg("output detection")
-		return nil
-	},
-	RunE: func(cmd *cobra.Command, _ []string) error {
-		det := DetectorFromContext(cmd)
-		interactive, _ := cmd.Root().PersistentFlags().GetBool("interactive")
-		if interactive && !terminal.Is(os.Stdout) {
-			return fmt.Errorf("tui requires an interactive terminal")
-		}
-		if interactive && det.Mode == cli.ModeTUI {
-			_, err := tuiRun(cmd)
-			return err
-		}
-		// Bare `jira` behavior:
-		//   - TTY (human): print help so users get an immediate command list
-		//     instead of a wall of JSON.
-		//   - non-TTY / agent: emit JSON discovery so pipes and AI agents
-		//     keep working (locked contract).
-		// Agents wanting structured discovery in TTY can opt in via
-		// `jira agent schema [--compact]`.
-		if det.IsTTY && det.Mode == cli.ModePlain {
-			return cmd.Help()
-		}
-		return writeSchema(cmd)
-	},
+	return root
 }
 
-func Execute(ctx context.Context) error {
-	if err := setup(); err != nil {
-		writeCommandError(rootCmd, err)
+// rootPersistentPreRun resolves logging, color, and output-mode detection
+// for an invocation, then seeds cmd.Context() with the detector and a
+// fresh credential-warning sink. Output detection reads the runtime
+// stdout writer so a redirected stream is detected consistently.
+func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
+	if cmd.Name() == "completion" || (cmd.Parent() != nil && cmd.Parent().Name() == "completion") {
+		return nil
+	}
+
+	pf := cmd.Root().PersistentFlags()
+	debug, _ := pf.GetBool("debug")
+	clog.SetEnvPrefix("JIRA")
+	clog.SetVerbose(debug)
+
+	if colorMode, _ := pf.GetString("color"); colorMode != "" {
+		switch colorMode {
+		case "auto":
+			clog.SetOutput(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAuto))
+		case "always":
+			clog.SetOutput(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAlways))
+			clog.SetColorMode(clog.ColorAlways)
+		case "never":
+			clog.SetOutput(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorNever))
+			clog.SetColorMode(clog.ColorNever)
+		default:
+			return fmt.Errorf("invalid color mode %q: must be \"auto\", \"always\" or \"never\"", colorMode)
+		}
+	} else {
+		clog.SetOutput(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAuto))
+	}
+
+	outputRaw, _ := pf.GetString("output")
+	outputMode, err := cli.ParseOutputMode(outputRaw)
+	if err != nil {
 		return err
 	}
-	args, err := expandAliasArgs(rootCmd, os.Args[1:])
+	det := detectOutput(rt)
+	det.Mode = cli.ResolveOutputMode(outputMode, det)
+	interactive, _ := pf.GetBool("interactive")
+	if interactive {
+		det.Mode = cli.ModeTUI
+	}
+	// cmd.Context() is always populated: Execute drives the tree through
+	// ExecuteContextC, which seeds every command's context from main's
+	// signal-aware root context.
+	ctx := cmd.Context()
+	ctx = context.WithValue(ctx, detectorKey, det)
+	// Install a fresh credential-warning sink for this command invocation
+	// so a legacy-keyring-fallback warning is scoped to the command that
+	// produced it and cannot bleed into another.
+	ctx = withCredentialWarnSink(ctx)
+	cmd.SetContext(ctx)
+	event := clog.Debug().Str("mode", string(det.Mode))
+	if det.AgentName != "" {
+		event.Str("agent", det.AgentName)
+	} else {
+		event.Str("agent", "null")
+	}
+	event.Msg("output detection")
+	return nil
+}
+
+// rootRun is the bare `jira` behavior: launch the dashboard when
+// interactive, print help for a human TTY, or emit JSON discovery for a
+// pipe/agent.
+func rootRun(cmd *cobra.Command, rt *runtime.Runtime) error {
+	det := DetectorFromContext(cmd)
+	interactive, _ := cmd.Root().PersistentFlags().GetBool("interactive")
+	if interactive && !runtimeStdoutIsTTY(rt) {
+		return fmt.Errorf("tui requires an interactive terminal")
+	}
+	if interactive && det.Mode == cli.ModeTUI {
+		_, err := tuiRun(cmd)
+		return err
+	}
+	// Bare `jira` behavior:
+	//   - TTY (human): print help so users get an immediate command list
+	//     instead of a wall of JSON.
+	//   - non-TTY / agent: emit JSON discovery so pipes and AI agents
+	//     keep working (locked contract).
+	// Agents wanting structured discovery in TTY can opt in via
+	// `jira agent schema [--compact]`.
+	if det.IsTTY && det.Mode == cli.ModePlain {
+		return cmd.Help()
+	}
+	return writeSchema(cmd)
+}
+
+// detectOutput resolves the output detection for the runtime's stdout
+// writer. When stdout is an *os.File (the production path) detection
+// inspects that descriptor; otherwise (a buffer in tests or an embedding
+// caller) it falls back to the process stdout so env-driven agent
+// detection still applies.
+func detectOutput(rt *runtime.Runtime) cli.Detection {
+	if f, ok := rt.Stdout().(*os.File); ok {
+		return cli.Detect(f)
+	}
+	return cli.Detect(os.Stdout)
+}
+
+// runtimeStdoutIsTTY reports whether the runtime stdout writer is an
+// interactive terminal. A non-*os.File writer (test buffer) is never a
+// TTY.
+func runtimeStdoutIsTTY(rt *runtime.Runtime) bool {
+	f, ok := rt.Stdout().(*os.File)
+	return ok && terminal.Is(f)
+}
+
+// NewRootCommand builds a fully assembled root command for the given
+// runtime: the bare root plus every command family and the shell
+// completion command. Each call yields an independent command tree with
+// its own flag set and IO wiring — no process-global command state.
+func NewRootCommand(rt *runtime.Runtime) *cobra.Command {
+	root := newRootCommand(rt)
+	root.AddCommand(clib.CompletionCommand(root, func() *complete.Generator {
+		return completionGenerator(root)
+	}))
+	registerCommands(root)
+	return root
+}
+
+// completionGenerator builds the clib completion generator for a root
+// command. Shared by the `completion` subcommand and the preflight path.
+func completionGenerator(root *cobra.Command) *complete.Generator {
+	gen := complete.NewGenerator("jira", complete.WithOrder(complete.OrderKeep)).FromFlags(clib.FlagMeta(root))
+	gen.Subs = clib.Subcommands(root)
+	return gen
+}
+
+// configureRootFlags declares the global persistent flags on root. Each
+// call installs a fresh, independent flag set.
+func configureRootFlags(root *cobra.Command) {
+	pf := root.PersistentFlags()
+	pf.StringP("profile", "p", "", "Jira profile name")
+	pf.StringP("config", "c", "", "Config file path")
+	pf.String("output", "auto", "Output mode: auto, human, json, or compact "+
+		"(compact is the JSON data payload without the envelope — no ok/meta/warnings/errors)")
+	pf.BoolP("interactive", "i", false, "Launch persistent dashboard from root command")
+	pf.BoolP("debug", "d", false, "Enable debug output")
+	pf.Bool("no-input", false, "Disable interactive prompts (mandatory for headless / agent invocation)")
+	pf.Duration("timeout", 0, "Whole-invocation deadline (e.g. 30s, 2m); 0 disables it")
+	pf.String("color", "auto", `Color mode: "auto", "always", or "never"`)
+	// ADF strict/best-effort selection — mutually exclusive;
+	// internal/cli/adfmode reads them ahead of env/profile/default.
+	pf.Bool("adf-strict", false, "Treat lossy ADF conversions as errors")
+	pf.Bool("adf-best-effort", false, "Allow lossy ADF conversions with structured warnings")
+
+	clib.Extend(pf.Lookup("profile"), clib.FlagExtra{
+		Group:       "Configuration",
+		Placeholder: "NAME",
+		Complete:    "predictor=profile",
+		Terse:       "profile name",
+	})
+	clib.Extend(pf.Lookup("config"), clib.FlagExtra{
+		Group:       "Configuration",
+		Placeholder: "PATH",
+		Hint:        "file",
+		Terse:       "config file path",
+	})
+	clib.Extend(pf.Lookup("output"), clib.FlagExtra{
+		Group:       "Output",
+		Placeholder: "MODE",
+		Enum:        cli.OutputModeValues,
+		EnumTerse:   []string{"detect terminal", "rich text", "JSON envelope", "JSON data only"},
+		EnumDefault: "auto",
+		Terse:       "output mode",
+	})
+	clib.Extend(pf.Lookup("timeout"), clib.FlagExtra{
+		Group:       "Configuration",
+		Placeholder: "DURATION",
+		Terse:       "invocation deadline",
+	})
+	clib.Extend(pf.Lookup("interactive"), clib.FlagExtra{Group: "Dashboard", Terse: "launch dashboard"})
+	clib.Extend(pf.Lookup("debug"), clib.FlagExtra{Group: "Output", Terse: "debug output"})
+	clib.Extend(pf.Lookup("color"), clib.FlagExtra{
+		Group:       "Output",
+		Enum:        []string{"auto", "always", "never"},
+		EnumTerse:   []string{"detect terminal", "force color", "no color"},
+		EnumDefault: "auto",
+		Terse:       "color mode",
+	})
+
+	root.MarkFlagsMutuallyExclusive("adf-strict", "adf-best-effort")
+}
+
+// configureRootGroups declares the help command groups on root.
+func configureRootGroups(root *cobra.Command) {
+	root.AddGroup(
+		&cobra.Group{ID: "dashboard", Title: "Dashboard"},
+		&cobra.Group{ID: "resources", Title: "Jira Resources"},
+		&cobra.Group{ID: "configuration", Title: "Configuration"},
+		&cobra.Group{ID: "agent", Title: "Agent Discovery"},
+	)
+}
+
+// configureRootHelp installs the themed clib help renderer on root.
+func configureRootHelp(root *cobra.Command) {
+	theme.SetEnvPrefix("JIRA")
+	th := theme.Default().With(
+		theme.WithEnumStyle(theme.EnumStyleHighlightBoth),
+		theme.WithHelpRepeatEllipsisEnabled(true),
+	)
+	renderer := help.NewRenderer(th)
+	root.SetHelpFunc(clib.HelpFunc(renderer, clib.SectionsWithOptions(clib.WithSubcommandOptional())))
+}
+
+// Execute builds the runtime and root command for a process invocation,
+// services any shell-completion preflight, applies the optional
+// whole-invocation timeout, and runs the command tree against ctx.
+//
+// ctx is the root context main owns (signal-aware via signal.NotifyContext).
+// Execute never calls os.Exit: a completion preflight that was fully
+// handled is reported back to main as errCompletionHandled.
+func Execute(ctx context.Context) error {
+	rt, err := runtime.New()
 	if err != nil {
-		writeCommandError(rootCmd, err)
+		return err
+	}
+	// NewRootCommand builds a static command tree; it deliberately takes
+	// no context. The per-command PersistentPreRunE derives its context
+	// from cmd.Context() at run time — cobra seeds that from the ctx
+	// passed to ExecuteContextC below. contextcheck cannot see that
+	// deferred handoff and flags the construction call as a missing
+	// context thread.
+	root := NewRootCommand(rt) //nolint:contextcheck // context flows via ExecuteContextC, not construction
+
+	if handled, err := handleCompletionPreflight(root); err != nil {
+		writeCommandError(root, err)
+		return err
+	} else if handled {
+		return errCompletionHandled
+	}
+
+	args, err := expandAliasArgs(root, os.Args[1:])
+	if err != nil {
+		writeCommandError(root, err)
 		return err
 	}
 	if args != nil {
-		rootCmd.SetArgs(args)
+		root.SetArgs(args)
 	}
 	// Optional whole-invocation deadline. Derive it here, where Execute
 	// already owns the root context, with a local defer cancel(): no
 	// cancel func is parked in a package var, and the context is never
 	// stored on a runtime struct. The deadline spans command execution
-	// (setup() and alias expansion above are flag/file work with no
-	// network I/O; the timeout's purpose is bounding the request).
+	// (alias expansion above is flag/file work with no network I/O; the
+	// timeout's purpose is bounding the request).
 	if timeout := timeoutFromArgs(args); timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, timeout)
@@ -150,12 +337,30 @@ func Execute(ctx context.Context) error {
 	// ExecuteContext seeds cmd.Context() with the (optionally
 	// deadline-bounded) root context so every RunE that calls
 	// cmd.Context() inherits cancellation.
-	cmd, err := rootCmd.ExecuteContextC(ctx)
+	cmd, err := root.ExecuteContextC(ctx)
 	if err != nil {
 		writeCommandError(cmd, err)
 		return err
 	}
 	return nil
+}
+
+// handleCompletionPreflight services a clib `--@complete` preflight
+// request against root. It returns handled=true when the request was a
+// completion request that was fully serviced; the caller must then
+// terminate without running a command. Returning the handled signal
+// instead of calling os.Exit keeps process termination with main.
+func handleCompletionPreflight(root *cobra.Command) (bool, error) {
+	flags, positional, ok := clib.Preflight()
+	if !ok {
+		return false, nil
+	}
+	gen := completionGenerator(root)
+	handled, err := flags.Handle(gen, completionHandler(), complete.WithArgs(positional))
+	if err != nil {
+		return false, err
+	}
+	return handled, nil
 }
 
 // timeoutFromArgs extracts the --timeout duration from the resolved
@@ -266,99 +471,6 @@ func exitCodeForError(err error) int {
 // special case: every error envelope is built one way.
 func outputErrorFor(err error) cli.Error {
 	return cli.MapError(err)
-}
-
-func setup() error {
-	rootCmd.AddCommand(clib.CompletionCommand(rootCmd, func() *complete.Generator {
-		gen := complete.NewGenerator("jira", complete.WithOrder(complete.OrderKeep)).FromFlags(clib.FlagMeta(rootCmd))
-		gen.Subs = clib.Subcommands(rootCmd)
-		return gen
-	}))
-
-	flags, positional, ok := clib.Preflight()
-	if ok {
-		gen := complete.NewGenerator("jira", complete.WithOrder(complete.OrderKeep)).FromFlags(clib.FlagMeta(rootCmd))
-		gen.Subs = clib.Subcommands(rootCmd)
-		handled, err := flags.Handle(gen, completionHandler(), complete.WithArgs(positional))
-		if err != nil {
-			return err
-		}
-		if handled {
-			os.Exit(0) // completion preflight must terminate after handling
-		}
-	}
-	return nil
-}
-
-func init() {
-	pf := rootCmd.PersistentFlags()
-	pf.StringP("profile", "p", "", "Jira profile name")
-	pf.StringP("config", "c", "", "Config file path")
-	pf.String("output", "auto", "Output mode: auto, human, json, or compact "+
-		"(compact is the JSON data payload without the envelope — no ok/meta/warnings/errors)")
-	pf.BoolP("interactive", "i", false, "Launch persistent dashboard from root command")
-	pf.BoolP("debug", "d", false, "Enable debug output")
-	pf.Bool("no-input", false, "Disable interactive prompts (mandatory for headless / agent invocation)")
-	pf.Duration("timeout", 0, "Whole-invocation deadline (e.g. 30s, 2m); 0 disables it")
-	pf.String("color", "auto", `Color mode: "auto", "always", or "never"`)
-	// ADF strict/best-effort selection — mutually exclusive;
-	// internal/cli/adfmode reads them ahead of env/profile/default.
-	pf.Bool("adf-strict", false, "Treat lossy ADF conversions as errors")
-	pf.Bool("adf-best-effort", false, "Allow lossy ADF conversions with structured warnings")
-
-	clib.Extend(pf.Lookup("profile"), clib.FlagExtra{
-		Group:       "Configuration",
-		Placeholder: "NAME",
-		Complete:    "predictor=profile",
-		Terse:       "profile name",
-	})
-	clib.Extend(pf.Lookup("config"), clib.FlagExtra{
-		Group:       "Configuration",
-		Placeholder: "PATH",
-		Hint:        "file",
-		Terse:       "config file path",
-	})
-	clib.Extend(pf.Lookup("output"), clib.FlagExtra{
-		Group:       "Output",
-		Placeholder: "MODE",
-		Enum:        cli.OutputModeValues,
-		EnumTerse:   []string{"detect terminal", "rich text", "JSON envelope", "JSON data only"},
-		EnumDefault: "auto",
-		Terse:       "output mode",
-	})
-	clib.Extend(pf.Lookup("timeout"), clib.FlagExtra{
-		Group:       "Configuration",
-		Placeholder: "DURATION",
-		Terse:       "invocation deadline",
-	})
-	clib.Extend(pf.Lookup("interactive"), clib.FlagExtra{Group: "Dashboard", Terse: "launch dashboard"})
-	clib.Extend(pf.Lookup("debug"), clib.FlagExtra{Group: "Output", Terse: "debug output"})
-	clib.Extend(pf.Lookup("color"), clib.FlagExtra{
-		Group:       "Output",
-		Enum:        []string{"auto", "always", "never"},
-		EnumTerse:   []string{"detect terminal", "force color", "no color"},
-		EnumDefault: "auto",
-		Terse:       "color mode",
-	})
-
-	rootCmd.MarkFlagsMutuallyExclusive("adf-strict", "adf-best-effort")
-
-	rootCmd.AddGroup(
-		&cobra.Group{ID: "dashboard", Title: "Dashboard"},
-		&cobra.Group{ID: "resources", Title: "Jira Resources"},
-		&cobra.Group{ID: "configuration", Title: "Configuration"},
-		&cobra.Group{ID: "agent", Title: "Agent Discovery"},
-	)
-
-	theme.SetEnvPrefix("JIRA")
-	th := theme.Default().With(
-		theme.WithEnumStyle(theme.EnumStyleHighlightBoth),
-		theme.WithHelpRepeatEllipsisEnabled(true),
-	)
-	renderer := help.NewRenderer(th)
-	rootCmd.SetHelpFunc(clib.HelpFunc(renderer, clib.SectionsWithOptions(clib.WithSubcommandOptional())))
-
-	registerCommands(rootCmd)
 }
 
 func DetectorFromContext(cmd *cobra.Command) cli.Detection {

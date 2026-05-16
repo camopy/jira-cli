@@ -63,8 +63,8 @@ func TestProbeRemoteAuthHonorsProfileTimeout(t *testing.T) {
 
 	cmd := &cobra.Command{Use: "probe-test"}
 	cmd.SetContext(context.Background())
-	rootCmd.AddCommand(cmd)
-	defer rootCmd.RemoveCommand(cmd)
+	root := &cobra.Command{Use: "jira"}
+	root.AddCommand(cmd)
 
 	profile := config.Profile{
 		Name:           "slow",
@@ -111,8 +111,8 @@ func TestCredentialWarningDoesNotLeakAcrossCommands(t *testing.T) {
 		cmd := &cobra.Command{Use: "warn-scope-test"}
 		cmd.SetContext(withCredentialWarnSink(context.Background()))
 		cmd.SetOut(&buf)
-		rootCmd.AddCommand(cmd)
-		t.Cleanup(func() { rootCmd.RemoveCommand(cmd) })
+		root := &cobra.Command{Use: "jira"}
+		root.AddCommand(cmd)
 		return cmd, &buf
 	}
 

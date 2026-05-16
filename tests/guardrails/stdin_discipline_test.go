@@ -13,8 +13,10 @@ import (
 )
 
 // The only places allowed to read os.Stdin are the canonical
-// stdin-discipline package (internal/cli/stdin/) and tests. Every
-// other source-tree reference to os.Stdin is a violation.
+// stdin-discipline package (internal/cli/stdin/), the runtime IO
+// boundary (internal/cli/runtime/, which holds os.Stdin only as the
+// default value a caller overrides), and tests. Every other source-tree
+// reference to os.Stdin is a violation.
 //
 // The guard greps every .go file under cmd/ and internal/ (excluding the
 // allowed package and _test.go files) and fails on any os.Stdin usage.
@@ -25,7 +27,8 @@ func TestNoRogueStdinReads(t *testing.T) {
 		filepath.Join("..", "..", "pkg"),
 	}
 	allowedPaths := map[string]bool{
-		filepath.Join("..", "..", "internal", "cli", "stdin"): true,
+		filepath.Join("..", "..", "internal", "cli", "stdin"):   true,
+		filepath.Join("..", "..", "internal", "cli", "runtime"): true,
 	}
 
 	for _, root := range roots {
