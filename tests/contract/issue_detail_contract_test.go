@@ -23,7 +23,7 @@ func TestIssueListDetailFetchesFullIssueRecords(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", jiraConfig(t, srv.URL), "--json", "issue", "list", "--detail")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", jiraConfig(t, srv.URL), "--output=json", "issue", "list", "--detail")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue list --detail error = %v\n%s", err, out)
@@ -50,31 +50,5 @@ func TestIssueListDetailFetchesFullIssueRecords(t *testing.T) {
 	}
 	if len(env.Data.Issues) != 1 || env.Data.Issues[0].ID != "10001" || len(env.Data.Issues[0].Comments) != 1 || len(env.Data.Issues[0].Worklogs) != 1 {
 		t.Fatalf("detail output did not include fetched full record: %+v\n%s", env.Data.Issues, out)
-	}
-}
-
-func TestRawOutputUsesCapturedJiraResponseBody(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/rest/api/3/search/jql" {
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.String())
-		}
-		_, _ = w.Write([]byte(`{"isLast":true,"maxResults":50,"total":1,"warningMessages":["native"],"issues":[{"id":"10001","key":"PROJ-1","fields":{"summary":"Native"}}]}`))
-	}))
-	defer srv.Close()
-
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", jiraConfig(t, srv.URL), "--raw", "issue", "list")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("issue list --raw error = %v\n%s", err, out)
-	}
-	var raw map[string]any
-	if err := json.Unmarshal(out, &raw); err != nil {
-		t.Fatalf("raw output is not JSON: %v\n%s", err, out)
-	}
-	if _, ok := raw["warningMessages"]; !ok {
-		t.Fatalf("raw output lost Jira-native fields: %+v\n%s", raw, out)
-	}
-	if _, ok := raw["pagination"]; ok {
-		t.Fatalf("raw output included CLI abstraction fields: %+v\n%s", raw, out)
 	}
 }

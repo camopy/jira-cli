@@ -25,7 +25,7 @@ func writeTempJSON(t *testing.T, body string) string {
 func TestIssueCreateNoInputDryRunRejectsMissingRequiredFields(t *testing.T) {
 	cfg := emptyBaseURLConfig(t)
 	cmd := exec.Command("go", "run", "../../cmd/jira",
-		"--config", cfg, "issue", "create", "--no-input", "--dry-run", "--json")
+		"--config", cfg, "issue", "create", "--no-input", "--dry-run", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("issue create --no-input --dry-run with no required fields succeeded:\n%s", out)
@@ -46,7 +46,7 @@ func TestIssueCreateNoInputDryRunAcceptsCompleteJSONInput(t *testing.T) {
 	path := writeTempJSON(t, `{"project_key":"PROJ","issue_type":"Task","summary":"Hello"}`)
 	cfg := emptyBaseURLConfig(t)
 	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg,
-		"issue", "create", "--no-input", "--dry-run", "--json-input", path, "--json")
+		"issue", "create", "--no-input", "--dry-run", "--json-input", path, "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue create with complete json-input failed: %v\n%s", err, out)

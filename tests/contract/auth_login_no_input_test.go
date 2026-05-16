@@ -17,7 +17,7 @@ import (
 func TestAuthLoginNoInputDoesNotReadImplicitStdin(t *testing.T) {
 	bin := buildJiraBinary(t)
 
-	cmd := exec.Command(bin, "auth", "login", "--no-input", "--json")
+	cmd := exec.Command(bin, "auth", "login", "--no-input", "--output=json")
 	cmd.Stdin = strings.NewReader("garbage that should not be consumed\n")
 	stderr := &bytes.Buffer{}
 	cmd.Stderr = stderr

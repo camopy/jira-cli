@@ -55,7 +55,7 @@ func TestAttachmentListEnvelopeShape(t *testing.T) {
 	cfg := jiraConfig(t, srv.URL)
 	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--json",
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json",
 		"issue", "attachment", "list", "PROJ-1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -141,7 +141,7 @@ func TestAttachmentAddMultipartContract(t *testing.T) {
 	cfg := jiraConfig(t, srv.URL)
 	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--json",
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json",
 		"issue", "attachment", "add", "PROJ-1", "--file", tmp)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -190,7 +190,7 @@ func TestAttachmentAddSizeRejection413SurfacesUpstream(t *testing.T) {
 	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
 
 	bin := buildJiraBinary(t)
-	cmd := exec.Command(bin, "--config", cfg, "--json",
+	cmd := exec.Command(bin, "--config", cfg, "--output=json",
 		"issue", "attachment", "add", "PROJ-1", "--file", tmp)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -226,7 +226,7 @@ func TestAttachmentAddSizeRejection413SurfacesUpstream(t *testing.T) {
 func TestAttachmentDeleteForceGateAndWireContract(t *testing.T) {
 	t.Run("no-input without --force exits 3", func(t *testing.T) {
 		bin := buildJiraBinary(t)
-		cmd := exec.Command(bin, "--json", "--no-input",
+		cmd := exec.Command(bin, "--output=json", "--no-input",
 			"issue", "attachment", "delete", "PROJ-1", "10042")
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout = &stdout
@@ -255,7 +255,7 @@ func TestAttachmentDeleteForceGateAndWireContract(t *testing.T) {
 
 		cfg := jiraConfig(t, srv.URL)
 		t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
-		cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--json", "--no-input",
+		cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json", "--no-input",
 			"issue", "attachment", "delete", "PROJ-1", "10042", "--force")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -284,12 +284,12 @@ func TestAttachmentDeleteForceGateAndWireContract(t *testing.T) {
 }
 
 // `attachment download` modes:
-// (1) --output PATH, (2) clobber-protect under --output (no --force) →
+// (1) --to PATH, (2) clobber-protect under --to (no --force) →
 // exit 3, (3) clobber-protect cleared by --force.
 //
 // TTY-mode current-dir behavior is exercised separately (the TTY-gated
 // dispatch is hard to fake in a test exec); here we cover the
-// envelope shape for --output and the clobber-protect contract that
+// envelope shape for --to and the clobber-protect contract that
 // must hold without entering the HTTP path.
 func TestAttachmentDownloadModesAndClobberProtect(t *testing.T) {
 	const payload = "binary-bytes-for-test"
@@ -306,10 +306,10 @@ func TestAttachmentDownloadModesAndClobberProtect(t *testing.T) {
 	cfg := jiraConfig(t, srv.URL)
 	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
 
-	t.Run("--output writes file and emits envelope", func(t *testing.T) {
+	t.Run("--to writes file and emits envelope", func(t *testing.T) {
 		out := filepath.Join(t.TempDir(), "local.png")
-		cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--json",
-			"issue", "attachment", "download", "PROJ-1", "10042", "--output", out)
+		cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json",
+			"issue", "attachment", "download", "PROJ-1", "10042", "--to", out)
 		stdout, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("attachment download error = %v\n%s", err, stdout)
@@ -337,14 +337,14 @@ func TestAttachmentDownloadModesAndClobberProtect(t *testing.T) {
 		}
 	})
 
-	t.Run("--output existing file without --force exits 3", func(t *testing.T) {
+	t.Run("--to existing file without --force exits 3", func(t *testing.T) {
 		existing := filepath.Join(t.TempDir(), "existing.png")
 		if err := os.WriteFile(existing, []byte("KEEP"), 0o600); err != nil {
 			t.Fatalf("WriteFile: %v", err)
 		}
 		bin := buildJiraBinary(t)
-		cmd := exec.Command(bin, "--config", cfg, "--json", "--no-input",
-			"issue", "attachment", "download", "PROJ-1", "10042", "--output", existing)
+		cmd := exec.Command(bin, "--config", cfg, "--output=json", "--no-input",
+			"issue", "attachment", "download", "PROJ-1", "10042", "--to", existing)
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
@@ -369,13 +369,13 @@ func TestAttachmentDownloadModesAndClobberProtect(t *testing.T) {
 		}
 	})
 
-	t.Run("--output existing file with --force overwrites", func(t *testing.T) {
+	t.Run("--to existing file with --force overwrites", func(t *testing.T) {
 		existing := filepath.Join(t.TempDir(), "existing.png")
 		if err := os.WriteFile(existing, []byte("OLD"), 0o600); err != nil {
 			t.Fatalf("WriteFile: %v", err)
 		}
-		cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--json",
-			"issue", "attachment", "download", "PROJ-1", "10042", "--output", existing, "--force")
+		cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json",
+			"issue", "attachment", "download", "PROJ-1", "10042", "--to", existing, "--force")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("download --force error = %v\n%s", err, out)

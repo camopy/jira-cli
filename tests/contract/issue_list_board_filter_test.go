@@ -78,7 +78,7 @@ func TestIssueListBoardByName(t *testing.T) {
 	]`)
 	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 
-	out, err := runWithEnv(bin, env, "--config", cfg, "issue", "list", "--board", "Engineering Sprint", "--json")
+	out, err := runWithEnv(bin, env, "--config", cfg, "issue", "list", "--board", "Engineering Sprint", "--output=json")
 	if err != nil {
 		t.Fatalf("issue list --board: %v\n%s", err, out)
 	}
@@ -143,7 +143,7 @@ func TestIssueListBoardByID(t *testing.T) {
 	]`)
 	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 
-	out, err := runWithEnv(bin, env, "--config", cfg, "issue", "list", "--board-id", "99", "--json")
+	out, err := runWithEnv(bin, env, "--config", cfg, "issue", "list", "--board-id", "99", "--output=json")
 	if err != nil {
 		t.Fatalf("issue list --board-id: %v\n%s", err, out)
 	}
@@ -181,7 +181,7 @@ func TestIssueListBoardAndBoardIDMutuallyExclusive(t *testing.T) {
 
 	// Use CombinedOutput to capture both stdout + stderr; cobra prints
 	// the mutual-exclusion error on stderr.
-	c := exec.Command(bin, "--config", cfg, "issue", "list", "--board", "X", "--board-id", "42", "--json")
+	c := exec.Command(bin, "--config", cfg, "issue", "list", "--board", "X", "--board-id", "42", "--output=json")
 	c.Env = append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 	out, err := c.CombinedOutput()
 	if err == nil {

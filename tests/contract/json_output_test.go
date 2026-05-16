@@ -8,7 +8,7 @@ import (
 )
 
 func TestJSONEnvelopeAndOutputModeConflicts(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--json", "schema")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=json", "schema")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("schema error = %v\n%s", err, out)
@@ -21,14 +21,23 @@ func TestJSONEnvelopeAndOutputModeConflicts(t *testing.T) {
 		t.Fatalf("schema envelope missing fields: %+v", env)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--compact", "--plain", "schema")
-	if err := cmd.Run(); err == nil {
-		t.Fatal("combined output modes succeeded")
+	// The removed legacy boolean flags must be rejected as unknown
+	// flags — never silently re-aliased onto a mode.
+	for _, removed := range []string{"--json", "--compact", "--plain", "--raw"} {
+		c := exec.Command("go", "run", "../../cmd/jira", removed, "schema")
+		if err := c.Run(); err == nil {
+			t.Fatalf("removed flag %q was accepted; want unknown-flag error", removed)
+		}
+	}
+
+	// An invalid --output value is rejected.
+	if err := exec.Command("go", "run", "../../cmd/jira", "--output=garbage", "schema").Run(); err == nil {
+		t.Fatal("invalid --output value was accepted")
 	}
 }
 
 func TestOutputModesApplyToGenericCommands(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--compact", "schema")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=compact", "schema")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("schema --compact error = %v\n%s", err, out)
@@ -42,7 +51,7 @@ func TestOutputModesApplyToGenericCommands(t *testing.T) {
 	}
 
 	cfg := emptyBaseURLConfig(t)
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--plain", "search", "jql", "project = PROJ")
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=human", "search", "jql", "project = PROJ")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("search --plain error = %v\n%s", err, out)
@@ -51,13 +60,13 @@ func TestOutputModesApplyToGenericCommands(t *testing.T) {
 		t.Fatalf("search --plain output = %s", out)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--raw", "search", "jql", "project = PROJ")
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=compact", "search", "jql", "project = PROJ")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("search --raw error = %v\n%s", err, out)
+		t.Fatalf("search --output=compact error = %v\n%s", err, out)
 	}
 	if strings.Contains(string(out), `"meta"`) || !strings.Contains(string(out), `"jql":"project = PROJ"`) {
-		t.Fatalf("search --raw output = %s", out)
+		t.Fatalf("search --output=compact output = %s", out)
 	}
 }
 

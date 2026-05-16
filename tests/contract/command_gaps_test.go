@@ -23,7 +23,7 @@ func TestSearchCommandsExposeInlineAndSavedJQL(t *testing.T) {
 	cfg := jiraConfig(t, srv.URL)
 	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--json", "search", "jql", "project = PROJ")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json", "search", "jql", "project = PROJ")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("search jql error = %v\n%s", err, out)
@@ -40,12 +40,12 @@ func TestSearchCommandsExposeInlineAndSavedJQL(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(queryDir, "mine.jql"), []byte(query), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--json", "config", "set", "queries_path", queryDir)
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json", "config", "set", "queries_path", queryDir)
 	if out, err = cmd.CombinedOutput(); err != nil {
 		t.Fatalf("config set queries_path error = %v\n%s", err, out)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--json", "search", "saved", "mine")
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json", "search", "saved", "mine")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("search saved error = %v\n%s", err, out)
@@ -61,7 +61,7 @@ func TestConfigThemeCommandShowsAndUpdatesTheme(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "config.toml")
 	initConfig(t, cfg)
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--json", "config", "theme", "--name", "primer", "--path", "/tmp/theme.toml")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json", "config", "theme", "--name", "primer", "--path", "/tmp/theme.toml")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("config theme set error = %v\n%s", err, out)
@@ -70,7 +70,7 @@ func TestConfigThemeCommandShowsAndUpdatesTheme(t *testing.T) {
 		t.Fatalf("config theme set output = %s", out)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--json", "config", "theme")
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json", "config", "theme")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("config theme show error = %v\n%s", err, out)
@@ -84,7 +84,7 @@ func TestAuthRefreshAndMigrateReportConcreteState(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "config.toml")
 	initConfig(t, cfg)
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--json", "auth", "refresh")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json", "auth", "refresh")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("auth refresh error = %v\n%s", err, out)
@@ -93,7 +93,7 @@ func TestAuthRefreshAndMigrateReportConcreteState(t *testing.T) {
 		t.Fatalf("auth refresh output = %s", out)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--json", "auth", "migrate", "--backend", "1password", "--dry-run")
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json", "auth", "migrate", "--backend", "1password", "--dry-run")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("auth migrate error = %v\n%s", err, out)

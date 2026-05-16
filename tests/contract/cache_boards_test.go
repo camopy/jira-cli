@@ -84,7 +84,7 @@ func TestCacheBoardsRoundTrip(t *testing.T) {
 	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 
 	// First call → primes API.
-	out, err := runWithEnv(bin, env, "--config", cfg, "cache", "boards", "--json")
+	out, err := runWithEnv(bin, env, "--config", cfg, "cache", "boards", "--output=json")
 	if err != nil {
 		t.Fatalf("first cache boards: %v\n%s", err, out)
 	}
@@ -123,7 +123,7 @@ func TestCacheBoardsRoundTrip(t *testing.T) {
 	}
 
 	// Second call → served from cache, no /board hit.
-	out2, err := runWithEnv(bin, env, "--config", cfg, "cache", "boards", "--json")
+	out2, err := runWithEnv(bin, env, "--config", cfg, "cache", "boards", "--output=json")
 	if err != nil {
 		t.Fatalf("second cache boards: %v\n%s", err, out2)
 	}
@@ -154,7 +154,7 @@ func TestCacheBoardsRefreshBypassesFreshness(t *testing.T) {
 	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 
 	// Prime once.
-	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "boards", "--json"); err != nil {
+	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "boards", "--output=json"); err != nil {
 		t.Fatal(err)
 	}
 	if hits.Load() != 1 {
@@ -162,7 +162,7 @@ func TestCacheBoardsRefreshBypassesFreshness(t *testing.T) {
 	}
 
 	// --refresh while cache is fresh → API IS hit.
-	out, err := runWithEnv(bin, env, "--config", cfg, "cache", "boards", "--refresh", "--json")
+	out, err := runWithEnv(bin, env, "--config", cfg, "cache", "boards", "--refresh", "--output=json")
 	if err != nil {
 		t.Fatalf("cache boards --refresh: %v\n%s", err, out)
 	}
@@ -231,7 +231,7 @@ func TestCacheBoardsMaxPagesTruncationSurfaces(t *testing.T) {
 	cacheRoot := t.TempDir()
 	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 
-	out, err := runWithEnv(bin, env, "--config", cfg, "cache", "boards", "--json")
+	out, err := runWithEnv(bin, env, "--config", cfg, "cache", "boards", "--output=json")
 	if err != nil {
 		t.Fatalf("cache boards: %v\n%s", err, out)
 	}
@@ -318,7 +318,7 @@ func TestCacheBoardsRateLimitMidWalk(t *testing.T) {
 	cacheRoot := t.TempDir()
 	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 
-	out, err := runWithEnv(bin, env, "--config", cfg, "cache", "boards", "--json")
+	out, err := runWithEnv(bin, env, "--config", cfg, "cache", "boards", "--output=json")
 	if err != nil {
 		t.Fatalf("cache boards (expected exit 0 for partial prime): %v\n%s", err, out)
 	}

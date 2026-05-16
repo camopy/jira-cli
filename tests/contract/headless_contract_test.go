@@ -20,7 +20,7 @@ func TestJSONFlagForcesEnvelopeEvenForDetectedAgents(t *testing.T) {
 	defer srv.Close()
 
 	bin := buildJiraBinary(t)
-	cmd := exec.Command(bin, "--config", jiraConfig(t, srv.URL), "--json", "search", "jql", "project = PROJ")
+	cmd := exec.Command(bin, "--config", jiraConfig(t, srv.URL), "--output=json", "search", "jql", "project = PROJ")
 	cmd.Env = append(cmd.Environ(), "CLAUDE_CODE=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -32,37 +32,24 @@ func TestJSONFlagForcesEnvelopeEvenForDetectedAgents(t *testing.T) {
 	}
 }
 
-func TestJSONFlagConflictsWithAlternateOutputModes(t *testing.T) {
+// The removed legacy output flags must be rejected as unknown flags —
+// never silently re-aliased onto the --output mode.
+func TestRemovedLegacyOutputFlagsAreUnknownFlags(t *testing.T) {
 	bin := buildJiraBinary(t)
-	for _, args := range [][]string{
-		{"--json", "--compact", "schema"},
-		{"--json", "--plain", "schema"},
-		{"--json", "--raw", "schema"},
-	} {
-		args := args
-		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			cmd := exec.Command(bin, args...)
+	for _, removed := range []string{"--json", "--compact", "--plain", "--raw"} {
+		removed := removed
+		t.Run(removed, func(t *testing.T) {
+			cmd := exec.Command(bin, removed, "schema")
 			var stdout, stderr bytes.Buffer
 			cmd.Stdout = &stdout
 			cmd.Stderr = &stderr
 			err := cmd.Run()
 			if err == nil {
-				t.Fatalf("jira %v succeeded (want non-zero exit)", args)
+				t.Fatalf("jira %s schema succeeded; want unknown-flag error", removed)
 			}
-			// clog diagnostic on stderr must name the conflict.
 			stderrLow := strings.ToLower(stderr.String())
-			if !strings.Contains(stderrLow, "err") || !strings.Contains(stderrLow, "flags") {
-				t.Fatalf("jira %v stderr did not emit clog diagnostic error:\n%s", args, stderr.String())
-			}
-			// --json was requested so stdout must carry a JSON envelope
-			// with the error in errors[].
-			var env map[string]any
-			if jsonErr := json.Unmarshal(stdout.Bytes(), &env); jsonErr != nil {
-				t.Fatalf("jira %v stdout is not valid JSON: %v\nstdout=%s", args, jsonErr, stdout.String())
-			}
-			errs, _ := env["errors"].([]any)
-			if len(errs) == 0 {
-				t.Fatalf("jira %v stdout envelope.errors is empty:\nstdout=%s", args, stdout.String())
+			if !strings.Contains(stderrLow, "unknown flag") {
+				t.Fatalf("jira %s did not report an unknown flag:\n%s", removed, stderr.String())
 			}
 		})
 	}
@@ -71,14 +58,14 @@ func TestJSONFlagConflictsWithAlternateOutputModes(t *testing.T) {
 func TestConfigCommandsEmitEnvelopeInHeadlessMode(t *testing.T) {
 	path := t.TempDir() + "/config.toml"
 	bin := buildJiraBinary(t)
-	cmd := exec.Command(bin, "--config", path, "--json", "config", "init", "--no-input", "--profile", "default", "--base-url", "https://company.atlassian.net", "--auth-type", "token", "--email", "dev@example.com")
+	cmd := exec.Command(bin, "--config", path, "--output=json", "config", "init", "--no-input", "--profile", "default", "--base-url", "https://company.atlassian.net", "--auth-type", "token", "--email", "dev@example.com")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("config init error = %v\n%s", err, out)
 	} else if env := decodeEnvelope(t, out); env.Meta.Command != "config.init" {
 		t.Fatalf("config init envelope = %+v", env)
 	}
 
-	cmd = exec.Command(bin, "--config", path, "--json", "config", "get", "default_profile")
+	cmd = exec.Command(bin, "--config", path, "--output=json", "config", "get", "default_profile")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("config get error = %v\n%s", err, out)
@@ -95,7 +82,7 @@ func TestConfigCommandsEmitEnvelopeInHeadlessMode(t *testing.T) {
 
 func TestErrorDiagnosticUsesFailingCommandMessage(t *testing.T) {
 	bin := buildJiraBinary(t)
-	cmd := exec.Command(bin, "--json", "issue", "delete", "PROJ-1")
+	cmd := exec.Command(bin, "--output=json", "issue", "delete", "PROJ-1")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

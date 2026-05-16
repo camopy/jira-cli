@@ -114,17 +114,6 @@ func runCommentList(cmd *cobra.Command, key string, limit int, all bool) error {
 		pagesFetched = 1
 	}
 
-	// --raw: Atlassian native shape verbatim. Only meaningful for a single
-	// page since the native shape doesn't carry "all walked" semantics; we
-	// emit the last page's RawBody, matching every other --raw consumer.
-	if raw, _ := cmd.Root().PersistentFlags().GetBool("raw"); raw {
-		if lastResp != nil && len(lastResp.RawBody) > 0 {
-			return cli.WriteRaw(cmd.OutOrStdout(), lastResp.RawBody)
-		}
-		body, _ := json.Marshal(map[string]any{"comments": collected})
-		return cli.WriteRaw(cmd.OutOrStdout(), body)
-	}
-
 	pagination := commentListPagination(lastResp, all, rateLimitHit)
 	commentsOut := commentListData(collected)
 	data := map[string]any{
@@ -262,19 +251,15 @@ func commentListWarnings(comments []*jira.Comment, rateLimitHit *jira.APIError, 
 // schema.
 func writeEnvelopeWithCommentWarnings(cmd *cobra.Command, command string, data any, warnings []map[string]any) error {
 	if useCompactOutput(cmd) {
-		payload := map[string]any{"data": data, "warnings": warningsOrEmpty(warnings), "errors": []any{}}
-		return cli.WriteCompact(cmd.OutOrStdout(), payload)
+		return cli.WriteCompact(cmd.OutOrStdout(), foldRawWarningsIntoData(data, warnings))
 	}
 	if usePlainOutput(cmd) {
 		return cli.WriteCommandPlain(cmd.OutOrStdout(), command, data, plainOptionsForCommand(cmd)...)
 	}
-	if raw, _ := cmd.Root().PersistentFlags().GetBool("raw"); raw {
-		return cli.WriteRaw(cmd.OutOrStdout(), rawPayload(command, data))
-	}
 	body := map[string]any{
+		"ok": true,
 		"meta": map[string]any{
 			"command":    command,
-			"profile":    profileForEnvelope(cmd),
 			"timestamp":  time.Now().UTC().Format(time.RFC3339),
 			"request_id": cli.NewRequestID(),
 		},

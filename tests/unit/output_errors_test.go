@@ -13,15 +13,19 @@ func TestStructuredErrorsAndExitCodes(t *testing.T) {
 	if code := cli.ExitCode(err); code != 4 {
 		t.Fatalf("ExitCode() = %d", code)
 	}
+
+	// A failure envelope round-trips through JSON and preserves the
+	// structured error type for a machine consumer.
 	var buf bytes.Buffer
-	if werr := cli.WriteErrors(&buf, []cli.Error{err}); werr != nil {
-		t.Fatalf("WriteErrors() error = %v", werr)
+	env := cli.Envelope{Errors: []cli.Error{err}, Warnings: []cli.Warning{}}
+	if werr := cli.WriteEnvelope(&buf, env); werr != nil {
+		t.Fatalf("WriteEnvelope() error = %v", werr)
 	}
-	var decoded []cli.Error
+	var decoded cli.Envelope
 	if jerr := json.Unmarshal(buf.Bytes(), &decoded); jerr != nil {
-		t.Fatalf("stderr JSON invalid: %v", jerr)
+		t.Fatalf("envelope JSON invalid: %v", jerr)
 	}
-	if decoded[0].Type != string(cli.ErrorTypeRateLimit) {
-		t.Fatalf("decoded error = %+v", decoded[0])
+	if len(decoded.Errors) != 1 || decoded.Errors[0].Type != string(cli.ErrorTypeRateLimit) {
+		t.Fatalf("decoded errors = %+v", decoded.Errors)
 	}
 }

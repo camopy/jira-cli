@@ -9,14 +9,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"sort"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cache"
-	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/pkg/jira"
 )
 
@@ -53,17 +51,6 @@ func boardsListCommand() *cobra.Command {
 				return err
 			}
 			ttl := time.Duration(ttlMinutes) * time.Minute
-			// --raw returns Atlassian's `/rest/agile/1.0/board` shape
-			// verbatim. Bypasses the cache because the upstream payload
-			// is what the user asked for, not the CLI's normalized
-			// view.
-			if raw, _ := cmd.Root().PersistentFlags().GetBool("raw"); raw {
-				if !ok {
-					return fmt.Errorf("jira base URL is required for boards.list")
-				}
-				return writeBoardsListRaw(cmd, client)
-			}
-
 			file, fetchedAt, fromCache, err := readOrPrimeBoardsCache(cmd, client, profile.Name, ok, ttl, ttlMinutes, refresh, unbounded)
 			if err != nil {
 				return err
@@ -238,21 +225,6 @@ func safeIntPtr(p *int) int {
 		return 0
 	}
 	return *p
-}
-
-// writeBoardsListRaw emits Atlassian's native /rest/agile/1.0/board
-// page verbatim. Skips the cache because --raw is upstream-shape
-// transparency.
-func writeBoardsListRaw(cmd *cobra.Command, client *jira.Client) error {
-	req, err := client.NewRequest(cmd.Context(), http.MethodGet, "rest/agile/1.0/board", nil)
-	if err != nil {
-		return err
-	}
-	var raw json.RawMessage
-	if _, err := client.Do(req, &raw); err != nil {
-		return err
-	}
-	return cli.WriteRaw(cmd.OutOrStdout(), raw)
 }
 
 // writeEnvelopeWithRawWarnings is the shared helper in commands.go for

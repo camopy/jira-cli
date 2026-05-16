@@ -8,7 +8,7 @@ import (
 )
 
 func TestRootNonTTYJSONDiscovery(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--json")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("root command error = %v\n%s", err, out)

@@ -15,7 +15,7 @@ import (
 // `warnings`, `official_url`, `notes`, plus `submit_description`.
 func TestAgentADFMatrixJSON(t *testing.T) {
 	bin := buildJiraBinary(t)
-	cmd := exec.Command(bin, "agent", "adf-matrix", "--json")
+	cmd := exec.Command(bin, "agent", "adf-matrix", "--output=json")
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("adf-matrix --json: %v\nstderr: %s", err, exitStderr(err))

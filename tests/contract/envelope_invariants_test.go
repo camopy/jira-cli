@@ -114,19 +114,12 @@ func assertValidationExitCode(t *testing.T, runErr error) {
 	assertExitCode(t, runErr, 3, "validation errors → exit 3")
 }
 
-// TestI1MutexFlagsJsonEnvelope — Attack 3: --json --plain are mutually exclusive.
-// Cobra fires the error before RunE, but stdout must still carry a JSON envelope.
-// validation errors → exit 3.
-func TestI1MutexFlagsJsonEnvelope(t *testing.T) {
+// TestI1RemovedOutputFlagFails — Attack 3: a removed legacy output flag
+// must fail as an unknown flag, never be silently re-aliased onto a mode.
+func TestI1RemovedOutputFlagFails(t *testing.T) {
 	bin := buildJiraBinary(t)
-	env, runErr := requireEnvelopeOnStdout(t, bin, "--json", "--plain", "schema")
-	if runErr == nil {
-		t.Fatal("expected non-zero exit for mutually exclusive flags, got 0")
-	}
-	assertValidationExitCode(t, runErr)
-	errs, _ := env["errors"].([]any)
-	if len(errs) == 0 {
-		t.Fatalf("envelope.errors is empty; want at least one error entry\nenvelope=%v", env)
+	if err := exec.Command(bin, "--plain", "schema").Run(); err == nil {
+		t.Fatal("removed flag --plain was accepted; want unknown-flag error")
 	}
 }
 
@@ -140,7 +133,7 @@ func TestI1MalformedJsonInputEnvelope(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	env, runErr := requireEnvelopeOnStdout(t, bin, "issue", "create",
-		"--json-input", badJSON, "--json")
+		"--json-input", badJSON, "--output=json")
 	if runErr == nil {
 		t.Fatal("expected non-zero exit for malformed JSON, got 0")
 	}
@@ -165,7 +158,7 @@ func TestI1HugeJsonInputEnvelope(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	env, runErr := requireEnvelopeOnStdout(t, bin, "issue", "create",
-		"--json-input", hugeJSON, "--json")
+		"--json-input", hugeJSON, "--output=json")
 	if runErr == nil {
 		t.Fatal("expected non-zero exit for huge/invalid JSON, got 0")
 	}
@@ -185,7 +178,7 @@ func TestI1StdinAndJsonInputEnvelope(t *testing.T) {
 	if err := os.WriteFile(badJSON, []byte("not json {["), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	cmd := exec.Command(bin, "issue", "create", "--json-input", badJSON, "--json")
+	cmd := exec.Command(bin, "issue", "create", "--json-input", badJSON, "--output=json")
 	cmd.Stdin = bytes.NewBufferString(`{"summary":"a"}`)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -218,7 +211,7 @@ func TestI1HTMLServerResponseEnvelope(t *testing.T) {
 	defer srv.Close()
 
 	env, runErr := requireEnvelopeOnStdout(t, bin, "--config", jiraConfig(t, srv.URL),
-		"--json", "issue", "list")
+		"--output=json", "issue", "list")
 	if runErr == nil {
 		t.Fatal("expected non-zero exit for HTML server response, got 0")
 	}

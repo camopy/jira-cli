@@ -30,7 +30,7 @@ func TestCacheFieldsRoundTrip(t *testing.T) {
 	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 
 	// First call → fetches.
-	out, err := runWithEnv(bin, env, "--config", cfg, "cache", "fields", "--json")
+	out, err := runWithEnv(bin, env, "--config", cfg, "cache", "fields", "--output=json")
 	if err != nil {
 		t.Fatalf("first fields call: %v\n%s", err, out)
 	}
@@ -47,7 +47,7 @@ func TestCacheFieldsRoundTrip(t *testing.T) {
 	}
 
 	// Second call → cached.
-	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "fields", "--json"); err != nil {
+	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "fields", "--output=json"); err != nil {
 		t.Fatal(err)
 	}
 	if hits.Load() != 1 {
@@ -55,7 +55,7 @@ func TestCacheFieldsRoundTrip(t *testing.T) {
 	}
 
 	// --refresh → fetches again.
-	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "fields", "--refresh", "--json"); err != nil {
+	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "fields", "--refresh", "--output=json"); err != nil {
 		t.Fatal(err)
 	}
 	if hits.Load() != 2 {

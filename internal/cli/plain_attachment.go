@@ -105,7 +105,9 @@ func attachmentInt64Field(m map[string]any, key string) int64 {
 	return 0
 }
 
-// attachmentHumanBytes renders a byte count in a sensible IEC-ish unit.
+// attachmentHumanBytes renders a byte count in a binary (1024-based)
+// unit. The label is the IEC binary unit (KiB/MiB/...) so it matches
+// the 1024 divisor — a 1024-divisor labeled "KB" misreports the size.
 func attachmentHumanBytes(n int64) string {
 	const unit = 1024
 	if n < unit {
@@ -116,7 +118,7 @@ func attachmentHumanBytes(n int64) string {
 		div *= unit
 		exp++
 	}
-	suffix := []string{"KB", "MB", "GB", "TB", "PB"}[exp]
+	suffix := []string{"KiB", "MiB", "GiB", "TiB", "PiB"}[exp]
 	return fmt.Sprintf("%.1f %s", float64(n)/float64(div), suffix)
 }
 
@@ -138,6 +140,11 @@ func attachmentHumanCreated(ts string) string {
 		}
 		delta := time.Since(t)
 		switch {
+		// A timestamp in the future (clock skew, a bad upstream value)
+		// would produce a negative relative age like "-5m ago"; fall
+		// back to the absolute date instead.
+		case delta < 0:
+			return t.Format("2006-01-02")
 		case delta < time.Minute:
 			return "just now"
 		case delta < time.Hour:

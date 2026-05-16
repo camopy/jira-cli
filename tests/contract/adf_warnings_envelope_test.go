@@ -15,7 +15,6 @@ func TestEnvelopeAlwaysCarriesEmptyWarningsArray(t *testing.T) {
 	env := cli.Envelope{
 		Meta: cli.Meta{
 			Command:   "test.cmd",
-			Profile:   "default",
 			Timestamp: "2026-05-04T00:00:00Z",
 		},
 		Data:     map[string]any{"k": "v"},

@@ -30,11 +30,11 @@ func TestReadOnlyModeBlocksMutationsAtHTTPLayer(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"issue create", []string{"issue", "create", "--no-input", "--json-input", createPayload, "--json"}},
-		{"issue edit", []string{"issue", "edit", "PROJ-1", "--no-input", "--json-input", editPayload, "--json"}},
-		{"issue comment", []string{"issue", "comment", "PROJ-1", "--body-markdown", "x", "--no-input", "--json"}},
-		{"worklog add", []string{"worklog", "add", "PROJ-1", "--time-spent", "30m", "--no-input", "--json"}},
-		{"epic add", []string{"epic", "add", "PROJ-1", "EPIC-1", "--no-input", "--json"}},
+		{"issue create", []string{"issue", "create", "--no-input", "--json-input", createPayload, "--output=json"}},
+		{"issue edit", []string{"issue", "edit", "PROJ-1", "--no-input", "--json-input", editPayload, "--output=json"}},
+		{"issue comment", []string{"issue", "comment", "PROJ-1", "--body-markdown", "x", "--no-input", "--output=json"}},
+		{"worklog add", []string{"worklog", "add", "PROJ-1", "--time-spent", "30m", "--no-input", "--output=json"}},
+		{"epic add", []string{"epic", "add", "PROJ-1", "EPIC-1", "--no-input", "--output=json"}},
 	} {
 		args := append([]string{"run", "../../cmd/jira", "--config", cfg}, tc.args...)
 		cmd := exec.Command("go", args...)
@@ -62,10 +62,10 @@ func TestReadOnlyModeAllowsReadsAndDryRuns(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"jira me (no client)", []string{"--json", "auth", "status"}},
+		{"jira me (no client)", []string{"--output=json", "auth", "status"}},
 		{"issue create dry-run", []string{
 			"issue", "create", "--dry-run", "--no-input",
-			"--json-input", writeIssueCreatePayload(t), "--json",
+			"--json-input", writeIssueCreatePayload(t), "--output=json",
 		}},
 	} {
 		args := append([]string{"run", "../../cmd/jira", "--config", cfg}, tc.args...)

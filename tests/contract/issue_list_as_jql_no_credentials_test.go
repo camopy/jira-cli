@@ -25,7 +25,7 @@ func TestIssueListAsJQLBoardScopeWorksWithoutCredentials(t *testing.T) {
 		{"id":42,"name":"Engineering Sprint","type":"scrum","project_keys":["ENG","PLAT"]}
 	]`)
 
-	c := exec.Command(bin, "--config", cfg, "issue", "list", "--as-jql", "--board", "Engineering Sprint", "--json")
+	c := exec.Command(bin, "--config", cfg, "issue", "list", "--as-jql", "--board", "Engineering Sprint", "--output=json")
 	c.Env = append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 	out, err := c.CombinedOutput()
 	if err != nil {
@@ -63,7 +63,7 @@ func TestJQLBuildBoardScopeWorksWithoutCredentials(t *testing.T) {
 		{"id":7,"name":"Solo Board","type":"scrum","project_keys":["SOLO"]}
 	]`)
 
-	c := exec.Command(bin, "--config", cfg, "jql", "build", "--board", "Solo Board", "--json")
+	c := exec.Command(bin, "--config", cfg, "jql", "build", "--board", "Solo Board", "--output=json")
 	c.Env = append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 	out, err := c.CombinedOutput()
 	if err != nil {

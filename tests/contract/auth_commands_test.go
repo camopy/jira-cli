@@ -55,7 +55,7 @@ func TestAuthLoginSwitchAndLogoutMetadataOnly(t *testing.T) {
 		}
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--json", "auth", "switch", "work")
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "auth", "switch", "work")
 	if out, err = cmd.CombinedOutput(); err != nil {
 		t.Fatalf("auth switch error = %v\n%s", err, out)
 	}
@@ -71,7 +71,7 @@ func TestAuthLoginSwitchAndLogoutMetadataOnly(t *testing.T) {
 	if err := os.WriteFile(op, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
 		t.Fatalf("WriteFile(fake op) error = %v", err)
 	}
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--json", "auth", "logout", "work")
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "auth", "logout", "work")
 	cmd.Env = append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	if out, err = cmd.CombinedOutput(); err != nil {
 		t.Fatalf("auth logout error = %v\n%s", err, out)
@@ -212,7 +212,7 @@ secret_backend = "keyring"
 `), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", path, "--json", "auth", "refresh")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "auth", "refresh")
 	cmd.Env = append(os.Environ(), "JIRA_DEFAULT_PROFILE=play")
 	out, err := cmd.CombinedOutput()
 	if err != nil {

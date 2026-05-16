@@ -12,7 +12,7 @@ import (
 
 func TestIssueEditNoInputJSONInputDryRunShowsPreviewPayload(t *testing.T) {
 	input := issueEditPayloadFile(t)
-	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "edit", "PROJ-1", "--dry-run", "--no-input", "--json-input", input, "--json")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "edit", "PROJ-1", "--dry-run", "--no-input", "--json-input", input, "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue edit dry-run json-input error = %v\n%s", err, out)
@@ -60,7 +60,7 @@ func TestIssueEditNoInputJSONInputCallsJiraUpdateWithFieldsAndADF(t *testing.T) 
 
 	cfg := jiraConfig(t, srv.URL)
 	input := issueEditPayloadFile(t)
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "edit", "PROJ-1", "--no-input", "--json-input", input, "--json")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "edit", "PROJ-1", "--no-input", "--json-input", input, "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue edit json-input error = %v\n%s", err, out)

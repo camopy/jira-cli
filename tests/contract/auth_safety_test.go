@@ -15,7 +15,7 @@ import (
 
 func TestAuthLoginRefusesPromptsInHeadlessJSONMode(t *testing.T) {
 	bin := buildJiraBinary(t)
-	cmd := exec.Command(bin, "--json", "auth", "login")
+	cmd := exec.Command(bin, "--output=json", "auth", "login")
 	cmd.Stdin = strings.NewReader("work\nhttps://company.atlassian.net\ntoken\ndev@example.com\nkeyring\n\n\n")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -163,7 +163,7 @@ secret_backend = "keyring"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	cmd := exec.Command(bin, "--config", path, "--json", "auth", "whoami", "--save")
+	cmd := exec.Command(bin, "--config", path, "--output=json", "auth", "whoami", "--save")
 	cmd.Env = append(os.Environ(),
 		"JIRA_TOKEN_WORK=test-token",
 		"JIRA_PROFILE_WORK_DEFAULT_ISSUE_TYPE=OverlayType",
@@ -209,7 +209,7 @@ secret_backend = "keyring"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	cmd := exec.Command(bin, "--config", path, "--profile", "ghost", "--json", "auth", "whoami", "--save")
+	cmd := exec.Command(bin, "--config", path, "--profile", "ghost", "--output=json", "auth", "whoami", "--save")
 	cmd.Env = append(os.Environ(),
 		"JIRA_TOKEN_GHOST=test-token",
 		"JIRA_PROFILE_GHOST_BASE_URL="+srv.URL,
@@ -246,7 +246,7 @@ secret_backend = "keyring"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	cmd := exec.Command(bin, "--config", path, "--profile", "typo", "--json", "auth", "migrate", "--backend", "1password")
+	cmd := exec.Command(bin, "--config", path, "--profile", "typo", "--output=json", "auth", "migrate", "--backend", "1password")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -291,7 +291,7 @@ secret_backend = "keyring"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	cmd := exec.Command(bin, "--config", path, "--json", "auth", "whoami", "--save")
+	cmd := exec.Command(bin, "--config", path, "--output=json", "auth", "whoami", "--save")
 	cmd.Env = append(os.Environ(),
 		"JIRA_TOKEN_WORK=test-token",
 		"JIRA_PROFILE_WORK_BASE_URL="+serverB.URL,

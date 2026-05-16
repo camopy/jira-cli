@@ -11,7 +11,7 @@ import (
 // parse both ADF + customfield surfaces with the same code.
 func TestAgentFieldTypesJSON(t *testing.T) {
 	bin := buildJiraBinary(t)
-	cmd := exec.Command(bin, "agent", "fieldtypes", "--json")
+	cmd := exec.Command(bin, "agent", "fieldtypes", "--output=json")
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("fieldtypes --json: %v\nstderr: %s", err, exitStderr(err))

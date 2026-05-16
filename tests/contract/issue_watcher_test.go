@@ -43,7 +43,7 @@ func runJiraWatchers(t *testing.T, srvURL, profileEnv string, args ...string) ([
 	// exit code directly (go run masks non-zero exits as `1`, which breaks
 	// the exit-2 / exit-3 assertions on the failure paths).
 	bin := buildJiraBinary(t)
-	cmd := exec.Command(bin, append([]string{"--config", cfg, "--json"}, args...)...)
+	cmd := exec.Command(bin, append([]string{"--config", cfg, "--output=json"}, args...)...)
 	cmd.Env = append(cmd.Environ(), profileEnv)
 	// Capture only stdout — clog writes a human-readable diagnostic to
 	// stderr alongside the JSON envelope on the failure path, and mixing
@@ -94,34 +94,6 @@ func TestWatchersListEnvelopeShape(t *testing.T) {
 	}
 	if c, _ := data["watch_count"].(float64); c != 3 {
 		t.Errorf("watch_count = %v, want 3", c)
-	}
-}
-
-// (--raw): native passthrough preserves Atlassian's camelCase keys.
-func TestWatchersListRawPassthrough(t *testing.T) {
-	body := watchersBody(false, 1, [2]string{"acc-bob", "Bob"})
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/rest/api/3/myself" {
-			_, _ = w.Write([]byte(myselfBody))
-			return
-		}
-		_, _ = w.Write([]byte(body))
-	}))
-	defer srv.Close()
-
-	cfg := jiraConfig(t, srv.URL)
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--raw", "issue", "watchers", "list", "KAN-1")
-	cmd.Env = append(cmd.Environ(), "JIRA_TOKEN_DEFAULT=test-token")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("watchers list --raw error = %v\n%s", err, out)
-	}
-	if !strings.Contains(string(out), `"isWatching"`) || !strings.Contains(string(out), `"watchCount"`) {
-		t.Fatalf("--raw missing camelCase keys: %s", out)
-	}
-	if strings.Contains(string(out), `"is_watching"`) {
-		t.Fatalf("--raw leaked CLI envelope keys: %s", out)
 	}
 }
 

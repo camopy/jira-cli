@@ -14,7 +14,7 @@ func TestIssueCreateDryRunOmitsIssueAndPopulatesPreview(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "create",
-		"--dry-run", "--no-input", "--json-input", path, "--json")
+		"--dry-run", "--no-input", "--json-input", path, "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue create dry-run error = %v\n%s", err, out)
@@ -47,7 +47,7 @@ func TestIssueCreateDryRunConvertsMarkdownDescriptionToADF(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "create",
-		"--dry-run", "--no-input", "--json-input", path, "--json")
+		"--dry-run", "--no-input", "--json-input", path, "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue create dry-run error = %v\n%s", err, out)

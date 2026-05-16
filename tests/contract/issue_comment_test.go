@@ -16,7 +16,7 @@ import (
 )
 
 // Comment full lifecycle:
-//   - comment list contract (oldest-first, pagination, --raw passthrough, lossy warnings)
+//   - comment list contract (oldest-first, pagination, lossy warnings)
 //   - comment list --all rate-limit-during-pagination: partial data + warning + exit 0
 //   - comment add contract incl. visibility plumbing + back-compat alias
 //   - comment edit contract incl. visibility replace/preserve/clear semantics + author preserved
@@ -142,7 +142,7 @@ func TestCommentListReturnsEnvelopeWithPaginationAndOrdering(t *testing.T) {
 	})
 
 	cfg := jiraConfig(t, srv.URL)
-	stdout, _, code := runJira(t, "--config", cfg, "issue", "comment", "list", "PROJ-1", "--json")
+	stdout, _, code := runJira(t, "--config", cfg, "issue", "comment", "list", "PROJ-1", "--output=json")
 	if code != 0 {
 		t.Fatalf("exit = %d; want 0\nstdout=%s", code, stdout)
 	}
@@ -173,43 +173,6 @@ func TestCommentListReturnsEnvelopeWithPaginationAndOrdering(t *testing.T) {
 	}
 }
 
-func TestCommentListRawPassesThroughAtlassianShape(t *testing.T) {
-	page := `{"comments":[{"id":"7","body":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"text","text":"raw"}]}]},"author":{"accountId":"u","displayName":"A"},"created":"2026-04-01T10:00:00.000+0000","updated":"2026-04-01T10:00:00.000+0000"}],"startAt":0,"maxResults":50,"total":1,"isLast":true}`
-	srv, _ := newCommentServer(t, map[string]http.HandlerFunc{
-		"GET /rest/api/3/issue/PROJ-1/comment": func(w http.ResponseWriter, _ *http.Request) {
-			_, _ = io.WriteString(w, page)
-		},
-	})
-	cfg := jiraConfig(t, srv.URL)
-	stdout, _, code := runJira(t, "--config", cfg, "issue", "comment", "list", "PROJ-1", "--raw")
-	if code != 0 {
-		t.Fatalf("exit = %d; want 0\nstdout=%s", code, stdout)
-	}
-	var raw map[string]any
-	if err := json.Unmarshal(stdout, &raw); err != nil {
-		t.Fatalf("--raw output not JSON: %v\nstdout=%s", err, stdout)
-	}
-	for _, want := range []string{"comments", "startAt", "maxResults", "total", "isLast"} {
-		if _, ok := raw[want]; !ok {
-			t.Errorf("--raw missing native key %q: %v", want, raw)
-		}
-	}
-	for _, unwanted := range []string{"meta", "data", "warnings", "errors"} {
-		if _, ok := raw[unwanted]; ok {
-			t.Errorf("--raw leaked envelope key %q", unwanted)
-		}
-	}
-	cs, _ := raw["comments"].([]any)
-	if len(cs) != 1 {
-		t.Fatalf("comments len = %d; want 1", len(cs))
-	}
-	c0, _ := cs[0].(map[string]any)
-	body, ok := c0["body"].(map[string]any)
-	if !ok || body["type"] != "doc" {
-		t.Errorf("--raw body is not native ADF: %v", c0["body"])
-	}
-}
-
 func TestCommentListAllPaginatesUntilIsLast(t *testing.T) {
 	page1 := `{"comments":[{"id":"100","body":{"type":"doc","version":1,"content":[]},"author":{"accountId":"u","displayName":"A"},"created":"2026-04-01T10:00:00.000+0000","updated":"2026-04-01T10:00:00.000+0000"}],"startAt":0,"maxResults":1,"total":2,"isLast":false}`
 	page2 := `{"comments":[{"id":"101","body":{"type":"doc","version":1,"content":[]},"author":{"accountId":"u","displayName":"A"},"created":"2026-04-02T10:00:00.000+0000","updated":"2026-04-02T10:00:00.000+0000"}],"startAt":1,"maxResults":1,"total":2,"isLast":true}`
@@ -227,7 +190,7 @@ func TestCommentListAllPaginatesUntilIsLast(t *testing.T) {
 		},
 	})
 	cfg := jiraConfig(t, srv.URL)
-	stdout, _, code := runJira(t, "--config", cfg, "issue", "comment", "list", "PROJ-1", "--all", "--limit", "1", "--json")
+	stdout, _, code := runJira(t, "--config", cfg, "issue", "comment", "list", "PROJ-1", "--all", "--limit", "1", "--output=json")
 	if code != 0 {
 		t.Fatalf("exit = %d; want 0\nstdout=%s", code, stdout)
 	}
@@ -258,7 +221,7 @@ func TestCommentListAllRateLimitDuringPaginationReturnsPartialData(t *testing.T)
 		},
 	})
 	cfg := jiraConfig(t, srv.URL)
-	stdout, _, code := runJira(t, "--config", cfg, "issue", "comment", "list", "PROJ-1", "--all", "--limit", "1", "--json")
+	stdout, _, code := runJira(t, "--config", cfg, "issue", "comment", "list", "PROJ-1", "--all", "--limit", "1", "--output=json")
 	if code != 0 {
 		t.Fatalf("exit = %d; want 0 (partial data on rate-limit)\nstdout=%s", code, stdout)
 	}
@@ -301,7 +264,7 @@ func TestCommentAddSubmitsADFAndReturnsEnvelope(t *testing.T) {
 		},
 	})
 	cfg := jiraConfig(t, srv.URL)
-	stdout, _, code := runJira(t, "--config", cfg, "issue", "comment", "add", "PROJ-1", "--body-markdown", "hello", "--json")
+	stdout, _, code := runJira(t, "--config", cfg, "issue", "comment", "add", "PROJ-1", "--body-markdown", "hello", "--output=json")
 	if code != 0 {
 		t.Fatalf("exit = %d; want 0\nstdout=%s", code, stdout)
 	}
@@ -330,7 +293,7 @@ func TestCommentAddVisibilityRolePlumbsToWire(t *testing.T) {
 		},
 	})
 	cfg := jiraConfig(t, srv.URL)
-	_, _, code := runJira(t, "--config", cfg, "issue", "comment", "add", "PROJ-1", "--body-markdown", "hi", "--visibility-role", "Developers", "--json")
+	_, _, code := runJira(t, "--config", cfg, "issue", "comment", "add", "PROJ-1", "--body-markdown", "hi", "--visibility-role", "Developers", "--output=json")
 	if code != 0 {
 		t.Fatalf("exit = %d; want 0", code)
 	}
@@ -362,11 +325,11 @@ func TestCommentAddBackCompatAliasMatchesAddSubcommand(t *testing.T) {
 	})
 	cfg := jiraConfig(t, srv.URL)
 
-	_, _, code := runJira(t, "--config", cfg, "issue", "comment", "PROJ-1", "--body-markdown", "alias", "--json")
+	_, _, code := runJira(t, "--config", cfg, "issue", "comment", "PROJ-1", "--body-markdown", "alias", "--output=json")
 	if code != 0 {
 		t.Fatalf("alias form exit = %d; want 0", code)
 	}
-	_, _, code = runJira(t, "--config", cfg, "issue", "comment", "add", "PROJ-1", "--body-markdown", "alias", "--json")
+	_, _, code = runJira(t, "--config", cfg, "issue", "comment", "add", "PROJ-1", "--body-markdown", "alias", "--output=json")
 	if code != 0 {
 		t.Fatalf("add subcommand exit = %d; want 0", code)
 	}
@@ -392,7 +355,7 @@ func TestCommentEditPreservesAuthorAndPlumbsBody(t *testing.T) {
 		},
 	})
 	cfg := jiraConfig(t, srv.URL)
-	stdout, _, code := runJira(t, "--config", cfg, "issue", "comment", "edit", "PROJ-1", "55", "--body-markdown", "fixed", "--json")
+	stdout, _, code := runJira(t, "--config", cfg, "issue", "comment", "edit", "PROJ-1", "55", "--body-markdown", "fixed", "--output=json")
 	if code != 0 {
 		t.Fatalf("exit = %d; want 0\nstdout=%s", code, stdout)
 	}
@@ -426,7 +389,7 @@ func TestCommentEditVisibilityReplaceOnSupply(t *testing.T) {
 		},
 	})
 	cfg := jiraConfig(t, srv.URL)
-	_, _, code := runJira(t, "--config", cfg, "issue", "comment", "edit", "PROJ-1", "55", "--body-markdown", "x", "--visibility-role", "Admins", "--json")
+	_, _, code := runJira(t, "--config", cfg, "issue", "comment", "edit", "PROJ-1", "55", "--body-markdown", "x", "--visibility-role", "Admins", "--output=json")
 	if code != 0 {
 		t.Fatalf("exit = %d", code)
 	}
@@ -449,7 +412,7 @@ func TestCommentEditPreserveWhenOmitted(t *testing.T) {
 		},
 	})
 	cfg := jiraConfig(t, srv.URL)
-	_, _, code := runJira(t, "--config", cfg, "issue", "comment", "edit", "PROJ-1", "55", "--body-markdown", "x", "--json")
+	_, _, code := runJira(t, "--config", cfg, "issue", "comment", "edit", "PROJ-1", "55", "--body-markdown", "x", "--output=json")
 	if code != 0 {
 		t.Fatalf("exit = %d", code)
 	}
@@ -471,7 +434,7 @@ func TestCommentEditClearVisibilitySendsNull(t *testing.T) {
 		},
 	})
 	cfg := jiraConfig(t, srv.URL)
-	_, _, code := runJira(t, "--config", cfg, "issue", "comment", "edit", "PROJ-1", "55", "--body-markdown", "x", "--clear-visibility", "--json")
+	_, _, code := runJira(t, "--config", cfg, "issue", "comment", "edit", "PROJ-1", "55", "--body-markdown", "x", "--clear-visibility", "--output=json")
 	if code != 0 {
 		t.Fatalf("exit = %d", code)
 	}
@@ -484,7 +447,7 @@ func TestCommentEditMutuallyExclusiveFlagsExit3(t *testing.T) {
 	srv, cts := newCommentServer(t, map[string]http.HandlerFunc{})
 	cfg := jiraConfig(t, srv.URL)
 	_, _, code := runJira(t, "--config", cfg, "issue", "comment", "edit", "PROJ-1", "55",
-		"--body-markdown", "x", "--visibility-role", "Admins", "--clear-visibility", "--json")
+		"--body-markdown", "x", "--visibility-role", "Admins", "--clear-visibility", "--output=json")
 	if code != 3 {
 		t.Fatalf("exit = %d; want 3 (validation)", code)
 	}
@@ -493,7 +456,7 @@ func TestCommentEditMutuallyExclusiveFlagsExit3(t *testing.T) {
 	}
 
 	_, _, code2 := runJira(t, "--config", cfg, "issue", "comment", "edit", "PROJ-1", "55",
-		"--body-markdown", "x", "--visibility-role", "Admins", "--visibility-group", "Eng", "--json")
+		"--body-markdown", "x", "--visibility-role", "Admins", "--visibility-group", "Eng", "--output=json")
 	if code2 != 3 {
 		t.Fatalf("role+group exit = %d; want 3", code2)
 	}
@@ -504,7 +467,7 @@ func TestCommentEditMutuallyExclusiveFlagsExit3(t *testing.T) {
 func TestCommentDeleteForceGatedUnderNoInput(t *testing.T) {
 	srv, cts := newCommentServer(t, map[string]http.HandlerFunc{})
 	cfg := jiraConfig(t, srv.URL)
-	_, _, code := runJira(t, "--config", cfg, "issue", "comment", "delete", "PROJ-1", "55", "--no-input", "--json")
+	_, _, code := runJira(t, "--config", cfg, "issue", "comment", "delete", "PROJ-1", "55", "--no-input", "--output=json")
 	if code != 3 {
 		t.Fatalf("exit = %d; want 3 (force omitted under --no-input)", code)
 	}
@@ -520,7 +483,7 @@ func TestCommentDeleteWithForceReturnsEnvelope(t *testing.T) {
 		},
 	})
 	cfg := jiraConfig(t, srv.URL)
-	stdout, _, code := runJira(t, "--config", cfg, "issue", "comment", "delete", "PROJ-1", "55", "--force", "--no-input", "--json")
+	stdout, _, code := runJira(t, "--config", cfg, "issue", "comment", "delete", "PROJ-1", "55", "--force", "--no-input", "--output=json")
 	if code != 0 {
 		t.Fatalf("exit = %d; want 0\nstdout=%s", code, stdout)
 	}
@@ -549,7 +512,7 @@ func TestCommentListEmitsLossyWarningPerComment(t *testing.T) {
 		},
 	})
 	cfg := jiraConfig(t, srv.URL)
-	stdout, _, code := runJira(t, "--config", cfg, "issue", "comment", "list", "PROJ-1", "--json")
+	stdout, _, code := runJira(t, "--config", cfg, "issue", "comment", "list", "PROJ-1", "--output=json")
 	if code != 0 {
 		t.Fatalf("exit = %d\nstdout=%s", code, stdout)
 	}
@@ -589,7 +552,7 @@ func TestCommentListEmitsLossyWarningPerComment(t *testing.T) {
 func TestCommentAddEmptyBodyMarkdownRejectedLocally(t *testing.T) {
 	srv, cts := newCommentServer(t, map[string]http.HandlerFunc{})
 	cfg := jiraConfig(t, srv.URL)
-	_, stderr, code := runJira(t, "--config", cfg, "issue", "comment", "add", "PROJ-1", "--body-markdown", "", "--no-input", "--json")
+	_, stderr, code := runJira(t, "--config", cfg, "issue", "comment", "add", "PROJ-1", "--body-markdown", "", "--no-input", "--output=json")
 	if code != 3 {
 		t.Fatalf("exit = %d; want 3 (empty body)\nstderr=%s", code, stderr)
 	}
@@ -609,7 +572,7 @@ func TestCommentAddEmptyJSONInputRejectedLocally(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"type":"doc","version":1,"content":[]}`), 0o600); err != nil {
 		t.Fatalf("write empty.json: %v", err)
 	}
-	_, _, code := runJira(t, "--config", cfg, "issue", "comment", "add", "PROJ-1", "--json-input", path, "--no-input", "--json")
+	_, _, code := runJira(t, "--config", cfg, "issue", "comment", "add", "PROJ-1", "--json-input", path, "--no-input", "--output=json")
 	if code != 3 {
 		t.Fatalf("exit = %d; want 3 (empty json-input doc)", code)
 	}
@@ -621,7 +584,7 @@ func TestCommentAddEmptyJSONInputRejectedLocally(t *testing.T) {
 func TestCommentEditWithoutBodyOrJSONInputRejectedLocally(t *testing.T) {
 	srv, cts := newCommentServer(t, map[string]http.HandlerFunc{})
 	cfg := jiraConfig(t, srv.URL)
-	_, _, code := runJira(t, "--config", cfg, "issue", "comment", "edit", "PROJ-1", "55", "--no-input", "--json")
+	_, _, code := runJira(t, "--config", cfg, "issue", "comment", "edit", "PROJ-1", "55", "--no-input", "--output=json")
 	if code != 3 {
 		t.Fatalf("exit = %d; want 3 (no body)", code)
 	}

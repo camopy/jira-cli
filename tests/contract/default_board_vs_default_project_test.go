@@ -55,7 +55,7 @@ func TestDefaultBoardWinsExclusivelyOverDefaultProject(t *testing.T) {
 		"Engineering Sprint", // default_board → ENG
 	)
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "list", "--json")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "list", "--output=json")
 	cmd.Env = append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

@@ -19,12 +19,12 @@ func TestNonDryRunMutationsRequireConfiguredJiraClient(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"issue create", []string{"issue", "create", "--no-input", "--json-input", createPayload, "--json"}},
-		{"issue edit", []string{"issue", "edit", "PROJ-1", "--no-input", "--json-input", editPayload, "--json"}},
-		{"issue comment", []string{"issue", "comment", "PROJ-1", "--body-markdown", "hello", "--no-input", "--json"}},
-		{"worklog add", []string{"worklog", "add", "PROJ-1", "--time-spent", "45m", "--no-input", "--json"}},
-		{"epic add", []string{"epic", "add", "PROJ-1", "EPIC-1", "--no-input", "--json"}},
-		{"epic remove", []string{"epic", "remove", "PROJ-1", "--no-input", "--json"}},
+		{"issue create", []string{"issue", "create", "--no-input", "--json-input", createPayload, "--output=json"}},
+		{"issue edit", []string{"issue", "edit", "PROJ-1", "--no-input", "--json-input", editPayload, "--output=json"}},
+		{"issue comment", []string{"issue", "comment", "PROJ-1", "--body-markdown", "hello", "--no-input", "--output=json"}},
+		{"worklog add", []string{"worklog", "add", "PROJ-1", "--time-spent", "45m", "--no-input", "--output=json"}},
+		{"epic add", []string{"epic", "add", "PROJ-1", "EPIC-1", "--no-input", "--output=json"}},
+		{"epic remove", []string{"epic", "remove", "PROJ-1", "--no-input", "--output=json"}},
 	} {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {

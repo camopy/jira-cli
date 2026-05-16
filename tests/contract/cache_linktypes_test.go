@@ -31,7 +31,7 @@ func TestCacheLinkTypesRoundTrip(t *testing.T) {
 	cacheRoot := t.TempDir()
 	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 
-	out, err := runWithEnv(bin, env, "--config", cfg, "cache", "linktypes", "--json")
+	out, err := runWithEnv(bin, env, "--config", cfg, "cache", "linktypes", "--output=json")
 	if err != nil {
 		t.Fatalf("first cache linktypes: %v\n%s", err, out)
 	}
@@ -61,14 +61,14 @@ func TestCacheLinkTypesRoundTrip(t *testing.T) {
 		t.Fatalf("expected cache file at %s: %v", cachePath, err)
 	}
 
-	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "linktypes", "--json"); err != nil {
+	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "linktypes", "--output=json"); err != nil {
 		t.Fatal(err)
 	}
 	if hits.Load() != 1 {
 		t.Fatalf("expected cached second call (still 1 hit), got %d", hits.Load())
 	}
 
-	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "linktypes", "--refresh", "--json"); err != nil {
+	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "linktypes", "--refresh", "--output=json"); err != nil {
 		t.Fatal(err)
 	}
 	if hits.Load() != 2 {
@@ -79,14 +79,14 @@ func TestCacheLinkTypesRoundTrip(t *testing.T) {
 	// to DefaultTTL inside internal/cache, so the canonical "force a
 	// fetch" path is --refresh (already exercised). A high TTL against a
 	// freshly-written cache should NOT trigger a new hit.
-	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "linktypes", "--ttl-minutes", "120", "--json"); err != nil {
+	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "linktypes", "--ttl-minutes", "120", "--output=json"); err != nil {
 		t.Fatal(err)
 	}
 	if hits.Load() != 2 {
 		t.Fatalf("expected 2 hits after --ttl-minutes 120 against fresh cache, got %d", hits.Load())
 	}
 
-	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "linktypes", "--json"); err != nil {
+	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "linktypes", "--output=json"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(cachePath); !os.IsNotExist(err) {
@@ -107,14 +107,14 @@ func TestCacheClearProfileRemovesLinkTypes(t *testing.T) {
 	cacheRoot := t.TempDir()
 	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 
-	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "linktypes", "--json"); err != nil {
+	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "linktypes", "--output=json"); err != nil {
 		t.Fatal(err)
 	}
 	cachePath := filepath.Join(cacheRoot, "jira-cli", "test", "linktypes.json")
 	if _, err := os.Stat(cachePath); err != nil {
 		t.Fatalf("cache file missing pre-clear: %v", err)
 	}
-	out, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "--json")
+	out, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "--output=json")
 	if err != nil {
 		t.Fatalf("cache clear: %v\n%s", err, out)
 	}

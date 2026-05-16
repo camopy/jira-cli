@@ -135,7 +135,7 @@ func TestLifecycleCommandsEmitMetaEnvelope(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			args := append([]string{"--config", cfg, "--json"}, tc.args...)
+			args := append([]string{"--config", cfg, "--output=json"}, tc.args...)
 			stdout, stderr, code := runJira(t, args...)
 			if code != 0 {
 				t.Fatalf("exit = %d; want 0\nstdout=%s\nstderr=%s", code, stdout, stderr)
@@ -151,8 +151,10 @@ func TestLifecycleCommandsEmitMetaEnvelope(t *testing.T) {
 			if got, _ := meta["command"].(string); got != tc.want {
 				t.Errorf("meta.command = %q; want %q", got, tc.want)
 			}
-			if got, _ := meta["profile"].(string); got == "" {
-				t.Errorf("meta.profile empty")
+			// Machine envelopes omit meta.profile entirely — a command
+			// that must report a profile puts it in command-specific data.
+			if _, has := meta["profile"]; has {
+				t.Errorf("meta.profile must not appear in a machine envelope")
 			}
 			ts, _ := meta["timestamp"].(string)
 			if ts == "" {

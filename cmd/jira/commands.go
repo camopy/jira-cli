@@ -93,7 +93,7 @@ func schemaCommand() *cobra.Command {
 		GroupID: "agent",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return writeSchema(cmd, false)
+			return writeSchema(cmd)
 		},
 	}
 }
@@ -1091,18 +1091,25 @@ func authTokenCommand() *cobra.Command {
 				return refErr
 			}
 			status := config.CredentialStatus(cmd.Context(), credentialStoreFor(profile.SecretBackend), ref)
-			return writeEnvelope(cmd, "auth.token", map[string]any{
-				"profile":             profile.Name,
-				"source":              status.Source,
-				"backend":             string(profile.SecretBackend),
-				"onepassword_account": profile.OnePasswordAccount,
-				"vault":               profile.Vault,
-				"item":                firstNonEmpty(profile.Item, "jira-cli-"+profile.Name),
-				"valid":               status.Valid,
-				"redacted":            status.Redacted,
-				"expiry":              nil,
-				"error":               status.Error,
-			})
+			data := map[string]any{
+				"profile":  profile.Name,
+				"source":   status.Source,
+				"backend":  string(profile.SecretBackend),
+				"valid":    status.Valid,
+				"redacted": status.Redacted,
+				"expiry":   nil,
+				"error":    status.Error,
+			}
+			// 1Password coordinates (account/vault/item) are meaningful
+			// only for a 1Password-backed profile. Populating them on a
+			// keyring profile prints fields irrelevant to the active
+			// backend, so scope them to the 1Password backend.
+			if profile.SecretBackend == config.SecretBackendOnePassword {
+				data["onepassword_account"] = profile.OnePasswordAccount
+				data["vault"] = profile.Vault
+				data["item"] = firstNonEmpty(profile.Item, "jira-cli-"+profile.Name)
+			}
+			return writeEnvelope(cmd, "auth.token", data)
 		},
 	}
 }
@@ -1165,13 +1172,16 @@ func issueViewCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				// Scan the issue's ADF surfaces (description and any
-				// embedded comment bodies) for constructs the renderer
-				// can't fully round-trip and surface them as structured
-				// warnings on the envelope. The body itself is still
-				// returned as-is so consumers can keep working; agents
-				// needing fidelity opt into --raw.
-				warnings := collectIssueLossyWarnings(issue)
+				// ADF render-loss warnings describe what the HUMAN
+				// renderer drops when it flattens ADF to Markdown. The
+				// json/compact envelope carries the full ADF in
+				// data.issue, so nothing is lost there — emitting the
+				// warning on a machine path would be false.
+				// Scope the scan to the human output mode only.
+				var warnings []adf.Warning
+				if usePlainOutput(cmd) {
+					warnings = collectIssueLossyWarnings(issue)
+				}
 				return writeEnvelopeWithResponseAndWarnings(cmd, "issue.view", map[string]any{"issue": issue}, resp, warnings)
 			}
 			return writeEnvelope(cmd, "issue.view", map[string]any{"issue": map[string]any{"key": args[0]}})
@@ -1199,7 +1209,7 @@ func collectIssueLossyWarnings(issue *jira.Issue) []adf.Warning {
 		for _, c := range res.LossyConstructs {
 			warnings = append(warnings, adf.Warning{
 				Type:     "adf_lossy_render",
-				Message:  fmt.Sprintf("description ADF construct %q dropped during Markdown render; use --raw for fidelity", c),
+				Message:  fmt.Sprintf("description ADF construct %q dropped during Markdown render; render in --output=json for full ADF fidelity", c),
 				Field:    "description",
 				NodeType: c,
 				Lossy:    true,
@@ -1225,7 +1235,7 @@ func collectIssueLossyWarnings(issue *jira.Issue) []adf.Warning {
 		for _, c := range res.LossyConstructs {
 			warnings = append(warnings, adf.Warning{
 				Type:     "adf_lossy_render",
-				Message:  fmt.Sprintf("comment %s ADF construct %q dropped during Markdown render; use --raw for fidelity", commentID, c),
+				Message:  fmt.Sprintf("comment %s ADF construct %q dropped during Markdown render; render in --output=json for full ADF fidelity", commentID, c),
 				Field:    field,
 				NodeType: c,
 				Lossy:    true,
@@ -1304,16 +1314,13 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 	if err != nil {
 		return err
 	}
-	if opts.detail && !useRawOutput(cmd) {
+	if opts.detail {
 		issues, err = fetchIssueDetails(cmd.Context(), service, issues)
 		if err != nil {
 			return err
 		}
 	}
 	issueData := issueOutput(issues, opts.detail)
-	if useRawOutput(cmd) {
-		issueData = issues
-	}
 	return writeEnvelopeWithResponse(cmd, "issue.list", boardScopedListData(cmd, issueData, opts.detail, query, scope, precedence), resp)
 }
 
@@ -2151,16 +2158,19 @@ func writeEnvelopeWithRawWarnings(cmd *cobra.Command, command string, data any, 
 		})
 	}
 	if useCompactOutput(cmd) {
-		payload := map[string]any{"data": data, "warnings": rawWarningsOrEmpty(warnings), "errors": []any{}}
-		return cli.WriteCompact(cmd.OutOrStdout(), payload)
+		// compact is the data payload without the envelope. Warnings have
+		// no envelope to ride in, so fold any non-empty warning set into
+		// the data so credential-cleanup and pagination notices stay
+		// visible to agents (they would otherwise be silently dropped).
+		return cli.WriteCompact(cmd.OutOrStdout(), foldRawWarningsIntoData(data, warnings))
 	}
 	if usePlainOutput(cmd) {
 		return cli.WriteCommandPlain(cmd.OutOrStdout(), command, data, plainOptionsForCommand(cmd)...)
 	}
 	body := map[string]any{
+		"ok": true,
 		"meta": map[string]any{
 			"command":    command,
-			"profile":    profileForEnvelope(cmd),
 			"timestamp":  time.Now().UTC().Format(time.RFC3339),
 			"request_id": cli.NewRequestID(),
 		},
@@ -2171,6 +2181,36 @@ func writeEnvelopeWithRawWarnings(cmd *cobra.Command, command string, data any, 
 	enc := json.NewEncoder(cmd.OutOrStdout())
 	enc.SetIndent("", "  ")
 	return enc.Encode(body)
+}
+
+// foldWarnings merges a non-empty warning slice into a compact-mode data
+// payload so a correctness warning survives a mode that has no envelope
+// to carry it. A map payload gets a "warnings" key alongside its existing
+// fields; a non-map payload (slice or scalar) is wrapped as
+// {"data": ..., "warnings": ...} so the warning is never silently
+// dropped. An empty warning set returns the data unchanged.
+func foldWarnings[T any](data any, warnings []T) any {
+	if len(warnings) == 0 {
+		return data
+	}
+	if m, ok := data.(map[string]any); ok {
+		out := copyAnyMap(m)
+		out["warnings"] = warnings
+		return out
+	}
+	return map[string]any{"data": data, "warnings": warnings}
+}
+
+// foldRawWarningsIntoData folds a raw map-shaped warning slice into a
+// compact payload. See foldWarnings.
+func foldRawWarningsIntoData(data any, warnings []map[string]any) any {
+	return foldWarnings(data, warnings)
+}
+
+// foldWarningsIntoData folds a typed cli.Warning slice into a compact
+// payload. See foldWarnings.
+func foldWarningsIntoData(data any, warnings []cli.Warning) any {
+	return foldWarnings(data, warnings)
 }
 
 func rawWarningsOrEmpty(w []map[string]any) []map[string]any {
@@ -2192,7 +2232,9 @@ func writeEnvelopeWithWarnings(cmd *cobra.Command, command string, data any, war
 	}
 	cliWarnings = append(cliWarnings, collectedCredentialWarnings(cmd)...)
 	if useCompactOutput(cmd) {
-		return cli.WriteCompact(cmd.OutOrStdout(), data)
+		// compact has no envelope; fold warnings into the data so a failed
+		// credential cleanup or other correctness notice is not lost.
+		return cli.WriteCompact(cmd.OutOrStdout(), foldWarningsIntoData(data, cliWarnings))
 	}
 	if usePlainOutput(cmd) {
 		// Data on stdout, warnings on stderr as clog WRN.
@@ -2201,13 +2243,10 @@ func writeEnvelopeWithWarnings(cmd *cobra.Command, command string, data any, war
 		}
 		return mirrorADFWarningsToStderr(cmd.ErrOrStderr(), cliWarnings)
 	}
-	if raw, _ := cmd.Root().PersistentFlags().GetBool("raw"); raw {
-		return cli.WriteRaw(cmd.OutOrStdout(), rawPayload(command, data))
-	}
 	env := cli.Envelope{
+		OK: true,
 		Meta: cli.Meta{
 			Command:   command,
-			Profile:   profileForEnvelope(cmd),
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 			RequestID: cli.NewRequestID(),
 		},
@@ -2246,7 +2285,7 @@ func writeEnvelopeWithResponseAndWarnings(cmd *cobra.Command, command string, da
 	if useCompactOutput(cmd) {
 		if m, ok := data.(map[string]any); ok {
 			m["pagination"] = paginationFromResponse(resp)
-			return cli.WriteCompact(cmd.OutOrStdout(), m)
+			return cli.WriteCompact(cmd.OutOrStdout(), foldWarningsIntoData(m, cliWarnings))
 		}
 		return cli.WriteCompact(cmd.OutOrStdout(), data)
 	}
@@ -2256,16 +2295,10 @@ func writeEnvelopeWithResponseAndWarnings(cmd *cobra.Command, command string, da
 		}
 		return mirrorADFWarningsToStderr(cmd.ErrOrStderr(), cliWarnings)
 	}
-	if raw, _ := cmd.Root().PersistentFlags().GetBool("raw"); raw {
-		if len(resp.RawBody) > 0 {
-			return cli.WriteRaw(cmd.OutOrStdout(), resp.RawBody)
-		}
-		return cli.WriteRaw(cmd.OutOrStdout(), rawPayloadWithResponse(command, data, resp))
-	}
 	env := cli.Envelope{
+		OK: true,
 		Meta: cli.Meta{
 			Command:    command,
-			Profile:    profileForEnvelope(cmd),
 			Timestamp:  time.Now().UTC().Format(time.RFC3339),
 			RequestID:  cli.NewRequestID(),
 			Pagination: paginationFromResponse(resp),
@@ -2829,41 +2862,20 @@ func requestedProfile(cmd *cobra.Command) string {
 	return profile
 }
 
+// resolvedOutputMode returns the output mode resolved by PersistentPreRunE
+// from the --output flag and terminal/agent detection. It is the single
+// source of truth for every command output helper.
+func resolvedOutputMode(cmd *cobra.Command) cli.Mode {
+	return DetectorFromContext(cmd).Mode
+}
+
 func useCompactOutput(cmd *cobra.Command) bool {
-	if forcedJSON, _ := cmd.Root().PersistentFlags().GetBool("json"); forcedJSON {
-		return false
-	}
-	if plain, _ := cmd.Root().PersistentFlags().GetBool("plain"); plain {
-		return false
-	}
-	if raw, _ := cmd.Root().PersistentFlags().GetBool("raw"); raw {
-		return false
-	}
-	if compact, _ := cmd.Root().PersistentFlags().GetBool("compact"); compact {
-		return true
-	}
-	return DetectorFromContext(cmd).Mode == cli.ModeCompact
+	return resolvedOutputMode(cmd) == cli.ModeCompact
 }
 
 func usePlainOutput(cmd *cobra.Command) bool {
-	if forcedJSON, _ := cmd.Root().PersistentFlags().GetBool("json"); forcedJSON {
-		return false
-	}
-	if plain, _ := cmd.Root().PersistentFlags().GetBool("plain"); plain {
-		return true
-	}
-	if compact, _ := cmd.Root().PersistentFlags().GetBool("compact"); compact {
-		return false
-	}
-	if raw, _ := cmd.Root().PersistentFlags().GetBool("raw"); raw {
-		return false
-	}
-	return DetectorFromContext(cmd).Mode == cli.ModePlain
-}
-
-func useRawOutput(cmd *cobra.Command) bool {
-	raw, _ := cmd.Root().PersistentFlags().GetBool("raw")
-	return raw
+	mode := resolvedOutputMode(cmd)
+	return mode == cli.ModePlain || mode == cli.ModeTUI
 }
 
 func workdaySecondsForCommand(cmd *cobra.Command) int {
@@ -3170,44 +3182,6 @@ func paginationFromResponse(resp *jira.Response) *cli.Pagination {
 		Total:      resp.Total,
 		IsLast:     resp.NextCursor() == "",
 		NextCursor: resp.NextCursor(),
-	}
-}
-
-func rawPayload(command string, data any) any {
-	m, ok := data.(map[string]any)
-	if !ok {
-		return data
-	}
-	switch command {
-	case "issue.view":
-		if issue, ok := m["issue"]; ok {
-			return issue
-		}
-	}
-	return data
-}
-
-func rawPayloadWithResponse(command string, data any, resp *jira.Response) any {
-	m, ok := data.(map[string]any)
-	if !ok {
-		return rawPayload(command, data)
-	}
-	switch command {
-	case "issue.list", "search.jql", "search.saved":
-		out := map[string]any{
-			"issues":     m["issues"],
-			"startAt":    resp.StartAt, // pagination-exempt: output-shape only
-			"maxResults": resp.MaxResults,
-			"total":      resp.Total,
-			"isLast":     resp.IsLast,
-		}
-		// pagination-exempt: output-shape passthrough, not cursor management.
-		if resp.NextPageToken != "" { // pagination-exempt
-			out["nextPageToken"] = resp.NextPageToken // pagination-exempt
-		}
-		return out
-	default:
-		return rawPayload(command, data)
 	}
 }
 

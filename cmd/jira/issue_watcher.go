@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"time"
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/matcra587/jira-cli/internal/cli"
@@ -113,11 +112,6 @@ func watcherListCommand() *cobra.Command {
 			watchers, resp, err := jira.NewWatcherService(client).List(cmd.Context(), args[0])
 			if err != nil {
 				return err
-			}
-			if raw, _ := cmd.Root().PersistentFlags().GetBool("raw"); raw {
-				if len(resp.RawBody) > 0 {
-					return cli.WriteRaw(cmd.OutOrStdout(), resp.RawBody)
-				}
 			}
 			data := map[string]any{
 				"watchers":    watcherListData(watchers.Watchers),
@@ -321,28 +315,14 @@ func runWatcherRemove(cmd *cobra.Command, args watcherMutationArgs) error {
 func handleResolveErr(cmd *cobra.Command, command string, err error) error {
 	var ambig *jira.AmbiguousUserError
 	if errors.As(err, &ambig) {
-		cands := make([]map[string]any, 0, len(ambig.Candidates))
-		for _, c := range ambig.Candidates {
-			cands = append(cands, map[string]any{
-				"account_id":    derefString(c.AccountID),
-				"display_name":  derefString(c.DisplayName),
-				"email_address": derefString(c.EmailAddress),
-			})
-		}
-		env := cli.Envelope{
-			Meta: cli.Meta{
-				Command:   command,
-				Profile:   profileForEnvelope(cmd),
-				Timestamp: time.Now().UTC().Format(time.RFC3339),
-				RequestID: cli.NewRequestID(),
-			},
-			Data: map[string]any{},
-			Errors: []cli.Error{{
-				Type:       string(cli.ErrorTypeValidation),
-				Message:    err.Error() + ". Re-run with --user accountId:<id>.",
-				Candidates: cands,
-			}},
-			Warnings: []cli.Warning{},
+		// Route through the central error-envelope builder so the
+		// ambiguity failure carries a stable code, meta.exit_code, and
+		// the same shape as every other error envelope. cli.MapError
+		// recognizes *jira.AmbiguousUserError and flattens its
+		// /user/search candidates into errors[].candidates.
+		env := cli.ErrorEnvelope(command, err)
+		if len(env.Errors) == 1 {
+			env.Errors[0].Hint = "Re-run with --user accountId:<id>."
 		}
 		_ = cli.WriteEnvelope(cmd.OutOrStdout(), env)
 		return envelopeWrittenError{inner: fmt.Errorf("validation: %w", err)}

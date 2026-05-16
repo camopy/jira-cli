@@ -24,9 +24,9 @@ func TestNoInputDoesNotReadStdinImplicitly(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"issue create", []string{"issue", "create", "--no-input", "--json"}},
-		{"issue edit", []string{"issue", "edit", "KAN-1", "--no-input", "--json"}},
-		{"comment add", []string{"issue", "comment", "KAN-1", "--no-input", "--json"}},
+		{"issue create", []string{"issue", "create", "--no-input", "--output=json"}},
+		{"issue edit", []string{"issue", "edit", "KAN-1", "--no-input", "--output=json"}},
+		{"comment add", []string{"issue", "comment", "KAN-1", "--no-input", "--output=json"}},
 	}
 
 	for _, tc := range cases {

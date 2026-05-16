@@ -18,7 +18,7 @@ func TestJQLBuildBoardByName(t *testing.T) {
 	]`)
 	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 
-	out, err := runWithEnv(bin, env, "--config", cfg, "jql", "build", "--board", "Engineering Sprint", "--status", "Open", "--json")
+	out, err := runWithEnv(bin, env, "--config", cfg, "jql", "build", "--board", "Engineering Sprint", "--status", "Open", "--output=json")
 	if err != nil {
 		t.Fatalf("jql build --board: %v\n%s", err, out)
 	}

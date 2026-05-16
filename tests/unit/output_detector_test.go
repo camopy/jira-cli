@@ -10,13 +10,13 @@ import (
 func TestOutputDetectorAgentAndNonTTY(t *testing.T) {
 	clearAgentEnv(t)
 	t.Setenv("CLAUDE_CODE", "1")
-	d := cli.Detect(os.Stdout, false)
+	d := cli.Detect(os.Stdout)
 	if !d.Agent || d.Mode != cli.ModeCompact {
 		t.Fatalf("agent detection = %+v", d)
 	}
 
 	clearAgentEnv(t)
-	d = cli.Detect(nil, false)
+	d = cli.Detect(nil)
 	if d.Mode != cli.ModeJSON {
 		t.Fatalf("non-tty detection = %+v", d)
 	}
@@ -24,7 +24,7 @@ func TestOutputDetectorAgentAndNonTTY(t *testing.T) {
 
 func TestOutputDetectorTTYUsesPlainCommandModeNotTUI(t *testing.T) {
 	clearAgentEnv(t)
-	d := cli.Detect(os.Stdout, false)
+	d := cli.Detect(os.Stdout)
 	if d.IsTTY && d.Mode != cli.ModePlain {
 		t.Fatalf("tty command detection = %+v, want plain command mode", d)
 	}

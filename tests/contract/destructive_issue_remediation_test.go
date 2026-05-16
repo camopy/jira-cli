@@ -51,7 +51,7 @@ func TestForcedCloneAndMoveAreHTTPBackedOrExplicitUnsupported(t *testing.T) {
 				t.Fatalf("WriteFile() error = %v", err)
 			}
 			cfg := jiraConfig(t, srv.URL)
-			cmd := exec.Command(bin, "--config", cfg, "issue", tc.sub, "PROJ-1", "--force", "--no-input", "--json", "--json-input", input)
+			cmd := exec.Command(bin, "--config", cfg, "issue", tc.sub, "PROJ-1", "--force", "--no-input", "--output=json", "--json-input", input)
 			out, err := cmd.CombinedOutput()
 			if err != nil {
 				t.Fatalf("issue %s should be HTTP-backed, got error = %v\n%s", tc.sub, err, out)

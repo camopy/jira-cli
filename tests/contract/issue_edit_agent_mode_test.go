@@ -22,7 +22,7 @@ func TestIssueEditRefusesEditorInAgentMode(t *testing.T) {
 	bin := buildJiraBinary(t)
 	cfg := emptyBaseURLConfig(t)
 
-	c := exec.Command(bin, "--config", cfg, "issue", "edit", "PROJ-1", "--json")
+	c := exec.Command(bin, "--config", cfg, "issue", "edit", "PROJ-1", "--output=json")
 	// CLAUDECODE=1 trips the agent detector in internal/cli/detector.go
 	// without requiring a real Claude Code harness. Any agent env var
 	// from that detector's set would work; this one matches the user's
@@ -58,7 +58,7 @@ func TestIssueEditAcceptsFlagBasedInputInAgentMode(t *testing.T) {
 	cfg := emptyBaseURLConfig(t)
 
 	c := exec.Command(bin, "--config", cfg, "issue", "edit", "PROJ-1",
-		"--summary", "renamed", "--dry-run", "--json")
+		"--summary", "renamed", "--dry-run", "--output=json")
 	c.Env = append(os.Environ(), "CLAUDECODE=1")
 	out, err := c.CombinedOutput()
 	if err != nil {

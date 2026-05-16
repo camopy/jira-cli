@@ -55,7 +55,7 @@ func TestADFAndFieldTypesShareEnvelope(t *testing.T) {
 
 func loadAgentRows(t *testing.T, bin, sub string) []map[string]any {
 	t.Helper()
-	cmd := exec.Command(bin, "agent", sub, "--json")
+	cmd := exec.Command(bin, "agent", sub, "--output=json")
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("%s: %v\nstderr: %s", sub, err, exitStderr(err))

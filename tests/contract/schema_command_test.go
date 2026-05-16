@@ -7,7 +7,7 @@ import (
 )
 
 func TestSchemaCommandIncludesCommandTree(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--json", "schema")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=json", "schema")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("schema error = %v\n%s", err, out)
@@ -22,7 +22,7 @@ func TestSchemaCommandIncludesCommandTree(t *testing.T) {
 }
 
 func TestSchemaCommandIncludesDetailedFlagSignatures(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--json", "schema")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=json", "schema")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("schema error = %v\n%s", err, out)

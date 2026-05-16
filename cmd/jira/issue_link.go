@@ -17,7 +17,6 @@ import (
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/spf13/cobra"
 
-	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/pkg/jira"
 )
 
@@ -113,9 +112,6 @@ func issueLinkListCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.link.list")
 			}
-			if raw, _ := cmd.Root().PersistentFlags().GetBool("raw"); raw {
-				return writeIssueLinkListRaw(cmd, client, args[0])
-			}
 			links, _, err := jira.NewIssueLinkService(client).List(cmd.Context(), args[0])
 			if err != nil {
 				return err
@@ -128,32 +124,6 @@ func issueLinkListCommand() *cobra.Command {
 		},
 	}
 	return cmd
-}
-
-// writeIssueLinkListRaw fetches the issue with `fields=issuelinks` and
-// emits Atlassian's nested `issuelinks` array verbatim.
-func writeIssueLinkListRaw(cmd *cobra.Command, client *jira.Client, key string) error {
-	req, err := client.NewRequest(cmd.Context(), "GET", "rest/api/3/issue/"+key+"?fields=issuelinks", nil)
-	if err != nil {
-		return err
-	}
-	var raw json.RawMessage
-	if _, err := client.Do(req, &raw); err != nil {
-		return err
-	}
-	var doc map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &doc); err != nil {
-		return err
-	}
-	if fieldsRaw, ok := doc["fields"]; ok {
-		var fields map[string]json.RawMessage
-		if err := json.Unmarshal(fieldsRaw, &fields); err == nil {
-			if links, ok := fields["issuelinks"]; ok {
-				return cli.WriteRaw(cmd.OutOrStdout(), links)
-			}
-		}
-	}
-	return cli.WriteRaw(cmd.OutOrStdout(), raw)
 }
 
 // issueLinkDeleteCommand wires `jira issue link delete KEY LINK_ID`.
@@ -244,14 +214,6 @@ func issueLinkTypesCommand() *cobra.Command {
 			})
 			if err != nil {
 				return err
-			}
-			// --raw: return Atlassian's native shape verbatim. We
-			// stored the unwrapped slice in cache, so re-wrap to
-			// preserve the upstream contract for raw consumers.
-			if raw, _ := cmd.Root().PersistentFlags().GetBool("raw"); raw {
-				return cli.WriteRaw(cmd.OutOrStdout(), map[string]any{
-					"issueLinkTypes": json.RawMessage(data),
-				})
 			}
 			var types []jira.IssueLinkType
 			if err := json.Unmarshal(data, &types); err != nil {

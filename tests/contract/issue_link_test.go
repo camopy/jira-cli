@@ -35,7 +35,7 @@ func TestIssueLinkListUnifiesInwardOutwardSortedEnvelope(t *testing.T) {
 	defer srv.Close()
 
 	cfg := jiraConfig(t, srv.URL)
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--json", "issue", "link", "list", "PROJ-1")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json", "issue", "link", "list", "PROJ-1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue link list error = %v\n%s", err, out)
@@ -80,7 +80,7 @@ func TestIssueLinkListUnifiesInwardOutwardSortedEnvelope(t *testing.T) {
 // data.link_id echoes the supplied id verbatim regardless of source KEY.
 func TestIssueLinkDeleteForceGateAndIDEcho(t *testing.T) {
 	cfg := jiraConfig(t, "http://127.0.0.1:1")
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "link", "delete", "PROJ-1", "9001", "--no-input", "--json")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "link", "delete", "PROJ-1", "9001", "--no-input", "--output=json")
 	if err := cmd.Run(); err == nil {
 		t.Fatalf("expected force-gate failure under --no-input without --force")
 	}
@@ -97,7 +97,7 @@ func TestIssueLinkDeleteForceGateAndIDEcho(t *testing.T) {
 	defer srv.Close()
 
 	cfg2 := jiraConfig(t, srv.URL)
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg2, "issue", "link", "delete", "PROJ-1", "9001", "--force", "--no-input", "--json")
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg2, "issue", "link", "delete", "PROJ-1", "9001", "--force", "--no-input", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue link delete error = %v\n%s", err, out)
@@ -126,7 +126,7 @@ func TestIssueLinkDeleteDryRunNoCall(t *testing.T) {
 	defer srv.Close()
 
 	cfg := jiraConfig(t, srv.URL)
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "link", "delete", "PROJ-1", "9001", "--dry-run", "--no-input", "--force", "--json")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "link", "delete", "PROJ-1", "9001", "--dry-run", "--no-input", "--force", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue link delete --dry-run error = %v\n%s", err, out)
@@ -155,7 +155,7 @@ func TestIssueLinkTypesCachedAndRefresh(t *testing.T) {
 	cacheRoot := t.TempDir()
 	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 
-	out, err := runWithEnv(bin, env, "--config", cfg, "issue", "link", "types", "--json")
+	out, err := runWithEnv(bin, env, "--config", cfg, "issue", "link", "types", "--output=json")
 	if err != nil {
 		t.Fatalf("link types first call: %v\n%s", err, out)
 	}
@@ -175,7 +175,7 @@ func TestIssueLinkTypesCachedAndRefresh(t *testing.T) {
 		t.Fatalf("expected 2 link types, got %d", len(types1))
 	}
 
-	out, err = runWithEnv(bin, env, "--config", cfg, "issue", "link", "types", "--json")
+	out, err = runWithEnv(bin, env, "--config", cfg, "issue", "link", "types", "--output=json")
 	if err != nil {
 		t.Fatalf("link types second call: %v\n%s", err, out)
 	}
@@ -191,39 +191,11 @@ func TestIssueLinkTypesCachedAndRefresh(t *testing.T) {
 		t.Fatalf("second call should be from_cache=true; got %+v", data2)
 	}
 
-	if _, err := runWithEnv(bin, env, "--config", cfg, "issue", "link", "types", "--refresh", "--json"); err != nil {
+	if _, err := runWithEnv(bin, env, "--config", cfg, "issue", "link", "types", "--refresh", "--output=json"); err != nil {
 		t.Fatal(err)
 	}
 	if hits.Load() != 2 {
 		t.Fatalf("expected 2 hits after --refresh, got %d", hits.Load())
-	}
-}
-
-// extension: --raw returns Atlassian's native {issueLinkTypes:[...]} verbatim.
-func TestIssueLinkTypesRawPassthrough(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"issueLinkTypes":[{"id":"10000","name":"Blocks","inward":"is blocked by","outward":"blocks"}]}`))
-	}))
-	defer srv.Close()
-
-	bin := buildJiraBinary(t)
-	cfg := writeCacheTestConfig(t, srv.URL)
-	env := append(os.Environ(), "XDG_CACHE_HOME="+t.TempDir())
-
-	out, err := runWithEnv(bin, env, "--config", cfg, "--raw", "issue", "link", "types")
-	if err != nil {
-		t.Fatalf("link types --raw: %v\n%s", err, out)
-	}
-	var raw map[string]any
-	if err := json.Unmarshal(out, &raw); err != nil {
-		t.Fatalf("--raw output is not JSON: %v\n%s", err, out)
-	}
-	if _, ok := raw["issueLinkTypes"]; !ok {
-		t.Fatalf("--raw missing Atlassian's `issueLinkTypes` key: %+v", raw)
-	}
-	if _, ok := raw["data"]; ok {
-		t.Fatalf("--raw must not wrap in CLI envelope; saw `data`: %+v", raw)
 	}
 }
 
@@ -242,7 +214,7 @@ func TestIssueLinkCreateBackCompat(t *testing.T) {
 	defer srv.Close()
 
 	cfg := jiraConfig(t, srv.URL)
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "link", "PROJ-1", "--to", "PROJ-2", "--type", "Blocks", "--json")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "link", "PROJ-1", "--to", "PROJ-2", "--type", "Blocks", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue link create back-compat: %v\n%s", err, out)

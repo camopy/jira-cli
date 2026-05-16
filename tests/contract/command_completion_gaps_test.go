@@ -51,10 +51,10 @@ func TestCommandsUseConfiguredJiraServices(t *testing.T) {
 		args []string
 		want string
 	}{
-		{[]string{"issue", "list", "--json"}, `"key": "PROJ-1"`},
-		{[]string{"issue", "list", "--jql", "project = CUSTOM", "--json"}, `"key": "CUSTOM-1"`},
-		{[]string{"search", "jql", "project = PROJ", "--json"}, `"key": "PROJ-2"`},
-		{[]string{"worklog", "list", "PROJ-1", "--json"}, `"timeSpentSeconds": 60`},
+		{[]string{"issue", "list", "--output=json"}, `"key": "PROJ-1"`},
+		{[]string{"issue", "list", "--jql", "project = CUSTOM", "--output=json"}, `"key": "CUSTOM-1"`},
+		{[]string{"search", "jql", "project = PROJ", "--output=json"}, `"key": "PROJ-2"`},
+		{[]string{"worklog", "list", "PROJ-1", "--output=json"}, `"timeSpentSeconds": 60`},
 	} {
 		cmd := exec.Command("go", append([]string{"run", "../../cmd/jira", "--config", cfg}, tc.args...)...)
 		out, err := cmd.CombinedOutput()
@@ -73,7 +73,7 @@ func TestCommandsUseConfiguredJiraServices(t *testing.T) {
 }
 
 func TestIssueCommentCommandConvertsMarkdownToADF(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "comment", "PROJ-1", "--body-markdown", "hello **world**", "--dry-run", "--no-input", "--json")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "comment", "PROJ-1", "--body-markdown", "hello **world**", "--dry-run", "--no-input", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue comment error = %v\n%s", err, out)
@@ -95,7 +95,7 @@ func TestIssueCommentCommandConvertsMarkdownToADF(t *testing.T) {
 
 func TestJSONErrorsUseClogDiagnosticsAndExitCodes(t *testing.T) {
 	bin := buildJiraBinary(t)
-	cmd := exec.Command(bin, "worklog", "add", "PROJ-1", "--time-spent", "wat", "--json")
+	cmd := exec.Command(bin, "worklog", "add", "PROJ-1", "--time-spent", "wat", "--output=json")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

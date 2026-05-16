@@ -244,17 +244,16 @@ func issueAttachmentDownloadCommand() *cobra.Command {
 	var output string
 	var force, dryRun bool
 	cmd := &cobra.Command{
-		Use:         "download KEY ATTACHMENT_ID [--output PATH]",
+		Use:         "download KEY ATTACHMENT_ID [--to PATH]",
 		Short:       "Download an attachment from an issue",
 		Args:        cobra.ExactArgs(2),
 		Annotations: issueKeyArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			key, attachmentID := args[0], args[1]
-			det := DetectorFromContext(cmd)
-			mode, target := resolveDownloadMode(output, det.IsTTY)
-			// Clobber-protect for `--output` and TTY current-dir
-			// modes happens BEFORE any HTTP call.
-			if mode != downloadModeStdoutPiped && target != "" {
+			mode, target := resolveDownloadMode(output)
+			// Clobber-protect for an explicit --to target happens BEFORE
+			// any HTTP call.
+			if target != "" {
 				if _, err := os.Stat(target); err == nil && !force {
 					return fmt.Errorf("attachment download: validation: %s already exists; pass --force to overwrite", target)
 				} else if err != nil && !os.IsNotExist(err) {
@@ -293,60 +292,47 @@ func issueAttachmentDownloadCommand() *cobra.Command {
 					return fmt.Errorf("attachment download: validation: %s already exists; pass --force to overwrite", target)
 				}
 			}
-			switch mode {
-			case downloadModeStdoutPiped:
-				// Pipe mode: raw bytes, no envelope. Binary-safe.
-				if _, err := io.Copy(cmd.OutOrStdout(), body); err != nil {
-					return err
-				}
-				return nil
-			case downloadModeOutput, downloadModeCurrentDir:
-				wrote, err := writeDownloadFile(target, body, force)
-				if err != nil {
-					return err
-				}
-				return writeEnvelope(cmd, "issue.attachment.download", map[string]any{
-					"attachment_id": attachmentID,
-					"written_to":    target,
-					"bytes":         wrote,
-					"mode":          string(mode),
-				})
+			// Attachment binary content always writes to a file — it is
+			// never streamed to stdout, in any output mode, so a JSON or
+			// compact consumer never has binary bytes spliced into its
+			// parseable stream.
+			wrote, err := writeDownloadFile(target, body, force)
+			if err != nil {
+				return err
 			}
-			return fmt.Errorf("attachment download: unknown output mode %q", mode)
+			return writeEnvelope(cmd, "issue.attachment.download", map[string]any{
+				"attachment_id": attachmentID,
+				"written_to":    target,
+				"bytes":         wrote,
+				"mode":          string(mode),
+			})
 		},
 	}
-	cmd.Flags().StringVar(&output, "output", "", "Write to PATH (use - for stdout)")
+	cmd.Flags().StringVar(&output, "to", "", "Write the attachment to PATH (default: current directory)")
 	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing target file")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without downloading")
 	return cmd
 }
 
-// downloadMode names the three dispatching paths for `attachment
-// download`. Strings match the envelope's data.mode values.
+// downloadMode names the two dispatching paths for `attachment
+// download`. Strings match the envelope's data.mode values. There is no
+// stdout path: attachment binary content always writes to a file.
 type downloadMode string
 
 const (
-	downloadModeOutput      downloadMode = "output"
-	downloadModeCurrentDir  downloadMode = "current-dir"
-	downloadModeStdoutPiped downloadMode = "stdout"
+	downloadModeOutput     downloadMode = "output"
+	downloadModeCurrentDir downloadMode = "current-dir"
 )
 
-// resolveDownloadMode picks one of the three download paths from the
-// command-line state. `target` is empty for current-dir mode (the
-// server-provided filename is resolved AFTER the HTTP response so the
-// caller can inspect Content-Disposition).
-func resolveDownloadMode(output string, isTTY bool) (downloadMode, string) {
-	switch output {
-	case "":
-		if isTTY {
-			return downloadModeCurrentDir, ""
-		}
-		return downloadModeStdoutPiped, ""
-	case "-":
-		return downloadModeStdoutPiped, ""
-	default:
-		return downloadModeOutput, output
+// resolveDownloadMode picks the download path from the --to flag.
+// `target` is empty for current-dir mode (the server-provided filename
+// is resolved AFTER the HTTP response so the caller can inspect
+// Content-Disposition).
+func resolveDownloadMode(output string) (downloadMode, string) {
+	if output == "" {
+		return downloadModeCurrentDir, ""
 	}
+	return downloadModeOutput, output
 }
 
 // writeDownloadFile streams body bytes to target via io.Copy. Uses

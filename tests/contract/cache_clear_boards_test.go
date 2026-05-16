@@ -33,7 +33,7 @@ func TestCacheClearBoardsRemovesFile(t *testing.T) {
 	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 
 	// Prime the cache.
-	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "boards", "--json"); err != nil {
+	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "boards", "--output=json"); err != nil {
 		t.Fatalf("prime cache: %v", err)
 	}
 	cachePath := filepath.Join(cacheRoot, "jira-cli", "test", "boards.json")
@@ -42,7 +42,7 @@ func TestCacheClearBoardsRemovesFile(t *testing.T) {
 	}
 
 	// Clear → file removed, exit 0.
-	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "boards", "--json"); err != nil {
+	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "boards", "--output=json"); err != nil {
 		t.Fatalf("cache clear boards: %v", err)
 	}
 	if _, err := os.Stat(cachePath); !os.IsNotExist(err) {
@@ -50,7 +50,7 @@ func TestCacheClearBoardsRemovesFile(t *testing.T) {
 	}
 
 	// Idempotent: clear again → exit 0, no error.
-	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "boards", "--json"); err != nil {
+	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "boards", "--output=json"); err != nil {
 		t.Fatalf("idempotent cache clear boards: %v", err)
 	}
 }
@@ -74,7 +74,7 @@ func TestCacheClearRejectsUnknownExplicitProfile(t *testing.T) {
 	}
 
 	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
-	c := exec.Command(bin, "--config", cfg, "--profile", "typo", "cache", "clear", "--json")
+	c := exec.Command(bin, "--config", cfg, "--profile", "typo", "cache", "clear", "--output=json")
 	c.Env = env
 	var stdout, stderr bytes.Buffer
 	c.Stdout = &stdout

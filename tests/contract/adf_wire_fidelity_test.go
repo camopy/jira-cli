@@ -30,7 +30,7 @@ func TestI4WrongShapeADFRejectedByComment(t *testing.T) {
 	cmd := exec.Command("go", "run", "../../cmd/jira",
 		"issue", "comment", "KAN-1",
 		"--json-input", path,
-		"--dry-run", "--no-input", "--json")
+		"--dry-run", "--no-input", "--output=json")
 	stdout, _ := cmd.Output()
 
 	var env struct {
@@ -74,7 +74,7 @@ func TestI4UnknownNodeStrictModeRejectedByComment(t *testing.T) {
 	cmd := exec.Command("go", "run", "../../cmd/jira",
 		"issue", "comment", "KAN-1",
 		"--json-input", path,
-		"--dry-run", "--no-input", "--json")
+		"--dry-run", "--no-input", "--output=json")
 	stdout, _ := cmd.Output()
 
 	var env struct {
@@ -114,7 +114,7 @@ func TestI4UnknownNodeBestEffortWarnsNotErrors(t *testing.T) {
 	cmd := exec.Command("go", "run", "../../cmd/jira",
 		"issue", "comment", "KAN-1",
 		"--json-input", path,
-		"--dry-run", "--no-input", "--json",
+		"--dry-run", "--no-input", "--output=json",
 		"--adf-best-effort")
 	stdout, _ := cmd.Output()
 
@@ -164,7 +164,7 @@ func TestI4IllegalMarkOnBlockStrictModeErrors(t *testing.T) {
 	cmd := exec.Command("go", "run", "../../cmd/jira",
 		"issue", "comment", "KAN-1",
 		"--json-input", path,
-		"--dry-run", "--no-input", "--json")
+		"--dry-run", "--no-input", "--output=json")
 	stdout, _ := cmd.Output()
 
 	var env struct {
@@ -198,7 +198,7 @@ func TestI4UnknownMarkRejectedByStrictMode(t *testing.T) {
 	cmd := exec.Command("go", "run", "../../cmd/jira",
 		"issue", "comment", "KAN-1",
 		"--json-input", path,
-		"--dry-run", "--no-input", "--json")
+		"--dry-run", "--no-input", "--output=json")
 	stdout, _ := cmd.Output()
 
 	var env struct {
@@ -247,7 +247,7 @@ func TestI4CreatePathRejectsUnknownAdfNode(t *testing.T) {
 	cmd := exec.Command("go", "run", "../../cmd/jira",
 		"issue", "create",
 		"--json-input", path,
-		"--dry-run", "--no-input", "--json")
+		"--dry-run", "--no-input", "--output=json")
 	stdout, _ := cmd.Output()
 
 	var env struct {
@@ -282,7 +282,7 @@ func TestI4CreatePathRejectsWrongShapeAdf(t *testing.T) {
 	cmd := exec.Command("go", "run", "../../cmd/jira",
 		"issue", "create",
 		"--json-input", path,
-		"--dry-run", "--no-input", "--json")
+		"--dry-run", "--no-input", "--output=json")
 	stdout, _ := cmd.Output()
 
 	var env struct {
@@ -331,7 +331,7 @@ func TestI4CreatePathBestEffortPreservesUnknownNode(t *testing.T) {
 	cmd := exec.Command("go", "run", "../../cmd/jira",
 		"issue", "create",
 		"--json-input", path,
-		"--dry-run", "--no-input", "--json",
+		"--dry-run", "--no-input", "--output=json",
 		"--adf-best-effort")
 	stdout, _ := cmd.Output()
 

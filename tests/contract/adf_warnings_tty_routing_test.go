@@ -21,7 +21,7 @@ func TestWarningsInJSONStayInEnvelopeOnStdout(t *testing.T) {
 		Stdout:   stdout,
 		Stderr:   stderr,
 		Mode:     cli.RouteJSON,
-		Envelope: cli.Envelope{Meta: cli.Meta{Command: "x", Profile: "p", Timestamp: "t"}, Data: map[string]any{"k": "v"}, Errors: []cli.Error{}, Warnings: []cli.Warning{w}},
+		Envelope: cli.Envelope{Meta: cli.Meta{Command: "x", Timestamp: "t"}, Data: map[string]any{"k": "v"}, Errors: []cli.Error{}, Warnings: []cli.Warning{w}},
 	})
 	if err != nil {
 		t.Fatalf("RouteWarnings: %v", err)

@@ -13,7 +13,7 @@ import (
 func TestMissingNonLocalCredentialsReturnStructuredAuthError(t *testing.T) {
 	bin := buildJiraBinary(t)
 	cfg := jiraConfigWithProfile(t, "missingcreds", "https://jira.example.invalid")
-	cmd := exec.Command(bin, "--config", cfg, "--profile", "missingcreds", "--json", "issue", "list")
+	cmd := exec.Command(bin, "--config", cfg, "--profile", "missingcreds", "--output=json", "issue", "list")
 	cmd.Env = append(cmd.Environ(), "JIRA_TOKEN_MISSINGCREDS=")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

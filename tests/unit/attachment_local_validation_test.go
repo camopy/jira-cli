@@ -42,7 +42,7 @@ func TestAttachmentAddRejectsMissingFileBeforeHTTP(t *testing.T) {
 	// `attachment add` has no interactive prompts so --no-input is not
 	// needed here; the local pre-flight check fires before any TUI
 	// branch is even considered.
-	cmd := exec.Command(bin, "--config", cfg, "--json",
+	cmd := exec.Command(bin, "--config", cfg, "--output=json",
 		"issue", "attachment", "add", "PROJ-1", "--file", missing)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -87,7 +87,7 @@ func TestAttachmentDownloadClobberProtectExitsBeforeHTTP(t *testing.T) {
 	// `attachment download` clobber-protect is a local pre-flight check
 	// — fires before any HTTP call and before any TUI branch — so
 	// --no-input is not needed.
-	cmd := exec.Command(bin, "--config", cfg, "--json",
+	cmd := exec.Command(bin, "--config", cfg, "--output=json",
 		"issue", "attachment", "download", "PROJ-1", "10042", "--output", existing)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

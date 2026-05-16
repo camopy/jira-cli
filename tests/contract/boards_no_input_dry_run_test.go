@@ -104,7 +104,7 @@ func TestBoardsCommandsAcceptNoInputAndDryRun(t *testing.T) {
 			// invocations must match (modulo volatile fields).
 			baselineCache := filepath.Join(t.TempDir(), "baseline-cache")
 			t.Setenv("XDG_CACHE_HOME", baselineCache)
-			baseArgs := append([]string{"--config", cfg, "--json"}, c.args...)
+			baseArgs := append([]string{"--config", cfg, "--output=json"}, c.args...)
 			baseStdout, baseStderr, baseCode := runJira(t, baseArgs...)
 			if baseCode != 0 {
 				t.Fatalf("baseline %v exit = %d (want 0)\nstdout=%s\nstderr=%s", c.args, baseCode, baseStdout, baseStderr)
@@ -115,7 +115,7 @@ func TestBoardsCommandsAcceptNoInputAndDryRun(t *testing.T) {
 				t.Run(combo.label, func(t *testing.T) {
 					comboCache := filepath.Join(t.TempDir(), "combo-cache")
 					t.Setenv("XDG_CACHE_HOME", comboCache)
-					args := append([]string{"--config", cfg, "--json"}, c.args...)
+					args := append([]string{"--config", cfg, "--output=json"}, c.args...)
 					args = append(args, combo.flags...)
 					stdout, stderr, code := runJira(t, args...)
 					if code != 0 {

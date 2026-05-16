@@ -260,6 +260,17 @@ func TestWatchersAddAmbiguousEmitsCandidatesEnvelope(t *testing.T) {
 	if first["type"] != "validation" {
 		t.Errorf("errors[0].type = %v, want validation", first["type"])
 	}
+	// The ambiguity error must carry a stable machine code so agents can
+	// branch on it without parsing the message.
+	if code, _ := first["code"].(string); code == "" {
+		t.Errorf("errors[0].code is empty, want a stable validation code: %s", stdout)
+	}
+	// The failure envelope must report the exit code so a machine consumer
+	// sees the same exit value the process returns.
+	meta, _ := env["meta"].(map[string]any)
+	if ec, ok := meta["exit_code"].(float64); !ok || int(ec) != 3 {
+		t.Errorf("meta.exit_code = %v, want 3: %s", meta["exit_code"], stdout)
+	}
 	cands, _ := first["candidates"].([]any)
 	if len(cands) != 2 {
 		t.Fatalf("candidates len = %d, want 2: %s", len(cands), stdout)

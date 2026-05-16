@@ -61,7 +61,7 @@ func TestIssueCreateDryRunDoesNotResolveCredentials(t *testing.T) {
 	}
 
 	c := exec.Command(bin, "--config", cfg, "issue", "create",
-		"--dry-run", "--no-input", "--json-input", payload, "--json")
+		"--dry-run", "--no-input", "--json-input", payload, "--output=json")
 	c.Env = noOnePasswordAuthEnv()
 	out, err := c.CombinedOutput()
 	if err != nil {
@@ -82,7 +82,7 @@ func TestIssueEditDryRunDoesNotResolveCredentials(t *testing.T) {
 	cfg := onePasswordProfileConfig(t)
 
 	c := exec.Command(bin, "--config", cfg, "issue", "edit", "PROJ-1",
-		"--summary", "renamed", "--dry-run", "--json")
+		"--summary", "renamed", "--dry-run", "--output=json")
 	c.Env = noOnePasswordAuthEnv()
 	out, err := c.CombinedOutput()
 	if err != nil {

@@ -15,7 +15,7 @@ func TestConfigInitProfileGetSetMetadataOnly(t *testing.T) {
 	cmd := exec.Command(
 		"go", "run", "../../cmd/jira",
 		"--config", path,
-		"--json",
+		"--output=json",
 		"config", "init",
 		"--no-input",
 		"--profile", "default",
@@ -36,7 +36,7 @@ func TestConfigInitProfileGetSetMetadataOnly(t *testing.T) {
 		t.Fatalf("config file contains secret material:\n%s", content)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--json", "config", "get", "default_profile")
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "config", "get", "default_profile")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("config get error = %v\n%s", err, out)
@@ -54,12 +54,12 @@ func TestConfigInitProfileGetSetMetadataOnly(t *testing.T) {
 		t.Fatalf("default_profile envelope = %q", out)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--json", "config", "set", "theme.path", "/tmp/theme.toml")
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "config", "set", "theme.path", "/tmp/theme.toml")
 	if out, err = cmd.CombinedOutput(); err != nil {
 		t.Fatalf("config set error = %v\n%s", err, out)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--json", "config", "profile")
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "config", "profile")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("config --help error = %v\n%s", err, out)
@@ -75,7 +75,7 @@ func TestConfigInitProfileGetSetMetadataOnly(t *testing.T) {
 func TestReadOnlyCommandDoesNotCreateConfigForExplicitMissingPath(t *testing.T) {
 	bin := buildJiraBinary(t)
 	path := filepath.Join(t.TempDir(), "missing.toml")
-	cmd := exec.Command(bin, "--config", path, "--json", "config", "profile")
+	cmd := exec.Command(bin, "--config", path, "--output=json", "config", "profile")
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("config profile with missing --config succeeded:\n%s", out)
@@ -100,7 +100,7 @@ secret_backend = "keyring"
 `), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	cmd := exec.Command(bin, "--config", path, "--json", "config", "set", "profiles.work.default_project", "REAL")
+	cmd := exec.Command(bin, "--config", path, "--output=json", "config", "set", "profiles.work.default_project", "REAL")
 	cmd.Env = append(os.Environ(),
 		"JIRA_PROFILE_WORK_BASE_URL=https://overlay.atlassian.net",
 		"JIRA_PROFILE_WORK_DEFAULT_ISSUE_TYPE=OverlayType",
@@ -149,7 +149,7 @@ secret_backend = "keyring"
 `), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	cmd := exec.Command(bin, "--config", path, "--json", "auth", "switch", "play")
+	cmd := exec.Command(bin, "--config", path, "--output=json", "auth", "switch", "play")
 	cmd.Env = append(os.Environ(), "JIRA_DEFAULT_PROFILE=phantom")
 	out, err := cmd.CombinedOutput()
 	if err != nil {

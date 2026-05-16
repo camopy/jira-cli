@@ -12,7 +12,7 @@ func TestIssueEditDryRunEditNoInputContract(t *testing.T) {
 	// edit under --no-input is now a validation error.
 	cmd := exec.Command("go", "run", "../../cmd/jira",
 		"issue", "edit", "PROJ-1", "--dry-run", "--no-input",
-		"--summary", "renamed", "--json")
+		"--summary", "renamed", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue edit error = %v\n%s", err, out)

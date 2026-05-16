@@ -2,13 +2,13 @@
 
 Comprehensive steering document for AI coding assistants and developers
 using `jira-cli`. This file is embedded in the binary and surfaced via
-`jira agent guide`. Pair with `jira agent schema --compact` for the
-machine-readable command tree, `jira agent adf-matrix --json` for the
-ADF support matrix, and `jira agent fieldtypes --json` for the
+`jira agent guide`. Pair with `jira agent schema --output=compact` for the
+machine-readable command tree, `jira agent adf-matrix --output=json` for the
+ADF support matrix, and `jira agent fieldtypes --output=json` for the
 customfield encoder registry.
 
 The guide assumes you are interacting through the JSON envelope path
-(`--json` or auto-detected agent mode); flags and recipes still apply
+(`--output=json` or auto-detected agent mode); flags and recipes still apply
 to TTY humans, just the output rendering differs.
 
 ## Identity & profiles
@@ -43,14 +43,19 @@ The default profile is set by `default_profile = "..."` in
 
 ## Output modes & envelope
 
-Mode is auto-detected:
+There is ONE output flag: `--output=auto|human|json|compact`. The
+removed legacy booleans `--json`, `--compact`, `--plain` and `--raw` are
+unknown flags now — passing one fails with exit 3. There is no raw REST
+passthrough mode: `json` (full envelope) and `compact` (the JSON `data`
+payload without the envelope) cover every machine-consumption need.
 
-| Context           | Default mode       |
-|-------------------|--------------------|
-| TTY human         | `plain`  (clog rich text) |
-| TTY + `--json`    | `json`  (full envelope) |
+`--output=auto` (the default) is auto-detected:
+
+| Context           | Resolved mode       |
+|-------------------|---------------------|
+| TTY human         | `human`  (clog rich text) |
 | Non-TTY (pipe)    | `json`  (full envelope) |
-| Detected agent    | `compact`  (envelope, single line, jq-friendly) |
+| Detected agent    | `compact`  (envelope `data` only, single line, jq-friendly) |
 
 Agents detected via env vars: `CLAUDE_CODE`, `CURSOR_TERMINAL`,
 `CURSOR_AGENT`, `COPILOT_CLI`, `COPILOT`, `GITHUB_COPILOT`,
@@ -58,22 +63,20 @@ Agents detected via env vars: `CLAUDE_CODE`, `CURSOR_TERMINAL`,
 in the order amp → codex → gemini → copilot → opencode → cursor →
 claude. `AI_AGENT=<name>` is an explicit override.
 
-Mode flags (mutually exclusive — combining them returns exit 3):
-
-| Flag         | Effect |
-|--------------|--------|
-| `--json`     | Force the structured envelope on stdout |
-| `--compact`  | Force jq-friendly compact JSON |
-| `--plain`    | Force human-friendly clog rich text |
-| `--raw`      | Emit the underlying Jira REST JSON verbatim (no envelope) |
+| `--output` value | Effect |
+|------------------|--------|
+| `auto`    | Detect: TTY → human, pipe → json, agent → compact |
+| `human`   | Force human-friendly clog rich text |
+| `json`    | Force the full structured envelope on stdout |
+| `compact` | Force the JSON `data` payload only — no `ok`/`meta`/`warnings`/`errors` |
 
 Every JSON envelope:
 
 ```json
 {
+  "ok": true,
   "meta": {
     "command": "issue.create",
-    "profile": "default",
     "timestamp": "2026-05-04T22:48:55Z",
     "request_id": "...",
     "pagination": { "startAt": 0, "maxResults": 50, "total": 12, "isLast": true }
@@ -83,6 +86,11 @@ Every JSON envelope:
   "warnings": []
 }
 ```
+
+`ok` is `true` on success and `false` on failure. A failure envelope
+also carries `meta.exit_code` and sets `data` to `null`. Machine
+envelopes never carry `meta.profile` — a command that reports a profile
+puts it in command-specific `data`.
 
 `warnings[]` carries non-fatal best-effort diagnostics. Common warning
 types you'll see:
@@ -94,12 +102,12 @@ types you'll see:
 | `customfield_unknown_type`   | `customfield_NNNN` key forwarded with no registry schema (Jira handles the type) |
 | `lossy_adf_conversion`       | markdown → ADF or roundtrip dropped detail   |
 
-In `--plain` mode warnings mirror to stderr as clog `WRN` lines so
+In `--output=human` mode warnings mirror to stderr as clog `WRN` lines so
 stdout stays clean for piping.
 
-### `--compact` and errors
+### `--output=compact` and errors
 
-Under `--compact`, the success path strips `meta` and `errors` for
+Under `--output=compact`, the success path strips `meta` and `errors` for
 jq-friendliness. **Error paths still emit the full envelope** so
 failures stay parseable regardless of mode flags — stripping `errors`
 on a failure would leave the failure invisible.
@@ -120,13 +128,13 @@ Exit codes (stable contract — never reused for new categories):
 Three commands let agents introspect the CLI without reading prose:
 
 ```sh
-jira agent schema [--compact]    # full command tree + flag signatures + per-command JSON output schemas
+jira agent schema [--output=compact]    # full command tree + flag signatures + per-command JSON output schemas
 jira agent guide  [<section>]    # this guide; section is a slug like "issues" or "jql"
-jira agent adf-matrix [--json]   # ADF node/mark support matrix
-jira agent fieldtypes [--json]   # customfield encoder registry
+jira agent adf-matrix [--output=json]   # ADF node/mark support matrix
+jira agent fieldtypes [--output=json]   # customfield encoder registry
 ```
 
-Both `adf-matrix --json` and `fieldtypes --json` emit arrays of the
+Both `adf-matrix --output=json` and `fieldtypes --output=json` emit arrays of the
 same envelope shape:
 
 ```json
@@ -149,12 +157,12 @@ A single agent parser handles both surfaces.
 ## Reading issues
 
 ```sh
-jira issue view KEY            --json
-jira issue list                --json
-jira issue list --jql 'JQL'    --json
-jira issue list --as-jql       --json    # show what JQL would run; no API call
-jira search jql 'JQL'          --json
-jira search saved <name>       --json    # ~/.config/jira-cli/queries/<name>.jql
+jira issue view KEY            --output=json
+jira issue list                --output=json
+jira issue list --jql 'JQL'    --output=json
+jira issue list --as-jql       --output=json    # show what JQL would run; no API call
+jira search jql 'JQL'          --output=json
+jira search saved <name>       --output=json    # ~/.config/jira-cli/queries/<name>.jql
 ```
 
 ### `--detail` on `issue list` only
@@ -166,25 +174,20 @@ in the page. Without it, list returns the summary set
 `search jql` does NOT take `--detail` — it always requests
 `fields:["*all"]` server-side, returning the full Jira shape.
 
-### `--raw` is the safety valve
+### Known typed-output gaps
 
-Two known **typed-output drops** in the current `view` / `list`
-transformations — use `--raw` to recover full fidelity:
+A few Jira fields are not yet projected into the typed `view` / `list`
+envelope shape:
 
-| Field          | typed JSON | --raw |
-|----------------|-----------|-------|
-| `parent`       | dropped   | present (full nested issue shape) |
-| `subtasks`     | dropped   | present |
-| `issuetype.name` on `issue view` | reported as `null` | present |
+| Field          | typed JSON |
+|----------------|-----------|
+| `parent`       | not projected |
+| `subtasks`     | not projected |
+| `issuetype.name` on `issue view` | may be `null` |
 
-Any time you need parent/subtask awareness, use `--raw` and parse
-`fields.parent.key` / `fields.subtasks[].key` directly.
-
-Example pattern for parent-aware code:
-
-```sh
-jira issue view KEY --raw 2>/dev/null | jq -r '.fields.parent.key // "none"'
-```
+There is no raw REST passthrough mode to recover these — closing the
+gap means extending the typed projection. Treat parent/subtask data as
+unavailable from the CLI for now.
 
 ## Creating issues
 
@@ -199,7 +202,7 @@ beyond the supported set still degrade).
 Recommended invocation:
 
 ```sh
-jira issue create --no-input --json-input payload.json --json
+jira issue create --no-input --json-input payload.json --output=json
 ```
 
 Minimal payload:
@@ -269,14 +272,14 @@ Document".
 Convenience flags (good for quick one-shots, bypass `--json-input`):
 
 ```sh
-jira issue create --no-input --summary "..." --json
-jira issue create --no-input --summary "..." --assignee me --json
+jira issue create --no-input --summary "..." --output=json
+jira issue create --no-input --summary "..." --assignee me --output=json
 ```
 
 Always start with `--dry-run` if you're not sure about the payload:
 
 ```sh
-jira issue create --dry-run --no-input --json-input payload.json --json
+jira issue create --dry-run --no-input --json-input payload.json --output=json
 ```
 
 The dry-run runs every validation stage (parse → ADF compat → field
@@ -298,9 +301,9 @@ validation: issue edit requires an interactive terminal for the editor flow;
 Field flags (single-shot edits, no editor):
 
 ```sh
-jira issue edit KEY --summary "New title" --json
-jira issue edit KEY --assignee me --json                 # or --assignee none / accountId
-jira issue edit KEY --json-input fields.json --json     # bulk JSON edit
+jira issue edit KEY --summary "New title" --output=json
+jira issue edit KEY --assignee me --output=json                 # or --assignee none / accountId
+jira issue edit KEY --json-input fields.json --output=json     # bulk JSON edit
 ```
 
 For interactive humans only: the bare form opens `$EDITOR` on the
@@ -340,7 +343,7 @@ jira issue edit KEY --no-input --summary X # ✓ ok
 Native ADF (preferred for agents):
 
 ```sh
-jira issue comment KEY --json-input adf.json --no-input --json
+jira issue comment KEY --json-input adf.json --no-input --output=json
 ```
 
 `adf.json` shape — either the full body wrapped in `{"body": {...}}`
@@ -364,7 +367,7 @@ Markdown convenience (lossy — see the ADF Reference section for what
 survives):
 
 ```sh
-jira issue comment KEY --body-markdown "**heads up**" --no-input --json
+jira issue comment KEY --body-markdown "**heads up**" --no-input --output=json
 ```
 
 The two flags are mutually exclusive.
@@ -421,10 +424,10 @@ comment shape:
 ## Attachments
 
 ```sh
-jira issue attachment list KEY --json                                # oldest-first
-jira issue attachment add KEY --file ./trace.log --json              # multipart upload
-jira issue attachment download KEY 10042 --output ./local.pdf --json # clobber-protected
-jira issue attachment delete KEY 10043 --force --json                # force-gated
+jira issue attachment list KEY --output=json                                # oldest-first
+jira issue attachment add KEY --file ./trace.log --output=json              # multipart upload
+jira issue attachment download KEY 10042 --to ./local.pdf --output=json     # clobber-protected
+jira issue attachment delete KEY 10043 --force --output=json                # force-gated
 ```
 
 `attachment list` envelope:
@@ -455,8 +458,9 @@ jira issue attachment delete KEY 10043 --force --json                # force-gat
 }
 ```
 
-`attachment download` reports written path + bytes (`mode` in `output`,
-`current-dir`, or `stdout`; piped stdout is raw bytes, no envelope):
+`attachment download` reports written path + bytes (`mode` is `output`
+when `--to PATH` is given, else `current-dir`; the binary always writes
+to a file, never to stdout):
 
 ```json
 {"data": {"attachment_id": "10042", "written_to": "./local.pdf", "bytes": 124521, "mode": "output"}}
@@ -474,9 +478,9 @@ message is preserved verbatim under `errors[].message`.
 ## Watchers
 
 ```sh
-jira issue watchers list KEY --json
-jira issue watchers add KEY --user me --json          # alias: jira issue watch KEY
-jira issue watchers remove KEY --user me --json       # alias: jira issue unwatch KEY
+jira issue watchers list KEY --output=json
+jira issue watchers add KEY --user me --output=json          # alias: jira issue watch KEY
+jira issue watchers remove KEY --user me --output=json       # alias: jira issue unwatch KEY
 ```
 
 `watchers list` envelope — `is_watching`/`watch_count` are additive
@@ -510,11 +514,17 @@ agent can re-run with `--user accountId:<id>`:
 
 ```json
 {
-  "data": {},
+  "ok": false,
+  "meta": {"command": "issue.watchers.add", "exit_code": 3, "timestamp": "..."},
+  "data": null,
+  "warnings": [],
   "errors": [
     {
       "type": "validation",
+      "code": "validation_failed",
       "message": "ambiguous user 'alice' — 3 candidates",
+      "hint": "Re-run with --user accountId:<id>.",
+      "retryable": false,
       "candidates": [
         {"account_id": "1", "display_name": "Alice Smith", "email_address": "alice.smith@example.com"},
         {"account_id": "2", "display_name": "Alice Jones", "email_address": "alice.jones@example.com"},
@@ -524,6 +534,13 @@ agent can re-run with `--user accountId:<id>`:
   ]
 }
 ```
+
+Every error entry carries `type`, `code` (stable snake_case — branch on
+this, never on `message`), `message`, `hint`, and `retryable`. Optional
+fields appear when relevant: `flag`, `field`, `http_status`,
+`retry_after_seconds`, `provider`, `upstream_code`, `upstream_status`.
+For Jira API errors `upstream_code` is empty — Jira exposes no stable
+machine error code.
 
 Zero matches → exit 2 (`not_found`); the input string is echoed in
 `errors[0].message` so the agent knows what failed to resolve.
@@ -535,32 +552,32 @@ blocks KAN-73" pass `KEY=KAN-73 --to KAN-72 --type Blocks`.
 
 ```sh
 # A blocks B (B is blocked by A)
-jira issue link <BLOCKED> --to <BLOCKER> --type Blocks --json
+jira issue link <BLOCKED> --to <BLOCKER> --type Blocks --output=json
 
 # A and B are related (no direction)
-jira issue link KAN-73 --to KAN-72 --type Relates --json
+jira issue link KAN-73 --to KAN-72 --type Relates --output=json
 
 # A is a duplicate of canonical B
-jira issue link <DUP> --to <CANONICAL> --type Duplicate --json
+jira issue link <DUP> --to <CANONICAL> --type Duplicate --output=json
 
 # A is a clone of B
-jira issue link <CLONE> --to <ORIGINAL> --type Cloners --json
+jira issue link <CLONE> --to <ORIGINAL> --type Cloners --output=json
 
 # Preview without writing
-jira issue link KAN-73 --to KAN-72 --type Blocks --dry-run --json
+jira issue link KAN-73 --to KAN-72 --type Blocks --dry-run --output=json
 ```
 
 Discover the link types your instance has configured (admins add
 custom ones):
 
 ```sh
-jira issue view ANY-KEY --raw | jq -r '.fields.issuelinks[].type.name' | sort -u
+jira issue link types --output=json | jq -r '.data.link_types[].name' | sort -u
 ```
 
 Read back links on an issue with the typed envelope:
 
 ```sh
-jira issue link list KEY --json
+jira issue link list KEY --output=json
 ```
 
 `link list` flattens Atlassian's wire shape — direction-aware
@@ -586,7 +603,7 @@ jira issue link list KEY --json
 `link delete LINK_ID --force` (force-gated under `--no-input`):
 
 ```sh
-jira issue link delete 9001 --force --json
+jira issue link delete 9001 --force --output=json
 ```
 
 ```json
@@ -598,8 +615,8 @@ locally; `cache linktypes` primes the cache (and adds `data.profile`
 per the cache-primer convention):
 
 ```sh
-jira issue link types --json
-jira cache linktypes --json
+jira issue link types --output=json
+jira cache linktypes --output=json
 ```
 
 ```json
@@ -630,7 +647,7 @@ also primes transparently on first run when the cache is empty.
 
 ```sh
 jira cache boards               # explicit prime
-jira boards list --json         # listing (envelope or table)
+jira boards list --output=json         # listing (envelope or table)
 jira boards list --refresh      # force re-prime
 jira cache clear boards         # drop the cache file
 ```
@@ -720,7 +737,7 @@ or unset with "jira config set profiles.<profile>.default_board ''"
 ## Web links (remote URL attachments)
 
 ```sh
-jira issue weblink KEY --url "https://example.com/spec" --title "Spec doc" --json
+jira issue weblink KEY --url "https://example.com/spec" --title "Spec doc" --output=json
 ```
 
 Goes through `POST /rest/api/3/issue/{KEY}/remotelink`. Different
@@ -749,21 +766,21 @@ Subtasks are regular `jira issue create` calls with
 }
 ```
 
-Verify with `jira issue view PARENT --raw | jq '.fields.subtasks'` —
-recall that the typed view drops `subtasks`.
+Note the typed `issue view` envelope does not project `subtasks`, so
+there is no CLI-side verification of the subtask list today.
 
 ## Transitions (workflow state changes)
 
 List available transitions for an issue (these are workflow-specific):
 
 ```sh
-jira issue transition KEY --json
+jira issue transition KEY --output=json
 ```
 
 Returns `data.transitions[]` — pick an `id` and execute:
 
 ```sh
-jira issue transition KEY --transition <id> --json
+jira issue transition KEY --transition <id> --output=json
 ```
 
 Transition IDs are workflow-specific — they vary per project and per
@@ -775,17 +792,17 @@ the issue you're acting on.**
 ## Worklog
 
 ```sh
-jira worklog add KEY --time-spent 1h30m  --json
-jira worklog add KEY --time-spent 2h     --started 2026-05-04T09:00:00.000+0000 --json
-jira worklog add KEY --time-spent 45m    --comment-markdown "fixed bug X" --json
+jira worklog add KEY --time-spent 1h30m  --output=json
+jira worklog add KEY --time-spent 2h     --started 2026-05-04T09:00:00.000+0000 --output=json
+jira worklog add KEY --time-spent 45m    --comment-markdown "fixed bug X" --output=json
 jira worklog add KEY --json-input wl.json  # full payload, ADF comment supported
 ```
 
 `--time-spent` accepts `1d 2h 30m`-style durations; days resolve via
 the per-profile `workday_seconds` (default 28,800 = 8h).
 
-`worklog list KEY --json` reads, `worklog list KEY --raw` for the
-full Jira shape.
+`worklog list KEY --output=json` reads the worklog list as the typed
+envelope.
 
 ## Destructive operations (clone / move / delete)
 
@@ -801,10 +818,10 @@ Refuses to run without one of:
 Examples:
 
 ```sh
-jira issue delete KAN-1 --force --json
-jira issue delete KAN-1 --force --delete-subtasks --json   # drains subtasks atomically
-jira issue clone  KAN-1 --force --json
-jira issue move   KAN-1 --force --json-input move.json  --json
+jira issue delete KAN-1 --force --output=json
+jira issue delete KAN-1 --force --delete-subtasks --output=json   # drains subtasks atomically
+jira issue clone  KAN-1 --force --output=json
+jira issue move   KAN-1 --force --json-input move.json  --output=json
 ```
 
 ⚠ **Subtasks block deletion** — Jira refuses to delete a parent
@@ -828,16 +845,16 @@ time-tracking (`timeestimate`, `timespent`, `timeoriginalestimate`,
 
 ```sh
 # Straight clone — same project, same fields
-jira issue clone KAN-1 --force --json
+jira issue clone KAN-1 --force --output=json
 
 # Clone with overrides — caller fields win over source fields
 cat > /tmp/over.json <<'EOF'
 {"fields": {"summary": "Triage copy of KAN-1", "assignee": {"accountId": "<your-id>"}}}
 EOF
-jira issue clone KAN-1 --force --json-input /tmp/over.json --json
+jira issue clone KAN-1 --force --json-input /tmp/over.json --output=json
 
 # Preview without creating
-jira issue clone KAN-1 --force --dry-run --json
+jira issue clone KAN-1 --force --dry-run --output=json
 ```
 
 To clone into a different project, override `project`:
@@ -858,7 +875,7 @@ To strip an inherited field (e.g. clear the assignee), set it to
 cat > /tmp/move.json <<'EOF'
 {"fields": {"project": {"key": "OTHER"}, "issuetype": {"name": "Story"}}}
 EOF
-jira issue move KAN-1 --force --json-input /tmp/move.json --json
+jira issue move KAN-1 --force --json-input /tmp/move.json --output=json
 ```
 
 Required-field changes between projects/types must also appear in
@@ -917,33 +934,33 @@ Refresh after these events:
 
 ```sh
 # Once per session, prime the high-value caches:
-jira cache fields     --refresh --json   # so you can map customfield_NNNN → name
-jira cache projects   --refresh --json   # so you can validate project keys
-jira cache issuetypes --refresh --json   # so you can validate issue_type
+jira cache fields     --refresh --output=json   # so you can map customfield_NNNN → name
+jira cache projects   --refresh --output=json   # so you can validate project keys
+jira cache issuetypes --refresh --output=json   # so you can validate issue_type
 
 # Use cached data for the rest of the session:
-jira cache labels --json | jq -r '.data.labels[]'   # cheap, reads disk
+jira cache labels --output=json | jq -r '.data.labels[]'   # cheap, reads disk
 ```
 
 ### Commands
 
 ```sh
-jira cache labels      --json
-jira cache projects    --json
-jira cache epics       --json
-jira cache fields      --json
-jira cache issuetypes  --json
+jira cache labels      --output=json
+jira cache projects    --output=json
+jira cache epics       --output=json
+jira cache fields      --output=json
+jira cache issuetypes  --output=json
 
 # Refresh / TTL:
-jira cache fields --refresh         --json
-jira cache fields --ttl-minutes 5   --json
+jira cache fields --refresh         --output=json
+jira cache fields --ttl-minutes 5   --output=json
 
 # Wipe:
 jira cache clear              # everything for the active profile
 jira cache clear labels       # just the labels file
 ```
 
-`jira cache fields --json` is the canonical way to discover
+`jira cache fields --output=json` is the canonical way to discover
 `customfield_xxxxx` IDs on a Jira instance — agents should run this
 once per session before authoring custom-field values.
 
@@ -959,7 +976,7 @@ serialize cleanly at the filesystem level.
 ADF is canonical. The official spec is at
 [developer.atlassian.com/cloud/jira/platform/apis/document](https://developer.atlassian.com/cloud/jira/platform/apis/document/).
 The CLI's MVP support set is mirrored in
-`jira agent adf-matrix --json` (per-row `official_url` points to the
+`jira agent adf-matrix --output=json` (per-row `official_url` points to the
 Atlassian docs page for that node/mark).
 
 Every ADF doc starts with the root:
@@ -1125,7 +1142,7 @@ what the CLI's ADF validator detects.
 ```
 
 The `id` MUST be the user's `accountId` (get it from
-`jira me --json` for yourself, or the assignee field on any issue
+`jira me --output=json` for yourself, or the assignee field on any issue
 they own). The `text` is the display label and can be anything.
 
 **Status pill (named color: green / red / yellow / blue / purple / grey / neutral):**
@@ -1212,8 +1229,7 @@ they own). The `text` is the display label and can be anything.
 | Path                   | Default mode |
 |------------------------|--------------|
 | Read / render          | best-effort  |
-| `--plain` extract      | best-effort  |
-| `--raw` emit           | n/a (passthrough, no validation) |
+| `--output=human` extract      | best-effort  |
 | Mutation submit        | strict       |
 | `--dry-run` preview    | strict       |
 
@@ -1287,28 +1303,28 @@ issuesWithText("phrase")
 
 ```sh
 # Everything assigned to me, not done
-jira search jql 'assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC' --json
+jira search jql 'assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC' --output=json
 
 # In-flight issues in a specific project
-jira search jql 'project = KAN AND status = "In Progress"' --json
+jira search jql 'project = KAN AND status = "In Progress"' --output=json
 
 # Bugs reported in the last sprint
-jira search jql 'project = KAN AND issuetype = Bug AND created > startOfMonth()' --json
+jira search jql 'project = KAN AND issuetype = Bug AND created > startOfMonth()' --output=json
 
 # Issues in any of my epics
-jira search jql 'project = KAN AND parent in (linkedIssues(currentUser()))' --json
+jira search jql 'project = KAN AND parent in (linkedIssues(currentUser()))' --output=json
 
 # Recently updated, with a specific label
-jira search jql 'project = KAN AND labels = "regression" AND updated > -7d' --json
+jira search jql 'project = KAN AND labels = "regression" AND updated > -7d' --output=json
 
 # Issues blocked by a specific issue
-jira search jql 'issue in linkedIssues("KAN-72", "is blocked by")' --json
+jira search jql 'issue in linkedIssues("KAN-72", "is blocked by")' --output=json
 
 # Subtasks of a parent
-jira search jql 'parent = KAN-69' --json
+jira search jql 'parent = KAN-69' --output=json
 
 # Status-history check (was = 'In Progress' some time recently)
-jira search jql 'status was "In Progress" during ("2026-04-01", "2026-05-01")' --json
+jira search jql 'status was "In Progress" during ("2026-04-01", "2026-05-01")' --output=json
 ```
 
 ### JQL builder — flag-driven query construction
@@ -1317,13 +1333,13 @@ When you don't want to hand-author JQL, build it from flags. Useful
 in pipelines and for agents avoiding string-quoting bugs.
 
 ```sh
-jira jql build --project KAN --status Done --assignee me --json
+jira jql build --project KAN --status Done --assignee me --output=json
 # → {"jql": "project = KAN AND assignee = currentUser() AND status = Done ORDER BY updated DESC"}
 
-jira jql build --project KAN --label regression --label hotfix --type Bug --type Task --json
+jira jql build --project KAN --label regression --label hotfix --type Bug --type Task --output=json
 # → {"jql": "project = KAN AND labels in (regression, hotfix) AND issuetype in (Bug, Task) ORDER BY updated DESC"}
 
-jira jql build --project KAN --order-by updated --desc --json
+jira jql build --project KAN --order-by updated --desc --output=json
 # → {"jql": "project = KAN ORDER BY updated DESC"}
 ```
 
@@ -1350,11 +1366,11 @@ Validation:
 Pipe builder output straight into search:
 
 ```sh
-JQL=$(jira jql build --project KAN --assignee me --json | jq -r '.data.jql')
-jira search jql "$JQL" --json
+JQL=$(jira jql build --project KAN --assignee me --output=json | jq -r '.data.jql')
+jira search jql "$JQL" --output=json
 ```
 
-`jira issue list --as-jql --json` returns the same builder output
+`jira issue list --as-jql --output=json` returns the same builder output
 without making the API call — useful for previewing what
 `issue list` would run.
 
@@ -1376,7 +1392,7 @@ ORDER BY priority DESC, updated DESC
 Run:
 
 ```sh
-jira search saved my-open-bugs --json
+jira search saved my-open-bugs --output=json
 ```
 
 ## Auth
@@ -1459,7 +1475,7 @@ jira auth switch <profile>          # change active profile (writes default_prof
 jira auth refresh                    # re-resolve the credential from the backend
 jira auth migrate --backend 1password  # move credential between backends
 jira auth logout <profile>           # remove credential from the backend (TOML metadata stays)
-jira auth token --json               # REDACTED token diagnostics (length, prefix, backend)
+jira auth token --output=json               # REDACTED token diagnostics (length, prefix, backend)
 ```
 
 ### Partial updates merge — they don't replace
@@ -1587,10 +1603,10 @@ support tickets.
 
 ## Common pitfalls
 
-1. **`issue view --json` drops `parent` and `subtasks`** from the typed
-   envelope. Use `--raw` when you need them.
-2. **`issue view --json` shows `issuetype.name` as `null`** for some
-   types in the typed envelope. `--raw` is correct.
+1. **`issue view --output=json` does not project `parent` or `subtasks`**
+   into the typed envelope. There is no raw passthrough to recover them.
+2. **`issue view --output=json` may show `issuetype.name` as `null`** for
+   some types in the typed envelope.
 3. **`environment` field is ADF on most modern Jira instances** — pass
    the full ADF doc, not a plain string. Same for `description`.
 4. **`issuelinks` cannot be set via `issue edit` bulk update** — Jira
@@ -1635,33 +1651,33 @@ jira me                                              # who am I?
 jira config profile                                  # what profiles exist?
 
 # Discover a project
-jira cache projects --json
-jira cache fields --json | jq '.data.fields[] | select(.id | startswith("customfield_"))'
-jira cache issuetypes --json
+jira cache projects --output=json
+jira cache fields --output=json | jq '.data.fields[] | select(.id | startswith("customfield_"))'
+jira cache issuetypes --output=json
 
 # Read
-jira issue view KAN-1 --json
-jira search jql 'assignee = currentUser() AND statusCategory != Done' --json
+jira issue view KAN-1 --output=json
+jira search jql 'assignee = currentUser() AND statusCategory != Done' --output=json
 
 # Write (always start with --dry-run)
-jira issue create --dry-run --no-input --json-input payload.json --json
-jira issue create          --no-input --json-input payload.json --json
+jira issue create --dry-run --no-input --json-input payload.json --output=json
+jira issue create          --no-input --json-input payload.json --output=json
 
 # Single-shot edits
-jira issue edit KEY --summary "New title" --no-input --json
-jira issue edit KEY --assignee me        --no-input --json
+jira issue edit KEY --summary "New title" --no-input --output=json
+jira issue edit KEY --assignee me        --no-input --output=json
 
 # Link + flow
-jira issue link KEY --to OTHER --type Blocks --json
-jira issue weblink KEY --url URL --title "..."  --json
-jira issue transition KEY --json                            # list
-jira issue transition KEY --transition 21 --json            # execute
-jira issue comment KEY --json-input adf.json --no-input --json
-jira worklog add KEY --time-spent 1h30m --no-input --json
+jira issue link KEY --to OTHER --type Blocks --output=json
+jira issue weblink KEY --url URL --title "..."  --output=json
+jira issue transition KEY --output=json                            # list
+jira issue transition KEY --transition 21 --output=json            # execute
+jira issue comment KEY --json-input adf.json --no-input --output=json
+jira worklog add KEY --time-spent 1h30m --no-input --output=json
 
 # Destructive
-jira issue delete KEY --force --json
-jira issue delete KEY --force --delete-subtasks --json      # parent with subtasks
+jira issue delete KEY --force --output=json
+jira issue delete KEY --force --delete-subtasks --output=json      # parent with subtasks
 
 # Debug
 jira <cmd> --debug 2>&1 | grep '^DBG'

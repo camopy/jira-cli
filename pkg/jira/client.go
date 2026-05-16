@@ -30,14 +30,58 @@ const (
 	ErrorTypeServer     ErrorType = "server"
 )
 
+// APIError is the typed error returned for any non-2xx Jira REST
+// response or transport failure. Beyond the HTTP status and a display
+// message it preserves the schema-backed fields of Jira Cloud's
+// ErrorCollection body (errorMessages[], errors map, status) and the
+// rate-limit Retry-After header, all as optional metadata. Jira exposes
+// no stable machine error code, so APIError carries none — callers
+// derive a normalized code from the HTTP status.
 type APIError struct {
 	StatusCode int
 	Type       ErrorType
 	Message    string
+	// ErrorMessages mirrors the Jira ErrorCollection.errorMessages array
+	// (general, non-field-scoped human messages). Nil when the body
+	// carried none. Never used as a branch target — wording is not
+	// contractual.
+	ErrorMessages []string
+	// FieldErrors mirrors the Jira ErrorCollection.errors map
+	// (field-name -> single human message). Nil when the body carried
+	// none.
+	FieldErrors map[string]string
+	// UpstreamStatus is the integer ErrorCollection.status field when the
+	// body carried one. Zero when absent.
+	UpstreamStatus int
+	// RetryAfterSeconds is the Retry-After header value on a 429
+	// response. Zero when the header was absent — callers fall back to
+	// exponential backoff with jitter.
+	RetryAfterSeconds int
 }
 
 func (e *APIError) Error() string {
 	return fmt.Sprintf("jira: %s (%d): %s", e.Type, e.StatusCode, e.Message)
+}
+
+// errorCollection is the Jira Cloud REST v3 standard error body shape
+// (#/components/schemas/ErrorCollection). All fields are optional.
+type errorCollection struct {
+	ErrorMessages []string          `json:"errorMessages"`
+	Errors        map[string]string `json:"errors"`
+	Status        int               `json:"status"`
+}
+
+// parseErrorCollection best-effort decodes a Jira error body into the
+// ErrorCollection shape. A body that does not parse as ErrorCollection
+// (HTML maintenance page, empty body) yields a zero value — the caller
+// keeps the raw message instead.
+func parseErrorCollection(body []byte) errorCollection {
+	var ec errorCollection
+	if len(body) == 0 || !json.Valid(body) {
+		return ec
+	}
+	_ = json.Unmarshal(body, &ec)
+	return ec
 }
 
 type Client struct {
@@ -223,7 +267,17 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 		if len(msgBody) > maxErrorBodyBytes {
 			msgBody = msgBody[:maxErrorBodyBytes]
 		}
-		return resp, &APIError{StatusCode: res.StatusCode, Type: classifyStatus(res.StatusCode), Message: strings.TrimSpace(string(msgBody))}
+		ec := parseErrorCollection(msgBody)
+		apiErr := &APIError{
+			StatusCode:        res.StatusCode,
+			Type:              classifyStatus(res.StatusCode),
+			Message:           strings.TrimSpace(string(msgBody)),
+			ErrorMessages:     ec.ErrorMessages,
+			FieldErrors:       ec.Errors,
+			UpstreamStatus:    ec.Status,
+			RetryAfterSeconds: resp.Rate.RetryAfterSeconds,
+		}
+		return resp, apiErr
 	}
 	if out != nil {
 		if err := json.Unmarshal(body, out); err != nil && len(body) > 0 {

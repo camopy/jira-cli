@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/gechr/clib/complete"
 
 	"github.com/matcra587/jira-cli/internal/cache"
+	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/pkg/jira"
 )
@@ -99,7 +99,8 @@ func emitCachedProjects() {
 		return
 	}
 	for _, p := range projects {
-		_, _ = fmt.Fprintf(os.Stdout, "%s\t%s\n", p.Key, p.Name)
+		_, _ = fmt.Fprintf(os.Stdout, "%s\t%s\n",
+			cli.SanitizeCompletionField(p.Key), cli.SanitizeCompletionField(p.Name))
 	}
 }
 
@@ -113,7 +114,8 @@ func emitCachedEpics() {
 		return
 	}
 	for _, e := range epics {
-		_, _ = fmt.Fprintf(os.Stdout, "%s\t%s\n", e.Key, e.Summary)
+		_, _ = fmt.Fprintf(os.Stdout, "%s\t%s\n",
+			cli.SanitizeCompletionField(e.Key), cli.SanitizeCompletionField(e.Summary))
 	}
 }
 
@@ -123,7 +125,7 @@ func emitCachedLabels() {
 		return
 	}
 	for _, l := range labels {
-		_, _ = fmt.Fprintln(os.Stdout, l)
+		_, _ = fmt.Fprintln(os.Stdout, cli.SanitizeCompletionField(l))
 	}
 }
 
@@ -141,7 +143,7 @@ func emitCachedIssueTypes() {
 			continue
 		}
 		seen[t.Name] = struct{}{}
-		_, _ = fmt.Fprintln(os.Stdout, t.Name)
+		_, _ = fmt.Fprintln(os.Stdout, cli.SanitizeCompletionField(t.Name))
 	}
 }
 
@@ -173,9 +175,9 @@ func emitCachedBoards() {
 			typ = *b.Type
 		}
 		descriptor := boardCompletionDescriptor(typ, b.ProjectKeys)
-		// Replace newlines / tabs in the name with single spaces so
-		// the descriptor stays single-line .
-		safeName := strings.NewReplacer("\n", " ", "\r", " ", "\t", " ").Replace(*b.Name)
+		// Sanitize the name so embedded tabs, newlines and control
+		// bytes cannot corrupt the one-candidate-per-line grammar.
+		safeName := cli.SanitizeCompletionField(*b.Name)
 		_, _ = fmt.Fprintf(os.Stdout, "%d\t%s%s\n", *b.ID, safeName, descriptor)
 	}
 }
@@ -222,6 +224,8 @@ func emitCachedLinkTypes() {
 		if t.Name == "" {
 			continue
 		}
-		_, _ = fmt.Fprintf(os.Stdout, "%s\t%s (%s / %s)\n", t.ID, t.Name, t.Inward, t.Outward)
+		_, _ = fmt.Fprintf(os.Stdout, "%s\t%s (%s / %s)\n",
+			cli.SanitizeCompletionField(t.ID), cli.SanitizeCompletionField(t.Name),
+			cli.SanitizeCompletionField(t.Inward), cli.SanitizeCompletionField(t.Outward))
 	}
 }

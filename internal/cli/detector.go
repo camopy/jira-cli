@@ -18,6 +18,64 @@ const (
 	ModeCompact Mode = "compact"
 )
 
+// OutputMode is the value of the canonical --output flag. It is the ONLY
+// output-mode selector: the legacy --json/--compact/--plain/--raw booleans
+// are removed and there is no raw REST passthrough mode.
+type OutputMode string
+
+const (
+	// OutputAuto defers to terminal/agent detection: TTY -> human,
+	// non-TTY -> json, detected agent -> compact.
+	OutputAuto OutputMode = "auto"
+	// OutputHuman forces the rich clog/table renderer.
+	OutputHuman OutputMode = "human"
+	// OutputJSON forces the full JSON envelope (ok/meta/data/warnings/errors).
+	OutputJSON OutputMode = "json"
+	// OutputCompact forces the JSON data payload without the envelope
+	// wrapper (no ok/meta/warnings/errors).
+	OutputCompact OutputMode = "compact"
+)
+
+// OutputModeValues lists the accepted --output values for help text and
+// shell completion.
+var OutputModeValues = []string{"auto", "human", "json", "compact"}
+
+// ParseOutputMode validates a raw --output flag value. An empty string
+// resolves to OutputAuto. Any other unrecognized value — including the
+// removed "raw"/"plain"/"tui" names — is rejected.
+func ParseOutputMode(v string) (OutputMode, error) {
+	switch v {
+	case "", "auto":
+		return OutputAuto, nil
+	case "human":
+		return OutputHuman, nil
+	case "json":
+		return OutputJSON, nil
+	case "compact":
+		return OutputCompact, nil
+	default:
+		return "", fmt.Errorf("invalid --output mode %q: must be one of auto, human, json, compact", v)
+	}
+}
+
+// ResolveOutputMode turns the --output flag value plus auto-detection into
+// the concrete rendering Mode. An explicit value overrides detection;
+// OutputAuto follows the Detection.Mode produced by Detect.
+func ResolveOutputMode(out OutputMode, det Detection) Mode {
+	switch out {
+	case OutputHuman:
+		return ModePlain
+	case OutputJSON:
+		return ModeJSON
+	case OutputCompact:
+		return ModeCompact
+	default: // OutputAuto
+		// Detect never produces ModeTUI for ordinary command output, so
+		// the detected mode is returned as-is.
+		return det.Mode
+	}
+}
+
 type Detection struct {
 	Mode      Mode
 	IsTTY     bool
@@ -39,7 +97,7 @@ const (
 
 var validAgentName = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
-func Detect(stdout *os.File, forceJSON bool) Detection {
+func Detect(stdout *os.File) Detection {
 	isTTY := terminal.Is(stdout)
 	agent, name := detectAgent()
 	d := Detection{
@@ -48,8 +106,6 @@ func Detect(stdout *os.File, forceJSON bool) Detection {
 		AgentName: name,
 	}
 	switch {
-	case forceJSON:
-		d.Mode = ModeJSON
 	case agent:
 		d.Mode = ModeCompact
 	case !isTTY:
@@ -61,7 +117,7 @@ func Detect(stdout *os.File, forceJSON bool) Detection {
 }
 
 func RequireTTY(stdout *os.File) (Detection, error) {
-	d := Detect(stdout, false)
+	d := Detect(stdout)
 	if !d.IsTTY {
 		return d, fmt.Errorf("tui requires an interactive terminal")
 	}

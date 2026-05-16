@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/gechr/clib/complete"
@@ -15,7 +14,6 @@ import (
 	"github.com/gechr/clog"
 	"github.com/gechr/x/terminal"
 	"github.com/matcra587/jira-cli/internal/cli"
-	"github.com/matcra587/jira-cli/pkg/jira"
 	"github.com/spf13/cobra"
 )
 
@@ -35,7 +33,7 @@ var rootCmd = &cobra.Command{
 	$ jira -i
 
 	# List issues as structured JSON
-	$ jira issue list --json
+	$ jira issue list --output=json
 
 # Run a saved JQL query
 $ jira search saved my-open-bugs`,
@@ -68,8 +66,13 @@ $ jira search saved my-open-bugs`,
 			clog.SetOutput(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAuto))
 		}
 
-		forcedJSON, _ := pf.GetBool("json")
-		det := cli.Detect(os.Stdout, forcedJSON)
+		outputRaw, _ := pf.GetString("output")
+		outputMode, err := cli.ParseOutputMode(outputRaw)
+		if err != nil {
+			return err
+		}
+		det := cli.Detect(os.Stdout)
+		det.Mode = cli.ResolveOutputMode(outputMode, det)
 		interactive, _ := pf.GetBool("interactive")
 		if interactive {
 			det.Mode = cli.ModeTUI
@@ -113,7 +116,7 @@ $ jira search saved my-open-bugs`,
 		if det.IsTTY && det.Mode == cli.ModePlain {
 			return cmd.Help()
 		}
-		return writeSchema(cmd, false)
+		return writeSchema(cmd)
 	},
 }
 
@@ -172,42 +175,37 @@ type envelopeWrittenError struct{ inner error }
 func (e envelopeWrittenError) Error() string { return e.inner.Error() }
 func (e envelopeWrittenError) Unwrap() error { return e.inner }
 
-// jsonEnvelopeRequested returns true when the caller has opted in to structured
-// JSON output, either explicitly via --json / --compact flags or implicitly
-// because an agent env-var (CLAUDE_CODE, CURSOR_AGENT, etc.) was detected and
-// defaulted the session to ModeCompact.
+// jsonEnvelopeRequested returns true when the resolved output mode is a
+// machine mode (json or compact), so a command failure still emits a
+// parseable error envelope on stdout.
 //
-// It inspects PersistentFlags and the env-detector directly so it works even
-// before PersistentPreRunE has run (e.g. when cobra fires a mutex-flag
-// validation error).  The detector reads env vars and the stdout fd directly —
+// It inspects the --output flag and the env-detector directly so it works
+// even before PersistentPreRunE has run (e.g. when cobra fires a flag
+// validation error). Detect() reads env vars and the stdout fd directly —
 // no cmd.Context() setup is required.
 func jsonEnvelopeRequested(cmd *cobra.Command) bool {
 	pf := cmd.Root().PersistentFlags()
-	if v, _ := pf.GetBool("json"); v {
+	outputRaw, _ := pf.GetString("output")
+	mode, err := cli.ParseOutputMode(outputRaw)
+	if err != nil {
+		// An invalid --output value is itself a failure; emit the error
+		// envelope so the machine consumer sees a parseable result.
 		return true
 	}
-	if v, _ := pf.GetBool("compact"); v {
-		return true
-	}
-	// No explicit flag — check whether an agent env-var has defaulted the
-	// session to ModeCompact.  Detect() is safe to call here because it only
-	// reads os.Environ() and checks whether stdout is a TTY; neither requires
-	// context nor any prior cobra setup.
-	det := cli.Detect(os.Stdout, false)
-	return det.Agent
+	det := cli.Detect(os.Stdout)
+	resolved := cli.ResolveOutputMode(mode, det)
+	return resolved == cli.ModeJSON || resolved == cli.ModeCompact
 }
 
-// writeErrorEnvelopeToStdout emits a minimal JSON envelope carrying the error
-// in the errors[] array to cmd's stdout.  Used only on the --json / --compact
-// / agent-detected path so machine consumers always have parseable output even
-// when the command fails before or after RunE.
+// writeErrorEnvelopeToStdout emits a lean failure envelope carrying the
+// error in the errors[] array to cmd's stdout. Used only on the
+// json/compact/agent-detected path so machine consumers always have
+// parseable output even when the command fails before or after RunE.
 //
-// This helper deliberately bypasses the compact/plain/raw branching used by
-// the success path (writeEnvelopeWithWarnings).  Errors must stay parseable
-// JSON regardless of mode flags, so the helper is intentionally not
-// consolidated with the success-path writer.
+// This helper deliberately bypasses the compact branching used by the
+// success path: errors must stay a parseable JSON envelope regardless of
+// the output mode, so a failed command is never invisible to an agent.
 func writeErrorEnvelopeToStdout(cmd *cobra.Command, err error) error {
-	cliErr := outputErrorFor(err)
 	// Use cobra's CommandPath() so nested sub-commands get the full dotted name
 	// (e.g. "issue.create") instead of the hand-walked single-level fallback.
 	command := strings.TrimPrefix(cmd.CommandPath(), "jira ")
@@ -215,17 +213,7 @@ func writeErrorEnvelopeToStdout(cmd *cobra.Command, err error) error {
 	if command == "" || command == "jira" {
 		command = "error"
 	}
-	env := cli.Envelope{
-		Meta: cli.Meta{
-			Command:   command,
-			Profile:   profileForEnvelope(cmd),
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
-			RequestID: cli.NewRequestID(),
-		},
-		Data:     map[string]any{},
-		Errors:   []cli.Error{cliErr},
-		Warnings: []cli.Warning{},
-	}
+	env := cli.ErrorEnvelope(command, err)
 	return cli.WriteEnvelope(cmd.OutOrStdout(), env)
 }
 
@@ -233,38 +221,14 @@ func exitCodeForError(err error) int {
 	return cli.ExitCode(outputErrorFor(err))
 }
 
+// outputErrorFor maps any command error onto the structured cli.Error
+// shape. It delegates entirely to the central cli.MapError mapper, which
+// uses errors.As for every typed error — credential, Jira API,
+// rate-limit, and the command-local board-validation wrapper (via the
+// cli.ValidationCandidatesError interface). There is no command-local
+// special case: every error envelope is built one way.
 func outputErrorFor(err error) cli.Error {
-	var apiErr *jira.APIError
-	if errors.As(err, &apiErr) {
-		return cli.NewError(cli.ErrorType(apiErr.Type), apiErr.Message)
-	}
-	// Typed "validation" wrapper (board ambiguity / default_board
-	// missing) — bypasses the substring classifier so messages
-	// containing "not found" still map to exit 3 (validation).
-	var bve boardValidationError
-	if errors.As(err, &bve) {
-		out := cli.NewError(cli.ErrorTypeValidation, bve.Error())
-		if cands := bve.BoardCandidates(); len(cands) > 0 {
-			out.Candidates = cands
-		}
-		return out
-	}
-	msg := err.Error()
-	lower := strings.ToLower(msg)
-	switch {
-	case strings.Contains(lower, "unsupported auth type"):
-		return cli.NewError(cli.ErrorTypeValidation, msg)
-	case strings.Contains(lower, "credential") || strings.Contains(lower, "auth"):
-		return cli.NewError(cli.ErrorTypeAuth, msg)
-	case strings.Contains(lower, "not found"):
-		return cli.NewError(cli.ErrorTypeNotFound, msg)
-	case strings.Contains(lower, "rate limit") || strings.Contains(lower, "too many"):
-		return cli.NewError(cli.ErrorTypeRateLimit, msg)
-	case strings.Contains(lower, "server"):
-		return cli.NewError(cli.ErrorTypeServer, msg)
-	default:
-		return cli.NewError(cli.ErrorTypeValidation, msg)
-	}
+	return cli.MapError(err)
 }
 
 func setup() error {
@@ -293,10 +257,8 @@ func init() {
 	pf := rootCmd.PersistentFlags()
 	pf.StringP("profile", "p", "", "Jira profile name")
 	pf.StringP("config", "c", "", "Config file path")
-	pf.Bool("json", false, "Force structured JSON output")
-	pf.Bool("compact", false, "Emit compact jq-friendly JSON")
-	pf.Bool("plain", false, "Emit clog rich text output")
-	pf.Bool("raw", false, "Emit Jira REST-native JSON")
+	pf.String("output", "auto", "Output mode: auto, human, json, or compact "+
+		"(compact is the JSON data payload without the envelope — no ok/meta/warnings/errors)")
 	pf.BoolP("interactive", "i", false, "Launch persistent dashboard from root command")
 	pf.BoolP("debug", "d", false, "Enable debug output")
 	pf.Bool("no-input", false, "Disable interactive prompts (mandatory for headless / agent invocation)")
@@ -318,10 +280,14 @@ func init() {
 		Hint:        "file",
 		Terse:       "config file path",
 	})
-	clib.Extend(pf.Lookup("json"), clib.FlagExtra{Group: "Output", Terse: "structured JSON"})
-	clib.Extend(pf.Lookup("compact"), clib.FlagExtra{Group: "Output", Terse: "compact JSON"})
-	clib.Extend(pf.Lookup("plain"), clib.FlagExtra{Group: "Output", Terse: "clog rich text"})
-	clib.Extend(pf.Lookup("raw"), clib.FlagExtra{Group: "Output", Terse: "Jira REST JSON"})
+	clib.Extend(pf.Lookup("output"), clib.FlagExtra{
+		Group:       "Output",
+		Placeholder: "MODE",
+		Enum:        cli.OutputModeValues,
+		EnumTerse:   []string{"detect terminal", "rich text", "JSON envelope", "JSON data only"},
+		EnumDefault: "auto",
+		Terse:       "output mode",
+	})
 	clib.Extend(pf.Lookup("interactive"), clib.FlagExtra{Group: "Dashboard", Terse: "launch dashboard"})
 	clib.Extend(pf.Lookup("debug"), clib.FlagExtra{Group: "Output", Terse: "debug output"})
 	clib.Extend(pf.Lookup("color"), clib.FlagExtra{
@@ -332,7 +298,6 @@ func init() {
 		Terse:       "color mode",
 	})
 
-	rootCmd.MarkFlagsMutuallyExclusive("json", "compact", "plain", "raw")
 	rootCmd.MarkFlagsMutuallyExclusive("adf-strict", "adf-best-effort")
 
 	rootCmd.AddGroup(

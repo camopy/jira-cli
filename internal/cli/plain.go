@@ -53,9 +53,44 @@ func WithPlainTheme(theme *clibtheme.Theme) PlainOption {
 	}
 }
 
-func WritePlain(w io.Writer, data any) error {
+// newPlainLogger builds the per-command clog logger for human output.
+// OmitEmpty drops nil/empty-string/empty-collection fields so a renderer
+// never prints a field irrelevant to the active backend (e.g. an empty
+// onepassword_account on a keyring profile). OmitEmpty keeps a
+// meaningful false such as valid=false; OmitZero would wrongly drop it.
+func newPlainLogger(w io.Writer) *clog.Logger {
 	logger := clog.New(clog.NewOutput(w, clog.ColorAuto))
-	return writeGenericPlain(logger, "result", data)
+	logger.SetOmitEmpty(true)
+	return logger
+}
+
+func WritePlain(w io.Writer, data any) error {
+	return writeGenericPlain(newPlainLogger(w), "result", data)
+}
+
+// PlainRenderer renders a single command's typed output as human text.
+// Per-command renderers in the plain_*.go files implement this contract:
+// they own the field order, human-size and time formatting for one
+// command group, replacing generic map reflection. writeGenericPlain
+// remains the fallback for low-risk internal data that has no dedicated
+// renderer.
+type PlainRenderer interface {
+	// RenderPlain writes the human view of data for command to w.
+	RenderPlain(w io.Writer, command string, data any, opts ...PlainOption) error
+}
+
+// plainRendererFunc adapts a plain rendering function to PlainRenderer.
+type plainRendererFunc func(w io.Writer, command string, data any, opts ...PlainOption) error
+
+func (f plainRendererFunc) RenderPlain(w io.Writer, command string, data any, opts ...PlainOption) error {
+	return f(w, command, data, opts...)
+}
+
+// dtoPlainRenderers maps a command name to the typed PlainRenderer that
+// owns its human output — field order, human sizes and time formatting.
+// Migrating a command off generic map reflection means adding it here.
+var dtoPlainRenderers = map[string]PlainRenderer{
+	"issue.attachment.list": plainRendererFunc(WriteAttachmentListPlain),
 }
 
 func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOption) error {
@@ -63,14 +98,15 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	logger := clog.New(clog.NewOutput(w, clog.ColorAuto))
+	logger := newPlainLogger(w)
+	if renderer, ok := dtoPlainRenderers[command]; ok {
+		return renderer.RenderPlain(w, command, data, opts...)
+	}
 	switch command {
 	case "issue.list":
 		return writeIssueListPlain(logger, data, cfg)
 	case "auth.status":
 		return writeAuthStatusPlain(logger, data, cfg)
-	case "issue.attachment.list":
-		return WriteAttachmentListPlain(w, command, data, opts...)
 	case "issue.comment.list":
 		return WriteCommentListPlain(w, command, data, opts...)
 	case "issue.watchers.list":
@@ -101,6 +137,13 @@ func writeGenericPlain(logger *clog.Logger, message string, data any) error {
 	event := logger.Info()
 	for _, field := range fields {
 		event = event.Any(field.key, field.value)
+	}
+	// An empty message means the command's data fields already carry the
+	// result; emitting a message line that just echoes the command name
+	// adds no information, so the renderer drops it.
+	if message == "" {
+		event.Send()
+		return nil
 	}
 	event.Msg(message)
 	return nil
@@ -144,12 +187,18 @@ func messageForCommand(command string) string {
 		return "logged out"
 	case "auth.switch":
 		return "switched profile"
-	case "auth.token":
-		return "inspected token"
 	case "schema":
 		return "rendered schema"
+	case "auth.token", "auth.whoami":
+		// The command's own data fields (valid, source, account) carry
+		// the result. A message line here would only echo the command
+		// the user just typed, so the renderer drops it.
+		return ""
 	default:
-		return strings.ReplaceAll(command, ".", " ")
+		// No curated result message: a fallback derived from the command
+		// name just restates what the user typed, so drop the message
+		// line and let the data fields speak.
+		return ""
 	}
 }
 

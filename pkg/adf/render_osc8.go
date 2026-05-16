@@ -40,7 +40,12 @@ var urlPattern = regexp.MustCompile(`https?://[^\s]+`)
 //
 // Modern terminals render <TEXT> as a clickable link to <URL>; older
 // terminals strip the escapes and show only <TEXT>.
+//
+// The plain text is stripped of C0/C1 control bytes first: a
+// Jira-controlled string could carry a bare ESC or BEL that would
+// corrupt the terminal or break an OSC 8 span.
 func activate(text, baseURL string) string {
+	text = stripControlBytes(text)
 	// URLs first so issue-key matches inside URLs don't double-wrap.
 	text = urlPattern.ReplaceAllStringFunc(text, func(m string) string {
 		return osc8(m, m)
@@ -60,6 +65,32 @@ func activate(text, baseURL string) string {
 }
 
 // osc8 returns the OSC 8 hyperlink escape for url displayed as text.
+// Both halves are stripped of control bytes so a control byte cannot
+// break the span open/close pair.
 func osc8(url, text string) string {
+	url = stripControlBytes(url)
+	text = stripControlBytes(text)
 	return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\"
+}
+
+// stripControlBytes drops C0 and C1 control characters. Tab, newline and
+// carriage return are kept because ToPlain output uses them as legitimate
+// layout; only the corrupting control bytes (ESC, BEL, NUL, etc.) go.
+func stripControlBytes(s string) string {
+	if s == "" {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch {
+		case r == '\t' || r == '\n' || r == '\r':
+			b.WriteRune(r)
+		case r < 0x20 || (r >= 0x7f && r <= 0x9f):
+			continue
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }

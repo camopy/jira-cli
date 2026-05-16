@@ -38,18 +38,62 @@ func TestNonTTYCommandsDefaultToJSONEnvelope(t *testing.T) {
 	}
 }
 
-func TestJSONFlagOverridesTTYHumanDefault(t *testing.T) {
-	cmd, stdout, _ := outputModeTestCommand(cli.ModePlain)
-	if err := cmd.Root().PersistentFlags().Set("json", "true"); err != nil {
-		t.Fatalf("Set(json) error = %v", err)
-	}
-
+// --output=json resolves to ModeJSON, which command output helpers must
+// honor by emitting the full envelope even when the terminal is a TTY.
+func TestOutputJSONModeForcesEnvelope(t *testing.T) {
+	cmd, stdout, _ := outputModeTestCommand(cli.ModeJSON)
 	if err := writeEnvelope(cmd, "issue.list", map[string]any{"issues": []any{}}); err != nil {
 		t.Fatalf("writeEnvelope() error = %v", err)
 	}
 	got := stdout.String()
-	if !strings.Contains(got, `"meta"`) || !strings.Contains(got, `"errors"`) {
-		t.Fatalf("--json did not force JSON envelope:\n%s", got)
+	if !strings.Contains(got, `"meta"`) || !strings.Contains(got, `"errors"`) || !strings.Contains(got, `"ok"`) {
+		t.Fatalf("--output=json did not force JSON envelope:\n%s", got)
+	}
+}
+
+// --output=compact resolves to ModeCompact, which drops the envelope
+// wrapper and emits the data payload only.
+func TestOutputCompactModeDropsEnvelope(t *testing.T) {
+	cmd, stdout, _ := outputModeTestCommand(cli.ModeCompact)
+	if err := writeEnvelope(cmd, "issue.list", map[string]any{"issues": []any{}}); err != nil {
+		t.Fatalf("writeEnvelope() error = %v", err)
+	}
+	got := stdout.String()
+	if strings.Contains(got, `"meta"`) {
+		t.Fatalf("--output=compact must drop the envelope meta:\n%s", got)
+	}
+}
+
+// ParseOutputMode rejects every removed legacy flag name so a removed
+// flag can never be silently re-aliased into a mode.
+func TestRemovedLegacyFlagNamesAreNotOutputModes(t *testing.T) {
+	for _, name := range []string{"json", "compact", "plain", "raw"} {
+		// json/compact ARE valid --output VALUES; the others must not be.
+		if name == "plain" || name == "raw" {
+			if _, err := cli.ParseOutputMode(name); err == nil {
+				t.Fatalf("removed flag name %q must not be a valid --output mode", name)
+			}
+		}
+	}
+}
+
+// A credential-cleanup warning (e.g. a failed revocation of the old
+// secret after an auth re-point) must survive compact mode. compact has
+// no envelope, so the warning is folded into the data payload — it must
+// never be silently dropped, or a stale secret stays invisible.
+func TestCompactModePreservesCredentialCleanupWarning(t *testing.T) {
+	cmd, stdout, _ := outputModeTestCommand(cli.ModeCompact)
+	recordCredentialWarnings(cmd, []string{"revoking the previous credential failed: keyring locked"})
+
+	if err := writeEnvelope(cmd, "auth.login", map[string]any{"profile": "work", "logged_in": true}); err != nil {
+		t.Fatalf("writeEnvelope() error = %v", err)
+	}
+	got := stdout.String()
+	if strings.Contains(got, `"meta"`) {
+		t.Fatalf("compact output must not carry the envelope:\n%s", got)
+	}
+	if !strings.Contains(got, "revoking the previous credential failed") {
+		t.Fatalf("compact mode dropped the credential cleanup warning:\n%s", got)
 	}
 }
 
@@ -72,8 +116,8 @@ func TestUnsupportedAuthTypeClassifiesAsValidationError(t *testing.T) {
 
 func TestIssueListPlainOutputHidesJQLUnlessDebug(t *testing.T) {
 	cmd, stdout, _ := outputModeTestCommand(cli.ModePlain)
-	if err := cmd.Root().PersistentFlags().Set("plain", "true"); err != nil {
-		t.Fatalf("Set(plain) error = %v", err)
+	if err := cmd.Root().PersistentFlags().Set("output", "human"); err != nil {
+		t.Fatalf("Set(output) error = %v", err)
 	}
 	data := issueListOutputData(cmd, []map[string]any{}, false, "assignee = currentUser() ORDER BY updated DESC")
 	if err := writeEnvelope(cmd, "issue.list", data); err != nil {
@@ -87,8 +131,8 @@ func TestIssueListPlainOutputHidesJQLUnlessDebug(t *testing.T) {
 	}
 
 	cmd, stdout, _ = outputModeTestCommand(cli.ModePlain)
-	if err := cmd.Root().PersistentFlags().Set("plain", "true"); err != nil {
-		t.Fatalf("Set(plain) error = %v", err)
+	if err := cmd.Root().PersistentFlags().Set("output", "human"); err != nil {
+		t.Fatalf("Set(output) error = %v", err)
 	}
 	if err := cmd.Root().PersistentFlags().Set("debug", "true"); err != nil {
 		t.Fatalf("Set(debug) error = %v", err)
@@ -110,8 +154,8 @@ func TestIssueListPlainOutputHidesJQLUnlessDebug(t *testing.T) {
 
 func TestPlainOutputExtractsNestedADFText(t *testing.T) {
 	cmd, stdout, _ := outputModeTestCommand(cli.ModePlain)
-	if err := cmd.Root().PersistentFlags().Set("plain", "true"); err != nil {
-		t.Fatalf("Set(plain) error = %v", err)
+	if err := cmd.Root().PersistentFlags().Set("output", "human"); err != nil {
+		t.Fatalf("Set(output) error = %v", err)
 	}
 	data := map[string]any{
 		"comment": map[string]any{
@@ -160,10 +204,7 @@ func outputModeTestCommand(mode cli.Mode) (*cobra.Command, *bytes.Buffer, *bytes
 	pf := root.PersistentFlags()
 	pf.String("profile", "default", "")
 	pf.String("config", "", "")
-	pf.Bool("json", false, "")
-	pf.Bool("compact", false, "")
-	pf.Bool("plain", false, "")
-	pf.Bool("raw", false, "")
+	pf.String("output", "auto", "")
 	pf.BoolP("interactive", "i", false, "")
 	pf.BoolP("debug", "d", false, "")
 	cmd := &cobra.Command{Use: "issue list"}
@@ -172,6 +213,8 @@ func outputModeTestCommand(mode cli.Mode) (*cobra.Command, *bytes.Buffer, *bytes
 	root.SetErr(stderr)
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
-	cmd.SetContext(context.WithValue(context.Background(), detectorKey, cli.Detection{Mode: mode, IsTTY: mode == cli.ModePlain}))
+	ctx := context.WithValue(context.Background(), detectorKey, cli.Detection{Mode: mode, IsTTY: mode == cli.ModePlain})
+	ctx = withCredentialWarnSink(ctx)
+	cmd.SetContext(ctx)
 	return cmd, stdout, stderr
 }

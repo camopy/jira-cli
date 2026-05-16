@@ -129,7 +129,7 @@ func TestDefaultBoardAppliedWhenNoFlag(t *testing.T) {
 	srv := newFakeSearchServer(t)
 	cfg := jiraConfigWithDefaultBoard(t, srv.srv.URL, "Engineering Sprint")
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "list", "--json")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "list", "--output=json")
 	cmd.Env = append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -165,7 +165,7 @@ func TestDefaultBoardOverriddenByExplicitFlag(t *testing.T) {
 
 	cmd := exec.Command(
 		"go", "run", "../../cmd/jira", "--config", cfg,
-		"issue", "list", "--json",
+		"issue", "list", "--output=json",
 		"--board", "Platform Roadmap",
 	)
 	cmd.Env = append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
@@ -197,7 +197,7 @@ func TestDefaultBoardSuppressedByEmptyFlag(t *testing.T) {
 
 	cmd := exec.Command(
 		"go", "run", "../../cmd/jira", "--config", cfg,
-		"issue", "list", "--json",
+		"issue", "list", "--output=json",
 		"--board", "",
 	)
 	cmd.Env = append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
@@ -236,7 +236,7 @@ func TestDefaultBoardMissingExitsThreeWithPinnedWording(t *testing.T) {
 	cfg := jiraConfigWithDefaultBoard(t, srv.srv.URL, "Nonexistent")
 
 	bin := buildJiraBinary(t)
-	cmd := exec.Command(bin, "--config", cfg, "issue", "list", "--json")
+	cmd := exec.Command(bin, "--config", cfg, "issue", "list", "--output=json")
 	cmd.Env = append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -279,7 +279,7 @@ func TestDefaultBoardAmbiguousReturnsCandidates(t *testing.T) {
 	cfg := jiraConfigWithDefaultBoard(t, srv.srv.URL, "Engineering")
 
 	bin := buildJiraBinary(t)
-	cmd := exec.Command(bin, "--config", cfg, "issue", "list", "--json")
+	cmd := exec.Command(bin, "--config", cfg, "issue", "list", "--output=json")
 	cmd.Env = append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

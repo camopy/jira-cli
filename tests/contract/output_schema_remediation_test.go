@@ -7,7 +7,7 @@ import (
 )
 
 func TestOutputSchemasDescribeNestedEnvelopeAndIssueShapes(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--json", "schema")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=json", "schema")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("schema error = %v\n%s", err, out)
@@ -23,10 +23,28 @@ func TestOutputSchemasDescribeNestedEnvelopeAndIssueShapes(t *testing.T) {
 	}
 
 	envelope := env.Data.OutputSchemas["envelope"]
+	// The envelope is lean: ok, meta, data, errors, warnings.
+	for _, required := range []string{"ok", "meta", "data", "errors", "warnings"} {
+		if !containsString(envelope.Required, required) {
+			t.Fatalf("envelope schema missing required %q: %+v", required, envelope)
+		}
+	}
 	meta := envelope.Properties["meta"]
-	for _, required := range []string{"command", "profile", "timestamp", "request_id"} {
+	// Machine envelopes omit meta.profile entirely; meta requires only
+	// command and timestamp.
+	for _, required := range []string{"command", "timestamp"} {
 		if !containsString(meta.Required, required) {
 			t.Fatalf("envelope meta schema missing required %q: %+v", required, meta)
+		}
+	}
+	if containsString(meta.Required, "profile") {
+		t.Fatalf("envelope meta schema must not require profile: %+v", meta)
+	}
+	// The error schema carries the lean structured-error fields.
+	errSchema := env.Data.OutputSchemas["error"]
+	for _, required := range []string{"type", "code", "message", "hint", "retryable"} {
+		if !containsString(errSchema.Required, required) {
+			t.Fatalf("error schema missing required %q: %+v", required, errSchema)
 		}
 	}
 

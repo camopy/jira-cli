@@ -25,9 +25,9 @@ workday_seconds = 28800
 	}
 	commands := [][]string{
 		{"schema"},
-		{"issue", "list", "--json"},
+		{"issue", "list", "--output=json"},
 		// project_key + issue_type derive from profile defaults; summary supplied via flag.
-		{"issue", "create", "--summary", "hello", "--dry-run", "--no-input", "--json"},
+		{"issue", "create", "--summary", "hello", "--dry-run", "--no-input", "--output=json"},
 		{"worklog", "add", "PROJ-1", "--time-spent", "45m", "--dry-run", "--no-input"},
 	}
 	for _, args := range commands {

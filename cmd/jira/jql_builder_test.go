@@ -92,7 +92,7 @@ workday_seconds = 28800
 		t.Fatalf("WriteFile(config): %v", err)
 	}
 
-	cmd := exec.Command("go", "run", ".", "--config", cfg, "issue", "list", "--as-jql", "--json")
+	cmd := exec.Command("go", "run", ".", "--config", cfg, "issue", "list", "--as-jql", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue list --as-jql error = %v\n%s", err, out)
@@ -111,7 +111,7 @@ workday_seconds = 28800
 }
 
 func TestIssueListAsJQLPrintsBuiltQueryWithoutCallingJira(t *testing.T) {
-	cmd := exec.Command("go", "run", ".", "issue", "list", "--project", "PROJ", "--assignee", "me", "--status", "In Progress", "--as-jql", "--json")
+	cmd := exec.Command("go", "run", ".", "issue", "list", "--project", "PROJ", "--assignee", "me", "--status", "In Progress", "--as-jql", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue list --as-jql error = %v\n%s", err, out)

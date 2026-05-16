@@ -74,7 +74,7 @@ func TestBoardsListColdStartPrimesThenServesFromCache(t *testing.T) {
 	cacheRoot := t.TempDir()
 	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 
-	out, err := runWithEnv(bin, env, "--config", cfg, "boards", "list", "--json")
+	out, err := runWithEnv(bin, env, "--config", cfg, "boards", "list", "--output=json")
 	if err != nil {
 		t.Fatalf("first boards list: %v\n%s", err, out)
 	}
@@ -120,7 +120,7 @@ func TestBoardsListColdStartPrimesThenServesFromCache(t *testing.T) {
 
 	// Second call → from cache, no additional hits to /board.
 	pagesBefore := fake.pages.Load()
-	out2, err := runWithEnv(bin, env, "--config", cfg, "boards", "list", "--json")
+	out2, err := runWithEnv(bin, env, "--config", cfg, "boards", "list", "--output=json")
 	if err != nil {
 		t.Fatalf("second boards list: %v\n%s", err, out2)
 	}
@@ -149,7 +149,7 @@ func TestBoardsListRefreshForcesPrime(t *testing.T) {
 	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 
 	// Prime once.
-	if _, err := runWithEnv(bin, env, "--config", cfg, "boards", "list", "--json"); err != nil {
+	if _, err := runWithEnv(bin, env, "--config", cfg, "boards", "list", "--output=json"); err != nil {
 		t.Fatal(err)
 	}
 	pagesAfterFirst := fake.pages.Load()
@@ -158,7 +158,7 @@ func TestBoardsListRefreshForcesPrime(t *testing.T) {
 	}
 
 	// --refresh → hits /board again.
-	out, err := runWithEnv(bin, env, "--config", cfg, "boards", "list", "--refresh", "--json")
+	out, err := runWithEnv(bin, env, "--config", cfg, "boards", "list", "--refresh", "--output=json")
 	if err != nil {
 		t.Fatalf("--refresh: %v\n%s", err, out)
 	}
@@ -217,7 +217,7 @@ func TestBoardsListSurfacesTruncationWarning(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err := runWithEnv(bin, env, "--config", cfg, "boards", "list", "--json", "--ttl-minutes", "9999")
+	out, err := runWithEnv(bin, env, "--config", cfg, "boards", "list", "--output=json", "--ttl-minutes", "9999")
 	if err != nil {
 		t.Fatalf("boards list (truncated cache): %v\n%s", err, out)
 	}
@@ -266,7 +266,7 @@ func TestBoardsListEmptyInstanceReturnsEmptyArray(t *testing.T) {
 	cacheRoot := t.TempDir()
 	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 
-	out, err := runWithEnv(bin, env, "--config", cfg, "boards", "list", "--json")
+	out, err := runWithEnv(bin, env, "--config", cfg, "boards", "list", "--output=json")
 	if err != nil {
 		t.Fatalf("empty-instance boards list: %v\n%s", err, out)
 	}

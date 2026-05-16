@@ -24,30 +24,30 @@ type flagSchema struct {
 	Default   string `json:"default,omitempty"`
 }
 
-func writeSchema(cmd *cobra.Command, compact bool) error {
+// writeSchema emits the CLI command schema. The envelope vs compact vs
+// human output shape is decided by the resolved --output mode.
+func writeSchema(cmd *cobra.Command) error {
 	root := cmd.Root()
 	data := map[string]any{
 		"commands":       []commandSchema{schemaForCommand(root)},
 		"output_schemas": outputSchemas(),
 	}
-	if compact || useCompactOutput(cmd) {
+	if useCompactOutput(cmd) {
 		return cli.WriteCompact(cmd.OutOrStdout(), data)
 	}
-	if plain, _ := root.PersistentFlags().GetBool("plain"); plain {
+	if usePlainOutput(cmd) {
 		return cli.WritePlain(cmd.OutOrStdout(), data)
 	}
-	if raw, _ := root.PersistentFlags().GetBool("raw"); raw {
-		return cli.WriteRaw(cmd.OutOrStdout(), data)
-	}
 	env := cli.Envelope{
+		OK: true,
 		Meta: cli.Meta{
 			Command:   "schema",
-			Profile:   profileForEnvelope(cmd),
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 			RequestID: cli.NewRequestID(),
 		},
-		Data:   data,
-		Errors: []cli.Error{},
+		Data:     data,
+		Errors:   []cli.Error{},
+		Warnings: []cli.Warning{},
 	}
 	return cli.WriteEnvelope(cmd.OutOrStdout(), env)
 }
@@ -82,16 +82,36 @@ func schemaForCommand(cmd *cobra.Command) commandSchema {
 }
 
 func outputSchemas() map[string]any {
+	errorSchema := map[string]any{
+		"type":     "object",
+		"required": []string{"type", "code", "message", "hint", "retryable"},
+		"properties": map[string]any{
+			"type":                map[string]any{"type": "string"},
+			"code":                map[string]any{"type": "string"},
+			"message":             map[string]any{"type": "string"},
+			"hint":                map[string]any{"type": "string"},
+			"retryable":           map[string]any{"type": "boolean"},
+			"flag":                map[string]any{"type": "string"},
+			"field":               map[string]any{"type": "string"},
+			"path":                map[string]any{"type": "string"},
+			"http_status":         map[string]any{"type": "integer"},
+			"retry_after_seconds": map[string]any{"type": "integer"},
+			"provider":            map[string]any{"type": "string"},
+			"upstream_code":       map[string]any{"type": "string"},
+			"upstream_status":     map[string]any{"type": "integer"},
+		},
+	}
 	envelope := map[string]any{
 		"type":     "object",
-		"required": []string{"meta", "data", "errors"},
+		"required": []string{"ok", "meta", "data", "errors", "warnings"},
 		"properties": map[string]any{
+			"ok": map[string]any{"type": "boolean"},
 			"meta": map[string]any{
 				"type":     "object",
-				"required": []string{"command", "profile", "timestamp", "request_id"},
+				"required": []string{"command", "timestamp"},
 				"properties": map[string]any{
 					"command":    map[string]any{"type": "string"},
-					"profile":    map[string]any{"type": "string"},
+					"exit_code":  map[string]any{"type": "integer", "description": "Present only on failure envelopes."},
 					"timestamp":  map[string]any{"type": "string", "format": "date-time"},
 					"request_id": map[string]any{"type": "string"},
 					"pagination": map[string]any{
@@ -107,16 +127,17 @@ func outputSchemas() map[string]any {
 					},
 				},
 			},
-			"data": map[string]any{"type": "object"},
+			"data": map[string]any{"type": []string{"object", "array", "null"}},
 			"errors": map[string]any{
 				"type":  "array",
-				"items": map[string]any{"type": "object", "required": []string{"type", "message"}},
+				"items": errorSchema,
 			},
+			"warnings": map[string]any{"type": "array"},
 		},
 	}
 	return map[string]any{
 		"envelope": envelope,
-		"error":    map[string]any{"type": "object", "required": []string{"type", "message"}},
+		"error":    errorSchema,
 		"issue.list": map[string]any{
 			"type":     "object",
 			"required": []string{"issues"},

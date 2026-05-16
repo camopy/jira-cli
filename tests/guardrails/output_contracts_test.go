@@ -1,5 +1,5 @@
 // MOTIVATION: output-contract regressions are a recurring upstream
-// class — empty lists exiting non-zero, --plain colliding with --raw,
+// class — empty lists exiting non-zero, conflicting output modes,
 // --debug leaking into stdout. Comments in this file are PROVENANCE
 // ONLY and MUST NOT be a source of implementation, fixtures, wording,
 // or test logic.
@@ -19,7 +19,7 @@ import (
 // covers the end-to-end path.
 func TestEmptyListEnvelopeIsExitZeroWithEmptyArray(t *testing.T) {
 	env := cli.Envelope{
-		Meta:     cli.Meta{Command: "issue.list", Profile: "p", Timestamp: "t"},
+		Meta:     cli.Meta{Command: "issue.list", Timestamp: "t"},
 		Data:     map[string]any{"issues": []any{}, "count": 0},
 		Errors:   []cli.Error{},
 		Warnings: []cli.Warning{},
@@ -57,7 +57,7 @@ func TestEmptyListEnvelopeIsExitZeroWithEmptyArray(t *testing.T) {
 // nothing else is implied.
 func TestEnvelopeShapeIsStable(t *testing.T) {
 	env := cli.Envelope{
-		Meta:     cli.Meta{Command: "x", Profile: "p", Timestamp: "t"},
+		Meta:     cli.Meta{Command: "x", Timestamp: "t"},
 		Data:     map[string]any{"k": "v"},
 		Errors:   []cli.Error{},
 		Warnings: []cli.Warning{},
