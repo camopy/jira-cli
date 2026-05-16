@@ -10,23 +10,44 @@ import (
 
 const keyringService = "jira-cli"
 
+// KeyringStore stores credentials in the OS keyring under a readable
+// "<site-host>/<profile>" entry name. A credential belongs to a site and a
+// profile; the entry name is that identity verbatim, with no digest.
 type KeyringStore struct{}
 
+// Get reads the credential for ref from its "<host>/<profile>" keyring entry.
+// A missing entry is reported as a typed credential-missing error (wrapping
+// ErrCredentialNotFound) that names the profile and points at `auth login`.
+// There is no legacy fallback: a credential stored by a pre-namespacing
+// release under a bare profile name is not auto-resolved — the user logs in
+// once after upgrading.
 func (KeyringStore) Get(_ context.Context, ref SecretRef) (string, error) {
-	v, err := keyring.Get(keyringService, ref.Profile)
-	if err != nil {
-		if errors.Is(err, keyring.ErrNotFound) {
-			return "", ErrCredentialNotFound
-		}
-		return "", fmt.Errorf("keyring get %q: %w", ref.Profile, err)
+	v, err := keyring.Get(keyringService, ref.KeyringName())
+	if err == nil {
+		return v, nil
 	}
-	return v, nil
+	if errors.Is(err, keyring.ErrNotFound) {
+		return "", credentialMissingError(ref.Profile)
+	}
+	return "", fmt.Errorf("keyring get %q: %w", ref.Profile, err)
 }
 
+// Put writes the credential under the "<host>/<profile>" keyring entry.
 func (KeyringStore) Put(_ context.Context, ref SecretRef, secret string) error {
-	return keyring.Set(keyringService, ref.Profile, secret)
+	return keyring.Set(keyringService, ref.KeyringName(), secret)
 }
 
+// Delete removes the credential's "<host>/<profile>" keyring entry — the entry
+// jira-cli itself created. A missing entry is normalized to
+// ErrCredentialNotFound rather than surfaced as a backend failure, so logout
+// is idempotent.
 func (KeyringStore) Delete(_ context.Context, ref SecretRef) error {
-	return keyring.Delete(keyringService, ref.Profile)
+	err := keyring.Delete(keyringService, ref.KeyringName())
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, keyring.ErrNotFound) {
+		return ErrCredentialNotFound
+	}
+	return fmt.Errorf("keyring delete %q: %w", ref.Profile, err)
 }

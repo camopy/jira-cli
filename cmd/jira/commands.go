@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/huh"
@@ -290,13 +292,19 @@ func authLoginCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				credential = strings.TrimSpace(string(b))
+				// Trim only the trailing record delimiter; an explicitly
+				// empty credential is rejected, not stored.
+				credential, err = config.ReadSecret(string(b))
+				if err != nil {
+					return fmt.Errorf("validation: --secret-stdin: %w", err)
+				}
 			}
 			if credentialEnv != "" {
-				credential = os.Getenv(credentialEnv)
-				if credential == "" {
-					return fmt.Errorf("credential environment variable %q is empty", credentialEnv)
+				secret, err := config.ReadSecret(os.Getenv(credentialEnv))
+				if err != nil {
+					return fmt.Errorf("validation: credential environment variable %q: %w", credentialEnv, err)
 				}
+				credential = secret
 			}
 			cfg, err := config.LoadOrInit(config.WithPath(configPath(cmd)))
 			if err != nil {
@@ -306,7 +314,8 @@ func authLoginCommand() *cobra.Command {
 			// Start from the persisted profile (if any) so that fields not
 			// supplied to `auth login` (email, account_id, default_project,
 			// read_only, editor, …) survive a partial update.
-			profile := existingProfileOrDefault(cfg, profileName)
+			previousProfile := existingProfileOrDefault(cfg, profileName)
+			profile := previousProfile
 			if cmd.Flags().Changed("profile-name") || profile.Name == "" {
 				profile.Name = profileName
 			}
@@ -352,13 +361,32 @@ func authLoginCommand() *cobra.Command {
 			if err := cfg.Validate(); err != nil {
 				return err
 			}
+			// Persist the profile, and — when a credential was supplied — the
+			// credential, as one transaction: the credential is staged into
+			// the backend, the config is saved, and a save failure rolls the
+			// credential write back so a failed login never leaves an orphaned
+			// secret in the keyring or 1Password.
+			saveConfig := func() error { return config.Save(configPath(cmd), cfg) }
 			if credential != "" {
-				if err := credentialStoreFor(targetBackend).Put(cmd.Context(), secretRefFor(profile, targetBackend), credential); err != nil {
+				ref, refErr := secretRefFor(profile, targetBackend)
+				if refErr != nil {
+					return refErr
+				}
+				if err := config.StoreCredentialTransactionally(cmd.Context(), credentialStoreFor(targetBackend), ref, credential, saveConfig); err != nil {
 					return err
 				}
-			}
-			if err := config.Save(configPath(cmd), cfg); err != nil {
+			} else if err := saveConfig(); err != nil {
 				return err
+			}
+			// When this login re-pointed an existing profile at a different
+			// credential identity (a new site, a backend switch, a different
+			// 1Password account/vault/item), the credential under the OLD
+			// identity is now stale — revoke it so no live secret lingers in
+			// the old keyring entry / old 1Password item. The new credential
+			// and config save have already committed, so a cleanup failure is
+			// surfaced as a note rather than failing the login.
+			if note := revokeOldCredentialOnRelogin(cmd, previousProfile, profile); note != "" {
+				recordCredentialWarnings(cmd, []string{note})
 			}
 			return writeEnvelope(cmd, "auth.login", map[string]any{
 				"profile":             profileName,
@@ -382,6 +410,12 @@ func authLoginCommand() *cobra.Command {
 	cmd.Flags().StringVar(&credentialEnv, "credential-env", "", "Read credential from environment variable")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read auth profile metadata from JSON file")
 	cmd.Flags().BoolVar(&noInput, "no-input", false, "Run without interactive prompts")
+	// --secret-stdin and --credential-env both supply the credential. Passing
+	// both is a syntactic conflict: one would silently win by processing
+	// order, so reject it in Cobra validation before any source is read.
+	// --json-input carries only profile metadata, never the credential, so it
+	// is not part of this group.
+	cmd.MarkFlagsMutuallyExclusive("secret-stdin", "credential-env")
 	clib.Extend(cmd.Flags().Lookup("profile-name"), clib.FlagExtra{Placeholder: "NAME", Complete: "predictor=profile"})
 	clib.Extend(cmd.Flags().Lookup("auth-type"), clib.FlagExtra{Placeholder: "TYPE", Enum: []string{"token", "basic", "pat", "mtls"}, EnumDefault: "token"})
 	clib.Extend(cmd.Flags().Lookup("backend"), clib.FlagExtra{Placeholder: "BACKEND", Enum: []string{"keyring", "1password"}, EnumDefault: "keyring"})
@@ -470,7 +504,7 @@ func authLoginQuestions() []authLoginQuestion {
 			ID:          "onepassword_account",
 			Kind:        authLoginQuestionInput,
 			Title:       "1Password account",
-			Description: "Desktop app account name for SDK auth. Leave blank to use OP_SERVICE_ACCOUNT_TOKEN or the op CLI fallback.",
+			Description: "Desktop app account name for SDK auth. Leave blank to use OP_SERVICE_ACCOUNT_TOKEN.",
 		},
 		{
 			ID:          "vault",
@@ -568,7 +602,7 @@ func authLoginForm(profileName, baseURL, authType, account, backend, onePassword
 		huh.NewGroup(
 			huh.NewInput().
 				Title("1Password account").
-				Description("Desktop app account name for SDK auth. Leave blank to use OP_SERVICE_ACCOUNT_TOKEN or the op CLI fallback.").
+				Description("Desktop app account name for SDK auth. Leave blank to use OP_SERVICE_ACCOUNT_TOKEN.").
 				Value(onePasswordAccount),
 			huh.NewInput().
 				Title("1Password vault").
@@ -672,17 +706,22 @@ to skip remote calls and run only the local credential check.`,
 			}
 			profiles := make([]map[string]any, 0, len(cfg.Profiles))
 			for _, profile := range cfg.Profiles {
+				entry := map[string]any{"profile": profile.Name}
+				ref, refErr := secretRefFor(profile, profile.SecretBackend)
+				if refErr != nil {
+					entry["valid"] = false
+					entry["error"] = refErr.Error()
+					profiles = append(profiles, entry)
+					continue
+				}
 				cred := config.CredentialStatus(
 					cmd.Context(),
 					credentialStoreFor(profile.SecretBackend),
-					secretRefFor(profile, profile.SecretBackend),
+					ref,
 				)
-				entry := map[string]any{
-					"profile":  cred.Profile,
-					"valid":    cred.Valid,
-					"source":   cred.Source,
-					"redacted": cred.Redacted,
-				}
+				entry["valid"] = cred.Valid
+				entry["source"] = cred.Source
+				entry["redacted"] = cred.Redacted
 				if cred.Error != "" {
 					entry["error"] = cred.Error
 				}
@@ -711,23 +750,19 @@ to skip remote calls and run only the local credential check.`,
 // the user can see what went wrong without rerunning anything.
 func probeRemoteAuth(cmd *cobra.Command, profile config.Profile, projectKey string) map[string]any {
 	out := map[string]any{"site": profile.BaseURL}
-	cmd.SetContext(cmd.Context())
 
-	// Build a transient client bound to this profile (jiraClientForCommand
-	// is profile-aware via --profile, but we want every profile here).
-	secret, err := config.ResolveCredential(cmd.Context(), credentialStoreFor(profile.SecretBackend), secretRefFor(profile, profile.SecretBackend))
+	// Route the probe through the same client constructor normal commands
+	// use, so the per-profile request timeout and an mTLS client certificate
+	// both apply to the probe's live calls rather than silently defaulting.
+	client, _, ok, err := jiraClientForProfile(cmd, profile)
 	if err != nil {
 		out["error"] = config.SanitizeCredentialError(err)
 		return out
 	}
-	opts := []jira.Option{jira.WithBaseURL(profile.BaseURL)}
-	switch profile.AuthType {
-	case config.AuthTypeBasic, config.AuthTypeToken:
-		opts = append(opts, jira.WithBasicAuth(firstNonEmpty(profile.Email, profile.Username), secret))
-	case config.AuthTypePAT:
-		opts = append(opts, jira.WithBearerToken(secret))
+	if !ok || client == nil {
+		out["error"] = "profile has no base URL to probe"
+		return out
 	}
-	client := jira.NewClient(opts...)
 	user := jira.NewUserService(client)
 
 	// /myself reveals scope-level auth issues (granular tokens missing
@@ -802,13 +837,20 @@ func authLogoutCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			err = credentialStoreFor(profile.SecretBackend).Delete(cmd.Context(), secretRefFor(profile, profile.SecretBackend))
-			removed := err == nil
-			if errors.Is(err, config.ErrCredentialNotFound) {
-				err = nil
-			}
+			ref, err := secretRefFor(profile, profile.SecretBackend)
 			if err != nil {
 				return err
+			}
+			// Revoke the credential from its backend. An absent credential is
+			// not an error: removed=false reports there was nothing to remove.
+			// A note is returned when revocation left a user-named 1Password
+			// item in place; surface it as an informational warning.
+			removed, note, err := config.RevokeProfileCredential(cmd.Context(), credentialStoreFor(profile.SecretBackend), ref)
+			if err != nil {
+				return err
+			}
+			if note != "" {
+				recordCredentialWarnings(cmd, []string{note})
 			}
 			return writeEnvelope(cmd, "auth.logout", map[string]any{"profile": profile.Name, "removed": removed})
 		},
@@ -850,7 +892,10 @@ func authRefreshCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			profile := activeProfile(cmd, cfg)
+			profile, err := cfg.ResolveProfile(requestedProfile(cmd))
+			if err != nil {
+				return err
+			}
 			data := map[string]any{
 				"profile":   profile.Name,
 				"auth_type": string(profile.AuthType),
@@ -889,7 +934,23 @@ func authMigrateCommand() *cobra.Command {
 				}
 				profileName = resolved.Name
 			}
+			// --item names ONE 1Password item; applying it across a whole
+			// batch would point every profile.s credential at a single
+			// vault item. Require a single selected profile when --item is set.
+			if item != "" && profileName == "" && len(cfg.Profiles) > 1 {
+				return fmt.Errorf("--item names a single 1Password item; use --profile to select one profile, or omit --item to let each profile use its own item")
+			}
 			ops := make([]map[string]any, 0, len(cfg.Profiles))
+			// migrations collects the profiles that need a real backend
+			// switch. The destination write for every one of them is staged
+			// before the single config.Save, so a save failure rolls the
+			// whole batch back rather than stranding new secrets. Each
+			// CredentialMigration carries its profile index, so migrations is
+			// the single ordered source of truth for which profiles flip.
+			// migratingOps holds the matching op result entries, appended in
+			// lockstep with migrations so the two never drift.
+			var migrations []config.CredentialMigration
+			var migratingOps []map[string]any
 			for i := range cfg.Profiles {
 				profile := &cfg.Profiles[i]
 				if profileName != "" && profile.Name != profileName {
@@ -917,9 +978,12 @@ func authMigrateCommand() *cobra.Command {
 					if item != "" {
 						profile.Item = item
 					}
-					if profile.Item == "" {
-						profile.Item = "jira-cli-" + profile.Name
-					}
+					// Leave profile.Item empty when the user did not name an
+					// item: CredentialIdentity derives the default name and
+					// marks the resulting 1Password item jira-cli-owned, so a
+					// later migrate-away can safely delete it. Persisting the
+					// default name would make jira-cli's own item look
+					// user-named and strand it on the next migration.
 					if profile.Vault == "" {
 						op["error"] = "1Password migration requires --vault or existing profile vault metadata"
 						ops = append(ops, op)
@@ -931,25 +995,72 @@ func authMigrateCommand() *cobra.Command {
 					ops = append(ops, op)
 					continue
 				}
-				if err := migrateCredential(cmd.Context(), *profile, target); err != nil {
-					op["error"] = err.Error()
+				sourceRef, refErr := secretRefFor(*profile, profile.SecretBackend)
+				if refErr != nil {
+					op["error"] = refErr.Error()
 					ops = append(ops, op)
 					continue
 				}
-				profile.SecretBackend = target
-				op["migrated"] = true
+				destRef, refErr := secretRefFor(*profile, target)
+				if refErr != nil {
+					op["error"] = refErr.Error()
+					ops = append(ops, op)
+					continue
+				}
+				migrations = append(migrations, config.CredentialMigration{
+					Profile:      profile.Name,
+					ProfileIndex: i,
+					Source:       credentialStoreFor(profile.SecretBackend),
+					Destination:  credentialStoreFor(target),
+					SourceRef:    sourceRef,
+					DestRef:      destRef,
+				})
+				migratingOps = append(migratingOps, op)
 				ops = append(ops, op)
 			}
-			if !dryRun {
+			cleanupFailures := []string{}
+			cleanupNotes := []string{}
+			if !dryRun && len(migrations) > 0 {
+				report, migErr := config.MigrateCredentials(cmd.Context(), migrations, func() error {
+					// The destination secrets are staged; persist the new
+					// backend metadata. Only a durable save here lets the
+					// source secrets be cleaned up.
+					applyMigratedBackends(cfg, migrations, target)
+					return config.Save(configPath(cmd), cfg)
+				})
+				if migErr != nil {
+					return fmt.Errorf("auth migrate: %w", migErr)
+				}
+				for _, op := range migratingOps {
+					op["migrated"] = true
+				}
+				for _, failure := range report.CleanupFailures {
+					cleanupFailures = append(cleanupFailures, failure.Profile)
+				}
+				// A cleanup note marks source storage left in place because
+				// jira-cli does not own it. Surface it to the user so they
+				// can remove the old credential by hand if they want to.
+				for _, note := range report.CleanupNotes {
+					cleanupNotes = append(cleanupNotes, note.Message)
+				}
+				recordCredentialWarnings(cmd, cleanupNotes)
+			} else if !dryRun {
 				if err := config.Save(configPath(cmd), cfg); err != nil {
 					return err
 				}
 			}
-			return writeEnvelope(cmd, "auth.migrate", map[string]any{
+			data := map[string]any{
 				"target_backend": string(target),
 				"dry_run":        dryRun,
 				"profiles":       ops,
-			})
+			}
+			if len(cleanupFailures) > 0 {
+				data["cleanup_failures"] = cleanupFailures
+			}
+			if len(cleanupNotes) > 0 {
+				data["cleanup_notes"] = cleanupNotes
+			}
+			return writeEnvelope(cmd, "auth.migrate", data)
 		},
 	}
 	cmd.Flags().StringVar(&backend, "backend", string(config.SecretBackendKeyring), "Target secret backend: keyring or 1password")
@@ -971,8 +1082,15 @@ func authTokenCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			profile := activeProfile(cmd, cfg)
-			status := config.CredentialStatus(cmd.Context(), credentialStoreFor(profile.SecretBackend), secretRefFor(profile, profile.SecretBackend))
+			profile, err := cfg.ResolveProfile(requestedProfile(cmd))
+			if err != nil {
+				return err
+			}
+			ref, refErr := secretRefFor(profile, profile.SecretBackend)
+			if refErr != nil {
+				return refErr
+			}
+			status := config.CredentialStatus(cmd.Context(), credentialStoreFor(profile.SecretBackend), ref)
 			return writeEnvelope(cmd, "auth.token", map[string]any{
 				"profile":             profile.Name,
 				"source":              status.Source,
@@ -2025,6 +2143,13 @@ func writeEnvelope(cmd *cobra.Command, command string, data any) error {
 // fields outside the cli.Warning struct's Type/Message/Field/Path/etc.
 // surface — see contracts/envelope-shapes.md.
 func writeEnvelopeWithRawWarnings(cmd *cobra.Command, command string, data any, warnings []map[string]any) error {
+	for _, cw := range collectedCredentialWarnings(cmd) {
+		warnings = append(warnings, map[string]any{
+			"type":    cw.Type,
+			"message": cw.Message,
+			"lossy":   cw.Lossy,
+		})
+	}
 	if useCompactOutput(cmd) {
 		payload := map[string]any{"data": data, "warnings": rawWarningsOrEmpty(warnings), "errors": []any{}}
 		return cli.WriteCompact(cmd.OutOrStdout(), payload)
@@ -2065,6 +2190,7 @@ func writeEnvelopeWithWarnings(cmd *cobra.Command, command string, data any, war
 	for _, w := range warnings {
 		cliWarnings = append(cliWarnings, cli.WarningFrom(w))
 	}
+	cliWarnings = append(cliWarnings, collectedCredentialWarnings(cmd)...)
 	if useCompactOutput(cmd) {
 		return cli.WriteCompact(cmd.OutOrStdout(), data)
 	}
@@ -2108,13 +2234,15 @@ func writeEnvelopeWithResponse(cmd *cobra.Command, command string, data any, res
 // writeEnvelopeWithWarnings's TTY routing for plain mode so the data
 // stays on stdout and warnings mirror to stderr as clog WRN lines.
 func writeEnvelopeWithResponseAndWarnings(cmd *cobra.Command, command string, data any, resp *jira.Response, warnings []adf.Warning) error {
+	if resp == nil {
+		// writeEnvelopeWithWarnings collects the credential warnings itself.
+		return writeEnvelopeWithWarnings(cmd, command, data, warnings)
+	}
 	cliWarnings := make([]cli.Warning, 0, len(warnings))
 	for _, w := range warnings {
 		cliWarnings = append(cliWarnings, cli.WarningFrom(w))
 	}
-	if resp == nil {
-		return writeEnvelopeWithWarnings(cmd, command, data, warnings)
-	}
+	cliWarnings = append(cliWarnings, collectedCredentialWarnings(cmd)...)
 	if useCompactOutput(cmd) {
 		if m, ok := data.(map[string]any); ok {
 			m["pagination"] = paginationFromResponse(resp)
@@ -2785,6 +2913,85 @@ func credentialStoreFor(backend config.SecretBackend) config.CredentialStore {
 	return config.KeyringStore{}
 }
 
+// credentialWarnSink is a per-command collector for credential notices (a
+// migration cleanup note, a kept user-named 1Password item on logout, an
+// orphaned credential after a site change). It is installed into the command
+// context by PersistentPreRunE, so each command invocation owns a fresh,
+// isolated sink — a notice raised by one command can never reach another.
+type credentialWarnSink struct {
+	mu    sync.Mutex
+	warns []string
+}
+
+func (s *credentialWarnSink) add(warns []string) {
+	if len(warns) == 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, w := range warns {
+		if !slices.Contains(s.warns, w) {
+			s.warns = append(s.warns, w)
+		}
+	}
+}
+
+func (s *credentialWarnSink) collected() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.warns)
+}
+
+// withCredentialWarnSink returns a context carrying a fresh credential-warning
+// sink. PersistentPreRunE installs one per command invocation.
+func withCredentialWarnSink(ctx context.Context) context.Context {
+	return context.WithValue(ctx, credentialWarnSinkKey, &credentialWarnSink{})
+}
+
+// recordCredentialWarnings appends resolution warnings to the command's sink,
+// if one is installed. Commands without a sink (direct test calls) drop the
+// warnings silently — they are diagnostics, not results.
+func recordCredentialWarnings(cmd *cobra.Command, warns []string) {
+	if len(warns) == 0 || cmd == nil {
+		return
+	}
+	if sink, ok := cmd.Context().Value(credentialWarnSinkKey).(*credentialWarnSink); ok {
+		sink.add(warns)
+	}
+}
+
+// collectedCredentialWarnings returns the credential warnings recorded for the
+// current command as envelope warnings. The sink is per-command, so this
+// only ever returns warnings from the command currently executing.
+func collectedCredentialWarnings(cmd *cobra.Command) []cli.Warning {
+	if cmd == nil {
+		return nil
+	}
+	sink, ok := cmd.Context().Value(credentialWarnSinkKey).(*credentialWarnSink)
+	if !ok {
+		return nil
+	}
+	return credentialWarningsToEnvelope(sink.collected())
+}
+
+// credentialWarningsToEnvelope renders credential notices — a migration
+// cleanup note, a kept user-named 1Password item, an orphaned credential
+// after a site change — as envelope warnings under one informational type.
+func credentialWarningsToEnvelope(msgs []string) []cli.Warning {
+	if len(msgs) == 0 {
+		return nil
+	}
+	out := make([]cli.Warning, 0, len(msgs))
+	for _, msg := range msgs {
+		out = append(out, cli.Warning{
+			Type:    "credential_notice",
+			Message: msg,
+			Lossy:   false,
+		})
+	}
+	return out
+}
+
 // existingProfileOrDefault returns a copy of the named profile from cfg if it
 // exists, or a new Profile with the given name. Used by authLoginCommand to
 // merge a partial update instead of wholesale replacing the persisted profile
@@ -2816,31 +3023,73 @@ func profileBaseURLEnvVar(name string) string {
 	return "JIRA_PROFILE_" + strings.ToUpper(strings.ReplaceAll(name, "-", "_")) + "_BASE_URL"
 }
 
-func secretRefFor(profile config.Profile, backend config.SecretBackend) config.SecretRef {
-	item := profile.Item
-	if item == "" {
-		item = "jira-cli-" + profile.Name
-	}
-	return config.SecretRef{
-		Profile: profile.Name,
-		Backend: backend,
-		Account: profile.OnePasswordAccount,
-		Vault:   profile.Vault,
-		Item:    item,
-	}
+// secretRefFor derives the credential identity for a profile under a given
+// backend. The credential is keyed by the profile's Jira site host and name;
+// an unsafe profile name is rejected here rather than producing a malformed
+// keyring entry.
+func secretRefFor(profile config.Profile, backend config.SecretBackend) (config.SecretRef, error) {
+	scoped := profile
+	scoped.SecretBackend = backend
+	return config.CredentialIdentity(scoped)
 }
 
-func migrateCredential(ctx context.Context, profile config.Profile, target config.SecretBackend) error {
-	source := credentialStoreFor(profile.SecretBackend)
-	destination := credentialStoreFor(target)
-	secret, err := config.ResolveCredential(ctx, source, secretRefFor(profile, profile.SecretBackend))
+// revokeOldCredentialOnRelogin revokes the previous credential after an auth
+// login re-points an existing profile at a different credential identity (a
+// new site, a backend switch, a different 1Password account/vault/item). The
+// old credential would otherwise linger as a live secret in the old keyring
+// entry / old 1Password item. It is called only after the new credential
+// write and config save have committed.
+//
+// It returns an informational note when cleanup of the old credential failed;
+// an empty string means there was nothing to revoke (fresh profile, unchanged
+// identity) or the revocation succeeded. Cleanup failure is surfaced, never
+// fatal — the login itself already succeeded.
+func revokeOldCredentialOnRelogin(cmd *cobra.Command, previous, updated config.Profile) string {
+	// A profile that was never persisted (no prior base_url) has no old
+	// credential to revoke.
+	if previous.BaseURL == "" {
+		return ""
+	}
+	oldRef, err := secretRefFor(previous, previous.SecretBackend)
 	if err != nil {
-		return err
+		return ""
 	}
-	if err := destination.Put(ctx, secretRefFor(profile, target), secret); err != nil {
-		return err
+	newRef, err := secretRefFor(updated, updated.SecretBackend)
+	if err != nil {
+		return ""
 	}
-	return source.Delete(ctx, secretRefFor(profile, profile.SecretBackend))
+	return revokeOldCredential(cmd.Context(), credentialStoreFor(previous.SecretBackend), oldRef, newRef)
+}
+
+// revokeOldCredential revokes the credential at oldRef when it addresses
+// storage different from newRef. For the keyring backend the old entry is
+// deleted; for 1Password the old item's managed credential field is stripped
+// (the item itself is never destroyed). When the identities are the same it
+// does nothing — the credential was not re-pointed. A cleanup failure is
+// returned as an informational note, not an error: the login already
+// succeeded and must not be undone by a failed best-effort cleanup.
+func revokeOldCredential(ctx context.Context, store config.CredentialStore, oldRef, newRef config.SecretRef) string {
+	if !config.CredentialIdentitiesDiffer(oldRef, newRef) {
+		return ""
+	}
+	if _, _, err := config.RevokeProfileCredential(ctx, store, oldRef); err != nil {
+		return fmt.Sprintf(
+			"the previous credential for profile %q (%s, site %s) could not be removed: %v — remove it manually",
+			oldRef.Profile, oldRef.Backend, oldRef.Host, err,
+		)
+	}
+	return ""
+}
+
+// applyMigratedBackends flips secret_backend to target on exactly the
+// profiles named by migrations, located by the ProfileIndex each migration
+// carries. Profiles not in the batch are left untouched.
+func applyMigratedBackends(cfg *config.Config, migrations []config.CredentialMigration, target config.SecretBackend) {
+	for _, m := range migrations {
+		if m.ProfileIndex >= 0 && m.ProfileIndex < len(cfg.Profiles) {
+			cfg.Profiles[m.ProfileIndex].SecretBackend = target
+		}
+	}
 }
 
 func jiraClientForCommand(cmd *cobra.Command) (*jira.Client, config.Profile, bool, error) {
@@ -2882,7 +3131,11 @@ func jiraClientForProfile(cmd *cobra.Command, profile config.Profile) (*jira.Cli
 		}
 		opts = append(opts, jira.WithHTTPClient(httpClient))
 	} else {
-		secret, secretErr := config.ResolveCredential(cmd.Context(), credentialStoreFor(profile.SecretBackend), secretRefFor(profile, profile.SecretBackend))
+		ref, refErr := secretRefFor(profile, profile.SecretBackend)
+		if refErr != nil {
+			return nil, profile, false, refErr
+		}
+		secret, secretErr := config.ResolveCredential(cmd.Context(), credentialStoreFor(profile.SecretBackend), ref)
 		if secretErr != nil && !isLocalBaseURL(profile.BaseURL) {
 			return nil, profile, false, fmt.Errorf("credential for profile %q is required: %w", profile.Name, secretErr)
 		}

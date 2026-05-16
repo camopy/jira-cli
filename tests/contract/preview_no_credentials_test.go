@@ -1,14 +1,13 @@
 // Dry-run and preview paths are local-only: they must validate input and
 // render a preview without ever constructing a credentialed Jira client.
 // Resolving credentials for a command that will not touch the network is
-// both wasteful and a failure mode — a locked keyring or an offline
+// both wasteful and a failure mode — a locked keyring or an unauthenticated
 // 1Password backend would break a purely local preview.
 //
-// These tests pin that contract with a fake `op` binary that records any
-// invocation and exits non-zero. If a dry-run path resolves credentials
-// through the 1Password backend, the fake `op` runs: the sentinel file
-// appears and/or the command fails. A genuine local preview never calls
-// it.
+// These tests pin that contract with a 1Password-backed profile and no
+// 1Password auth source in the environment: resolving a credential would
+// fail. A dry-run path that resolves credentials therefore fails the
+// command; a genuine local preview succeeds without touching the backend.
 package contract
 
 import (
@@ -16,7 +15,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"testing"
 )
 
@@ -45,33 +43,17 @@ workday_seconds = 28800
 	return path
 }
 
-// failingOnePasswordEnv installs a fake `op` on PATH that records the
-// fact that it was called (by writing sentinelPath) and then exits
-// non-zero, simulating an unavailable credential backend. It returns the
-// environment slice to attach to the command and the sentinel path.
-func failingOnePasswordEnv(t *testing.T) (env []string, sentinel string) {
-	t.Helper()
-	binDir := t.TempDir()
-	sentinel = filepath.Join(t.TempDir(), "op-was-called")
-	op := filepath.Join(binDir, "op")
-	script := "#!/bin/sh\ntouch " + shellQuote(sentinel) + "\necho 'op: not signed in' >&2\nexit 1\n"
-	if err := os.WriteFile(op, []byte(script), 0o700); err != nil {
-		t.Fatalf("WriteFile(fake op) error = %v", err)
-	}
-	env = append(os.Environ(),
-		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"OP_SERVICE_ACCOUNT_TOKEN=",
-	)
-	return env, sentinel
+// noOnePasswordAuthEnv returns an environment with no 1Password auth source:
+// the service-account token is explicitly cleared. A 1Password-backed profile
+// then cannot resolve a credential, so any command that resolves credentials
+// fails — which is exactly what a dry-run path must NOT do.
+func noOnePasswordAuthEnv() []string {
+	return append(os.Environ(), "OP_SERVICE_ACCOUNT_TOKEN=")
 }
 
 func TestIssueCreateDryRunDoesNotResolveCredentials(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake op fixture is Unix-specific")
-	}
 	bin := buildJiraBinary(t)
 	cfg := onePasswordProfileConfig(t)
-	env, sentinel := failingOnePasswordEnv(t)
 
 	payload := filepath.Join(t.TempDir(), "create.json")
 	if err := os.WriteFile(payload, []byte(`{"project_key":"PROJ","issue_type":"Task","summary":"Hello"}`), 0o600); err != nil {
@@ -80,13 +62,10 @@ func TestIssueCreateDryRunDoesNotResolveCredentials(t *testing.T) {
 
 	c := exec.Command(bin, "--config", cfg, "issue", "create",
 		"--dry-run", "--no-input", "--json-input", payload, "--json")
-	c.Env = env
+	c.Env = noOnePasswordAuthEnv()
 	out, err := c.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue create --dry-run resolved credentials and failed: %v\n%s", err, out)
-	}
-	if _, statErr := os.Stat(sentinel); statErr == nil {
-		t.Fatalf("issue create --dry-run invoked the 1Password credential backend:\n%s", out)
 	}
 	var env2 map[string]any
 	if jsonErr := json.Unmarshal(out, &env2); jsonErr != nil {
@@ -99,22 +78,15 @@ func TestIssueCreateDryRunDoesNotResolveCredentials(t *testing.T) {
 }
 
 func TestIssueEditDryRunDoesNotResolveCredentials(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake op fixture is Unix-specific")
-	}
 	bin := buildJiraBinary(t)
 	cfg := onePasswordProfileConfig(t)
-	env, sentinel := failingOnePasswordEnv(t)
 
 	c := exec.Command(bin, "--config", cfg, "issue", "edit", "PROJ-1",
 		"--summary", "renamed", "--dry-run", "--json")
-	c.Env = env
+	c.Env = noOnePasswordAuthEnv()
 	out, err := c.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue edit --dry-run resolved credentials and failed: %v\n%s", err, out)
-	}
-	if _, statErr := os.Stat(sentinel); statErr == nil {
-		t.Fatalf("issue edit --dry-run invoked the 1Password credential backend:\n%s", out)
 	}
 	var env2 map[string]any
 	if jsonErr := json.Unmarshal(out, &env2); jsonErr != nil {

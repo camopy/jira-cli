@@ -21,7 +21,11 @@ import (
 
 type contextKey string
 
-const detectorKey contextKey = "detector"
+const (
+	detectorKey contextKey = "detector"
+	// credentialWarnSinkKey carries the per-command credential-warning sink.
+	credentialWarnSinkKey contextKey = "credential-warn-sink"
+)
 
 var rootCmd = &cobra.Command{
 	Use:   "jira",
@@ -74,7 +78,12 @@ $ jira search saved my-open-bugs`,
 		if ctx == nil {
 			ctx = context.Background()
 		}
-		cmd.SetContext(context.WithValue(ctx, detectorKey, det))
+		ctx = context.WithValue(ctx, detectorKey, det)
+		// Install a fresh credential-warning sink for this command invocation
+		// so a legacy-keyring-fallback warning is scoped to the command that
+		// produced it and cannot bleed into another.
+		ctx = withCredentialWarnSink(ctx)
+		cmd.SetContext(ctx)
 		event := clog.Debug().Str("mode", string(det.Mode))
 		if det.AgentName != "" {
 			event.Str("agent", det.AgentName)

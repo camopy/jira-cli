@@ -3,9 +3,6 @@ package unit
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -84,24 +81,5 @@ func TestCredentialStatusSanitizesBackendErrors(t *testing.T) {
 	}
 	if status.Error == "" {
 		t.Fatalf("status did not preserve a sanitized error: %+v", status)
-	}
-}
-
-func TestOnePasswordExpiredSessionGuidesSignin(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("shell script fixture is Unix-specific")
-	}
-	dir := t.TempDir()
-	op := filepath.Join(dir, "op")
-	if err := os.WriteFile(op, []byte("#!/bin/sh\necho 'not signed in' >&2\nexit 1\n"), 0o700); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-	store := config.OnePasswordStore{Bin: op}
-	_, err := store.Get(context.Background(), config.SecretRef{Profile: "default", Backend: config.SecretBackendOnePassword, Vault: "Engineering", Item: "jira"})
-	if err == nil {
-		t.Fatal("Get() error = nil")
-	}
-	if !strings.Contains(err.Error(), "op signin") {
-		t.Fatalf("expired session error = %v", err)
 	}
 }

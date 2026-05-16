@@ -148,6 +148,9 @@ func (c *Config) Validate() error {
 		if p.SecretBackend == "" {
 			p.SecretBackend = SecretBackendKeyring
 		}
+		if !supportedSecretBackend(p.SecretBackend) {
+			return fmt.Errorf("profile %q unsupported secret_backend %q", p.Name, p.SecretBackend)
+		}
 		if p.RefreshInterval <= 0 {
 			p.RefreshInterval = DefaultRefreshIntervalSeconds
 		}
@@ -170,6 +173,15 @@ func (c *Config) Validate() error {
 func supportedAuthType(authType AuthType) bool {
 	switch authType {
 	case AuthTypeToken, AuthTypeBasic, AuthTypePAT, AuthTypeMTLS:
+		return true
+	default:
+		return false
+	}
+}
+
+func supportedSecretBackend(backend SecretBackend) bool {
+	switch backend {
+	case SecretBackendKeyring, SecretBackendOnePassword:
 		return true
 	default:
 		return false

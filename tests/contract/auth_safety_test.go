@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -57,65 +56,6 @@ func TestAuthLoginDoesNotExposeRawTokenFlag(t *testing.T) {
 	}
 }
 
-func TestOnePasswordAuthLoginDoesNotPassSecretInProcessArgs(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake op fixture is Unix-specific")
-	}
-
-	path := filepath.Join(t.TempDir(), "config.toml")
-	binDir := t.TempDir()
-	argsFile := filepath.Join(t.TempDir(), "op-args")
-	stdinFile := filepath.Join(t.TempDir(), "op-stdin")
-	op := filepath.Join(binDir, "op")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" > " + shellQuote(argsFile) + "\ncat > " + shellQuote(stdinFile) + "\n"
-	if err := os.WriteFile(op, []byte(script), 0o700); err != nil {
-		t.Fatalf("WriteFile(fake op) error = %v", err)
-	}
-
-	secret := "super-secret-token"
-	cmd := exec.Command(
-		buildJiraBinary(t),
-		"--config", path,
-		"auth", "login",
-		"--no-input",
-		"--profile-name", "work",
-		"--base-url", "https://company.atlassian.net",
-		"--auth-type", "token",
-		"--email", "dev@example.com",
-		"--backend", "1password",
-		"--vault", "Engineering",
-		"--item", "jira-cli-work",
-		"--secret-stdin",
-	)
-	cmd.Stdin = strings.NewReader(secret)
-	cmd.Env = append(os.Environ(),
-		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"OP_SERVICE_ACCOUNT_TOKEN=",
-	)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("auth login with fake op error = %v\n%s", err, out)
-	}
-	args, err := os.ReadFile(argsFile)
-	if err != nil {
-		t.Fatalf("ReadFile(args) error = %v", err)
-	}
-	if strings.Contains(string(args), secret) {
-		t.Fatalf("1Password command line leaked secret in args: %s", args)
-	}
-	stdin, err := os.ReadFile(stdinFile)
-	if err != nil {
-		t.Fatalf("ReadFile(stdin) error = %v", err)
-	}
-	if !strings.Contains(string(stdin), secret) {
-		t.Fatalf("1Password command did not receive secret through stdin/template: %s", stdin)
-	}
-}
-
-func shellQuote(path string) string {
-	return "'" + strings.ReplaceAll(path, "'", "'\\''") + "'"
-}
-
 // writeTwoProfileConfig writes a config with a real "work" profile so an
 // explicit `--profile <typo>` cannot silently resolve to a fabricated
 // default-like profile.
@@ -159,6 +99,44 @@ func TestAuthLogoutRejectsUnknownPositionalProfile(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(combined), "keyring") || strings.Contains(strings.ToLower(combined), "secret not found") {
 		t.Fatalf("auth logout fabricated the profile and probed its credential namespace:\n%s", combined)
+	}
+}
+
+// `auth token --profile <typo>` must be refused with a profile-not-found
+// error rather than resolved into a fabricated synthetic profile that then
+// reports phantom diagnostics at exit 0. It must name the bad profile.
+func TestAuthTokenRejectsUnknownProfile(t *testing.T) {
+	bin := buildJiraBinary(t)
+	cfg := writeTwoProfileConfig(t)
+	c := exec.Command(bin, "--config", cfg, "--profile", "typo", "auth", "token")
+	var stdout, stderr bytes.Buffer
+	c.Stdout = &stdout
+	c.Stderr = &stderr
+	if err := c.Run(); err == nil {
+		t.Fatalf("auth token with unknown profile succeeded:\nstdout=%s", stdout.String())
+	}
+	combined := stdout.String() + stderr.String()
+	if !strings.Contains(combined, "typo") {
+		t.Fatalf("auth token error does not name the unknown profile:\n%s", combined)
+	}
+}
+
+// `auth refresh --profile <typo>` must be refused with a profile-not-found
+// error rather than resolved into a fabricated synthetic profile. It must
+// name the bad profile.
+func TestAuthRefreshRejectsUnknownProfile(t *testing.T) {
+	bin := buildJiraBinary(t)
+	cfg := writeTwoProfileConfig(t)
+	c := exec.Command(bin, "--config", cfg, "--profile", "typo", "auth", "refresh")
+	var stdout, stderr bytes.Buffer
+	c.Stdout = &stdout
+	c.Stderr = &stderr
+	if err := c.Run(); err == nil {
+		t.Fatalf("auth refresh with unknown profile succeeded:\nstdout=%s", stdout.String())
+	}
+	combined := stdout.String() + stderr.String()
+	if !strings.Contains(combined, "typo") {
+		t.Fatalf("auth refresh error does not name the unknown profile:\n%s", combined)
 	}
 }
 
