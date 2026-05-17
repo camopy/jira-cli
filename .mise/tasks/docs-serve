@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(pwd)
+published_site_url="https://matcra587.github.io/jira-cli/"
+local_site_url="http://localhost:8000/"
+tmp_root=$(mktemp -d "${TMPDIR:-/tmp}/jira-cli-zensical-serve.XXXXXX")
+tmp_config="$tmp_root/zensical.toml"
+
+cleanup() {
+  rm -rf "$tmp_root"
+}
+trap cleanup EXIT
+trap 'cleanup; exit 130' INT TERM
+
+ln -s "$repo_root/docs" "$tmp_root/docs"
+awk -v published_site_url="$published_site_url" -v local_site_url="$local_site_url" '
+  $0 == "site_url = \"" published_site_url "\"" {
+    print "site_url = \"" local_site_url "\""
+    next
+  }
+  { print }
+' zensical.toml > "$tmp_config"
+
+uvx --from zensical zensical build --clean --strict -f "$tmp_config"
+uvx --from zensical zensical serve -f "$tmp_config" "$@"

@@ -1450,6 +1450,15 @@ The environment override is checked first. If it is unset, the profile's
 configured backend is used. The 1Password backend is SDK-only; it does not
 shell out to the `op` CLI.
 
+For desktop-app auth, 1Password must be installed, signed in to the account that
+owns the item, and configured to allow SDK integrations. In the 1Password app,
+open Settings > Developer and enable Integrate with other apps. If biometric
+approval is wanted, also enable the OS unlock option under Settings > Security.
+
+#### Further reading
+
+- [1Password SDK desktop app integration](https://www.1password.dev/sdks#1password-desktop-app)
+
 #### Step 2 — create the profile + credential
 
 **Interactive (TTY, recommended for first time):**

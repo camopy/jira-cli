@@ -174,6 +174,59 @@ func TestDocsSiteArtifactsExist(t *testing.T) {
 			t.Fatalf("docs site artifact %s missing: %v", path, err)
 		}
 	}
+
+	tasks, err := os.ReadFile("../../tasks.toml")
+	if err != nil {
+		t.Fatalf("ReadFile(tasks.toml): %v", err)
+	}
+	for _, want := range []string{
+		`["docs:build"]`,
+		`uvx --from zensical zensical build --clean --strict`,
+		`["docs:serve"]`,
+		`file = ".mise/tasks/docs-serve"`,
+	} {
+		if !strings.Contains(string(tasks), want) {
+			t.Fatalf("docs tooling missing %q\n%s", want, tasks)
+		}
+	}
+
+	serveTask, err := os.ReadFile("../../.mise/tasks/docs-serve")
+	if err != nil {
+		t.Fatalf("ReadFile(.mise/tasks/docs-serve): %v", err)
+	}
+	for _, want := range []string{
+		`local_site_url="http://localhost:8000/"`,
+		`uvx --from zensical zensical build --clean --strict -f "$tmp_config"`,
+		`uvx --from zensical zensical serve -f "$tmp_config" "$@"`,
+	} {
+		if !strings.Contains(string(serveTask), want) {
+			t.Fatalf("docs serve task missing %q\n%s", want, serveTask)
+		}
+	}
+}
+
+func TestOnePasswordDocsExplainDesktopIntegrationPrerequisite(t *testing.T) {
+	for _, path := range []string{
+		"../../README.md",
+		"../../docs/auth.md",
+		"../../cmd/jira/agent_guide.md",
+	} {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("ReadFile(%s): %v", path, err)
+		}
+		got := string(b)
+		for _, want := range []string{
+			"Further reading",
+			"https://www.1password.dev/sdks#1password-desktop-app",
+			"1Password SDK desktop app integration",
+			"Integrate with other apps",
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("%s missing 1Password desktop app prerequisite %q\n%s", path, want, got)
+			}
+		}
+	}
 }
 
 func TestRuntimeSourceHonorsStackBoundary(t *testing.T) {

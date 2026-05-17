@@ -134,6 +134,11 @@ run = "go mod download"
 description = "Build the documentation site"
 run = "uvx --from zensical zensical build --clean --strict"
 
+["docs:serve"]
+description = "Serve the documentation site locally"
+raw_args = true
+file = ".mise/tasks/docs-serve"
+
 ["deps:update"]
 description = "Update direct Go dependencies to latest patch releases"
 env = { DEPS_UPDATE_QUERY = "patch" }

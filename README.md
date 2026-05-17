@@ -43,6 +43,15 @@ for desktop-app auth or `OP_SERVICE_ACCOUNT_TOKEN` is present for service-accoun
 auth. macOS and Linux release archives are built without CGO, so use a
 CGO-enabled source build for 1Password-backed profiles.
 
+For desktop-app auth, 1Password must be signed in and allowed to serve SDK
+requests before `jira` can read items. In the 1Password app, open
+Settings > Developer and enable Integrate with other apps. If you want
+biometric approval, also enable the OS unlock option under Settings > Security.
+
+Further reading:
+
+- [1Password SDK desktop app integration](https://www.1password.dev/sdks#1password-desktop-app)
+
 ```toml
 [[profiles]]
 name = "work"

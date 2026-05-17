@@ -32,6 +32,12 @@ dist/
 build/
 out/
 
+# The docs/ site is part of the repo; re-include it in case a developer has a
+# broad personal docs/ ignore rule. The superpowers/ rollout scaffolding under
+# it is local-only and stays ignored.
+!docs/
+docs/superpowers/
+
 # Local overrides
 *.local.*
 .task/
