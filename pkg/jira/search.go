@@ -38,7 +38,7 @@ func (s *searchService) JQL(ctx context.Context, reqBody *SearchRequest) ([]*Iss
 	if reqBody == nil || reqBody.JQL == "" {
 		return nil, nil, errors.New("jql is required")
 	}
-	req, err := s.client.NewRequest(ctx, http.MethodPost, "rest/api/3/search/jql", reqBody.payload())
+	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("search", "jql"), reqBody.payload())
 	if err != nil {
 		return nil, nil, err
 	}

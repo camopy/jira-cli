@@ -181,13 +181,13 @@ func (i *Issue) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 	if len(i.Comments) == 0 && i.Fields.Comment != nil {
-		i.Comments = i.Fields.Comment.Comments
+		i.Comments = append([]*Comment(nil), i.Fields.Comment.Comments...)
 	}
 	if len(i.Worklogs) == 0 && i.Fields.Worklog != nil {
-		i.Worklogs = i.Fields.Worklog.Worklogs
+		i.Worklogs = append([]*Worklog(nil), i.Fields.Worklog.Worklogs...)
 	}
 	if len(i.Subtasks) == 0 {
-		i.Subtasks = i.Fields.Subtasks
+		i.Subtasks = append([]*Issue(nil), i.Fields.Subtasks...)
 	}
 	if len(i.LinkedIssues) == 0 {
 		for _, link := range i.Fields.IssueLinks {

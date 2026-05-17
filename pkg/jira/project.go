@@ -3,6 +3,7 @@ package jira
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -80,7 +81,10 @@ func (s *projectService) List(ctx context.Context, opts *ListOptions) ([]Project
 	var lastResp *Response
 	pages := 0
 	for {
-		path := "rest/api/3/project/search?startAt=" + strconv.Itoa(startAt) + "&maxResults=" + strconv.Itoa(page)
+		q := url.Values{}
+		q.Set("startAt", strconv.Itoa(startAt))
+		q.Set("maxResults", strconv.Itoa(page))
+		path := withQuery(RESTPath("project", "search"), q)
 		req, err := s.client.NewRequest(ctx, "GET", path, nil)
 		if err != nil {
 			return nil, nil, err
@@ -166,8 +170,10 @@ func (s *projectService) GetFieldSchemaForProfile(ctx context.Context, profile, 
 	var lastResp *Response
 	startAt := 0
 	for {
-		path := "rest/api/3/issue/createmeta/" + projectKey + "/issuetypes/" + issueTypeID +
-			"?startAt=" + strconv.Itoa(startAt) + "&maxResults=50"
+		q := url.Values{}
+		q.Set("startAt", strconv.Itoa(startAt))
+		q.Set("maxResults", "50")
+		path := withQuery(RESTPath("issue", "createmeta", projectKey, "issuetypes", issueTypeID), q)
 		req, err := s.client.NewRequest(ctx, "GET", path, nil)
 		if err != nil {
 			return nil, nil, err
@@ -209,8 +215,10 @@ func (s *projectService) resolveIssueTypeID(ctx context.Context, projectKey, iss
 	}
 	startAt := 0
 	for {
-		path := "rest/api/3/issue/createmeta/" + projectKey + "/issuetypes" +
-			"?startAt=" + strconv.Itoa(startAt) + "&maxResults=50"
+		q := url.Values{}
+		q.Set("startAt", strconv.Itoa(startAt))
+		q.Set("maxResults", "50")
+		path := withQuery(RESTPath("issue", "createmeta", projectKey, "issuetypes"), q)
 		req, err := s.client.NewRequest(ctx, "GET", path, nil)
 		if err != nil {
 			return "", err
@@ -277,7 +285,7 @@ func (s *projectService) GetEditSchemaForProfile(ctx context.Context, profile, i
 	if schema, ok := s.cache.Get(profile, issueKey, editScope); ok {
 		return schema, &Response{IsLast: true}, nil
 	}
-	req, err := s.client.NewRequest(ctx, "GET", "rest/api/3/issue/"+issueKey+"/editmeta", nil)
+	req, err := s.client.NewRequest(ctx, "GET", RESTPath("issue", issueKey, "editmeta"), nil)
 	if err != nil {
 		return nil, nil, err
 	}

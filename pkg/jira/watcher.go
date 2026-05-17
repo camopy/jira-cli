@@ -1,9 +1,7 @@
 package jira
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/url"
 )
@@ -39,7 +37,7 @@ func NewWatcherService(client *Client) WatcherService {
 // their privacy — the User.EmailAddress field is nilable here for that
 // reason.
 func (s *watcherService) List(ctx context.Context, issueKey string) (*WatchersResponse, *Response, error) {
-	req, err := s.client.NewRequest(ctx, http.MethodGet, "rest/api/3/issue/"+issueKey+"/watchers", nil)
+	req, err := s.client.NewRequest(ctx, http.MethodGet, RESTPath("issue", issueKey, "watchers"), nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -55,25 +53,14 @@ func (s *watcherService) List(ctx context.Context, issueKey string) (*WatchersRe
 //
 // Atlassian's POST /watchers expects a *raw JSON string* body
 // (`"<accountId>"`), not a JSON object — http-contract.md captures this
-// quirk. Sending an object yields 400 with "expected JSON string".
-// Bypasses Client.NewRequest's automatic JSON-marshal so we can hand the
-// pre-encoded bytes through verbatim with a Content-Type header.
+// quirk. Sending an object yields 400 with "expected JSON string". Passing
+// the account ID string directly to Client.NewRequest preserves that wire
+// shape because the JSON encoder marshals it as a string literal.
 func (s *watcherService) Add(ctx context.Context, issueKey, accountID string) (*Response, error) {
-	body, err := json.Marshal(accountID)
+	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issue", issueKey, "watchers"), accountID)
 	if err != nil {
 		return nil, err
 	}
-	rel, err := url.Parse("rest/api/3/issue/" + issueKey + "/watchers")
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.client.BaseURL().ResolveReference(rel).String(), bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
-	s.client.SignRequest(req)
 	return s.client.Do(req, nil)
 }
 
@@ -84,7 +71,7 @@ func (s *watcherService) Add(ctx context.Context, issueKey, accountID string) (*
 func (s *watcherService) Remove(ctx context.Context, issueKey, accountID string) (*Response, error) {
 	q := url.Values{}
 	q.Set("accountId", accountID)
-	req, err := s.client.NewRequest(ctx, http.MethodDelete, "rest/api/3/issue/"+issueKey+"/watchers?"+q.Encode(), nil)
+	req, err := s.client.NewRequest(ctx, http.MethodDelete, withQuery(RESTPath("issue", issueKey, "watchers"), q), nil)
 	if err != nil {
 		return nil, err
 	}

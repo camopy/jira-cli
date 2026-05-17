@@ -34,7 +34,7 @@ func TestEpicBoardCallsServiceWithPerEpicChildIssueCounts(t *testing.T) {
 			_, _ = w.Write([]byte(`{"isLast":true,"maxResults":50,"issues":[
 				{"key":"EPIC-1","fields":{"summary":"Quarter goal","status":{"name":"In Progress"}}}
 			]}`))
-		case strings.Contains(parsed.JQL, "parent=EPIC-1"):
+		case strings.Contains(parsed.JQL, `parent="EPIC-1"`):
 			_, _ = w.Write([]byte(`{"isLast":true,"maxResults":50,"issues":[
 				{"key":"PROJ-1","fields":{"status":{"name":"To Do"}}},
 				{"key":"PROJ-2","fields":{"status":{"name":"In Progress"}}},

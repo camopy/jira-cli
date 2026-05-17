@@ -2923,7 +2923,7 @@ func searchOutputFields(opts searchOptions) ([]string, bool, error) {
 	if len(fields) > 0 {
 		return fields, true, nil
 	}
-	return append([]string(nil), jira.IssueListFields...), false, nil
+	return jira.DefaultIssueListFields(), false, nil
 }
 
 func worklogCommand() *cobra.Command {
@@ -3489,7 +3489,11 @@ func jiraClientForProfile(cmd *cobra.Command, profile config.Profile) (*jira.Cli
 			}
 		}
 	}
-	return jira.NewClient(opts...), profile, true, nil
+	client, err := jira.NewClientE(opts...)
+	if err != nil {
+		return nil, profile, false, err
+	}
+	return client, profile, true, nil
 }
 
 func isLocalBaseURL(raw string) bool {

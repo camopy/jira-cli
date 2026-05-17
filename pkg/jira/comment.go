@@ -271,7 +271,7 @@ func (s *commentService) List(ctx context.Context, key string, opts *ListComment
 		}
 	}
 	q.Set("orderBy", orderBy)
-	path := "rest/api/3/issue/" + key + "/comment?" + q.Encode()
+	path := withQuery(RESTPath("issue", key, "comment"), q)
 	req, err := s.client.NewRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, nil, err
@@ -376,7 +376,7 @@ func (s *commentService) Add(ctx context.Context, key string, body *CommentBody)
 	// the optional path below. Today's Add signature doesn't accept vis;
 	// the caller composes payload manually if visibility is needed.
 	payload := commentPayload(body, VisibilityChange{Mode: VisibilityKeep})
-	req, err := s.client.NewRequest(ctx, http.MethodPost, "rest/api/3/issue/"+key+"/comment", payload)
+	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issue", key, "comment"), payload)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -396,7 +396,7 @@ func (s *commentService) AddWithVisibility(ctx context.Context, key string, body
 		return &Comment{ID: String("DRY-RUN")}, &Response{IsLast: true}, nil
 	}
 	payload := commentPayload(body, vis)
-	req, err := s.client.NewRequest(ctx, http.MethodPost, "rest/api/3/issue/"+key+"/comment", payload)
+	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issue", key, "comment"), payload)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -417,7 +417,7 @@ func (s *commentService) Edit(ctx context.Context, key, commentID string, body *
 		return &Comment{ID: &commentID}, &Response{IsLast: true}, nil
 	}
 	payload := commentPayload(body, vis)
-	req, err := s.client.NewRequest(ctx, http.MethodPut, "rest/api/3/issue/"+key+"/comment/"+commentID, payload)
+	req, err := s.client.NewRequest(ctx, http.MethodPut, RESTPath("issue", key, "comment", commentID), payload)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -432,7 +432,7 @@ func (s *commentService) Delete(ctx context.Context, key, commentID string) (*Re
 	if commentID == "" {
 		return nil, errors.New("comment id is required")
 	}
-	req, err := s.client.NewRequest(ctx, http.MethodDelete, "rest/api/3/issue/"+key+"/comment/"+commentID, nil)
+	req, err := s.client.NewRequest(ctx, http.MethodDelete, RESTPath("issue", key, "comment", commentID), nil)
 	if err != nil {
 		return nil, err
 	}

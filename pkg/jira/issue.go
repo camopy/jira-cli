@@ -69,7 +69,13 @@ type issueService struct {
 
 const DefaultIssueListJQL = "updated >= -365d ORDER BY updated DESC"
 
-var IssueListFields = []string{"key", "summary", "status", "assignee", "priority", "updated"}
+var defaultIssueListFields = []string{"key", "summary", "status", "assignee", "priority", "updated"}
+
+var IssueListFields = append([]string(nil), defaultIssueListFields...)
+
+func DefaultIssueListFields() []string {
+	return append([]string(nil), defaultIssueListFields...)
+}
 
 func NewIssueService(client *Client) IssueService {
 	return &issueService{client: client}
@@ -93,6 +99,9 @@ type IssueCreateRequest struct {
 }
 
 func (r *IssueCreateRequest) payload() map[string]any {
+	if r == nil {
+		return map[string]any{"fields": map[string]any{}}
+	}
 	fields := map[string]any{}
 	for key, value := range r.Fields {
 		switch key {
@@ -100,7 +109,7 @@ func (r *IssueCreateRequest) payload() map[string]any {
 			// Spec-input aliases — translated below, never sent verbatim.
 			continue
 		}
-		fields[key] = value
+		fields[key] = cloneJSONValue(value)
 	}
 	if r.Summary != "" {
 		fields["summary"] = r.Summary
@@ -122,6 +131,13 @@ type IssueUpdateRequest struct {
 	DryRun bool           `json:"-"`
 }
 
+func (r *IssueUpdateRequest) payload() map[string]any {
+	if r == nil {
+		return map[string]any{"fields": map[string]any{}}
+	}
+	return map[string]any{"fields": cloneJSONMap(r.Fields)}
+}
+
 type IssueCloneRequest struct {
 	Fields map[string]any `json:"fields,omitempty"`
 	DryRun bool           `json:"-"`
@@ -136,7 +152,7 @@ func (r *IssueMoveRequest) payload() map[string]any {
 	if r == nil {
 		return map[string]any{"fields": map[string]any{}}
 	}
-	return map[string]any{"fields": r.Fields}
+	return map[string]any{"fields": cloneJSONMap(r.Fields)}
 }
 
 type TransitionRequest struct {
@@ -156,11 +172,11 @@ func (s *issueService) List(ctx context.Context, opts *IssueListOptions) ([]*Iss
 		body.JQL = opts.JQL
 		body.ListOptions = opts.ListOptions
 	}
-	body.Fields = append([]string(nil), IssueListFields...)
+	body.Fields = DefaultIssueListFields()
 	if strings.TrimSpace(body.JQL) == "" {
 		body.JQL = DefaultIssueListJQL
 	}
-	req, err := s.client.NewRequest(ctx, http.MethodPost, "rest/api/3/search/jql", body.payload())
+	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("search", "jql"), body.payload())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -176,9 +192,11 @@ func (s *issueService) List(ctx context.Context, opts *IssueListOptions) ([]*Iss
 }
 
 func (s *issueService) Get(ctx context.Context, key string, opts *IssueGetOptions) (*Issue, *Response, error) {
-	path := "rest/api/3/issue/" + key
+	path := RESTPath("issue", key)
 	if opts != nil && len(opts.Expand) > 0 {
-		path += "?expand=" + url.QueryEscape(strings.Join(opts.Expand, ","))
+		q := url.Values{}
+		q.Set("expand", strings.Join(opts.Expand, ","))
+		path = withQuery(path, q)
 	}
 	req, err := s.client.NewRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
@@ -196,7 +214,7 @@ func (s *issueService) Create(ctx context.Context, reqBody *IssueCreateRequest) 
 	if reqBody.DryRun {
 		return &Issue{Key: String("DRY-RUN")}, &Response{IsLast: true}, nil
 	}
-	req, err := s.client.NewRequest(ctx, http.MethodPost, "rest/api/3/issue", reqBody.payload())
+	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issue"), reqBody.payload())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -209,7 +227,7 @@ func (s *issueService) Update(ctx context.Context, key string, reqBody *IssueUpd
 	if reqBody != nil && reqBody.DryRun {
 		return &Issue{Key: String(key)}, &Response{IsLast: true}, nil
 	}
-	req, err := s.client.NewRequest(ctx, http.MethodPut, "rest/api/3/issue/"+key, reqBody)
+	req, err := s.client.NewRequest(ctx, http.MethodPut, RESTPath("issue", key), reqBody.payload())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -219,7 +237,7 @@ func (s *issueService) Update(ctx context.Context, key string, reqBody *IssueUpd
 }
 
 func (s *issueService) Transitions(ctx context.Context, key string) ([]*Transition, *Response, error) {
-	req, err := s.client.NewRequest(ctx, http.MethodGet, "rest/api/3/issue/"+key+"/transitions", nil)
+	req, err := s.client.NewRequest(ctx, http.MethodGet, RESTPath("issue", key, "transitions"), nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -239,9 +257,9 @@ func (s *issueService) Transition(ctx context.Context, key string, reqBody *Tran
 	}
 	payload := map[string]any{"transition": map[string]string{"id": reqBody.ID}}
 	if len(reqBody.Fields) > 0 {
-		payload["fields"] = reqBody.Fields
+		payload["fields"] = cloneJSONMap(reqBody.Fields)
 	}
-	req, err := s.client.NewRequest(ctx, http.MethodPost, "rest/api/3/issue/"+key+"/transitions", payload)
+	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issue", key, "transitions"), payload)
 	if err != nil {
 		return nil, err
 	}
@@ -250,9 +268,11 @@ func (s *issueService) Transition(ctx context.Context, key string, reqBody *Tran
 }
 
 func (s *issueService) Delete(ctx context.Context, key string, opts *IssueDeleteOptions) (*Response, error) {
-	path := "rest/api/3/issue/" + key
+	path := RESTPath("issue", key)
 	if opts != nil && opts.DeleteSubtasks {
-		path += "?deleteSubtasks=true"
+		q := url.Values{}
+		q.Set("deleteSubtasks", "true")
+		path = withQuery(path, q)
 	}
 	req, err := s.client.NewRequest(ctx, http.MethodDelete, path, nil)
 	if err != nil {
@@ -273,7 +293,7 @@ func (s *issueService) Link(ctx context.Context, reqBody *IssueLinkRequest) (*Re
 		"inwardIssue":  map[string]string{"key": reqBody.InwardIssue},
 		"outwardIssue": map[string]string{"key": reqBody.OutwardIssue},
 	}
-	req, err := s.client.NewRequest(ctx, http.MethodPost, "rest/api/3/issueLink", body)
+	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issueLink"), body)
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +322,7 @@ func (s *issueService) AddRemoteLink(ctx context.Context, key string, reqBody *R
 			"title": reqBody.Title,
 		},
 	}
-	req, err := s.client.NewRequest(ctx, http.MethodPost, "rest/api/3/issue/"+key+"/remotelink", body)
+	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issue", key, "remotelink"), body)
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +352,7 @@ func (s *issueService) AddComment(ctx context.Context, key string, reqBody *Comm
 	if reqBody.DryRun {
 		return &Comment{ID: String("DRY-RUN")}, &Response{IsLast: true}, nil
 	}
-	req, err := s.client.NewRequest(ctx, http.MethodPost, "rest/api/3/issue/"+key+"/comment", reqBody)
+	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issue", key, "comment"), reqBody)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -375,7 +395,7 @@ func fieldsToClone(src, overrides map[string]any) map[string]any {
 		if strings.HasPrefix(k, "aggregate") {
 			continue
 		}
-		out[k] = v
+		out[k] = cloneJSONValue(v)
 	}
 	// Collapse project to {key: …} — only the key is accepted by POST.
 	if p, ok := out["project"].(map[string]any); ok {
@@ -413,14 +433,14 @@ func fieldsToClone(src, overrides map[string]any) map[string]any {
 	}
 	// Caller overrides win over anything carried from the source.
 	for k, v := range overrides {
-		out[k] = v
+		out[k] = cloneJSONValue(v)
 	}
 	return out
 }
 
 func (s *issueService) Clone(ctx context.Context, sourceKey string, reqBody *IssueCloneRequest) (*Issue, *Response, error) {
 	// GET the source issue as raw JSON so we can sanitize arbitrary fields.
-	getReq, err := s.client.NewRequest(ctx, http.MethodGet, "rest/api/3/issue/"+sourceKey, nil)
+	getReq, err := s.client.NewRequest(ctx, http.MethodGet, RESTPath("issue", sourceKey), nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -443,7 +463,7 @@ func (s *issueService) Clone(ctx context.Context, sourceKey string, reqBody *Iss
 		return &Issue{Key: String("DRY-RUN")}, &Response{IsLast: true}, nil
 	}
 
-	postReq, err := s.client.NewRequest(ctx, http.MethodPost, "rest/api/3/issue", map[string]any{"fields": merged})
+	postReq, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issue"), map[string]any{"fields": merged})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -453,7 +473,7 @@ func (s *issueService) Clone(ctx context.Context, sourceKey string, reqBody *Iss
 }
 
 func (s *issueService) Move(ctx context.Context, key string, reqBody *IssueMoveRequest) (*Issue, *Response, error) {
-	req, err := s.client.NewRequest(ctx, http.MethodPut, "rest/api/3/issue/"+key, reqBody.payload())
+	req, err := s.client.NewRequest(ctx, http.MethodPut, RESTPath("issue", key), reqBody.payload())
 	if err != nil {
 		return nil, nil, err
 	}

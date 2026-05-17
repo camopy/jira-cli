@@ -40,7 +40,7 @@ func (s *issueLinkService) List(ctx context.Context, key string) ([]IssueLinkVie
 	if strings.TrimSpace(key) == "" {
 		return nil, nil, errors.New("issue link list: key is required")
 	}
-	req, err := s.client.NewRequest(ctx, http.MethodGet, "rest/api/3/issue/"+key+"?fields=issuelinks", nil)
+	req, err := s.client.NewRequest(ctx, http.MethodGet, RESTPath("issue", key)+"?fields=issuelinks", nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -67,7 +67,7 @@ func (s *issueLinkService) Create(ctx context.Context, reqBody *IssueLinkRequest
 		"inwardIssue":  map[string]string{"key": reqBody.InwardIssue},
 		"outwardIssue": map[string]string{"key": reqBody.OutwardIssue},
 	}
-	req, err := s.client.NewRequest(ctx, http.MethodPost, "rest/api/3/issueLink", body)
+	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issueLink"), body)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (s *issueLinkService) Delete(ctx context.Context, linkID string) (*Response
 	if strings.TrimSpace(linkID) == "" {
 		return nil, errors.New("issue link delete: linkID is required")
 	}
-	req, err := s.client.NewRequest(ctx, http.MethodDelete, "rest/api/3/issueLink/"+linkID, nil)
+	req, err := s.client.NewRequest(ctx, http.MethodDelete, RESTPath("issueLink", linkID), nil)
 	if err != nil {
 		return nil, err
 	}

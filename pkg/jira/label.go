@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 )
 
 // LabelService surfaces Jira's global label list. Labels in Jira are not
@@ -49,7 +51,10 @@ func (s *labelService) List(ctx context.Context, opts *ListOptions) ([]string, *
 	var lastResp *Response
 	pages := 0
 	for {
-		path := fmt.Sprintf("rest/api/3/label?startAt=%d&maxResults=%d", startAt, page)
+		q := url.Values{}
+		q.Set("startAt", strconv.Itoa(startAt))
+		q.Set("maxResults", strconv.Itoa(page))
+		path := withQuery(RESTPath("label"), q)
 		req, err := s.client.NewRequest(ctx, http.MethodGet, path, nil)
 		if err != nil {
 			return nil, nil, err

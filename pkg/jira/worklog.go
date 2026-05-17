@@ -32,11 +32,9 @@ func NewWorklogService(client *Client) WorklogService {
 }
 
 func (s *worklogService) List(ctx context.Context, issueKey string, opts *ListOptions) ([]*Worklog, *Response, error) {
-	path := "rest/api/3/issue/" + issueKey + "/worklog"
+	path := RESTPath("issue", issueKey, "worklog")
 	if opts != nil {
-		if q := opts.QueryValues().Encode(); q != "" {
-			path += "?" + q
-		}
+		path = withQuery(path, opts.QueryValues())
 	}
 	req, err := s.client.NewRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
@@ -56,7 +54,7 @@ func (s *worklogService) Add(ctx context.Context, issueKey string, reqBody *Work
 	if reqBody.DryRun {
 		return &Worklog{ID: String("DRY-RUN"), TimeSpentSeconds: Int(reqBody.TimeSpentSeconds)}, &Response{IsLast: true}, nil
 	}
-	req, err := s.client.NewRequest(ctx, http.MethodPost, "rest/api/3/issue/"+issueKey+"/worklog", reqBody)
+	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issue", issueKey, "worklog"), reqBody)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -66,7 +64,7 @@ func (s *worklogService) Add(ctx context.Context, issueKey string, reqBody *Work
 }
 
 func (s *worklogService) Delete(ctx context.Context, issueKey, worklogID string) (*Response, error) {
-	req, err := s.client.NewRequest(ctx, http.MethodDelete, "rest/api/3/issue/"+issueKey+"/worklog/"+worklogID, nil)
+	req, err := s.client.NewRequest(ctx, http.MethodDelete, RESTPath("issue", issueKey, "worklog", worklogID), nil)
 	if err != nil {
 		return nil, err
 	}

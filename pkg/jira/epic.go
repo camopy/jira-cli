@@ -41,7 +41,7 @@ func (s *epicService) Get(ctx context.Context, key string, opts *IssueGetOptions
 
 func (s *epicService) AddIssue(ctx context.Context, epicKey, issueKey string) (*Response, error) {
 	payload := map[string]any{"fields": map[string]any{"parent": map[string]string{"key": epicKey}}}
-	req, err := s.client.NewRequest(ctx, http.MethodPut, "rest/api/3/issue/"+issueKey, payload)
+	req, err := s.client.NewRequest(ctx, http.MethodPut, RESTPath("issue", issueKey), payload)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func (s *epicService) AddIssue(ctx context.Context, epicKey, issueKey string) (*
 
 func (s *epicService) RemoveIssue(ctx context.Context, issueKey string) (*Response, error) {
 	payload := map[string]any{"fields": map[string]any{"parent": nil}}
-	req, err := s.client.NewRequest(ctx, http.MethodPut, "rest/api/3/issue/"+issueKey, payload)
+	req, err := s.client.NewRequest(ctx, http.MethodPut, RESTPath("issue", issueKey), payload)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func (s *epicService) RemoveIssue(ctx context.Context, issueKey string) (*Respon
 }
 
 func (s *epicService) IssuesInEpic(ctx context.Context, epicKey string) ([]*Issue, *Response, error) {
-	return NewIssueService(s.client).List(ctx, &IssueListOptions{JQL: "parent=" + epicKey})
+	return NewIssueService(s.client).List(ctx, &IssueListOptions{JQL: "parent=" + JQLValue(epicKey)})
 }
 
 func StatusCounts(issues []*Issue) map[string]int {

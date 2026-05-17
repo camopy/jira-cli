@@ -26,7 +26,7 @@ func NewIssueLinkTypeService(client *Client) IssueLinkTypeService {
 }
 
 func (s *issueLinkTypeService) List(ctx context.Context) ([]IssueLinkType, *Response, error) {
-	req, err := s.client.NewRequest(ctx, http.MethodGet, "rest/api/3/issueLinkType", nil)
+	req, err := s.client.NewRequest(ctx, http.MethodGet, RESTPath("issueLinkType"), nil)
 	if err != nil {
 		return nil, nil, err
 	}

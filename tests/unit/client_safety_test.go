@@ -50,6 +50,68 @@ func TestClientHTTPTimeoutOptionCancelsSlowRequests(t *testing.T) {
 	}
 }
 
+func TestBaseURLReturnsCopy(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	client := jira.NewClient(jira.WithBaseURL(srv.URL))
+	base := client.BaseURL()
+	base.Host = "evil.example"
+	base.Scheme = "https"
+
+	req, err := client.NewRequest(context.Background(), http.MethodGet, "rest/api/3/myself", nil)
+	if err != nil {
+		t.Fatalf("NewRequest() error = %v", err)
+	}
+	if req.URL.Host != strings.TrimPrefix(srv.URL, "http://") {
+		t.Fatalf("request host = %q, want original server host", req.URL.Host)
+	}
+}
+
+func TestNilClientAndNilRequestReturnErrors(t *testing.T) {
+	var nilClient *jira.Client
+	if _, err := nilClient.NewRequest(context.Background(), http.MethodGet, "rest/api/3/myself", nil); err == nil {
+		t.Fatal("nil client NewRequest() error = nil")
+	}
+
+	var zero jira.Client
+	if _, err := zero.NewRequest(context.Background(), http.MethodGet, "rest/api/3/myself", nil); err == nil {
+		t.Fatal("zero-value client NewRequest() error = nil")
+	}
+
+	client := jira.NewClient(jira.WithBaseURL("https://jira.example.com/"))
+	if _, err := client.Do(nil, nil); err == nil {
+		t.Fatal("Do(nil) error = nil")
+	}
+	if _, err := client.Do(&http.Request{Method: http.MethodPost}, nil); err == nil {
+		t.Fatal("Do(request with nil URL) error = nil")
+	}
+}
+
+func TestClientDoRejectsMutatedRequestTarget(t *testing.T) {
+	client := jira.NewClient(jira.WithBaseURL("https://jira.example.com/base/"))
+	req, err := client.NewRequest(context.Background(), http.MethodGet, "rest/api/3/myself", nil)
+	if err != nil {
+		t.Fatalf("NewRequest() error = %v", err)
+	}
+
+	req.URL.Host = "evil.example"
+	if _, err := client.Do(req, nil); err == nil {
+		t.Fatal("Do(mutated host) error = nil")
+	}
+
+	req, err = client.NewRequest(context.Background(), http.MethodGet, "rest/api/3/myself", nil)
+	if err != nil {
+		t.Fatalf("NewRequest() error = %v", err)
+	}
+	req.URL.Path = "/other/rest/api/3/myself"
+	if _, err := client.Do(req, nil); err == nil {
+		t.Fatal("Do(mutated path) error = nil")
+	}
+}
+
 func TestAPIErrorBodyIsBoundedAndSanitized(t *testing.T) {
 	body := strings.Repeat("x", 16*1024)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

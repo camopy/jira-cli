@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -93,20 +94,46 @@ type Client struct {
 	debug       bool
 	readOnly    bool
 	dryRun      bool
+	initErr     error
 }
 
 type Option func(*Client)
 
 func NewClient(opts ...Option) *Client {
+	c, _ := newClient(opts...)
+	return c
+}
+
+func NewClientE(opts ...Option) (*Client, error) {
+	c, err := newClient(opts...)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func newClient(opts ...Option) (*Client, error) {
 	u, _ := url.Parse(defaultBaseURL)
 	c := &Client{client: &http.Client{Timeout: 30 * time.Second}, baseURL: u}
 	for _, opt := range opts {
 		opt(c)
 	}
-	return c
+	if c.initErr != nil {
+		return c, c.initErr
+	}
+	return c, nil
+}
+
+func (c *Client) setInitErr(err error) {
+	if err != nil && c.initErr == nil {
+		c.initErr = err
+	}
 }
 
 func MTLSHTTPClient(certFile, keyFile string, timeout time.Duration) (*http.Client, error) {
+	if err := validatePrivateKeyPermissions(keyFile); err != nil {
+		return nil, err
+	}
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return nil, err
@@ -119,11 +146,27 @@ func MTLSHTTPClient(certFile, keyFile string, timeout time.Duration) (*http.Clie
 	return &http.Client{Transport: transport, Timeout: timeout}, nil
 }
 
+func validatePrivateKeyPermissions(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		return fmt.Errorf("mTLS private key %q has permissions %04o; run chmod 600 %q", path, info.Mode().Perm(), path)
+	}
+	return nil
+}
+
 func WithHTTPClient(h *http.Client) Option {
 	return func(c *Client) {
-		if h != nil {
-			c.client = h
+		if h == nil {
+			c.setInitErr(fmt.Errorf("jira client: http client must not be nil"))
+			return
 		}
+		c.client = h
 	}
 }
 
@@ -144,10 +187,36 @@ func WithHTTPTimeout(timeout time.Duration) Option {
 
 func WithBaseURL(raw string) Option {
 	return func(c *Client) {
-		if u, err := url.Parse(raw); err == nil {
-			c.baseURL = u
+		u, err := parseClientBaseURL(raw)
+		if err != nil {
+			c.setInitErr(err)
+			return
 		}
+		c.baseURL = u
 	}
+}
+
+func parseClientBaseURL(raw string) (*url.URL, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, fmt.Errorf("jira client: base URL is required")
+	}
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return nil, fmt.Errorf("jira client: base URL is malformed: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return nil, fmt.Errorf("jira client: base URL must use http or https")
+	}
+	if u.Host == "" {
+		return nil, fmt.Errorf("jira client: base URL must include a host")
+	}
+	if u.RawQuery != "" || u.Fragment != "" {
+		return nil, fmt.Errorf("jira client: base URL must not include query or fragment")
+	}
+	if !strings.HasSuffix(u.Path, "/") {
+		u.Path += "/"
+	}
+	return u, nil
 }
 
 func WithBearerToken(token string) Option {
@@ -192,11 +261,6 @@ func WithDryRun(dryRun bool) Option {
 }
 
 func (c *Client) NewRequest(ctx context.Context, method, path string, body any) (*http.Request, error) {
-	rel, err := url.Parse(strings.TrimPrefix(path, "/"))
-	if err != nil {
-		return nil, err
-	}
-	u := c.baseURL.ResolveReference(rel)
 	var r io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -205,16 +269,93 @@ func (c *Client) NewRequest(ctx context.Context, method, path string, body any) 
 		}
 		r = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, u.String(), r)
+	req, err := c.NewRawRequest(ctx, method, path, r)
+	if err != nil {
+		return nil, err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	return req, nil
+}
+
+func (c *Client) NewRawRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
+	u, err := c.requestURL(path)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
 	c.SignRequest(req)
 	return req, nil
+}
+
+func (c *Client) requestURL(path string) (*url.URL, error) {
+	if err := c.validate(); err != nil {
+		return nil, err
+	}
+	cleanPath, err := validateRequestPath(path)
+	if err != nil {
+		return nil, err
+	}
+	rel, err := url.Parse(cleanPath)
+	if err != nil {
+		return nil, err
+	}
+	u := c.baseURL.ResolveReference(rel)
+	return u, nil
+}
+
+func (c *Client) validate() error {
+	if c == nil {
+		return fmt.Errorf("jira client is nil")
+	}
+	if c.initErr != nil {
+		return c.initErr
+	}
+	if c.baseURL == nil {
+		return fmt.Errorf("jira client base URL is not configured")
+	}
+	if c.client == nil {
+		return fmt.Errorf("jira client HTTP client is not configured")
+	}
+	return nil
+}
+
+func validateRequestPath(path string) (string, error) {
+	for _, r := range path {
+		if r < 0x20 || r == 0x7f {
+			return "", fmt.Errorf("jira request path contains control characters")
+		}
+	}
+	if strings.HasPrefix(path, "//") {
+		return "", fmt.Errorf("jira request path must be relative")
+	}
+	trimmed := strings.TrimPrefix(path, "/")
+	if trimmed == "" {
+		return "", nil
+	}
+	rawPath, _, _ := strings.Cut(trimmed, "?")
+	rawPath, _, _ = strings.Cut(rawPath, "#")
+	for segment := range strings.SplitSeq(rawPath, "/") {
+		if segment == "." || segment == ".." {
+			return "", fmt.Errorf("jira request path contains dot segment %q", segment)
+		}
+	}
+	rel, err := url.Parse(trimmed)
+	if err != nil {
+		return "", err
+	}
+	if rel.IsAbs() || rel.Host != "" {
+		return "", fmt.Errorf("jira request path must be relative")
+	}
+	if rel.Fragment != "" {
+		return "", fmt.Errorf("jira request path must not include a fragment")
+	}
+	return trimmed, nil
 }
 
 // SignRequest applies the active profile's auth headers to req.
@@ -236,17 +377,33 @@ func (c *Client) SignRequest(req *http.Request) {
 // streaming download) can ResolveReference against the same root the
 // rest of the package uses.
 func (c *Client) BaseURL() *url.URL {
-	return c.baseURL
+	if c == nil || c.baseURL == nil {
+		return nil
+	}
+	u := *c.baseURL
+	return &u
 }
 
 func (c *Client) Do(req *http.Request, out any) (*Response, error) {
-	if c.readOnly && isMutationRequest(req) {
+	if err := c.validate(); err != nil {
+		return nil, err
+	}
+	if req == nil {
+		return nil, fmt.Errorf("jira request is nil")
+	}
+	if req.URL == nil {
+		return nil, fmt.Errorf("jira request URL is nil")
+	}
+	if err := c.validateRequestTarget(req); err != nil {
+		return nil, err
+	}
+	if c.readOnly && c.isMutationRequest(req) {
 		return nil, &APIError{
 			Type:    ErrorTypeValidation,
 			Message: "read-only mode is active (JIRA_READ_ONLY env or profile read_only=true); refusing " + req.Method + " " + req.URL.Path,
 		}
 	}
-	if c.dryRun && isMutationRequest(req) {
+	if c.dryRun && c.isMutationRequest(req) {
 		return nil, &APIError{
 			Type:    ErrorTypeValidation,
 			Message: "dry-run is active; refusing to send " + req.Method + " " + req.URL.Path,
@@ -319,6 +476,16 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 	return resp, nil
 }
 
+func (c *Client) validateRequestTarget(req *http.Request) error {
+	if req.URL.Scheme != c.baseURL.Scheme || req.URL.Host != c.baseURL.Host {
+		return fmt.Errorf("jira request target %s://%s does not match client base %s://%s", req.URL.Scheme, req.URL.Host, c.baseURL.Scheme, c.baseURL.Host)
+	}
+	if _, ok := c.relativeEscapedPath(req); !ok {
+		return fmt.Errorf("jira request path %q is outside client base path %q", req.URL.EscapedPath(), c.baseURL.EscapedPath())
+	}
+	return nil
+}
+
 // dumpRequest writes the outbound request to stderr in clog DBG style.
 // The Authorization header is redacted to "REDACTED" so token material
 // never reaches the log. Body is reset after read so the http.Client
@@ -374,7 +541,7 @@ func redactHeaders(h http.Header) http.Header {
 		case "authorization", "cookie", "x-atlassian-token":
 			out[k] = []string{"REDACTED"}
 		default:
-			out[k] = v
+			out[k] = append([]string(nil), v...)
 		}
 	}
 	return out
@@ -399,17 +566,45 @@ func parseRate(res *http.Response) Rate {
 // isMutationRequest decides whether a request actually changes server
 // state. Method alone isn't enough — Jira's /search/jql endpoint uses
 // POST so callers can send large JQL bodies, but it's a pure read.
-func isMutationRequest(req *http.Request) bool {
+func (c *Client) isMutationRequest(req *http.Request) bool {
+	if req == nil || req.URL == nil {
+		return false
+	}
 	switch req.Method {
 	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 	default:
 		return false
 	}
 	// Whitelist Jira read endpoints that happen to use POST.
-	if strings.Contains(req.URL.Path, "/search/") {
+	relativePath, ok := c.relativeEscapedPath(req)
+	if req.Method == http.MethodPost && ok && relativePath == "/rest/api/3/search/jql" {
 		return false
 	}
 	return true
+}
+
+func (c *Client) relativeEscapedPath(req *http.Request) (string, bool) {
+	path := req.URL.EscapedPath()
+	if path == "" {
+		path = "/"
+	}
+	basePath := c.baseURL.EscapedPath()
+	if basePath == "" {
+		basePath = "/"
+	}
+	if !strings.HasPrefix(basePath, "/") {
+		basePath = "/" + basePath
+	}
+	if !strings.HasSuffix(basePath, "/") {
+		basePath += "/"
+	}
+	if basePath == "/" {
+		return path, true
+	}
+	if !strings.HasPrefix(path, basePath) {
+		return "", false
+	}
+	return "/" + strings.TrimPrefix(path, basePath), true
 }
 
 func classifyStatus(code int) ErrorType {

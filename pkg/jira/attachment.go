@@ -8,7 +8,6 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -78,7 +77,7 @@ func (s *attachmentService) List(ctx context.Context, key string) ([]Attachment,
 	if strings.TrimSpace(key) == "" {
 		return nil, nil, errors.New("attachment list: issue key is required")
 	}
-	path := "rest/api/3/issue/" + url.PathEscape(key) + "?fields=attachment"
+	path := RESTPath("issue", key) + "?fields=attachment"
 	req, err := s.client.NewRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, nil, err
@@ -134,16 +133,10 @@ func (s *attachmentService) Add(ctx context.Context, key string, files []FileSou
 		return nil, nil, fmt.Errorf("attachment add: close multipart writer: %w", err)
 	}
 
-	rel, err := url.Parse("rest/api/3/issue/" + url.PathEscape(key) + "/attachments")
+	req, err := s.client.NewRawRequest(ctx, http.MethodPost, RESTPath("issue", key, "attachments"), &body)
 	if err != nil {
 		return nil, nil, err
 	}
-	target := s.client.BaseURL().ResolveReference(rel)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target.String(), &body)
-	if err != nil {
-		return nil, nil, err
-	}
-	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	// Atlassian's CSRF guard rejects POSTs lacking this header.
 	req.Header.Set("X-Atlassian-Token", "no-check")
@@ -161,7 +154,7 @@ func (s *attachmentService) Delete(ctx context.Context, attachmentID string) (*R
 	if strings.TrimSpace(attachmentID) == "" {
 		return nil, errors.New("attachment delete: attachment id is required")
 	}
-	req, err := s.client.NewRequest(ctx, http.MethodDelete, "rest/api/3/attachment/"+url.PathEscape(attachmentID), nil)
+	req, err := s.client.NewRequest(ctx, http.MethodDelete, RESTPath("attachment", attachmentID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -180,17 +173,11 @@ func (s *attachmentService) Download(ctx context.Context, attachmentID string) (
 	if strings.TrimSpace(attachmentID) == "" {
 		return nil, nil, errors.New("attachment download: attachment id is required")
 	}
-	rel, err := url.Parse("rest/api/3/attachment/content/" + url.PathEscape(attachmentID))
-	if err != nil {
-		return nil, nil, err
-	}
-	target := s.client.BaseURL().ResolveReference(rel)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
+	req, err := s.client.NewRawRequest(ctx, http.MethodGet, RESTPath("attachment", "content", attachmentID), nil)
 	if err != nil {
 		return nil, nil, err
 	}
 	req.Header.Set("Accept", "*/*")
-	s.client.SignRequest(req)
 
 	res, err := s.client.client.Do(req)
 	if err != nil {

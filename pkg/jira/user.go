@@ -85,7 +85,7 @@ func NewUserService(client *Client) UserService {
 
 // Myself returns the authenticated user's identity via /rest/api/3/myself.
 func (s *userService) Myself(ctx context.Context) (*CurrentUser, *Response, error) {
-	req, err := s.client.NewRequest(ctx, http.MethodGet, "rest/api/3/myself", nil)
+	req, err := s.client.NewRequest(ctx, http.MethodGet, RESTPath("myself"), nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -99,11 +99,12 @@ func (s *userService) Myself(ctx context.Context) (*CurrentUser, *Response, erro
 // list of permission keys (e.g. BROWSE_PROJECTS,CREATE_ISSUES) — required
 // by the v3 endpoint, which rejects unfiltered queries.
 func (s *userService) MyPermissions(ctx context.Context, projectKey string, keys []string) (*PermissionsResponse, *Response, error) {
-	path := "rest/api/3/mypermissions?permissions=" + strings.Join(keys, ",")
+	q := url.Values{}
+	q.Set("permissions", strings.Join(keys, ","))
 	if projectKey != "" {
-		path += "&projectKey=" + projectKey
+		q.Set("projectKey", projectKey)
 	}
-	req, err := s.client.NewRequest(ctx, http.MethodGet, path, nil)
+	req, err := s.client.NewRequest(ctx, http.MethodGet, withQuery(RESTPath("mypermissions"), q), nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -119,7 +120,7 @@ func (s *userService) MyPermissions(ctx context.Context, projectKey string, keys
 func (s *userService) Search(ctx context.Context, query string) ([]*User, *Response, error) {
 	q := url.Values{}
 	q.Set("query", query)
-	req, err := s.client.NewRequest(ctx, http.MethodGet, "rest/api/3/user/search?"+q.Encode(), nil)
+	req, err := s.client.NewRequest(ctx, http.MethodGet, withQuery(RESTPath("user", "search"), q), nil)
 	if err != nil {
 		return nil, nil, err
 	}

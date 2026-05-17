@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -53,6 +54,25 @@ func TestMTLSHTTPClientLoadsCertificatePair(t *testing.T) {
 	}
 	if transport.TLSClientConfig == nil || len(transport.TLSClientConfig.Certificates) != 1 {
 		t.Fatalf("TLS client config missing certificate: %+v", transport.TLSClientConfig)
+	}
+}
+
+func TestMTLSHTTPClientRejectsPermissivePrivateKey(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("windows permission bits do not model private-key group/world access")
+	}
+	certPath, keyPath := writeSelfSignedCertPair(t)
+	//nolint:gosec // Intentionally permissive for the rejection test.
+	if err := os.Chmod(keyPath, 0o644); err != nil {
+		t.Fatalf("Chmod(key) error = %v", err)
+	}
+	_, err := jira.MTLSHTTPClient(certPath, keyPath, 30*time.Second)
+	if err == nil {
+		t.Fatal("MTLSHTTPClient() error = nil, want private-key permission refusal")
+	}
+	got := strings.ToLower(err.Error())
+	if !strings.Contains(got, "private key") || !strings.Contains(got, "chmod 600") {
+		t.Fatalf("MTLSHTTPClient() error = %v, want chmod 600 guidance", err)
 	}
 }
 
