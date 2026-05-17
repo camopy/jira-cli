@@ -111,4 +111,8 @@ func TestReleaseArtifactsUseSupportedTargets(t *testing.T) {
 			t.Fatalf("GoReleaser config advertises unsupported target %q\n%s", forbidden, goreleaser)
 		}
 	}
+	// Intel macOS is not a release target; the build matrix must drop it.
+	if !strings.Contains(gotGoReleaser, "goos: darwin\n        goarch: amd64") {
+		t.Fatalf("GoReleaser config must ignore the darwin/amd64 combination\n%s", goreleaser)
+	}
 }
