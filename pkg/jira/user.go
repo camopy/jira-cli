@@ -69,6 +69,7 @@ type UserService interface {
 	Myself(context.Context) (*CurrentUser, *Response, error)
 	MyPermissions(ctx context.Context, projectKey string, keys []string) (*PermissionsResponse, *Response, error)
 	Search(ctx context.Context, query string) ([]*User, *Response, error)
+	ResolveAccountID(ctx context.Context, accountID string) (string, error)
 	ResolveUser(ctx context.Context, query string) (string, error)
 }
 
@@ -129,6 +130,34 @@ func (s *userService) Search(ctx context.Context, query string) ([]*User, *Respo
 	return out, resp, err
 }
 
+// ResolveAccountID validates a caller-supplied accountId via Jira's read-only
+// user endpoint. Normal ResolveUser keeps accountId:<id> local; this method is
+// for explicit remote-validation paths that need active/deleted checks.
+func (s *userService) ResolveAccountID(ctx context.Context, accountID string) (string, error) {
+	accountID = strings.TrimSpace(accountID)
+	if accountID == "" {
+		return "", errors.New("accountId requires a non-empty id")
+	}
+	q := url.Values{}
+	q.Set("accountId", accountID)
+	req, err := s.client.NewRequest(ctx, http.MethodGet, withQuery(RESTPath("user"), q), nil)
+	if err != nil {
+		return "", err
+	}
+	var user User
+	if _, err := s.client.Do(req, &user); err != nil {
+		return "", err
+	}
+	active := activeUsers([]*User{&user})
+	if len(active) == 0 {
+		return "", fmt.Errorf("%w: %q", ErrUserNotFound, "accountId:"+accountID)
+	}
+	if active[0].AccountID == nil || *active[0].AccountID == "" {
+		return "", errors.New("user lookup returned empty accountId")
+	}
+	return *active[0].AccountID, nil
+}
+
 // ResolveUser turns the user-supplied identifier into an accountId per
 // the resolver contract:
 //   - "me"                → cached /myself accountId
@@ -180,6 +209,7 @@ func (s *userService) ResolveUser(ctx context.Context, query string) (string, er
 	if err != nil {
 		return "", err
 	}
+	users = activeUsers(users)
 	switch len(users) {
 	case 0:
 		return "", fmt.Errorf("%w: %q", ErrUserNotFound, q)
@@ -191,4 +221,21 @@ func (s *userService) ResolveUser(ctx context.Context, query string) (string, er
 	default:
 		return "", &AmbiguousUserError{Query: q, Candidates: users}
 	}
+}
+
+func activeUsers(users []*User) []*User {
+	out := make([]*User, 0, len(users))
+	for _, user := range users {
+		if user == nil {
+			continue
+		}
+		if user.Active != nil && !*user.Active {
+			continue
+		}
+		if user.Deleted != nil && *user.Deleted {
+			continue
+		}
+		out = append(out, user)
+	}
+	return out
 }

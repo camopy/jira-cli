@@ -61,8 +61,9 @@ type Error struct {
 	Path  string `json:"path,omitempty"`
 
 	// HTTPStatus / RetryAfterSeconds carry transport metadata.
-	HTTPStatus        int `json:"http_status,omitempty"`
-	RetryAfterSeconds int `json:"retry_after_seconds,omitempty"`
+	HTTPStatus         int `json:"http_status,omitempty"`
+	RetryAfterSeconds  int `json:"retry_after_seconds,omitempty"`
+	RateLimitRemaining int `json:"rate_limit_remaining,omitempty"`
 
 	// Provider / UpstreamCode / UpstreamStatus preserve a backend's own
 	// failure identity. UpstreamCode stays empty when the provider

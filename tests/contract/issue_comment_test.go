@@ -244,6 +244,9 @@ func TestCommentListAllRateLimitDuringPaginationReturnsPartialData(t *testing.T)
 			if w["pages_fetched"] == nil || w["retry_after_seconds"] == nil {
 				t.Errorf("rate-limit warning missing fields: %v", w)
 			}
+			if got := int(w["retry_after_seconds"].(float64)); got != 30 {
+				t.Errorf("retry_after_seconds = %d, want 30", got)
+			}
 			found = true
 			break
 		}

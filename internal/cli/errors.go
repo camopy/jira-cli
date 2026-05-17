@@ -205,6 +205,7 @@ func mapJiraAPIError(err error) (Error, bool) {
 		Retryable:           kind == ErrorTypeRateLimit || kind == ErrorTypeServer,
 		HTTPStatus:          apiErr.StatusCode,
 		RetryAfterSeconds:   apiErr.RetryAfterSeconds,
+		RateLimitRemaining:  apiErr.RateLimitRemaining,
 		Provider:            "jira",
 		UpstreamStatus:      apiErr.UpstreamStatus,
 		UpstreamMessages:    apiErr.ErrorMessages,

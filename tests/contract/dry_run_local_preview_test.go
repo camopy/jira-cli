@@ -107,6 +107,42 @@ func TestWatcherAddValidateRemoteResolvesUserButDoesNotMutate(t *testing.T) {
 	}
 }
 
+func TestWatcherAddValidateRemoteRejectsInactiveAccountID(t *testing.T) {
+	var posts int32
+	var userLookups int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/rest/api/3/user", func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&userLookups, 1)
+		if got := r.URL.Query().Get("accountId"); got != "inactive" {
+			t.Fatalf("accountId query = %q, want inactive", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"accountId":"inactive","displayName":"Inactive User","active":false}`))
+	})
+	mux.HandleFunc("/rest/api/3/issue/KAN-1/watchers", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			atomic.AddInt32(&posts, 1)
+			t.Errorf("--validate-remote must not POST the watcher")
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cfg := jiraConfig(t, srv.URL)
+	stdout, stderr, code := runJira(t, "--config", cfg, "--output=json",
+		"issue", "watchers", "add", "KAN-1", "--user", "accountId:inactive", "--dry-run", "--validate-remote")
+	if code == 0 {
+		t.Fatalf("watch --dry-run --validate-remote accepted inactive account\nstdout=%s\nstderr=%s", stdout, stderr)
+	}
+	if n := atomic.LoadInt32(&userLookups); n != 1 {
+		t.Fatalf("--validate-remote made %d user lookup(s), want 1", n)
+	}
+	if n := atomic.LoadInt32(&posts); n != 0 {
+		t.Fatalf("--validate-remote sent %d POST(s); it must be read-only", n)
+	}
+}
+
 // TestWeblinkDryRunRejectsMalformedURLLocally — weblink dry-run
 // must do honest LOCAL validation. A syntactically invalid URL must be
 // caught without contacting Jira.

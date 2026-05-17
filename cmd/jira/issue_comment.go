@@ -232,14 +232,15 @@ func commentListWarnings(comments []*jira.Comment, rateLimitHit *jira.APIError, 
 		})
 	}
 	if rateLimitHit != nil {
-		// retry_after_seconds is best-effort: the 429 response object
-		// isn't surfaced from svc.List right now; default to 0 and let
-		// the consumer retry whenever they choose.
-		out = append(out, map[string]any{
+		warning := map[string]any{
 			"type":                "rate-limit-during-paginate",
 			"pages_fetched":       pagesFetched,
-			"retry_after_seconds": 0,
-		})
+			"retry_after_seconds": rateLimitHit.RetryAfterSeconds,
+		}
+		if rateLimitHit.StatusCode != 0 {
+			warning["http_status"] = rateLimitHit.StatusCode
+		}
+		out = append(out, warning)
 	}
 	return out
 }
@@ -254,7 +255,10 @@ func writeEnvelopeWithCommentWarnings(cmd *cobra.Command, command string, data a
 		return cli.WriteCompact(cmd.OutOrStdout(), foldRawWarningsIntoData(data, warnings))
 	}
 	if usePlainOutput(cmd) {
-		return cli.WriteCommandPlain(cmd.OutOrStdout(), command, data, plainOptionsForCommand(cmd)...)
+		if err := cli.WriteCommandPlain(cmd.OutOrStdout(), command, data, plainOptionsForCommand(cmd)...); err != nil {
+			return err
+		}
+		return mirrorADFWarningsToStderr(cmd.ErrOrStderr(), rawWarningsToCLI(warnings))
 	}
 	body := map[string]any{
 		"ok": true,

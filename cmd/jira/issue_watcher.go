@@ -360,13 +360,31 @@ func watcherDryRunPreview(cmd *cobra.Command, command string, args watcherMutati
 	if !ok {
 		return fmt.Errorf("jira base URL is required for %s --validate-remote", command)
 	}
-	accountID, rerr := jira.NewUserService(client).ResolveUser(cmd.Context(), args.UserIdent)
+	userSvc := jira.NewUserService(client)
+	var (
+		accountID string
+		rerr      error
+	)
+	if id, ok := accountIDFromIdentifier(args.UserIdent); ok {
+		accountID, rerr = userSvc.ResolveAccountID(cmd.Context(), id)
+	} else {
+		accountID, rerr = userSvc.ResolveUser(cmd.Context(), args.UserIdent)
+	}
 	if rerr != nil {
 		return handleResolveErr(cmd, command, rerr)
 	}
 	data["account_id_resolved"] = accountID
 	data["user_resolved"] = true
 	return writeEnvelope(cmd, command, data)
+}
+
+func accountIDFromIdentifier(ident string) (string, bool) {
+	id, ok := strings.CutPrefix(strings.TrimSpace(ident), "accountId:")
+	if !ok {
+		return "", false
+	}
+	id = strings.TrimSpace(id)
+	return id, id != ""
 }
 
 // handleResolveErr maps the resolver's (ErrUserNotFound / *AmbiguousUserError /

@@ -11,6 +11,12 @@ import (
 	"strings"
 )
 
+const maxAttachmentUploadBytes = 100 << 20
+
+func MaxAttachmentUploadBytes() int64 {
+	return maxAttachmentUploadBytes
+}
+
 // Attachment is a file attached to a Jira issue. Pointer-typed nullable
 // fields follow the rest of pkg/jira (Issue, Comment, …) so JSON
 // round-tripping preserves "field absent" vs "field present and empty".
@@ -39,6 +45,7 @@ type Attachment struct {
 // service implementation routes large payloads through io.Pipe .
 type FileSource struct {
 	Name   string
+	Size   int64
 	Reader io.Reader
 }
 
@@ -111,12 +118,23 @@ func (s *attachmentService) Add(ctx context.Context, key string, files []FileSou
 
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
+	var total int64
 	for i, f := range files {
 		if strings.TrimSpace(f.Name) == "" {
 			return nil, nil, fmt.Errorf("attachment add: file %d has empty name", i)
 		}
 		if f.Reader == nil {
 			return nil, nil, fmt.Errorf("attachment add: file %d (%s) has nil reader", i, f.Name)
+		}
+		if f.Size > maxAttachmentUploadBytes {
+			return nil, nil, fmt.Errorf("attachment add: file %d (%s) size %d exceeds %d bytes", i, f.Name, f.Size, maxAttachmentUploadBytes)
+		}
+		remaining := maxAttachmentUploadBytes - total
+		if remaining <= 0 {
+			return nil, nil, fmt.Errorf("attachment add: total upload size %d exceeds %d bytes", total, maxAttachmentUploadBytes)
+		}
+		if f.Size > remaining {
+			return nil, nil, fmt.Errorf("attachment add: total upload size %d exceeds %d bytes", total+f.Size, maxAttachmentUploadBytes)
 		}
 		// Atlassian requires the form field name to be exactly "file"
 		// per part. CreateFormFile uses application/octet-stream; that's
@@ -125,8 +143,18 @@ func (s *attachmentService) Add(ctx context.Context, key string, files []FileSou
 		if err != nil {
 			return nil, nil, fmt.Errorf("attachment add: create form file %s: %w", f.Name, err)
 		}
-		if _, err := io.Copy(part, f.Reader); err != nil {
+		limited := &io.LimitedReader{R: f.Reader, N: remaining + 1}
+		written, err := io.Copy(part, limited)
+		if err != nil {
 			return nil, nil, fmt.Errorf("attachment add: copy %s: %w", f.Name, err)
+		}
+		if limited.N == 0 {
+			return nil, nil, fmt.Errorf("attachment add: total upload size exceeds %d bytes at file %d (%s)", maxAttachmentUploadBytes, i, f.Name)
+		}
+		if f.Size > 0 {
+			total += f.Size
+		} else {
+			total += written
 		}
 	}
 	if err := writer.Close(); err != nil {
@@ -181,19 +209,34 @@ func (s *attachmentService) Download(ctx context.Context, attachmentID string) (
 
 	res, err := s.client.client.Do(req)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("jira request %s %s: %w", req.Method, req.URL.EscapedPath(), err)
 	}
 	resp := &Response{Response: res, Rate: parseRate(res)}
 	if res.StatusCode < 200 || res.StatusCode > 299 {
 		// Drain the error body so the caller can route by APIError;
 		// mirror Client.Do's body cap to keep stderr / log output
 		// bounded.
-		body, _ := io.ReadAll(io.LimitReader(res.Body, maxErrorBodyBytes))
+		body, _, readErr := readLimitedBody(res.Body, maxErrorBodyBytes)
 		_ = res.Body.Close()
+		if readErr != nil {
+			return nil, resp, &APIError{
+				StatusCode: res.StatusCode,
+				Type:       ErrorTypeServer,
+				Message:    "read response body: " + readErr.Error(),
+				Cause:      readErr,
+			}
+		}
+		msgBody := redactSensitiveBytes(body)
+		ec := parseErrorCollection(msgBody)
 		return nil, resp, &APIError{
-			StatusCode: res.StatusCode,
-			Type:       classifyStatus(res.StatusCode),
-			Message:    strings.TrimSpace(string(body)),
+			StatusCode:         res.StatusCode,
+			Type:               classifyStatus(res.StatusCode),
+			Message:            strings.TrimSpace(string(msgBody)),
+			ErrorMessages:      ec.ErrorMessages,
+			FieldErrors:        ec.Errors,
+			UpstreamStatus:     ec.Status,
+			RetryAfterSeconds:  resp.Rate.RetryAfterSeconds,
+			RateLimitRemaining: resp.Rate.Remaining,
 		}
 	}
 	return res.Body, resp, nil

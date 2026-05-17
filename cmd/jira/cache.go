@@ -572,11 +572,13 @@ func primeBoards(ctx context.Context, client *jira.Client, ttlMinutes int, unbou
 
 	ttl := ttlMinutes * 60
 	file := jira.BoardsCacheFile{
-		FetchedAt:       time.Now().UTC().Format(time.RFC3339),
-		TTLSeconds:      ttl,
-		Truncated:       res.Truncated,
-		TruncatedReason: res.TruncatedReason,
-		Items:           items,
+		FetchedAt:         time.Now().UTC().Format(time.RFC3339),
+		TTLSeconds:        ttl,
+		Truncated:         res.Truncated,
+		TruncatedReason:   res.TruncatedReason,
+		PagesFetched:      res.PagesFetched,
+		RetryAfterSeconds: retryAfterSeconds(res.RateLimitHit),
+		Items:             items,
 	}
 
 	var warnings []map[string]any
@@ -595,9 +597,11 @@ func primeBoards(ctx context.Context, client *jira.Client, ttlMinutes int, unbou
 		})
 	case "rate_limit":
 		warnings = append(warnings, map[string]any{
-			"type":        "rate-limit-during-paginate",
-			"resource":    "boards",
-			"remediation": "Re-run `jira cache boards --refresh` after the rate-limit window resets.",
+			"type":                "rate-limit-during-paginate",
+			"resource":            "boards",
+			"pages_fetched":       res.PagesFetched,
+			"retry_after_seconds": retryAfterSeconds(res.RateLimitHit),
+			"remediation":         "Re-run `jira cache boards --refresh` after the rate-limit window resets.",
 		})
 	}
 	if droppedRecords > 0 {
@@ -679,7 +683,9 @@ func emitCachedBoardsEnvelope(cmd *cobra.Command, profileName string, entry cach
 		case "rate_limit":
 			warnings = append(warnings, map[string]any{
 				"type": "rate-limit-during-paginate", "resource": "boards",
-				"remediation": "Re-run `jira cache boards --refresh` after the rate-limit window resets.",
+				"pages_fetched":       file.PagesFetched,
+				"retry_after_seconds": file.RetryAfterSeconds,
+				"remediation":         "Re-run `jira cache boards --refresh` after the rate-limit window resets.",
 			})
 		}
 	}
@@ -695,6 +701,13 @@ func emitCachedBoardsEnvelope(cmd *cobra.Command, profileName string, entry cach
 	}
 	addCacheStateFields(data, cacheSourceState, len(file.Items))
 	return writeEnvelopeWithRawWarnings(cmd, "cache.boards", data, warnings)
+}
+
+func retryAfterSeconds(apiErr *jira.APIError) int {
+	if apiErr == nil {
+		return 0
+	}
+	return apiErr.RetryAfterSeconds
 }
 
 func cacheClearCommand() *cobra.Command {

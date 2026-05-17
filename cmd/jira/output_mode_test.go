@@ -97,6 +97,24 @@ func TestCompactModePreservesCredentialCleanupWarning(t *testing.T) {
 	}
 }
 
+func TestPlainRawWarningsRouteToStderr(t *testing.T) {
+	cmd, stdout, stderr := outputModeTestCommand(cli.ModePlain)
+
+	err := writeEnvelopeWithRawWarnings(cmd, "cache.boards", map[string]any{"boards": []any{}}, []map[string]any{{
+		"type":    "rate-limit-during-paginate",
+		"message": "retry later",
+	}})
+	if err != nil {
+		t.Fatalf("writeEnvelopeWithRawWarnings() error = %v", err)
+	}
+	if strings.Contains(stdout.String(), "retry later") || strings.Contains(stdout.String(), "rate-limit-during-paginate") {
+		t.Fatalf("plain raw warning leaked to stdout:\n%s", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "retry later") || !strings.Contains(stderr.String(), "rate-limit-during-paginate") {
+		t.Fatalf("plain raw warning missing from stderr:\n%s", stderr.String())
+	}
+}
+
 func TestCommandErrorsUseClogDiagnosticsOnStderr(t *testing.T) {
 	cmd, _, stderr := outputModeTestCommand(cli.ModePlain)
 

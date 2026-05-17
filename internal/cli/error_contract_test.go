@@ -157,10 +157,11 @@ func TestJiraAPIErrorPreservesSchemaBackedFields(t *testing.T) {
 // Retry-After onto retry_after_seconds and marks the error retryable.
 func TestRateLimitErrorCarriesRetryAfter(t *testing.T) {
 	src := &jira.APIError{
-		StatusCode:        429,
-		Type:              jira.ErrorTypeRateLimit,
-		Message:           "rate limited",
-		RetryAfterSeconds: 30,
+		StatusCode:         429,
+		Type:               jira.ErrorTypeRateLimit,
+		Message:            "rate limited",
+		RetryAfterSeconds:  30,
+		RateLimitRemaining: 2,
 	}
 	got := cli.MapError(src)
 	if got.Type != string(cli.ErrorTypeRateLimit) {
@@ -168,6 +169,9 @@ func TestRateLimitErrorCarriesRetryAfter(t *testing.T) {
 	}
 	if got.RetryAfterSeconds != 30 {
 		t.Fatalf("RetryAfterSeconds = %d, want 30", got.RetryAfterSeconds)
+	}
+	if got.RateLimitRemaining != 2 {
+		t.Fatalf("RateLimitRemaining = %d, want 2", got.RateLimitRemaining)
 	}
 	if !got.Retryable {
 		t.Fatal("rate-limit error must be retryable")

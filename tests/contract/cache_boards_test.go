@@ -300,6 +300,7 @@ func TestCacheBoardsRateLimitMidWalk(t *testing.T) {
 			return
 		}
 		// Page 2+ → 429 forever.
+		w.Header().Set("Retry-After", "30")
 		w.WriteHeader(http.StatusTooManyRequests)
 		_, _ = w.Write([]byte(`{"errorMessages":["rate limited"]}`))
 	})
@@ -340,6 +341,12 @@ func TestCacheBoardsRateLimitMidWalk(t *testing.T) {
 	w0, _ := warnings[0].(map[string]any)
 	if w0["type"] != "rate-limit-during-paginate" {
 		t.Fatalf("warnings[0].type = %v; want rate-limit-during-paginate", w0["type"])
+	}
+	if got := int(w0["pages_fetched"].(float64)); got != 1 {
+		t.Fatalf("warnings[0].pages_fetched = %d; want 1", got)
+	}
+	if got := int(w0["retry_after_seconds"].(float64)); got != 30 {
+		t.Fatalf("warnings[0].retry_after_seconds = %d; want 30", got)
 	}
 
 	// Cache file persists truncated:true / truncated_reason:rate_limit.

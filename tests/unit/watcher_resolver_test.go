@@ -96,6 +96,67 @@ func TestResolveUserSingleMatchReturnsAccountID(t *testing.T) {
 	}
 }
 
+func TestResolveUserIgnoresInactiveMatches(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{"accountId":"inactive","displayName":"Inactive","emailAddress":"old@example.com","active":false},
+			{"accountId":"active","displayName":"Active","emailAddress":"new@example.com","active":true}
+		]`))
+	}))
+	defer srv.Close()
+
+	user := jira.NewUserService(jira.NewClient(jira.WithBaseURL(srv.URL + "/")))
+	id, err := user.ResolveUser(context.Background(), "person@example.com")
+	if err != nil {
+		t.Fatalf("ResolveUser error = %v", err)
+	}
+	if id != "active" {
+		t.Fatalf("ResolveUser = %q, want active", id)
+	}
+}
+
+func TestResolveUserInactiveOnlyReturnsNotFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"accountId":"inactive","displayName":"Inactive","active":false}]`))
+	}))
+	defer srv.Close()
+
+	user := jira.NewUserService(jira.NewClient(jira.WithBaseURL(srv.URL + "/")))
+	_, err := user.ResolveUser(context.Background(), "inactive@example.com")
+	if !errors.Is(err, jira.ErrUserNotFound) {
+		t.Fatalf("ResolveUser err = %v, want ErrUserNotFound", err)
+	}
+}
+
+func TestResolveUserAmbiguousCandidatesExcludeInactive(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{"accountId":"inactive","displayName":"Inactive","active":false},
+			{"accountId":"a-1","displayName":"Alice Smith","active":true},
+			{"accountId":"a-2","displayName":"Alice Jones","active":true}
+		]`))
+	}))
+	defer srv.Close()
+
+	user := jira.NewUserService(jira.NewClient(jira.WithBaseURL(srv.URL + "/")))
+	_, err := user.ResolveUser(context.Background(), "alice")
+	var ambig *jira.AmbiguousUserError
+	if !errors.As(err, &ambig) {
+		t.Fatalf("ResolveUser err = %v (%T), want *AmbiguousUserError", err, err)
+	}
+	if len(ambig.Candidates) != 2 {
+		t.Fatalf("Candidates = %d, want 2 active candidates", len(ambig.Candidates))
+	}
+	for _, c := range ambig.Candidates {
+		if c.AccountID != nil && *c.AccountID == "inactive" {
+			t.Fatalf("inactive user leaked into candidates: %+v", ambig.Candidates)
+		}
+	}
+}
+
 // TestResolveUserZeroMatchesReturnsErrUserNotFound covers the not-found path
 // (exit 2): /user/search returns []. ErrUserNotFound is the sentinel.
 func TestResolveUserZeroMatchesReturnsErrUserNotFound(t *testing.T) {

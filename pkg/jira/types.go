@@ -61,8 +61,11 @@ type Priority struct {
 
 type User struct {
 	AccountID    *string `json:"accountId,omitempty"`
+	AccountType  *string `json:"accountType,omitempty"`
 	DisplayName  *string `json:"displayName,omitempty"`
 	EmailAddress *string `json:"emailAddress,omitempty"`
+	Active       *bool   `json:"active,omitempty"`
+	Deleted      *bool   `json:"deleted,omitempty"`
 }
 
 type Component struct {

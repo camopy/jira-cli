@@ -181,10 +181,12 @@ func boardsTruncationWarnings(file jira.BoardsCacheFile) []map[string]any {
 		}}
 	case "rate_limit":
 		return []map[string]any{{
-			"type":        "rate-limit-during-paginate",
-			"resource":    "boards",
-			"message":     "boards cache truncated by rate_limit; re-run after the rate-limit window resets",
-			"remediation": "Re-run `jira cache boards --refresh` after the rate-limit window resets.",
+			"type":                "rate-limit-during-paginate",
+			"resource":            "boards",
+			"pages_fetched":       file.PagesFetched,
+			"retry_after_seconds": file.RetryAfterSeconds,
+			"message":             "boards cache truncated by rate_limit; re-run after the rate-limit window resets",
+			"remediation":         "Re-run `jira cache boards --refresh` after the rate-limit window resets.",
 		}}
 	}
 	return nil

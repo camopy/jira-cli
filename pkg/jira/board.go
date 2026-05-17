@@ -307,11 +307,13 @@ func (s *boardService) ProjectsForBoard(ctx context.Context, boardID int) ([]str
 // Data field so the existing internal/cache machinery (atomic write,
 // 0600 perms, TTL freshness) round-trips it unchanged.
 type BoardsCacheFile struct {
-	FetchedAt       string  `json:"fetched_at"`
-	TTLSeconds      int     `json:"ttl_seconds"`
-	Truncated       bool    `json:"truncated"`
-	TruncatedReason string  `json:"truncated_reason"`
-	Items           []Board `json:"items"`
+	FetchedAt         string  `json:"fetched_at"`
+	TTLSeconds        int     `json:"ttl_seconds"`
+	Truncated         bool    `json:"truncated"`
+	TruncatedReason   string  `json:"truncated_reason"`
+	PagesFetched      int     `json:"pages_fetched,omitempty"`
+	RetryAfterSeconds int     `json:"retry_after_seconds,omitempty"`
+	Items             []Board `json:"items"`
 }
 
 // DecodeBoardsCache parses the on-disk boards-cache payload. The earlier

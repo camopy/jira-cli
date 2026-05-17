@@ -2448,7 +2448,10 @@ func writeEnvelopeWithRawWarnings(cmd *cobra.Command, command string, data any, 
 		return cli.WriteCompact(cmd.OutOrStdout(), foldRawWarningsIntoData(data, warnings))
 	}
 	if usePlainOutput(cmd) {
-		return cli.WriteCommandPlain(cmd.OutOrStdout(), command, data, plainOptionsForCommand(cmd)...)
+		if err := cli.WriteCommandPlain(cmd.OutOrStdout(), command, data, plainOptionsForCommand(cmd)...); err != nil {
+			return err
+		}
+		return mirrorADFWarningsToStderr(cmd.ErrOrStderr(), rawWarningsToCLI(warnings))
 	}
 	body := map[string]any{
 		"ok": true,
@@ -2501,6 +2504,49 @@ func rawWarningsOrEmpty(w []map[string]any) []map[string]any {
 		return []map[string]any{}
 	}
 	return w
+}
+
+func rawWarningsToCLI(warnings []map[string]any) []cli.Warning {
+	out := make([]cli.Warning, 0, len(warnings))
+	for _, warning := range warnings {
+		if len(warning) == 0 {
+			continue
+		}
+		out = append(out, cli.Warning{
+			Type:    stringField(warning, "type"),
+			Message: rawWarningMessage(warning),
+			Field:   stringField(warning, "field"),
+			Path:    stringField(warning, "path"),
+			Lossy:   boolField(warning, "lossy"),
+		})
+	}
+	return out
+}
+
+func rawWarningMessage(warning map[string]any) string {
+	for _, key := range []string{"message", "remediation", "reason", "type"} {
+		if value := stringField(warning, key); value != "" {
+			return value
+		}
+	}
+	return "warning"
+}
+
+func stringField(m map[string]any, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	if v, ok := m[key]; ok && v != nil {
+		return fmt.Sprint(v)
+	}
+	return ""
+}
+
+func boolField(m map[string]any, key string) bool {
+	if v, ok := m[key].(bool); ok {
+		return v
+	}
+	return false
 }
 
 // writeEnvelopeWithWarnings is the warning-emitting envelope entry

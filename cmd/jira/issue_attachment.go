@@ -124,19 +124,16 @@ func issueAttachmentAddCommand() *cobra.Command {
 			}
 			// Pre-flight every path before any HTTP call. os.Stat
 			// catches both missing and permission-denied paths.
-			previews := make([]map[string]any, 0, len(paths))
-			for _, p := range paths {
-				info, err := os.Stat(p)
-				if err != nil {
-					return fmt.Errorf("attachment add: validation: %s: %w", p, err)
-				}
-				if info.IsDir() {
-					return fmt.Errorf("attachment add: validation: %s is a directory", p)
-				}
+			sources, err := attachmentFileSources(paths)
+			if err != nil {
+				return err
+			}
+			previews := make([]map[string]any, 0, len(sources))
+			for _, src := range sources {
 				previews = append(previews, map[string]any{
-					"path":          p,
-					"size":          info.Size(),
-					"mime_inferred": inferAttachmentMime(p),
+					"path":          src.Path,
+					"size":          src.Size,
+					"mime_inferred": inferAttachmentMime(src.Path),
 				})
 			}
 			if dryRun {
@@ -159,19 +156,20 @@ func issueAttachmentAddCommand() *cobra.Command {
 					_ = h.Close()
 				}
 			}()
-			sources := make([]jira.FileSource, 0, len(paths))
-			for _, p := range paths {
-				f, err := os.Open(p) //nolint:gosec // user-supplied attachment path, pre-validated by os.Stat above
+			fileSources := make([]jira.FileSource, 0, len(paths))
+			for _, source := range sources {
+				f, err := os.Open(source.Path)
 				if err != nil {
-					return fmt.Errorf("attachment add: validation: open %s: %w", p, err)
+					return fmt.Errorf("attachment add: validation: open %s: %w", source.Path, err)
 				}
 				handles = append(handles, f)
-				sources = append(sources, jira.FileSource{
-					Name:   filepath.Base(p),
+				fileSources = append(fileSources, jira.FileSource{
+					Name:   filepath.Base(source.Path),
+					Size:   source.Size,
 					Reader: f,
 				})
 			}
-			uploaded, _, err := service.Add(cmd.Context(), key, sources)
+			uploaded, _, err := service.Add(cmd.Context(), key, fileSources)
 			if err != nil {
 				return err
 			}
@@ -192,6 +190,38 @@ func issueAttachmentAddCommand() *cobra.Command {
 	cmd.Flags().StringArrayVar(&files, "file", nil, "Path to attach (repeatable)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without uploading")
 	return cmd
+}
+
+type attachmentFileSource struct {
+	Path string
+	Size int64
+}
+
+func attachmentFileSources(paths []string) ([]attachmentFileSource, error) {
+	sources := make([]attachmentFileSource, 0, len(paths))
+	var total int64
+	for _, p := range paths {
+		info, err := os.Stat(p)
+		if err != nil {
+			return nil, fmt.Errorf("attachment add: validation: %s: %w", p, err)
+		}
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("attachment add: validation: %s is not a regular file", p)
+		}
+		if info.Size() > jira.MaxAttachmentUploadBytes() {
+			return nil, fmt.Errorf("attachment add: validation: %s size %d exceeds %d bytes", p, info.Size(), jira.MaxAttachmentUploadBytes())
+		}
+		total += info.Size()
+		if total > jira.MaxAttachmentUploadBytes() {
+			return nil, fmt.Errorf("attachment add: validation: total upload size %d exceeds %d bytes", total, jira.MaxAttachmentUploadBytes())
+		}
+		sources = append(sources, attachmentFileSource{Path: p, Size: info.Size()})
+	}
+	return sources, nil
+}
+
+func jiraMaxAttachmentUploadBytes() int64 {
+	return jira.MaxAttachmentUploadBytes()
 }
 
 func issueAttachmentDeleteCommand() *cobra.Command {

@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	defaultBaseURL    = "https://api.atlassian.com/"
-	maxErrorBodyBytes = 4096
+	defaultBaseURL       = "https://api.atlassian.com/"
+	maxErrorBodyBytes    = 4096
+	maxResponseBodyBytes = 16 << 20
 )
 
 type ErrorType string
@@ -58,10 +59,21 @@ type APIError struct {
 	// response. Zero when the header was absent — callers fall back to
 	// exponential backoff with jitter.
 	RetryAfterSeconds int
+	// RateLimitRemaining is the X-RateLimit-Remaining header value when
+	// Jira sends it. Zero can mean either absent or exhausted; callers use
+	// it as diagnostic context only.
+	RateLimitRemaining int
+	// Cause preserves transport/body/JSON failures for errors.Is/As while
+	// keeping the public APIError message stable.
+	Cause error
 }
 
 func (e *APIError) Error() string {
 	return fmt.Sprintf("jira: %s (%d): %s", e.Type, e.StatusCode, e.Message)
+}
+
+func (e *APIError) Unwrap() error {
+	return e.Cause
 }
 
 // errorCollection is the Jira Cloud REST v3 standard error body shape
@@ -414,14 +426,18 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 	}
 	res, err := c.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("jira request %s %s: %w", req.Method, req.URL.EscapedPath(), err)
 	}
 	defer func() { _ = res.Body.Close() }()
 	if c.debug {
 		c.dumpResponseHead(res)
 	}
 	resp := &Response{Response: res, Rate: parseRate(res)}
-	body, readErr := io.ReadAll(res.Body)
+	bodyLimit := maxResponseBodyBytes
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		bodyLimit = maxErrorBodyBytes
+	}
+	body, truncated, readErr := readLimitedBody(res.Body, bodyLimit)
 	if c.debug {
 		c.dumpResponseBody(body)
 	}
@@ -432,26 +448,32 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 		return resp, &APIError{
 			StatusCode: res.StatusCode,
 			Type:       ErrorTypeServer,
-			Message:    "response body read failed: " + readErr.Error(),
+			Message:    "read response body: " + readErr.Error(),
+			Cause:      readErr,
+		}
+	}
+	if truncated && res.StatusCode >= 200 && res.StatusCode <= 299 {
+		return resp, &APIError{
+			StatusCode: res.StatusCode,
+			Type:       ErrorTypeServer,
+			Message:    fmt.Sprintf("response body exceeded %d bytes", maxResponseBodyBytes),
 		}
 	}
 	if len(body) > 0 {
 		resp.RawBody = append(resp.RawBody[:0], body...)
 	}
 	if res.StatusCode < 200 || res.StatusCode > 299 {
-		msgBody := body
-		if len(msgBody) > maxErrorBodyBytes {
-			msgBody = msgBody[:maxErrorBodyBytes]
-		}
+		msgBody := redactSensitiveBytes(body)
 		ec := parseErrorCollection(msgBody)
 		apiErr := &APIError{
-			StatusCode:        res.StatusCode,
-			Type:              classifyStatus(res.StatusCode),
-			Message:           strings.TrimSpace(string(msgBody)),
-			ErrorMessages:     ec.ErrorMessages,
-			FieldErrors:       ec.Errors,
-			UpstreamStatus:    ec.Status,
-			RetryAfterSeconds: resp.Rate.RetryAfterSeconds,
+			StatusCode:         res.StatusCode,
+			Type:               classifyStatus(res.StatusCode),
+			Message:            strings.TrimSpace(string(msgBody)),
+			ErrorMessages:      ec.ErrorMessages,
+			FieldErrors:        ec.Errors,
+			UpstreamStatus:     ec.Status,
+			RetryAfterSeconds:  resp.Rate.RetryAfterSeconds,
+			RateLimitRemaining: resp.Rate.Remaining,
 		}
 		return resp, apiErr
 	}
@@ -462,7 +484,7 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 			// failure, not a local validation error.  Wrap the decode error so
 			// that outputErrorFor's type-assert on *APIError can route it to
 			// exit 5 instead of the default exit 3.
-			snippet := body
+			snippet := redactSensitiveBytes(body)
 			if len(snippet) > maxErrorBodyBytes {
 				snippet = snippet[:maxErrorBodyBytes]
 			}
@@ -470,10 +492,22 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 				StatusCode: res.StatusCode,
 				Type:       ErrorTypeServer,
 				Message:    "response body is not valid JSON: " + err.Error() + "; body prefix: " + strings.TrimSpace(string(snippet)),
+				Cause:      err,
 			}
 		}
 	}
 	return resp, nil
+}
+
+func readLimitedBody(body io.Reader, limit int) ([]byte, bool, error) {
+	data, err := io.ReadAll(io.LimitReader(body, int64(limit)+1))
+	if err != nil {
+		return data, false, err
+	}
+	if len(data) > limit {
+		return data[:limit], true, nil
+	}
+	return data, false, nil
 }
 
 func (c *Client) validateRequestTarget(req *http.Request) error {
@@ -494,14 +528,18 @@ func (c *Client) dumpRequest(req *http.Request) {
 	headers := redactHeaders(req.Header)
 	bodyText := ""
 	if req.Body != nil && req.GetBody != nil {
-		// req.Body has already been used to build the request; rewind
-		// via GetBody for the dump. http.NewRequestWithContext sets
-		// GetBody when the body is a *bytes.Reader.
-		body, err := req.GetBody()
-		if err == nil && body != nil {
-			data, _ := io.ReadAll(body)
-			_ = body.Close()
-			bodyText = string(data)
+		if isDebuggableBody(req.Header.Get("Content-Type")) {
+			// req.Body has already been used to build the request; rewind
+			// via GetBody for the dump. http.NewRequestWithContext sets
+			// GetBody when the body is a *bytes.Reader.
+			body, err := req.GetBody()
+			if err == nil && body != nil {
+				data, _ := io.ReadAll(body)
+				_ = body.Close()
+				bodyText = string(redactSensitiveBytes(data))
+			}
+		} else {
+			bodyText = "(redacted non-json body)"
 		}
 	}
 	fmt.Fprintf(os.Stderr, "DBG ▶ %s %s\n", req.Method, req.URL.String())
@@ -511,6 +549,11 @@ func (c *Client) dumpRequest(req *http.Request) {
 	if bodyText != "" {
 		fmt.Fprintf(os.Stderr, "DBG    body: %s\n", oneLineSnippet(bodyText, 1024))
 	}
+}
+
+func isDebuggableBody(contentType string) bool {
+	contentType = strings.ToLower(strings.TrimSpace(contentType))
+	return strings.HasPrefix(contentType, "application/json")
 }
 
 // dumpResponseHead writes status + headers to stderr.
@@ -528,7 +571,7 @@ func (c *Client) dumpResponseBody(body []byte) {
 		fmt.Fprintln(os.Stderr, "DBG    body: (empty)")
 		return
 	}
-	fmt.Fprintf(os.Stderr, "DBG    body: %s\n", oneLineSnippet(string(body), 2048))
+	fmt.Fprintf(os.Stderr, "DBG    body: %s\n", oneLineSnippet(string(redactSensitiveBytes(body)), 2048))
 }
 
 // redactHeaders returns a copy of h with sensitive headers replaced by
@@ -555,6 +598,64 @@ func oneLineSnippet(s string, maxLen int) string {
 		flat = flat[:maxLen] + "…(truncated)"
 	}
 	return flat
+}
+
+func redactSensitiveBytes(body []byte) []byte {
+	if len(body) == 0 {
+		return body
+	}
+	var value any
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.UseNumber()
+	if err := dec.Decode(&value); err != nil {
+		return []byte(redactSensitiveText(string(body)))
+	}
+	redacted, err := json.Marshal(redactJSONValue("", value))
+	if err != nil {
+		return []byte(redactSensitiveText(string(body)))
+	}
+	return redacted
+}
+
+func redactJSONValue(key string, value any) any {
+	if sensitiveJSONKey(key) {
+		return "REDACTED"
+	}
+	switch v := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for k, item := range v {
+			out[k] = redactJSONValue(k, item)
+		}
+		return out
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = redactJSONValue("", item)
+		}
+		return out
+	default:
+		return value
+	}
+}
+
+func sensitiveJSONKey(key string) bool {
+	lower := strings.ToLower(key)
+	for _, token := range []string{"authorization", "cookie", "password", "secret", "token", "api_key", "apikey", "private_key"} {
+		if strings.Contains(lower, token) {
+			return true
+		}
+	}
+	return false
+}
+
+func redactSensitiveText(text string) string {
+	for _, marker := range []string{"authorization", "password", "secret", "token", "api_key", "apikey", "private_key"} {
+		if strings.Contains(strings.ToLower(text), marker) {
+			return "REDACTED"
+		}
+	}
+	return text
 }
 
 func parseRate(res *http.Response) Rate {
