@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/matcra587/jira-cli/pkg/adf"
+	"github.com/matcra587/jira-cli/internal/adf"
 )
 
 // CommentService groups the Jira-issue comment endpoints. Split out of

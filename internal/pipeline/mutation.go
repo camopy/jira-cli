@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli/adfmode"
-	"github.com/matcra587/jira-cli/pkg/adf"
 )
 
 // MutationInput is the realistic, command-facing input shape for the

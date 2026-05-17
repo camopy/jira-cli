@@ -10,9 +10,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui/components"
 	"github.com/matcra587/jira-cli/internal/tui/theme"
-	"github.com/matcra587/jira-cli/pkg/jira"
 )
 
 // issuesList is the dashboard's issue list view: a real Bubble Tea model

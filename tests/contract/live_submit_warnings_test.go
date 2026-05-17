@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli"
-	"github.com/matcra587/jira-cli/pkg/adf"
-	"github.com/matcra587/jira-cli/pkg/jira"
+	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 // Warnings collected by the pipeline before a live API call MUST

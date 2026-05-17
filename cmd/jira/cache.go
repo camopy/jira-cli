@@ -11,7 +11,7 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/cache"
 	"github.com/matcra587/jira-cli/internal/config"
-	"github.com/matcra587/jira-cli/pkg/jira"
+	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 // cacheCommand groups per-resource cache primers + housekeeping. Each

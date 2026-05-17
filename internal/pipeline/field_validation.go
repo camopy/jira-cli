@@ -19,8 +19,8 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli/adfmode"
-	"github.com/matcra587/jira-cli/pkg/adf"
 )
 
 // ScreenSchema is the per-project / per-issue-type field whitelist.

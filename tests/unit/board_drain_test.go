@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/matcra587/jira-cli/pkg/jira"
+	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 // pagedBoardServer fakes /rest/agile/1.0/board returning `total` boards,

@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/matcra587/jira-cli/pkg/adf"
+	"github.com/matcra587/jira-cli/internal/adf"
 )
 
 // lexorankPattern matches Jira Software's lexorank tokens (e.g. "0|i0003z:",

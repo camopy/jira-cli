@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui"
-	"github.com/matcra587/jira-cli/pkg/jira"
 )
 
 func TestTUIRendersStartupLoadErrorsInline(t *testing.T) {

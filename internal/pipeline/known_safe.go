@@ -3,7 +3,7 @@ package pipeline
 import (
 	"fmt"
 
-	"github.com/matcra587/jira-cli/pkg/adf"
+	"github.com/matcra587/jira-cli/internal/adf"
 )
 
 // knownSafeFields is the exact whitelist used as the best-effort

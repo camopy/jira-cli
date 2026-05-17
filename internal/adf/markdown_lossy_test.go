@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/matcra587/jira-cli/pkg/adf"
+	"github.com/matcra587/jira-cli/internal/adf"
 )
 
 // A GFM table has no supported ADF authoring path here — conversion

@@ -10,7 +10,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cache"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/config"
-	"github.com/matcra587/jira-cli/pkg/jira"
+	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 // completionHandler dispatches dynamic completion requests routed through

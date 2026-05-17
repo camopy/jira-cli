@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli/adfmode"
-	"github.com/matcra587/jira-cli/pkg/adf"
 )
 
 func mustParse(t *testing.T, raw string) adf.Document {

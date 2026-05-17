@@ -9,8 +9,8 @@ with Cobra.
   manpage source.
 - `internal/` — runtime, config, credential backends, output rendering,
   the mutation pipeline, the editor, and the TUI.
-- `pkg/jira/` — the Jira REST client and typed services.
-- `pkg/adf/` — Atlassian Document Format parsing, validation, rendering.
+- `internal/jira/` — the Jira REST client and typed services.
+- `internal/adf/` — Atlassian Document Format parsing, validation, rendering.
 - `tests/` — `contract`, `integration`, `unit`, and `guardrails` suites.
 
 ## Conventions

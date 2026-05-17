@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/matcra587/jira-cli/pkg/adf"
+	"github.com/matcra587/jira-cli/internal/adf"
 )
 
 // Parse → Marshal MUST preserve a known-node document byte-

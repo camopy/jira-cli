@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/pipeline"
-	"github.com/matcra587/jira-cli/pkg/jira"
 )
 
 // screenSchemaLookup is the narrow dependency a create / clone command

@@ -3,8 +3,8 @@ package tui
 import (
 	"time"
 
-	"github.com/matcra587/jira-cli/pkg/adf"
-	"github.com/matcra587/jira-cli/pkg/jira"
+	"github.com/matcra587/jira-cli/internal/adf"
+	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 // Submit messages — emitted by overlays/views to request a mutation.

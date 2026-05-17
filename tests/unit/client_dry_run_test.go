@@ -14,7 +14,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/matcra587/jira-cli/pkg/jira"
+	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 func TestClientDryRunRefusesMutatingMethods(t *testing.T) {

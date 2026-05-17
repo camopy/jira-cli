@@ -16,7 +16,7 @@ import (
 	"testing"
 
 	"github.com/matcra587/jira-cli/internal/cache"
-	"github.com/matcra587/jira-cli/pkg/jira"
+	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 // resolverFixture writes a boards cache file with the supplied entries

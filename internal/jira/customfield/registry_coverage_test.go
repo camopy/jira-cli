@@ -3,7 +3,7 @@ package customfield_test
 import (
 	"testing"
 
-	"github.com/matcra587/jira-cli/pkg/jira/customfield"
+	"github.com/matcra587/jira-cli/internal/jira/customfield"
 )
 
 // Validators MUST reject malformed values, not just malformed shapes.

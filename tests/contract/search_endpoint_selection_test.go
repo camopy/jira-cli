@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/matcra587/jira-cli/pkg/jira"
+	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 // Jira Cloud search MUST use POST /rest/api/3/search/jql (cursor-based)

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/matcra587/jira-cli/pkg/adf"
+	"github.com/matcra587/jira-cli/internal/adf"
 )
 
 // All MVP nodes & marks have a corresponding `<name>.json` fixture in

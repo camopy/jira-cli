@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli/adfmode"
-	"github.com/matcra587/jira-cli/pkg/adf"
-	"github.com/matcra587/jira-cli/pkg/jira/customfield"
+	"github.com/matcra587/jira-cli/internal/jira/customfield"
 )
 
 // CustomFieldDecision is the outcome of CustomFieldDropPolicy for one

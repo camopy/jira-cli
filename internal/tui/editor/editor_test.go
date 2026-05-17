@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/tui/editor"
-	"github.com/matcra587/jira-cli/pkg/adf"
 )
 
 // The in-TUI editor MUST be backed by an ADF document model end-to-end.

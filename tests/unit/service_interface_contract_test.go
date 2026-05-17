@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/matcra587/jira-cli/pkg/jira"
+	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 func TestJiraServicesAreExportedInterfaces(t *testing.T) {

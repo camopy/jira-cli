@@ -3,7 +3,7 @@ package jira
 import (
 	"encoding/json"
 
-	"github.com/matcra587/jira-cli/pkg/adf"
+	"github.com/matcra587/jira-cli/internal/adf"
 )
 
 func String(v string) *string { return &v }

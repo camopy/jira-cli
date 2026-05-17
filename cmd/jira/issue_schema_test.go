@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/pipeline"
-	"github.com/matcra587/jira-cli/pkg/jira"
 )
 
 type fakeScreenSchemaLookup struct {

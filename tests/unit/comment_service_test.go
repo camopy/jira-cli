@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/matcra587/jira-cli/pkg/adf"
-	"github.com/matcra587/jira-cli/pkg/jira"
+	"github.com/matcra587/jira-cli/internal/adf"
+	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 func TestIssueServiceAddCommentSubmitsADF(t *testing.T) {

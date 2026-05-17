@@ -24,7 +24,6 @@ func TestNoRogueStdinReads(t *testing.T) {
 	roots := []string{
 		filepath.Join("..", "..", "cmd"),
 		filepath.Join("..", "..", "internal"),
-		filepath.Join("..", "..", "pkg"),
 	}
 	allowedPaths := map[string]bool{
 		filepath.Join("..", "..", "internal", "cli", "stdin"):   true,

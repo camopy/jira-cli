@@ -7,7 +7,7 @@
 // protected: they render but cannot be edited or deleted.
 package editor
 
-import "github.com/matcra587/jira-cli/pkg/adf"
+import "github.com/matcra587/jira-cli/internal/adf"
 
 // Position describes a caret position inside the document.
 type Position struct {

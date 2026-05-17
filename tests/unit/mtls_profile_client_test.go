@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/matcra587/jira-cli/internal/config"
-	"github.com/matcra587/jira-cli/pkg/jira"
+	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 func TestProfileCarriesMTLSCertificateReferences(t *testing.T) {

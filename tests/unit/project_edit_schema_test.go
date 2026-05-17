@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/matcra587/jira-cli/pkg/jira"
+	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 // GetEditSchemaForProfile resolves the edit screen of one issue via the

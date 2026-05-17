@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/editor"
-	"github.com/matcra587/jira-cli/pkg/adf"
 )
 
 // The external --edit flow MUST round-trip through Markdown for the

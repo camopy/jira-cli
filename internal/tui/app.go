@@ -22,9 +22,9 @@ import (
 	"charm.land/lipgloss/v2"
 	xansi "github.com/charmbracelet/x/ansi"
 
+	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui/components"
 	"github.com/matcra587/jira-cli/internal/tui/theme"
-	"github.com/matcra587/jira-cli/pkg/jira"
 )
 
 // view enumerates the top-level screens.

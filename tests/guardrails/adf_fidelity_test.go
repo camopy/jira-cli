@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/matcra587/jira-cli/pkg/adf"
+	"github.com/matcra587/jira-cli/internal/adf"
 )
 
 // Every supported mark/attr survives a Parse → Marshal cycle. Checks

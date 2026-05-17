@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/matcra587/jira-cli/internal/config"
+	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui"
-	"github.com/matcra587/jira-cli/pkg/jira"
 	"github.com/spf13/cobra"
 )
 

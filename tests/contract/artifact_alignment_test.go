@@ -230,7 +230,7 @@ func TestOnePasswordDocsExplainDesktopIntegrationPrerequisite(t *testing.T) {
 }
 
 func TestRuntimeSourceHonorsStackBoundary(t *testing.T) {
-	for _, root := range []string{"../../cmd", "../../internal", "../../pkg"} {
+	for _, root := range []string{"../../cmd", "../../internal"} {
 		err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
 				return err

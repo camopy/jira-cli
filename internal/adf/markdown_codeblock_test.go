@@ -3,7 +3,7 @@ package adf_test
 import (
 	"testing"
 
-	"github.com/matcra587/jira-cli/pkg/adf"
+	"github.com/matcra587/jira-cli/internal/adf"
 )
 
 // Markdown-input layer: a fenced ```lang block in Markdown MUST

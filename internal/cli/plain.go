@@ -16,8 +16,8 @@ import (
 	"github.com/gechr/clog"
 	"github.com/gechr/primer/table"
 	termansi "github.com/gechr/x/ansi"
-	"github.com/matcra587/jira-cli/pkg/adf"
-	"github.com/matcra587/jira-cli/pkg/jira"
+	"github.com/matcra587/jira-cli/internal/adf"
+	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 type PlainOption func(*plainConfig)

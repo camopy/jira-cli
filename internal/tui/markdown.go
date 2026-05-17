@@ -5,8 +5,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/tui/theme"
-	"github.com/matcra587/jira-cli/pkg/adf"
 )
 
 // renderADFPlain returns a plain-text rendering for non-styled callers

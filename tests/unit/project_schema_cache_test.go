@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/matcra587/jira-cli/pkg/jira"
+	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 func TestProjectSchemaCacheTTLProfileSwitchAndManualInvalidation(t *testing.T) {

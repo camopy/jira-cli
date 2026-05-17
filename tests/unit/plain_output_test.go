@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli"
-	"github.com/matcra587/jira-cli/pkg/adf"
 )
 
 func TestPlainOutputExtractsADFText(t *testing.T) {
