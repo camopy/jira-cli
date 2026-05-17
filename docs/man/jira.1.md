@@ -17,7 +17,7 @@ structured JSON.
 ## Commands
 
 - `jira tui`
-- `jira issue list|view|create|edit|transition|clone|move|delete|comment|link|weblink|mine`
+- `jira issue list|view|create|edit|transition|clone|move|delete|comment|attachment|link|weblink|watchers|watch|unwatch|mine`
 - `jira epic list|board|add|remove`
 - `jira search jql|saved`
 - `jira jql build`
@@ -25,15 +25,15 @@ structured JSON.
 - `jira worklog add|list`
 - `jira auth login|status|logout|switch|refresh|token|migrate|whoami`
 - `jira config init|profile|get|set|theme`
-- `jira cache labels|projects|epics|fields|issuetypes|clear`
+- `jira cache boards|labels|projects|epics|fields|issuetypes|linktypes|clear`
 - `jira agent guide|schema|adf-matrix|fieldtypes`
 - `jira me`
 - `jira version`
 
 ## Output
 
-`--json`, `--compact`, `--plain`, and `--raw` are mutually exclusive; combining
-any two returns exit 3. `--plain` forces `clog` rich text output. Errors are
-written as `clog` diagnostics to stderr; under `--json` or `--compact` an
-error envelope is also written to stdout so machine consumers can parse the
-failure.
+`--output=auto|human|json|compact` is the single output selector. `human`
+forces `clog` rich text, `--output=json` writes the full envelope, and
+`compact` writes the command data on success. Errors are written as `clog`
+diagnostics to stderr; under `json` or `compact` an error envelope is also
+written to stdout so machine consumers can parse the failure.

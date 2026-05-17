@@ -130,6 +130,10 @@ run = "hk run pre-commit"
 description = "Download Go module dependencies"
 run = "go mod download"
 
+["docs:build"]
+description = "Build the documentation site"
+run = "uvx --from zensical zensical build --clean --strict"
+
 ["deps:update"]
 description = "Update direct Go dependencies to latest patch releases"
 env = { DEPS_UPDATE_QUERY = "patch" }

@@ -67,7 +67,7 @@ Classic Atlassian scopes (3 total — simplest path):
 - `read:jira-work` — issue view/list, JQL search, transitions list, worklog
   list, project/label/field/issuetype caches, createmeta
 - `write:jira-work` — create/edit/delete issues, execute transitions,
-  comments, issue links, web (remote) links, worklog add/delete
+  comments, issue links, web (remote) links, worklog add
 
 Granular scopes (Cloud scoped API tokens):
 
@@ -99,7 +99,6 @@ Write / delete:
 - `delete:comment:jira` — `issue comment delete`
 - `delete:issue:jira` — issue delete (incl. `--delete-subtasks`)
 - `delete:issue-link:jira` — `issue link delete`
-- `delete:issue-worklog:jira` — `worklog delete`
 - `delete:issue.watcher:jira` — `issue watchers remove`, `unwatch`
 - `write:attachment:jira` — `issue attachment add`
 - `write:comment:jira` — `issue comment add/edit`
@@ -128,8 +127,8 @@ Core keys: `j/k`, `/`, `Enter`, `e`, `m`, `c`, `w`, `n`, `r`, `P`, `?`, `q`.
 Non-TTY and agent environments emit JSON without prompts.
 
 ```sh
-jira issue list --json
-jira issue create --json-input payload.json --no-input --dry-run --json
+jira issue list --output=json
+jira issue create --json-input payload.json --no-input --dry-run --output=json
 jira agent schema
 ```
 
@@ -149,8 +148,8 @@ TTY commands render successful results through `clog` rich output:
 INF ℹ️ listed issues count=0 detail=false
 ```
 
-Use `--compact` for jq-friendly output, `--plain` to force `clog` rich text,
-and `--raw` for Jira REST-native shapes where supported.
+Use `--output=compact` for jq-friendly data-only JSON and
+`--output=human` to force `clog` rich text.
 
 ## JQL
 

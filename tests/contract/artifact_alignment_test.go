@@ -3,6 +3,7 @@ package contract
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -60,6 +61,117 @@ func TestReadmeDocumentsReleaseVersionMetadata(t *testing.T) {
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("README missing install/version contract %q\n%s", want, readme)
+		}
+	}
+}
+
+func TestHumanDocsUseCurrentOutputFlag(t *testing.T) {
+	removedFlags := map[string]*regexp.Regexp{
+		"--json":    regexp.MustCompile(`(^|[^[:alnum:]_-])--json([^[:alnum:]_-]|$)`),
+		"--compact": regexp.MustCompile(`(^|[^[:alnum:]_-])--compact([^[:alnum:]_-]|$)`),
+		"--plain":   regexp.MustCompile(`(^|[^[:alnum:]_-])--plain([^[:alnum:]_-]|$)`),
+		"--raw":     regexp.MustCompile(`(^|[^[:alnum:]_-])--raw([^[:alnum:]_-]|$)`),
+	}
+	for _, path := range []string{
+		"../../README.md",
+		"../../docs/man/jira.1.md",
+	} {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("ReadFile(%s): %v", path, err)
+		}
+		got := string(b)
+		if !strings.Contains(got, "--output=json") {
+			t.Fatalf("%s does not document the current --output=json flag", path)
+		}
+		for forbidden, re := range removedFlags {
+			if re.MatchString(got) {
+				t.Fatalf("%s still advertises removed output flag %q", path, forbidden)
+			}
+		}
+	}
+}
+
+func TestReadmeScopeDocsMatchCurrentCommands(t *testing.T) {
+	readme, err := os.ReadFile("../../README.md")
+	if err != nil {
+		t.Fatalf("ReadFile(README.md): %v", err)
+	}
+	if strings.Contains(string(readme), "worklog delete") {
+		t.Fatalf("README documents worklog delete, but the command surface only has worklog add/list")
+	}
+}
+
+func TestAgentGuideRecipesMatchLiveCommandSurface(t *testing.T) {
+	guide, err := os.ReadFile("../../cmd/jira/agent_guide.md")
+	if err != nil {
+		t.Fatalf("ReadFile(agent_guide) error = %v", err)
+	}
+	got := string(guide)
+	for _, want := range []string{
+		"jira issue link delete KEY 9001 --force --output=json",
+		"Configured backend lookup",
+		"JIRA_TOKEN_<PROFILE>",
+		"`AGENT=amp`",
+		"`CLAUDECODE`",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("agent guide missing current recipe text %q", want)
+		}
+	}
+	for _, forbidden := range []string{
+		"jira issue link delete 9001 --force --output=json",
+		"1Password (`op` CLI fallback)",
+		"Backends are tried in this priority order on every API call",
+		"jira issue list --all",
+		"jira issue list --all --max-pages",
+		"jira issue list --all --max-results-total",
+		"jira issue list --all --unbounded",
+	} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("agent guide still documents stale recipe %q", forbidden)
+		}
+	}
+}
+
+func TestJQLDocsMatchLiveBuilderDefaults(t *testing.T) {
+	jql, err := os.ReadFile("../../docs/jql.md")
+	if err != nil {
+		t.Fatalf("ReadFile(jql) error = %v", err)
+	}
+	got := string(jql)
+	for _, want := range []string{
+		"Sort defaults to descending",
+		"`--desc=false`",
+		"ORDER BY updated DESC",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("JQL docs missing live builder behavior %q\n%s", want, jql)
+		}
+	}
+	if strings.Contains(got, "default ascending") {
+		t.Fatalf("JQL docs still claim ascending is the default\n%s", jql)
+	}
+}
+
+func TestDocsSiteArtifactsExist(t *testing.T) {
+	for _, path := range []string{
+		"../../zensical.toml",
+		"../../.github/workflows/docs.yml",
+		"../../docs/index.md",
+		"../../docs/installation.md",
+		"../../docs/auth.md",
+		"../../docs/output.md",
+		"../../docs/issues.md",
+		"../../docs/adf.md",
+		"../../docs/custom-fields.md",
+		"../../docs/search.md",
+		"../../docs/cache.md",
+		"../../docs/agent.md",
+		"../../docs/stylesheets/github.css",
+	} {
+		if _, err := os.ReadFile(path); err != nil {
+			t.Fatalf("docs site artifact %s missing: %v", path, err)
 		}
 	}
 }

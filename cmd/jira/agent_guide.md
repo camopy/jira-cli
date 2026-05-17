@@ -57,11 +57,13 @@ payload without the envelope) cover every machine-consumption need.
 | Non-TTY (pipe)    | `json`  (full envelope) |
 | Detected agent    | `compact`  (envelope `data` only, single line, jq-friendly) |
 
-Agents detected via env vars: `CLAUDE_CODE`, `CURSOR_TERMINAL`,
-`CURSOR_AGENT`, `COPILOT_CLI`, `COPILOT`, `GITHUB_COPILOT`,
-`CODEX_*`, `OPENAI_CODEX`, `GEMINI_CLI`, `OPENCODE`. First match wins
-in the order amp → codex → gemini → copilot → opencode → cursor →
-claude. `AI_AGENT=<name>` is an explicit override.
+Agents detected via env vars: `AGENT=amp`, `CODEX_SANDBOX`,
+`CODEX_CI`, `CODEX_THREAD_ID`, `CODEX`, `OPENAI_CODEX`,
+`GEMINI_CLI`, `COPILOT_CLI`, `COPILOT`, `GITHUB_COPILOT`,
+`OPENCODE`, `CURSOR_TERMINAL`, `CURSOR_AGENT`, `CLAUDECODE`, and
+`CLAUDE_CODE`. First match wins in the order amp → codex → gemini →
+copilot → opencode → cursor → claude. `AI_AGENT=<name>` is an explicit
+override.
 
 | `--output` value | Effect |
 |------------------|--------|
@@ -616,10 +618,10 @@ jira issue link list KEY --output=json
 }
 ```
 
-`link delete LINK_ID --force` (force-gated under `--no-input`):
+`link delete KEY LINK_ID --force` (force-gated under `--no-input`):
 
 ```sh
-jira issue link delete 9001 --force --output=json
+jira issue link delete KEY 9001 --force --output=json
 ```
 
 ```json
@@ -1380,7 +1382,8 @@ Translations the builder applies for you:
 | Repeated `--label X`  | `labels in (X, Y, Z)`                  |
 | Repeated `--type X`   | `issuetype in (X, Y, Z)`               |
 | Repeated `--status X` | `status in (X, Y, Z)`                  |
-| `--order-by F --desc` | `ORDER BY F DESC` (default ASC)        |
+| `--order-by F --desc` | `ORDER BY F DESC` (default)            |
+| `--order-by F --desc=false` | `ORDER BY F ASC`                |
 | no flags              | `updated >= -365d ORDER BY updated DESC` |
 
 Validation:
@@ -1433,18 +1436,19 @@ supported backends. The TOML never holds the secret.
 
 #### Step 1 — pick a backend
 
-Backends are tried in this priority order on every API call. Pick the
-one you intend to use; the others stay as fallbacks.
+Pick the backend you intend the profile to use. Environment credentials are an
+override; otherwise the profile's configured backend is used.
 
 | Backend | Pick when |
 |---------|-----------|
-| **OS keyring** (default) | Single workstation, you want zero extra setup, your OS provides Secret Service / Keychain / Credential Manager |
-| **1Password (Go SDK)** | Team uses 1Password, you have a service account token (`OP_SERVICE_ACCOUNT_TOKEN` env var) OR the desktop app is signed in (`onepassword_account` set) |
-| **1Password (`op` CLI fallback)** | You're already signed in via `op` CLI but don't want to wire the SDK |
-| **Env var** | CI / containers / ephemeral runners. Read from `JIRA_TOKEN_<PROFILE>` |
+| **Env var** | CI / containers / ephemeral runners. `JIRA_TOKEN_<PROFILE>` overrides stored credentials for that profile. |
+| **Configured backend lookup** | Normal profile usage. `secret_backend = "keyring"` reads the OS keyring; `secret_backend = "1password"` reads the SDK-backed 1Password store. |
+| **OS keyring** (default) | Single workstation, you want zero extra setup, your OS provides Secret Service / Keychain / Credential Manager. |
+| **1Password (Go SDK)** | Team uses 1Password and you have `OP_SERVICE_ACCOUNT_TOKEN` or a CGO-enabled source build with desktop app integration. |
 
-The first backend that returns a credential wins. You don't have to
-use only one — set up keyring locally, fall through to env in CI.
+The environment override is checked first. If it is unset, the profile's
+configured backend is used. The 1Password backend is SDK-only; it does not
+shell out to the `op` CLI.
 
 #### Step 2 — create the profile + credential
 
@@ -1605,15 +1609,16 @@ Per-command headless requirements:
 ## Pagination & `--all`
 
 ```sh
-jira issue list --limit 25                 # stop after 25 results
-jira issue list --all                       # drain pages until isLast
-jira issue list --all --max-pages 50        # override default 100 pages
-jira issue list --all --max-results-total 5000  # override default 10,000
-jira issue list --all --unbounded           # remove BOTH limits (never set by TUI)
+jira issue comment list KEY --limit 25      # page size
+jira issue comment list KEY --all           # walk every page until isLast
+jira issue attachment list KEY --limit 25   # page size
+jira issue attachment list KEY --all        # return every attachment
+jira boards list --unbounded                # remove the board cache walk bound
 ```
 
-Bounded by default to protect runaway agents. When a bound truncates,
-`meta.pagination.truncated = true` and `truncated_reason ∈ {max_pages, max_results}`.
+Board and cache drains are bounded by default to protect runaway agents. When a
+bound truncates, the command emits a warning and data fields such as
+`truncated` and `truncated_reason`.
 
 ## Debug logging
 
