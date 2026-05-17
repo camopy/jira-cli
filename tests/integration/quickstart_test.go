@@ -24,7 +24,7 @@ workday_seconds = 28800
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	commands := [][]string{
-		{"schema"},
+		{"agent", "schema"},
 		{"issue", "list", "--output=json"},
 		// project_key + issue_type derive from profile defaults; summary supplied via flag.
 		{"issue", "create", "--summary", "hello", "--dry-run", "--no-input", "--output=json"},

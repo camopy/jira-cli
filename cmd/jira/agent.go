@@ -111,20 +111,15 @@ func agentGuideCommand() *cobra.Command {
 	return cmd
 }
 
-// agentADFMatrixCommand emits the ADF support matrix as JSON or the
-// generated Markdown — for agents that want the support set without
-// parsing prose.
+// agentADFMatrixCommand emits the ADF support matrix as JSON — the set
+// of nodes and marks the CLI handles, for agents that want the support
+// set without parsing prose.
 func agentADFMatrixCommand() *cobra.Command {
-	var asMarkdown bool
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "adf-matrix",
-		Short: "Emit the ADF support matrix as JSON or Markdown",
+		Short: "Emit the ADF support matrix as JSON",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if asMarkdown {
-				_, err := cmd.OutOrStdout().Write(adf.GenerateMatrix())
-				return err
-			}
 			rows := adf.Registry().All()
 			data := make([]any, 0, len(rows))
 			for _, r := range rows {
@@ -133,8 +128,6 @@ func agentADFMatrixCommand() *cobra.Command {
 			return writeEnvelope(cmd, "agent.adf-matrix", data)
 		},
 	}
-	cmd.Flags().BoolVar(&asMarkdown, "markdown", false, "Emit Markdown instead of JSON")
-	return cmd
 }
 
 // agentFieldTypesCommand emits the customfield registry as the

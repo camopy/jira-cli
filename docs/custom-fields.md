@@ -16,12 +16,35 @@ The field cache helps completion and lets agents map human field names to
 
 ## Field-Type Registry
 
+The CLI recognizes these custom-field types and encodes a bare value into the
+wire shape Jira expects. An explicit object (`{"id":...}` or `{"value":...}`)
+is always passed through unchanged.
+
+| Type | Bare input | Wire shape |
+|------|-----------|------------|
+| `string` | `"text"` | raw value |
+| `number` | `42` / `1.5` | raw numeric value |
+| `date` | `"2026-05-17"` | `YYYY-MM-DD` string |
+| `datetime` | ISO-8601 with offset | datetime string |
+| `labels` | `["a","b"]` | array of strings |
+| `select` | `"High"` | `{"value":"High"}` |
+| `multiselect` | `["A","B"]` | `[{"value":"A"},{"value":"B"}]` |
+| `user` | `"<accountId>"` | `{"accountId":"<id>"}` |
+| `multiuser` | `["<id1>","<id2>"]` | array of `{"accountId":...}` |
+| `group` / `multigroup` | group name(s) | `{"name":...}` / array |
+| `components` | component name(s) | array of `{"name":...}` |
+| `version` / `fixversions` | version name(s) | version array |
+| `versionpicker` / `multiversionpicker` | version name(s) | `{"name":...}` / array |
+| `projectpicker` | project key | `{"key":"<project>"}` |
+| `parent` | `"PROJ-123"` | parent issue link |
+| `cascadingselect` | — | `{"value":"<top>","child":{"value":"<sub>"}}` |
+
 ```sh
 jira agent fieldtypes --output=json
 ```
 
-The registry describes supported customfield encoders and the JSON shape each
-expects.
+`agent fieldtypes` emits the live registry as JSON, including the encoding
+notes above, so an agent can resolve a field shape without parsing prose.
 
 ## JSON Input
 
