@@ -129,7 +129,7 @@ func TestJSONErrorsUseClogDiagnosticsAndExitCodes(t *testing.T) {
 }
 
 func TestSchemaIncludesFlagsAndOutputSchemas(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "schema")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "agent", "schema")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("schema error = %v\n%s", err, out)

@@ -21,12 +21,12 @@ import (
 // Each predictor name corresponds either to a flag's
 // `clib.FlagExtra{Complete: "predictor=foo"}` or to an entry in a command's
 // `Annotations["clib"]` `dynamic-args='foo,bar'` list.
-func completionHandler() complete.Handler {
+func completionHandler(startup startupGlobals) complete.Handler {
 	return func(shell, kind string, args []string) {
 		_ = shell
 		switch kind {
 		case "profile":
-			cfg, err := config.Load()
+			cfg, err := config.Load(config.WithPath(startup.ConfigPath))
 			if err != nil {
 				return
 			}
@@ -34,7 +34,7 @@ func completionHandler() complete.Handler {
 				_, _ = fmt.Fprintln(os.Stdout, p.Name)
 			}
 		case "configkey":
-			cfg, _ := config.Load()
+			cfg, _ := config.Load(config.WithPath(startup.ConfigPath))
 			for _, k := range config.Keys(cfg) {
 				_, _ = fmt.Fprintf(os.Stdout, "%s\t%s\n", k.Name, k.Description)
 			}
@@ -47,7 +47,7 @@ func completionHandler() complete.Handler {
 				_, _ = fmt.Fprintln(os.Stdout, choice)
 			}
 		case "alias":
-			cfg, err := config.Load()
+			cfg, err := config.Load(config.WithPath(startup.ConfigPath))
 			if err != nil {
 				return
 			}
@@ -59,17 +59,17 @@ func completionHandler() complete.Handler {
 				_, _ = fmt.Fprintln(os.Stdout, r)
 			}
 		case "cacheproject":
-			emitCachedProjects()
+			emitCachedProjects(completionProfile(startup))
 		case "cacheepic":
-			emitCachedEpics()
+			emitCachedEpics(completionProfile(startup))
 		case "cachelabel":
-			emitCachedLabels()
+			emitCachedLabels(completionProfile(startup))
 		case "cacheissuetype":
-			emitCachedIssueTypes()
+			emitCachedIssueTypes(completionProfile(startup))
 		case "cachelinktype":
-			emitCachedLinkTypes()
+			emitCachedLinkTypes(completionProfile(startup))
 		case "cacheboard":
-			emitCachedBoards()
+			emitCachedBoards(completionProfile(startup))
 		case "issuekey":
 			// Every command taking an issue key positionally carries the
 			// dynamic-args='issuekey' annotation so a future issue-key
@@ -85,17 +85,20 @@ func completionHandler() complete.Handler {
 
 // completionProfile picks a profile name for cache-backed completion.
 // Falls back to "default" when the config is missing.
-func completionProfile() string {
-	cfg, err := config.Load()
+func completionProfile(startup startupGlobals) string {
+	if startup.Profile != "" {
+		return startup.Profile
+	}
+	cfg, err := config.Load(config.WithPath(startup.ConfigPath))
 	if err != nil || cfg.DefaultProfile == "" {
 		return "default"
 	}
 	return cfg.DefaultProfile
 }
 
-func emitCachedProjects() {
+func emitCachedProjects(profile string) {
 	var projects []jira.ProjectSummary
-	if !readCacheJSON(completionProfile(), "projects", &projects) {
+	if !readCacheJSON(profile, "projects", &projects) {
 		return
 	}
 	for _, p := range projects {
@@ -104,13 +107,13 @@ func emitCachedProjects() {
 	}
 }
 
-func emitCachedEpics() {
+func emitCachedEpics(profile string) {
 	type epic struct {
 		Key     string `json:"key"`
 		Summary string `json:"summary"`
 	}
 	var epics []epic
-	if !readCacheJSON(completionProfile(), "epics", &epics) {
+	if !readCacheJSON(profile, "epics", &epics) {
 		return
 	}
 	for _, e := range epics {
@@ -119,9 +122,9 @@ func emitCachedEpics() {
 	}
 }
 
-func emitCachedLabels() {
+func emitCachedLabels(profile string) {
 	var labels []string
-	if !readCacheJSON(completionProfile(), "labels", &labels) {
+	if !readCacheJSON(profile, "labels", &labels) {
 		return
 	}
 	for _, l := range labels {
@@ -129,12 +132,12 @@ func emitCachedLabels() {
 	}
 }
 
-func emitCachedIssueTypes() {
+func emitCachedIssueTypes(profile string) {
 	type issuetype struct {
 		Name string `json:"name"`
 	}
 	var types []issuetype
-	if !readCacheJSON(completionProfile(), "issuetypes", &types) {
+	if !readCacheJSON(profile, "issuetypes", &types) {
 		return
 	}
 	seen := make(map[string]struct{}, len(types))
@@ -150,15 +153,15 @@ func emitCachedIssueTypes() {
 // emitCachedBoards emits one candidate per cached board for the
 // `--board NAME` predictor. Output format:
 //
-//	<id>\t<name> (<type>, <project[s]>)
+//	<name>\t<id> (<type>, <project[s]>)
 //
 // where the projects segment comma-joins up to two project keys and
 // collapses to `+N` overflow for 3+ keys; an empty projects list drops
 // the segment entirely (just `(<type>)`). Null-safe: emits nothing
 // when the cache is missing or malformed so completion never blocks
 // the shell.
-func emitCachedBoards() {
-	entry, ok, _, err := cache.Read(completionProfile(), "boards", 24*time.Hour*365)
+func emitCachedBoards(profile string) {
+	entry, ok, _, err := cache.Read(profile, "boards", 24*time.Hour*365)
 	if err != nil || !ok {
 		return
 	}
@@ -178,7 +181,7 @@ func emitCachedBoards() {
 		// Sanitize the name so embedded tabs, newlines and control
 		// bytes cannot corrupt the one-candidate-per-line grammar.
 		safeName := cli.SanitizeCompletionField(*b.Name)
-		_, _ = fmt.Fprintf(os.Stdout, "%d\t%s%s\n", *b.ID, safeName, descriptor)
+		_, _ = fmt.Fprintf(os.Stdout, "%s\t%d%s\n", safeName, *b.ID, descriptor)
 	}
 }
 
@@ -205,11 +208,11 @@ func boardCompletionDescriptor(typ string, keys []string) string {
 
 // emitCachedLinkTypes emits one candidate per issue-link type cached
 // under the active profile's `linktypes` resource. Output format:
-// `<id>\t<name> (<inward> / <outward>)` so the shell tooltip carries
+// `<name>\t<id> (<inward> / <outward>)` so the shell tooltip carries
 // the relationship phrasing alongside the canonical name.
 // Null-safe: silently emits nothing when the cache is absent or
 // malformed so completion never blocks the shell.
-func emitCachedLinkTypes() {
+func emitCachedLinkTypes(profile string) {
 	type linkType struct {
 		ID      string `json:"id"`
 		Name    string `json:"name"`
@@ -217,7 +220,7 @@ func emitCachedLinkTypes() {
 		Outward string `json:"outward"`
 	}
 	var types []linkType
-	if !readCacheJSON(completionProfile(), "linktypes", &types) {
+	if !readCacheJSON(profile, "linktypes", &types) {
 		return
 	}
 	for _, t := range types {
@@ -225,7 +228,7 @@ func emitCachedLinkTypes() {
 			continue
 		}
 		_, _ = fmt.Fprintf(os.Stdout, "%s\t%s (%s / %s)\n",
-			cli.SanitizeCompletionField(t.ID), cli.SanitizeCompletionField(t.Name),
+			cli.SanitizeCompletionField(t.Name), cli.SanitizeCompletionField(t.ID),
 			cli.SanitizeCompletionField(t.Inward), cli.SanitizeCompletionField(t.Outward))
 	}
 }

@@ -39,7 +39,7 @@ func TestRemovedLegacyOutputFlagsAreUnknownFlags(t *testing.T) {
 	for _, removed := range []string{"--json", "--compact", "--plain", "--raw"} {
 		removed := removed
 		t.Run(removed, func(t *testing.T) {
-			cmd := exec.Command(bin, removed, "schema")
+			cmd := exec.Command(bin, "agent", "schema", removed)
 			var stdout, stderr bytes.Buffer
 			cmd.Stdout = &stdout
 			cmd.Stderr = &stderr

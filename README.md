@@ -124,7 +124,7 @@ Non-TTY and agent environments emit JSON without prompts.
 ```sh
 jira issue list --json
 jira issue create --json-input payload.json --no-input --dry-run --json
-jira schema
+jira agent schema
 ```
 
 Where `payload.json` is at minimum:

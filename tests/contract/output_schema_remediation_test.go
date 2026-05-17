@@ -7,7 +7,7 @@ import (
 )
 
 func TestOutputSchemasDescribeNestedEnvelopeAndIssueShapes(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=json", "schema")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=json", "agent", "schema")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("schema error = %v\n%s", err, out)

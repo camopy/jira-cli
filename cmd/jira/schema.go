@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/matcra587/jira-cli/internal/cli"
@@ -9,29 +12,47 @@ import (
 )
 
 type commandSchema struct {
-	Name        string          `json:"name"`
-	Use         string          `json:"use"`
-	Short       string          `json:"short"`
-	Flags       []flagSchema    `json:"flags,omitempty"`
-	Subcommands []commandSchema `json:"subcommands,omitempty"`
+	Name                   string          `json:"name"`
+	CommandPath            string          `json:"command_path"`
+	Use                    string          `json:"use"`
+	Short                  string          `json:"short"`
+	Flags                  []flagSchema    `json:"flags,omitempty"`
+	MutuallyExclusiveFlags [][]string      `json:"mutually_exclusive_flags,omitempty"`
+	RequiredTogetherFlags  [][]string      `json:"required_together_flags,omitempty"`
+	OneRequiredFlags       [][]string      `json:"one_required_flags,omitempty"`
+	InputSchema            string          `json:"input_schema,omitempty"`
+	OutputSchema           string          `json:"output_schema,omitempty"`
+	Subcommands            []commandSchema `json:"subcommands,omitempty"`
 }
 
 type flagSchema struct {
-	Name      string `json:"name"`
-	Type      string `json:"type"`
-	Usage     string `json:"usage"`
-	Shorthand string `json:"shorthand,omitempty"`
-	Default   string `json:"default,omitempty"`
+	Name        string   `json:"name"`
+	Type        string   `json:"type"`
+	Usage       string   `json:"usage"`
+	Shorthand   string   `json:"shorthand,omitempty"`
+	Default     string   `json:"default,omitempty"`
+	Group       string   `json:"group,omitempty"`
+	Placeholder string   `json:"placeholder,omitempty"`
+	Completion  string   `json:"completion,omitempty"`
+	Enum        []string `json:"enum,omitempty"`
+	EnumDefault string   `json:"enum_default,omitempty"`
+	EnumTerse   []string `json:"enum_terse,omitempty"`
+	Terse       string   `json:"terse,omitempty"`
+	ValueHint   string   `json:"value_hint,omitempty"`
+	Required    bool     `json:"required,omitempty"`
 }
 
 // writeSchema emits the CLI command schema. The envelope vs compact vs
 // human output shape is decided by the resolved --output mode.
 func writeSchema(cmd *cobra.Command) error {
 	root := cmd.Root()
+	outputs := outputSchemas()
+	inputs := inputSchemas()
 	data := map[string]any{
-		"commands":       []commandSchema{schemaForCommand(root)},
-		"output_schemas": outputSchemas(),
-		"input_schemas":  inputSchemas(),
+		"commands":       []commandSchema{schemaForCommand(root, inputs, outputs)},
+		"global_flags":   flagSchemas(root.PersistentFlags()),
+		"output_schemas": outputs,
+		"input_schemas":  inputs,
 	}
 	if useCompactOutput(cmd) {
 		return cli.WriteCompact(cmd.OutOrStdout(), data)
@@ -53,33 +74,145 @@ func writeSchema(cmd *cobra.Command) error {
 	return cli.WriteEnvelope(cmd.OutOrStdout(), env)
 }
 
-func schemaForCommand(cmd *cobra.Command) commandSchema {
+func schemaForCommand(cmd *cobra.Command, inputs, outputs map[string]any) commandSchema {
+	key := schemaKeyForCommand(cmd)
 	schema := commandSchema{
-		Name:  cmd.Name(),
-		Use:   cmd.Use,
-		Short: cmd.Short,
+		Name:                   cmd.Name(),
+		CommandPath:            cmd.CommandPath(),
+		Use:                    cmd.Use,
+		Short:                  cmd.Short,
+		Flags:                  flagSchemas(cmd.LocalFlags()),
+		MutuallyExclusiveFlags: flagGroups(cmd.LocalFlags(), cobraMutuallyExclusiveAnnotation),
+		RequiredTogetherFlags:  flagGroups(cmd.LocalFlags(), cobraRequiredAsGroupAnnotation),
+		OneRequiredFlags:       flagGroups(cmd.LocalFlags(), cobraOneRequiredAnnotation),
 	}
-	seen := map[string]struct{}{}
-	cmd.Flags().VisitAll(func(flag *pflag.Flag) {
-		if _, ok := seen[flag.Name]; ok {
-			return
-		}
-		seen[flag.Name] = struct{}{}
-		schema.Flags = append(schema.Flags, flagSchema{
-			Name:      "--" + flag.Name,
-			Type:      flag.Value.Type(),
-			Usage:     flag.Usage,
-			Shorthand: flag.Shorthand,
-			Default:   flag.DefValue,
-		})
-	})
+	if _, ok := inputs[key]; ok {
+		schema.InputSchema = key
+	}
+	if _, ok := outputs[key]; ok {
+		schema.OutputSchema = key
+	}
 	for _, child := range cmd.Commands() {
 		if !child.IsAvailableCommand() {
 			continue
 		}
-		schema.Subcommands = append(schema.Subcommands, schemaForCommand(child))
+		schema.Subcommands = append(schema.Subcommands, schemaForCommand(child, inputs, outputs))
 	}
 	return schema
+}
+
+const (
+	cobraRequiredAsGroupAnnotation   = "cobra_annotation_required_if_others_set"
+	cobraOneRequiredAnnotation       = "cobra_annotation_one_required"
+	cobraMutuallyExclusiveAnnotation = "cobra_annotation_mutually_exclusive"
+	cobraRequiredFlagAnnotation      = "cobra_annotation_bash_completion_one_required_flag"
+	clibExtraAnnotationKey           = "clib.extra"
+)
+
+type clibFlagExtraSchema struct {
+	Complete    string   `json:"complete"`
+	Enum        []string `json:"enum"`
+	EnumDefault string   `json:"enumDefault"`
+	EnumTerse   []string `json:"enumTerse"`
+	Group       string   `json:"group"`
+	Hint        string   `json:"hint"`
+	Placeholder string   `json:"placeholder"`
+	Terse       string   `json:"terse"`
+}
+
+func flagSchemas(flags *pflag.FlagSet) []flagSchema {
+	if flags == nil {
+		return nil
+	}
+	out := []flagSchema{}
+	seen := map[string]struct{}{}
+	flags.VisitAll(func(flag *pflag.Flag) {
+		if flag.Hidden || flag.Name == "help" {
+			return
+		}
+		if _, ok := seen[flag.Name]; ok {
+			return
+		}
+		seen[flag.Name] = struct{}{}
+		extra := clibExtraForFlag(flag)
+		out = append(out, flagSchema{
+			Name:        "--" + flag.Name,
+			Type:        flag.Value.Type(),
+			Usage:       flag.Usage,
+			Shorthand:   flag.Shorthand,
+			Default:     flag.DefValue,
+			Group:       extra.Group,
+			Placeholder: extra.Placeholder,
+			Completion:  extra.Complete,
+			Enum:        extra.Enum,
+			EnumDefault: extra.EnumDefault,
+			EnumTerse:   extra.EnumTerse,
+			Terse:       extra.Terse,
+			ValueHint:   extra.Hint,
+			Required:    len(flag.Annotations[cobraRequiredFlagAnnotation]) > 0,
+		})
+	})
+	return out
+}
+
+func clibExtraForFlag(flag *pflag.Flag) clibFlagExtraSchema {
+	if flag == nil || len(flag.Annotations[clibExtraAnnotationKey]) == 0 {
+		return clibFlagExtraSchema{}
+	}
+	var extra clibFlagExtraSchema
+	_ = json.Unmarshal([]byte(flag.Annotations[clibExtraAnnotationKey][0]), &extra)
+	return extra
+}
+
+func flagGroups(flags *pflag.FlagSet, annotation string) [][]string {
+	if flags == nil {
+		return nil
+	}
+	seen := map[string][]string{}
+	flags.VisitAll(func(flag *pflag.Flag) {
+		if flag.Hidden {
+			return
+		}
+		for _, raw := range flag.Annotations[annotation] {
+			if raw == "" {
+				continue
+			}
+			group := normalizeFlagGroup(raw)
+			if len(group) > 0 {
+				seen[strings.Join(group, "\x00")] = group
+			}
+		}
+	})
+	keys := make([]string, 0, len(seen))
+	for key := range seen {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	out := make([][]string, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, seen[key])
+	}
+	return out
+}
+
+func normalizeFlagGroup(raw string) []string {
+	parts := strings.Fields(raw)
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		out = append(out, "--"+strings.TrimPrefix(part, "--"))
+	}
+	return out
+}
+
+func schemaKeyForCommand(cmd *cobra.Command) string {
+	path := strings.TrimSpace(strings.TrimPrefix(cmd.CommandPath(), "jira"))
+	if path == "" {
+		return "root"
+	}
+	return strings.ReplaceAll(path, " ", ".")
 }
 
 func outputSchemas() map[string]any {

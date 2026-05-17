@@ -1,6 +1,6 @@
 // The `cacheboard` predictor emits per-board descriptors:
 //
-//	<id>\t<name> (<type>, <project[s]>) — capped at 2 keys with +N
+//	<name>\t<id> (<type>, <project[s]>) — capped at 2 keys with +N
 //	overflow for 3+ keys, and projects segment dropped entirely when
 //	empty.
 //
@@ -36,9 +36,9 @@ func TestCacheBoardPredictorDescriptors(t *testing.T) {
 	got := string(out)
 
 	want := []string{
-		"1\tSingle Project Board (scrum, ENG)",
-		"2\tTwo Project Board (kanban, ENG, PLAT)",
-		"3\tFour Project Board (scrum, ENG, PLAT +2)",
+		"Single Project Board\t1 (scrum, ENG)",
+		"Two Project Board\t2 (kanban, ENG, PLAT)",
+		"Four Project Board\t3 (scrum, ENG, PLAT +2)",
 	}
 	for _, w := range want {
 		if !strings.Contains(got, w) {
@@ -63,7 +63,7 @@ func TestCacheBoardPredictorEmptyProjectsDropsSegment(t *testing.T) {
 		t.Fatalf("complete cacheboard: %v\n%s", err, out)
 	}
 	got := string(out)
-	want := "7\tNo Project Board (scrum)"
+	want := "No Project Board\t7 (scrum)"
 	if !strings.Contains(got, want) {
 		t.Fatalf("predictor output missing %q\n--- got ---\n%s", want, got)
 	}

@@ -8,7 +8,7 @@ import (
 )
 
 func TestJSONEnvelopeAndOutputModeConflicts(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=json", "schema")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=json", "agent", "schema")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("schema error = %v\n%s", err, out)
@@ -24,20 +24,20 @@ func TestJSONEnvelopeAndOutputModeConflicts(t *testing.T) {
 	// The removed legacy boolean flags must be rejected as unknown
 	// flags — never silently re-aliased onto a mode.
 	for _, removed := range []string{"--json", "--compact", "--plain", "--raw"} {
-		c := exec.Command("go", "run", "../../cmd/jira", removed, "schema")
+		c := exec.Command("go", "run", "../../cmd/jira", removed, "agent", "schema")
 		if err := c.Run(); err == nil {
 			t.Fatalf("removed flag %q was accepted; want unknown-flag error", removed)
 		}
 	}
 
 	// An invalid --output value is rejected.
-	if err := exec.Command("go", "run", "../../cmd/jira", "--output=garbage", "schema").Run(); err == nil {
+	if err := exec.Command("go", "run", "../../cmd/jira", "--output=garbage", "agent", "schema").Run(); err == nil {
 		t.Fatal("invalid --output value was accepted")
 	}
 }
 
 func TestOutputModesApplyToGenericCommands(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=compact", "schema")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=compact", "agent", "schema")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("schema --compact error = %v\n%s", err, out)

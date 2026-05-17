@@ -18,7 +18,6 @@ import (
 // silently drop or rename a command.
 var expectedPublicLeaves = []string{
 	"jira tui",
-	"jira schema",
 	"jira me",
 	"jira version",
 }
@@ -104,15 +103,14 @@ func TestRootCommandAttachesGlobalFlagsOnce(t *testing.T) {
 	}
 }
 
-// TestRootCommandPreservesRequiredHiddenAliases asserts the backward-
-// compatibility command aliases survive the refactor. `schema` is kept as
-// a top-level alias of `agent schema`; `completion` must be present.
+// TestRootCommandPreservesRequiredHiddenAliases asserts the required
+// top-level commands survive the refactor: `completion` must be present.
 func TestRootCommandPreservesRequiredHiddenAliases(t *testing.T) {
 	root, _, err := NewRootCommandForTest()
 	if err != nil {
 		t.Fatalf("NewRootCommandForTest: %v", err)
 	}
-	required := []string{"schema", "completion"}
+	required := []string{"completion"}
 	for _, name := range required {
 		found := false
 		for _, sub := range root.Commands() {

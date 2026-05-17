@@ -118,7 +118,7 @@ func assertValidationExitCode(t *testing.T, runErr error) {
 // must fail as an unknown flag, never be silently re-aliased onto a mode.
 func TestI1RemovedOutputFlagFails(t *testing.T) {
 	bin := buildJiraBinary(t)
-	if err := exec.Command(bin, "--plain", "schema").Run(); err == nil {
+	if err := exec.Command(bin, "--plain", "agent", "schema").Run(); err == nil {
 		t.Fatal("removed flag --plain was accepted; want unknown-flag error")
 	}
 }

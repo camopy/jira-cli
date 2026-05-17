@@ -194,7 +194,7 @@ func expandAliasArgs(root *cobra.Command, args []string) ([]string, error) {
 	if !ok || name == "alias" || isRootCommand(root, name) {
 		return args, nil
 	}
-	cfg, err := config.Load(config.WithPath(configPathFromArgs(args)))
+	cfg, err := config.Load(config.WithPath(startupGlobalsFromArgs(args).ConfigPath))
 	if err != nil {
 		return nil, err
 	}
@@ -217,42 +217,121 @@ func expandAliasArgs(root *cobra.Command, args []string) ([]string, error) {
 }
 
 func splitFirstCommandArg(args []string) (prefix []string, command string, rest []string, ok bool) {
+	_, prefix, command, rest, ok = parseStartupArgs(args)
+	return prefix, command, rest, ok
+}
+
+type startupGlobals struct {
+	ConfigPath string
+	Profile    string
+}
+
+func startupGlobalsFromArgs(args []string) startupGlobals {
+	return scanStartupGlobals(args)
+}
+
+func parseStartupArgs(args []string) (globals startupGlobals, prefix []string, command string, rest []string, ok bool) {
+	globals = scanStartupGlobals(args)
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if arg == "--" {
 			if i+1 >= len(args) {
-				return args, "", nil, false
+				return globals, args, "", nil, false
 			}
-			return args[:i+1], args[i+1], args[i+2:], true
+			return globals, args[:i+1], args[i+1], args[i+2:], true
 		}
-		if strings.HasPrefix(arg, "--config=") || strings.HasPrefix(arg, "--profile=") || strings.HasPrefix(arg, "--color=") {
-			continue
-		}
-		if slices.Contains([]string{"--config", "-c", "--profile", "-p", "--color"}, arg) {
-			i++
+		if consumeStartupGlobal(args, &i, &globals) {
 			continue
 		}
 		if strings.HasPrefix(arg, "-") {
 			continue
 		}
-		return args[:i], arg, args[i+1:], true
+		return globals, args[:i], arg, args[i+1:], true
 	}
-	return args, "", nil, false
+	return globals, args, "", nil, false
 }
 
-func configPathFromArgs(args []string) string {
-	for i, arg := range args {
-		if value, ok := strings.CutPrefix(arg, "--config="); ok {
-			return value
+func scanStartupGlobals(args []string) startupGlobals {
+	var globals startupGlobals
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			break
 		}
-		if arg == "--config" || arg == "-c" {
-			if i+1 < len(args) {
-				return args[i+1]
+		if strings.HasPrefix(arg, "--") {
+			name, value, hasValue := strings.Cut(strings.TrimPrefix(arg, "--"), "=")
+			switch name {
+			case "config":
+				globals.ConfigPath = startupFlagValue(args, &i, value, hasValue)
+			case "profile":
+				globals.Profile = startupFlagValue(args, &i, value, hasValue)
 			}
-			return ""
+			continue
+		}
+		if strings.HasPrefix(arg, "-c") && arg != "-" {
+			globals.ConfigPath = startupShortFlagValue(args, &i, arg)
+			continue
+		}
+		if strings.HasPrefix(arg, "-p") && arg != "-" {
+			globals.Profile = startupShortFlagValue(args, &i, arg)
+			continue
 		}
 	}
-	return ""
+	return globals
+}
+
+func consumeStartupGlobal(args []string, i *int, globals *startupGlobals) bool {
+	arg := args[*i]
+	if strings.HasPrefix(arg, "--") {
+		name, value, hasValue := strings.Cut(strings.TrimPrefix(arg, "--"), "=")
+		switch name {
+		case "config":
+			globals.ConfigPath = startupFlagValue(args, i, value, hasValue)
+			return true
+		case "profile":
+			globals.Profile = startupFlagValue(args, i, value, hasValue)
+			return true
+		case "output", "timeout", "color":
+			_ = startupFlagValue(args, i, value, hasValue)
+			return true
+		case "interactive", "debug", "no-input", "adf-strict", "adf-best-effort":
+			return true
+		default:
+			return hasValue
+		}
+	}
+	if strings.HasPrefix(arg, "-c") && arg != "-" {
+		globals.ConfigPath = startupShortFlagValue(args, i, arg)
+		return true
+	}
+	if strings.HasPrefix(arg, "-p") && arg != "-" {
+		globals.Profile = startupShortFlagValue(args, i, arg)
+		return true
+	}
+	return arg == "-i" || arg == "-d"
+}
+
+func startupFlagValue(args []string, i *int, value string, hasValue bool) string {
+	if hasValue {
+		return value
+	}
+	if *i+1 >= len(args) {
+		return ""
+	}
+	*i = *i + 1
+	return args[*i]
+}
+
+func startupShortFlagValue(args []string, i *int, arg string) string {
+	if len(arg) > 2 {
+		value := strings.TrimPrefix(arg[2:], "=")
+		return value
+	}
+	if *i+1 >= len(args) {
+		return ""
+	}
+	*i = *i + 1
+	return args[*i]
 }
 
 func validateAliasName(root *cobra.Command, name string) error {

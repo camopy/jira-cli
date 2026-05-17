@@ -33,7 +33,6 @@ import (
 func registerCommands(root *cobra.Command) {
 	root.AddCommand(
 		tuiCommand(),
-		schemaCommand(), // top-level alias preserved for backward compatibility
 		agentCommand(),
 		cacheCommand(),
 		meCommand(),
@@ -82,18 +81,6 @@ func tuiCommand() *cobra.Command {
 			}
 			_, err = tuiRun(cmd)
 			return err
-		},
-	}
-}
-
-func schemaCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:     "schema",
-		Short:   "Print command and JSON schema metadata",
-		GroupID: "agent",
-		Args:    cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return writeSchema(cmd)
 		},
 	}
 }

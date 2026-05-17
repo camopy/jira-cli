@@ -20,9 +20,6 @@ var agentGuide string
 // agentCommand groups commands curated for AI coding assistants. The schema
 // and guide endpoints together give an agent everything needed to interact
 // with the CLI in two calls (tree + how-to).
-//
-// `jira schema` is preserved as a top-level alias for backward compatibility
-// with the locked spec; `jira agent schema` is the canonical location.
 func agentCommand() *cobra.Command {
 	cmd := groupCommand("agent", "Agent tooling: schema and guide for AI coding assistants", "agent")
 	cmd.AddCommand(agentSchemaCommand())

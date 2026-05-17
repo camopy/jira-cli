@@ -28,7 +28,6 @@ structured JSON.
 - `jira cache labels|projects|epics|fields|issuetypes|clear`
 - `jira agent guide|schema|adf-matrix|fieldtypes`
 - `jira me`
-- `jira schema`
 - `jira version`
 
 ## Output

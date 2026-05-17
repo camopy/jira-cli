@@ -206,9 +206,20 @@ func NewRootCommand(rt *runtime.Runtime) *cobra.Command {
 // completionGenerator builds the clib completion generator for a root
 // command. Shared by the `completion` subcommand and the preflight path.
 func completionGenerator(root *cobra.Command) *complete.Generator {
-	gen := complete.NewGenerator("jira", complete.WithOrder(complete.OrderKeep)).FromFlags(clib.FlagMeta(root))
+	gen := complete.NewGenerator("jira", complete.WithOrder(complete.OrderKeep)).FromFlags(rootCompletionFlagMeta(root))
 	gen.Subs = clib.Subcommands(root)
 	return gen
+}
+
+func rootCompletionFlagMeta(root *cobra.Command) []complete.FlagMeta {
+	meta := clib.FlagMeta(root)
+	for i := range meta {
+		switch meta[i].Name {
+		case "config", "profile":
+			meta[i].Forward = true
+		}
+	}
+	return meta
 }
 
 // configureRootFlags declares the global persistent flags on root. Each
@@ -356,7 +367,16 @@ func handleCompletionPreflight(root *cobra.Command) (bool, error) {
 		return false, nil
 	}
 	gen := completionGenerator(root)
-	handled, err := flags.Handle(gen, completionHandler(), complete.WithArgs(positional))
+	startup := startupGlobalsFromArgs(os.Args[1:])
+	if forwarded := startupGlobalsFromArgs(positional); forwarded.ConfigPath != "" || forwarded.Profile != "" {
+		if forwarded.ConfigPath != "" {
+			startup.ConfigPath = forwarded.ConfigPath
+		}
+		if forwarded.Profile != "" {
+			startup.Profile = forwarded.Profile
+		}
+	}
+	handled, err := flags.Handle(gen, completionHandler(startup), complete.WithArgs(positional))
 	if err != nil {
 		return false, err
 	}
