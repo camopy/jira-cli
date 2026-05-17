@@ -78,6 +78,28 @@ func TestSearchServiceUsesExplicitFields(t *testing.T) {
 	}
 }
 
+func TestSearchServiceUsesExplicitExpand(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("Decode() error = %v", err)
+		}
+		_, _ = w.Write([]byte(`{"issues":[],"isLast":true}`))
+	}))
+	defer srv.Close()
+
+	service := jira.NewSearchService(jira.NewClient(jira.WithBaseURL(srv.URL + "/")))
+	if _, _, err := service.JQL(context.Background(), &jira.SearchRequest{
+		JQL:    "project=PROJ",
+		Expand: []string{"renderedFields", "names", "schema"},
+	}); err != nil {
+		t.Fatalf("JQL() error = %v", err)
+	}
+	if got := body["expand"]; got != "renderedFields,names,schema" {
+		t.Fatalf("expand = %#v, want renderedFields,names,schema", got)
+	}
+}
+
 func TestSearchServiceIgnoresOffsetPaginationFields(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"issues":[],"startAt":25,"maxResults":25,"total":100,"isLast":false}`))

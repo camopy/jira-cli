@@ -5,31 +5,57 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
+	"strings"
 	"testing"
 )
 
-func TestIssueListDetailFetchesFullIssueRecords(t *testing.T) {
-	var getCount int
+func TestIssueListDetailUsesSingleSearchRequest(t *testing.T) {
+	assertIssueDetailUsesSingleSearchRequest(t, []string{"issue", "list", "--detail"})
+}
+
+func TestIssueMineDetailUsesSingleSearchRequest(t *testing.T) {
+	assertIssueDetailUsesSingleSearchRequest(t, []string{"issue", "mine", "--detail"})
+}
+
+func assertIssueDetailUsesSingleSearchRequest(t *testing.T, commandArgs []string) {
+	t.Helper()
+	var searchCount int
+	var searchBody struct {
+		Fields []string `json:"fields"`
+		Expand string   `json:"expand"`
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/rest/api/3/search/jql":
-			_, _ = w.Write([]byte(`{"isLast":true,"maxResults":50,"total":1,"issues":[{"key":"PROJ-1","fields":{"summary":"Summary only"}}]}`))
+			searchCount++
+			if err := json.NewDecoder(r.Body).Decode(&searchBody); err != nil {
+				t.Fatalf("decode search body: %v", err)
+			}
+			_, _ = w.Write([]byte(`{"isLast":true,"maxResults":50,"total":1,"issues":[{"id":"10001","key":"PROJ-1","fields":{"summary":"Full issue","comment":{"comments":[{"id":"c1"}]},"worklog":{"worklogs":[{"id":"w1","timeSpentSeconds":300}]}}}]}`))
 		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/PROJ-1":
-			getCount++
-			_, _ = w.Write([]byte(`{"id":"10001","key":"PROJ-1","fields":{"summary":"Full issue","comment":{"comments":[{"id":"c1"}]},"worklog":{"worklogs":[{"id":"w1","timeSpentSeconds":300}]}}}`))
+			t.Fatalf("issue list --detail made an avoidable per-issue detail request: %s", r.URL.String())
 		default:
 			t.Fatalf("unexpected request %s %s", r.Method, r.URL.String())
 		}
 	}))
 	defer srv.Close()
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", jiraConfig(t, srv.URL), "--output=json", "issue", "list", "--detail")
+	args := append([]string{"run", "../../cmd/jira", "--config", jiraConfig(t, srv.URL), "--output=json"}, commandArgs...)
+	cmd := exec.Command("go", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("issue list --detail error = %v\n%s", err, out)
+		t.Fatalf("%s error = %v\n%s", strings.Join(commandArgs, " "), err, out)
 	}
-	if getCount != 1 {
-		t.Fatalf("issue list --detail made %d detail requests, want 1", getCount)
+	if searchCount != 1 {
+		t.Fatalf("%s made %d search requests, want 1", strings.Join(commandArgs, " "), searchCount)
+	}
+	if len(searchBody.Fields) != 1 || searchBody.Fields[0] != "*all" {
+		t.Fatalf("detail search fields = %#v, want [*all]", searchBody.Fields)
+	}
+	for _, want := range []string{"renderedFields", "names", "schema", "transitions", "operations", "changelog"} {
+		if !strings.Contains(searchBody.Expand, want) {
+			t.Fatalf("detail search expand = %q, missing %q", searchBody.Expand, want)
+		}
 	}
 	var env struct {
 		Data struct {

@@ -83,7 +83,9 @@ func NewIssueService(client *Client) IssueService {
 
 type IssueListOptions struct {
 	ListOptions
-	JQL string
+	JQL    string
+	Fields []string
+	Expand []string
 }
 
 type IssueGetOptions struct {
@@ -171,8 +173,12 @@ func (s *issueService) List(ctx context.Context, opts *IssueListOptions) ([]*Iss
 	if opts != nil {
 		body.JQL = opts.JQL
 		body.ListOptions = opts.ListOptions
+		body.Fields = opts.Fields
+		body.Expand = opts.Expand
 	}
-	body.Fields = DefaultIssueListFields()
+	if len(body.Fields) == 0 {
+		body.Fields = DefaultIssueListFields()
+	}
 	if strings.TrimSpace(body.JQL) == "" {
 		body.JQL = DefaultIssueListJQL
 	}

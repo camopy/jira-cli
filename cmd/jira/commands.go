@@ -1302,18 +1302,20 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 		return writeEnvelope(cmd, "issue.list", boardScopedListData(cmd, []map[string]any{}, opts.detail, query, scope, precedence))
 	}
 	service := issueService(client)
+	fields := jira.DefaultIssueListFields()
+	var expand []string
+	if opts.detail {
+		fields = []string{"*all"}
+		expand = issueListDetailExpand()
+	}
 	issues, resp, err := service.List(cmd.Context(), &jira.IssueListOptions{
 		ListOptions: jira.ListOptions{MaxResults: 50},
 		JQL:         query,
+		Fields:      fields,
+		Expand:      expand,
 	})
 	if err != nil {
 		return err
-	}
-	if opts.detail {
-		issues, err = fetchIssueDetails(cmd.Context(), service, issues)
-		if err != nil {
-			return err
-		}
 	}
 	issueData := issueOutput(issues, opts.detail)
 	return writeEnvelopeWithResponse(cmd, "issue.list", boardScopedListData(cmd, issueData, opts.detail, query, scope, precedence), resp)
@@ -1367,24 +1369,8 @@ func issueListOutputData(cmd *cobra.Command, issues any, detail bool, query stri
 	return data
 }
 
-func fetchIssueDetails(ctx context.Context, service jira.IssueService, summaries []*jira.Issue) ([]*jira.Issue, error) {
-	details := make([]*jira.Issue, 0, len(summaries))
-	for _, issue := range summaries {
-		key := ""
-		if issue != nil && issue.Key != nil {
-			key = *issue.Key
-		}
-		if key == "" {
-			details = append(details, issue)
-			continue
-		}
-		detail, _, err := service.Get(ctx, key, &jira.IssueGetOptions{Expand: []string{"renderedFields", "names", "schema", "transitions", "operations", "changelog"}})
-		if err != nil {
-			return nil, err
-		}
-		details = append(details, detail)
-	}
-	return details, nil
+func issueListDetailExpand() []string {
+	return []string{"renderedFields", "names", "schema", "transitions", "operations", "changelog"}
 }
 
 func issueCreateCommand() *cobra.Command {

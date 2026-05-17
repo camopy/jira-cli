@@ -542,9 +542,10 @@ func primeBoards(ctx context.Context, client *jira.Client, ttlMinutes int, unbou
 	// the warning surface tells the user exactly what was lost.
 	items := make([]jira.Board, 0, len(res.Boards))
 	var (
-		droppedRecords int
-		droppedKeys    int
-		failedFetches  []int
+		droppedRecords  int
+		droppedKeys     int
+		failedFetches   []int
+		projectKeysByID = map[int][]string{}
 	)
 	for _, b := range res.Boards {
 		if b == nil {
@@ -560,13 +561,20 @@ func primeBoards(ctx context.Context, client *jira.Client, ttlMinutes int, unbou
 			droppedRecords++
 			continue
 		}
-		keys, _, perr := svc.ProjectsForBoard(ctx, *clean.ID)
-		if perr != nil {
-			failedFetches = append(failedFetches, *clean.ID)
-			clean.ProjectKeys = []string{}
-		} else {
-			clean.ProjectKeys, droppedKeys = filterJQLSafeKeys(keys, droppedKeys)
+		id := *clean.ID
+		keys, found := projectKeysByID[id]
+		if !found {
+			var perr error
+			keys, _, perr = svc.ProjectsForBoard(ctx, id)
+			if perr != nil {
+				failedFetches = append(failedFetches, id)
+				clean.ProjectKeys = []string{}
+				items = append(items, clean)
+				continue
+			}
+			projectKeysByID[id] = append([]string(nil), keys...)
 		}
+		clean.ProjectKeys, droppedKeys = filterJQLSafeKeys(keys, droppedKeys)
 		items = append(items, clean)
 	}
 

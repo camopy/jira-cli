@@ -20,6 +20,7 @@ type SearchRequest struct {
 	MaxResults    int    `json:"maxResults,omitempty"`
 	NextPageToken string `json:"nextPageToken,omitempty"`
 	Fields        []string
+	Expand        []string
 	ListOptions   `json:"-"`
 }
 
@@ -28,6 +29,7 @@ type searchRequestPayload struct {
 	MaxResults    int      `json:"maxResults,omitempty"`
 	NextPageToken string   `json:"nextPageToken,omitempty"`
 	Fields        []string `json:"fields,omitempty"`
+	Expand        string   `json:"expand,omitempty"`
 }
 
 func NewSearchService(client *Client) SearchService {
@@ -60,6 +62,7 @@ func (r *SearchRequest) payload() searchRequestPayload {
 		MaxResults:    r.effectiveMaxResults(),
 		NextPageToken: r.effectiveNextPageToken(),
 		Fields:        fields,
+		Expand:        strings.Join(compactSearchFields(r.Expand), ","),
 	}
 }
 
