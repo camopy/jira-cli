@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// CredentialError carries the structured metadata Phase 03 needs: a broad
+// CredentialError carries the structured metadata the output layer needs: a broad
 // type, a stable normalized code, a display message, a hint, a retryable
 // flag, and optional context. Accessors are Code/Hint/Retryable, never
 // Get-prefixed.

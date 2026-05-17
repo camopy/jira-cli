@@ -16,7 +16,7 @@
 // clock, and request-ID inputs are intentionally absent: their consumers
 // are not yet wired through the runtime, and an option that does not
 // reach its consumer is a correctness trap. They return to this boundary
-// in the later phase that wires each one.
+// when each one is wired to its consumer.
 package runtime
 
 import (

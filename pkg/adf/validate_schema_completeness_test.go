@@ -1,9 +1,9 @@
 package adf_test
 
-// Strict-validation completeness tests covering the rule-table gaps the
-// Phase 07 review found: table-cell content whitelists, content-minItems
-// enforcement, blockTaskItem registration, media/card required attrs,
-// and the remaining attribute-bearing marks.
+// Strict-validation completeness tests covering rule-table gaps:
+// table-cell content whitelists, content-minItems enforcement,
+// blockTaskItem registration, media/card required attrs, and the
+// remaining attribute-bearing marks.
 //
 // Each "invalid" case is a document that PASSED strict validation before
 // the rule was added — the validator silently shipped it to Jira. Each

@@ -67,8 +67,7 @@ case "$remote_tag_status" in
 	;;
 esac
 
-mise run ci
-mise run release:check
+mise run release:preflight
 
 if ((dry_run)); then
 	echo "dry run: would create annotated tag ${tag} at ${head_sha}"

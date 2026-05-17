@@ -1,5 +1,5 @@
-// MOTIVATION: a multi-phase refactor extracts command families into
-// internal/cli/<domain> packages over several phases. Without an
+// MOTIVATION: command-family extraction moves implementations into
+// internal/cli/<domain> packages over several passes. Without an
 // enforced contract, an extracted package can quietly reintroduce the
 // process-global anti-patterns the refactor exists to remove — calling
 // os.Exit, storing a context.Context for later use, or writing to

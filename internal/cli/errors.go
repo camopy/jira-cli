@@ -64,8 +64,8 @@ func ExitCode(err Error) int {
 }
 
 // codedError is the adapter the mapper consumes for any typed error that
-// carries a stable code, a next-action hint, and a retryable flag. Phase
-// 02's *config.CredentialError satisfies this.
+// carries a stable code, a next-action hint, and a retryable flag.
+// *config.CredentialError satisfies this.
 type codedError interface {
 	Code() config.ErrorCode
 	Hint() string
@@ -157,7 +157,7 @@ func mapContextError(err error) (Error, bool) {
 	}
 }
 
-// mapCredentialError adapts a Phase 02 *config.CredentialError. The
+// mapCredentialError adapts a *config.CredentialError. The
 // typed error supplies code/hint/retryable directly; provider metadata
 // is preserved verbatim when present.
 func mapCredentialError(err error) (Error, bool) {

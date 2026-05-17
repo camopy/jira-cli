@@ -92,3 +92,21 @@ func TestCIQualityGateRunsRequiredGoChecks(t *testing.T) {
 		t.Fatalf("shared workflow refs should use the Slack-aligned pinned SHA, not old 8b104684 refs")
 	}
 }
+
+func TestLocalCITaskIncludesReleasePreflightInputs(t *testing.T) {
+	tasks, err := os.ReadFile("../../tasks.toml")
+	if err != nil {
+		t.Fatalf("ReadFile(tasks.toml) error = %v", err)
+	}
+	got := string(tasks)
+	for _, want := range []string{
+		`["workflow:lint"]`,
+		`run = ["actionlint .github/workflows/*.yml", "zizmor --persona pedantic .github/"]`,
+		`depends = ["check", "test:integration", "tidy", "workflow:lint", "security"]`,
+		`run = ["mise run ci", "mise run release:check", "mise run release:build"]`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("tasks.toml missing local CI gate %q\n%s", want, tasks)
+		}
+	}
+}

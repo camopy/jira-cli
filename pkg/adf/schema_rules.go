@@ -4,7 +4,7 @@
 // schema (@atlaskit/adf-schema 52.11.3, draft-04). They are derived
 // strictly from the local JSON schema, not the Atlassian prose docs:
 // the prose docs omit nodes, omit required attrs, and list narrower
-// enums (see the Phase 07 schema-verification notes). Where the two
+// enums. Where the two
 // disagree, the JSON schema is the contract Jira enforces.
 //
 // The rules drive ValidateDoc. They are intentionally a separate table

@@ -11,7 +11,7 @@ depends = ["fmt:check", "lint", "rumdl", "vet", "test"]
 
 [ci]
 description = "Run CI-equivalent checks"
-depends = ["check", "security"]
+depends = ["check", "test:integration", "tidy", "workflow:lint", "security"]
 
 [fix]
 description = "Apply automatic formatting and lint fixes"
@@ -44,6 +44,10 @@ run = '"${DIST_DIR}/${BINARY_NAME}-$(go env GOOS)-$(go env GOARCH)"'
 ["release:check"]
 description = "Run GoReleaser config and environment checks"
 run = ["goreleaser check", "goreleaser healthcheck"]
+
+["release:preflight"]
+description = "Run the full local preflight used before publishing releases"
+run = ["mise run ci", "mise run release:check", "mise run release:build"]
 
 [release]
 description = "Validate, tag and push a release"
@@ -99,12 +103,12 @@ run = "go tool golangci-lint run --fix"
 
 [rumdl]
 description = "Lint markdown files with rumdl"
-run = "rumdl check ."
+run = "git ls-files '*.md' | xargs -r rumdl check"
 
 ["rumdl:fix"]
 description = "Fix markdown files with rumdl"
 raw_args = true
-run = "rumdl fmt ."
+run = "git ls-files '*.md' | xargs -r rumdl fmt"
 
 [vet]
 description = "Run go vet"
@@ -113,6 +117,10 @@ run = "go vet ./..."
 [security]
 description = "Run govulncheck"
 run = "go tool govulncheck ./..."
+
+["workflow:lint"]
+description = "Lint GitHub Actions workflows"
+run = ["actionlint .github/workflows/*.yml", "zizmor --persona pedantic .github/"]
 
 [pre-commit]
 description = "Run hk pre-commit hook"

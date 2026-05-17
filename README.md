@@ -8,6 +8,11 @@ Terminal-first Jira CLI for day-to-day developer workflows.
 go install github.com/matcra587/jira-cli/cmd/jira@latest
 ```
 
+Homebrew and GoReleaser release archives include release version metadata.
+`go install github.com/matcra587/jira-cli/cmd/jira@latest` builds from source
+and may report `dev` or git-derived metadata in `jira version`.
+Release archives currently target macOS and Linux.
+
 ## Configuration
 
 Configuration lives in `~/.config/jira-cli/config.toml`. Use metadata-only
@@ -35,7 +40,8 @@ are rejected instead of being stored as fake authenticated profiles.
 
 The 1Password backend uses the Go SDK when `onepassword_account` is configured
 for desktop-app auth or `OP_SERVICE_ACCOUNT_TOKEN` is present for service-account
-auth. The `op` CLI remains a fallback for existing signed-in workflows.
+auth. macOS and Linux release archives are built without CGO, so use a
+CGO-enabled source build for 1Password-backed profiles.
 
 ```toml
 [[profiles]]

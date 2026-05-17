@@ -45,3 +45,70 @@ func TestReleaseWorkflowUsesPinnedGoReleaserAndHomebrewPublisher(t *testing.T) {
 		t.Fatalf("release workflow should use the Slack-aligned GitHub App token path, not HOMEBREW_TAP_TOKEN")
 	}
 }
+
+func TestReleaseWorkflowRunsLocalPreflightBeforePublishing(t *testing.T) {
+	release, err := os.ReadFile("../../.github/workflows/release.yml")
+	if err != nil {
+		t.Fatalf("ReadFile(release) error = %v", err)
+	}
+	got := string(release)
+	for _, want := range []string{
+		"name: Release preflight",
+		"mise run release:preflight",
+		"if: steps.release-state.outputs.exists != 'true'",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("release workflow missing preflight gate %q\n%s", want, release)
+		}
+	}
+	if strings.Index(got, "name: Release preflight") > strings.Index(got, "name: Run GoReleaser") {
+		t.Fatalf("release preflight must run before GoReleaser publish\n%s", release)
+	}
+}
+
+func TestReleaseWorkflowValidatesExactSemverTag(t *testing.T) {
+	release, err := os.ReadFile("../../.github/workflows/release.yml")
+	if err != nil {
+		t.Fatalf("ReadFile(release) error = %v", err)
+	}
+	got := string(release)
+	for _, want := range []string{
+		"name: Validate release tag",
+		`[[ "${TAG_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("release workflow missing exact tag validation %q\n%s", want, release)
+		}
+	}
+	if strings.Index(got, "name: Validate release tag") > strings.Index(got, "name: Release preflight") {
+		t.Fatalf("release tag validation must run before release preflight\n%s", release)
+	}
+}
+
+func TestReleaseArtifactsUseSupportedTargets(t *testing.T) {
+	release, err := os.ReadFile("../../.github/workflows/release.yml")
+	if err != nil {
+		t.Fatalf("ReadFile(release) error = %v", err)
+	}
+	goreleaser, err := os.ReadFile("../../.goreleaser.yaml")
+	if err != nil {
+		t.Fatalf("ReadFile(goreleaser) error = %v", err)
+	}
+	gotRelease := string(release)
+	gotGoReleaser := string(goreleaser)
+	for _, want := range []string{"darwin/arm64", "linux/amd64", "linux/arm64"} {
+		if !strings.Contains(gotRelease, want) {
+			t.Fatalf("release workflow missing supported platform %q\n%s", want, release)
+		}
+	}
+	for _, want := range []string{"      - darwin\n", "      - linux\n"} {
+		if !strings.Contains(gotGoReleaser, want) {
+			t.Fatalf("GoReleaser config missing supported goos %q\n%s", want, goreleaser)
+		}
+	}
+	for _, forbidden := range []string{"      - windows\n", "goos: windows"} {
+		if strings.Contains(gotGoReleaser, forbidden) {
+			t.Fatalf("GoReleaser config advertises unsupported target %q\n%s", forbidden, goreleaser)
+		}
+	}
+}

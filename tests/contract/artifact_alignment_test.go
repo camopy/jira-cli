@@ -45,6 +45,25 @@ func TestArtifactsDoNotAdvertiseUnsupportedOAuth(t *testing.T) {
 	}
 }
 
+func TestReadmeDocumentsReleaseVersionMetadata(t *testing.T) {
+	readme, err := os.ReadFile("../../README.md")
+	if err != nil {
+		t.Fatalf("ReadFile(README.md): %v", err)
+	}
+	got := string(readme)
+	for _, want := range []string{
+		"Homebrew and GoReleaser release archives include release version metadata",
+		"`go install github.com/matcra587/jira-cli/cmd/jira@latest`",
+		"`dev`",
+		"Release archives currently target macOS and Linux",
+		"CGO-enabled source build for 1Password-backed profiles",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("README missing install/version contract %q\n%s", want, readme)
+		}
+	}
+}
+
 func TestRuntimeSourceHonorsStackBoundary(t *testing.T) {
 	for _, root := range []string{"../../cmd", "../../internal", "../../pkg"} {
 		err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
