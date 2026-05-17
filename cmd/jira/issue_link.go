@@ -213,7 +213,7 @@ func issueLinkTypesCommand() *cobra.Command {
 				return err
 			}
 			ttl := time.Duration(ttlMinutes) * time.Minute
-			data, fromCache, fetchedAt, err := cacheReadOrFetch(profile.Name, "linktypes", ttl, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cacheKeyForProfile(cmd, profile), "linktypes", ttl, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for issue.link.types")
 				}
@@ -226,12 +226,14 @@ func issueLinkTypesCommand() *cobra.Command {
 			if err := json.Unmarshal(data, &types); err != nil {
 				return fmt.Errorf("issue.link.types: decode cached payload: %w", err)
 			}
-			return writeEnvelope(cmd, "issue.link.types", map[string]any{
+			envelopeData := map[string]any{
 				"link_types": types,
 				"count":      len(types),
 				"from_cache": fromCache,
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
-			})
+			}
+			addCacheStateFields(envelopeData, cacheSourceState, len(types))
+			return writeEnvelope(cmd, "issue.link.types", envelopeData)
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")

@@ -47,13 +47,13 @@ default_board = "` + defaultBoard + `"
 func TestDefaultBoardWinsExclusivelyOverDefaultProject(t *testing.T) {
 	cacheRoot := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", cacheRoot)
-	primedBoardsCache(t, cacheRoot, "default", twoBoardCacheJSON)
 
 	srv := newFakeSearchServer(t)
 	cfg := jiraConfigWithBothDefaults(t, srv.srv.URL,
 		"UNRELATED",          // default_project intentionally pointing nowhere
 		"Engineering Sprint", // default_board → ENG
 	)
+	primedBoardsCache(t, cacheRoot, cfg, "default", srv.srv.URL, twoBoardCacheJSON)
 
 	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "list", "--output=json")
 	cmd.Env = append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)

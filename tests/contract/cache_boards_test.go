@@ -117,7 +117,7 @@ func TestCacheBoardsRoundTrip(t *testing.T) {
 	}
 
 	// Cache file present.
-	cachePath := filepath.Join(cacheRoot, "jira-cli", "test", "boards.json")
+	cachePath := filepath.Join(cacheRoot, "jira-cli", cacheKeyForTestConfig(t, cfg, "test", srv.URL), "boards.json")
 	if _, err := os.Stat(cachePath); err != nil {
 		t.Fatalf("expected cache file at %s: %v", cachePath, err)
 	}
@@ -260,7 +260,7 @@ func TestCacheBoardsMaxPagesTruncationSurfaces(t *testing.T) {
 	}
 
 	// Cache file should also persist truncated:true.
-	cachePath := filepath.Join(cacheRoot, "jira-cli", "test", "boards.json")
+	cachePath := filepath.Join(cacheRoot, "jira-cli", cacheKeyForTestConfig(t, cfg, "test", srv.URL), "boards.json")
 	body, err := os.ReadFile(cachePath)
 	if err != nil {
 		t.Fatalf("read cache file: %v", err)
@@ -343,7 +343,7 @@ func TestCacheBoardsRateLimitMidWalk(t *testing.T) {
 	}
 
 	// Cache file persists truncated:true / truncated_reason:rate_limit.
-	cachePath := filepath.Join(cacheRoot, "jira-cli", "test", "boards.json")
+	cachePath := filepath.Join(cacheRoot, "jira-cli", cacheKeyForTestConfig(t, cfg, "test", srv.URL), "boards.json")
 	body, err := os.ReadFile(cachePath)
 	if err != nil {
 		t.Fatalf("read cache file: %v", err)

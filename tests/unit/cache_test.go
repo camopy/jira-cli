@@ -42,6 +42,27 @@ func TestCacheRoundTrip(t *testing.T) {
 	}
 }
 
+func TestCacheKeySeparatesConfigSiteAndProfile(t *testing.T) {
+	a := cache.Key("default", "https://one.atlassian.net", "/tmp/a/config.toml")
+	b := cache.Key("default", "https://two.atlassian.net", "/tmp/a/config.toml")
+	c := cache.Key("default", "https://one.atlassian.net", "/tmp/b/config.toml")
+	d := cache.Key("work", "https://one.atlassian.net", "/tmp/a/config.toml")
+	if a == b || a == c || a == d {
+		t.Fatalf("cache keys collided: a=%q b=%q c=%q d=%q", a, b, c, d)
+	}
+	if !strings.HasPrefix(a, "default-") || strings.Contains(a, "/") {
+		t.Fatalf("cache key = %q, want filesystem-safe profile-prefixed key", a)
+	}
+}
+
+func TestCacheKeyNormalizesSiteTrailingSlash(t *testing.T) {
+	a := cache.Key("default", "https://one.atlassian.net", "/tmp/a/config.toml")
+	b := cache.Key("default", "https://one.atlassian.net/", "/tmp/a/config.toml")
+	if a != b {
+		t.Fatalf("cache keys differ for trailing slash: %q vs %q", a, b)
+	}
+}
+
 func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

@@ -51,7 +51,7 @@ func boardsListCommand() *cobra.Command {
 				return err
 			}
 			ttl := time.Duration(ttlMinutes) * time.Minute
-			file, fetchedAt, fromCache, err := readOrPrimeBoardsCache(cmd, client, profile.Name, ok, ttl, ttlMinutes, refresh, unbounded)
+			file, fetchedAt, fromCache, cacheSourceState, err := readOrPrimeBoardsCache(cmd, client, cacheKeyForProfile(cmd, profile), ok, ttl, ttlMinutes, refresh, unbounded)
 			if err != nil {
 				return err
 			}
@@ -77,6 +77,7 @@ func boardsListCommand() *cobra.Command {
 				"truncated":        file.Truncated,
 				"truncated_reason": file.TruncatedReason,
 			}
+			addCacheStateFields(envelopeData, cacheSourceState, len(boards))
 			warnings := boardsTruncationWarnings(file)
 			return writeEnvelopeWithRawWarnings(cmd, "boards.list", envelopeData, warnings)
 		},
@@ -97,34 +98,42 @@ func boardsListCommand() *cobra.Command {
 // Empty / stale cache + no --refresh → still primes, because the
 // "transparent first-run" UX would otherwise leave new users with an
 // empty list. --refresh always primes regardless of staleness.
-func readOrPrimeBoardsCache(cmd *cobra.Command, client *jira.Client, profileName string, hasClient bool, ttl time.Duration, ttlMinutes int, refresh, unbounded bool) (jira.BoardsCacheFile, time.Time, bool, error) {
+func readOrPrimeBoardsCache(cmd *cobra.Command, client *jira.Client, cacheProfile string, hasClient bool, ttl time.Duration, ttlMinutes int, refresh, unbounded bool) (jira.BoardsCacheFile, time.Time, bool, string, error) {
+	cacheSourceState := cacheStateRefresh
 	if !refresh {
-		entry, present, stale, readErr := cache.Read(profileName, "boards", ttl)
-		if readErr == nil && present && !stale {
+		entry, present, stale, readErr := cache.Read(cacheProfile, "boards", ttl)
+		switch {
+		case readErr != nil:
+			cacheSourceState = cacheStateMalformed
+		case present && !stale:
 			items, err := jira.DecodeBoardsCache(entry.Data)
 			if err != nil {
-				return jira.BoardsCacheFile{}, time.Time{}, false, fmt.Errorf("boards.list: decode cache: %w", err)
+				return jira.BoardsCacheFile{}, time.Time{}, false, cacheStateFresh, fmt.Errorf("boards.list: decode cache: %w", err)
 			}
 			file := boardsCacheFileFromEntry(entry.Data, items)
-			return file, entry.FetchedAt, true, nil
+			return file, entry.FetchedAt, true, cacheStateFresh, nil
+		case present && stale:
+			cacheSourceState = cacheStateStale
+		default:
+			cacheSourceState = cacheStateMissing
 		}
 	}
 	if !hasClient {
-		return jira.BoardsCacheFile{}, time.Time{}, false, fmt.Errorf("jira base URL is required for boards.list")
+		return jira.BoardsCacheFile{}, time.Time{}, false, cacheSourceState, fmt.Errorf("jira base URL is required for boards.list")
 	}
 	file, _, err := primeBoards(cmd.Context(), client, ttlMinutes, unbounded)
 	if err != nil {
-		return jira.BoardsCacheFile{}, time.Time{}, false, err
+		return jira.BoardsCacheFile{}, time.Time{}, false, cacheSourceState, err
 	}
 	body, err := json.Marshal(file)
 	if err != nil {
-		return jira.BoardsCacheFile{}, time.Time{}, false, fmt.Errorf("boards.list: marshal cache: %w", err)
+		return jira.BoardsCacheFile{}, time.Time{}, false, cacheSourceState, fmt.Errorf("boards.list: marshal cache: %w", err)
 	}
-	entry, err := cache.Write(profileName, "boards", body)
+	entry, err := cache.Write(cacheProfile, "boards", body)
 	if err != nil {
-		return jira.BoardsCacheFile{}, time.Time{}, false, fmt.Errorf("boards.list: write cache: %w", err)
+		return jira.BoardsCacheFile{}, time.Time{}, false, cacheSourceState, fmt.Errorf("boards.list: write cache: %w", err)
 	}
-	return file, entry.FetchedAt, false, nil
+	return file, entry.FetchedAt, false, cacheSourceState, nil
 }
 
 // boardsCacheFileFromEntry reconstructs the BoardsCacheFile envelope

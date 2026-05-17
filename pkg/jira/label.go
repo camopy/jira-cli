@@ -47,6 +47,7 @@ func (s *labelService) List(ctx context.Context, opts *ListOptions) ([]string, *
 	}
 	var labels []string
 	var lastResp *Response
+	pages := 0
 	for {
 		path := fmt.Sprintf("rest/api/3/label?startAt=%d&maxResults=%d", startAt, page)
 		req, err := s.client.NewRequest(ctx, http.MethodGet, path, nil)
@@ -58,12 +59,16 @@ func (s *labelService) List(ctx context.Context, opts *ListOptions) ([]string, *
 		if err != nil {
 			return nil, resp, err
 		}
+		pages++
 		labels = append(labels, p.Values...)
 		lastResp = resp
-		if p.IsLast || len(p.Values) == 0 {
+		if p.IsLast {
 			break
 		}
-		startAt += len(p.Values)
+		if pages >= defaultMaxPages || len(labels) >= defaultMaxResults {
+			return nil, lastResp, fmt.Errorf("label pagination exceeded default bounds")
+		}
+		startAt = nextOffset(startAt, len(p.Values), page, p.MaxResults)
 	}
 	return labels, lastResp, nil
 }

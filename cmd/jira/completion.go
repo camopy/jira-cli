@@ -59,17 +59,17 @@ func completionHandler(startup startupGlobals) complete.Handler {
 				_, _ = fmt.Fprintln(os.Stdout, r)
 			}
 		case "cacheproject":
-			emitCachedProjects(completionProfile(startup))
+			emitCachedProjects(completionCacheKey(startup))
 		case "cacheepic":
-			emitCachedEpics(completionProfile(startup))
+			emitCachedEpics(completionCacheKey(startup))
 		case "cachelabel":
-			emitCachedLabels(completionProfile(startup))
+			emitCachedLabels(completionCacheKey(startup))
 		case "cacheissuetype":
-			emitCachedIssueTypes(completionProfile(startup))
+			emitCachedIssueTypes(completionCacheKey(startup))
 		case "cachelinktype":
-			emitCachedLinkTypes(completionProfile(startup))
+			emitCachedLinkTypes(completionCacheKey(startup))
 		case "cacheboard":
-			emitCachedBoards(completionProfile(startup))
+			emitCachedBoards(completionCacheKey(startup))
 		case "issuekey":
 			// Every command taking an issue key positionally carries the
 			// dynamic-args='issuekey' annotation so a future issue-key
@@ -83,17 +83,20 @@ func completionHandler(startup startupGlobals) complete.Handler {
 	}
 }
 
-// completionProfile picks a profile name for cache-backed completion.
-// Falls back to "default" when the config is missing.
-func completionProfile(startup startupGlobals) string {
-	if startup.Profile != "" {
-		return startup.Profile
-	}
+// completionCacheKey picks the cache namespace for cache-backed completion.
+// Falls back to the default profile identity when the config is missing.
+func completionCacheKey(startup startupGlobals) string {
 	cfg, err := config.Load(config.WithPath(startup.ConfigPath))
-	if err != nil || cfg.DefaultProfile == "" {
-		return "default"
+	if startup.Profile != "" {
+		if err != nil {
+			return cacheKeyFromStartup(startup, nil, startup.Profile)
+		}
+		return cacheKeyFromStartup(startup, cfg, startup.Profile)
 	}
-	return cfg.DefaultProfile
+	if err != nil || cfg.DefaultProfile == "" {
+		return cacheKeyFromStartup(startup, nil, "default")
+	}
+	return cacheKeyFromStartup(startup, cfg, cfg.DefaultProfile)
 }
 
 func emitCachedProjects(profile string) {

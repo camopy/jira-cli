@@ -13,7 +13,7 @@ func TestJQLBuildBoardByName(t *testing.T) {
 	bin := buildJiraBinary(t)
 	cfg := emptyBaseURLConfig(t)
 	cacheRoot := t.TempDir()
-	primeBoardsCache(t, cacheRoot, "default", `[
+	primeBoardsCacheForConfig(t, cacheRoot, cfg, "default", "", `[
 		{"id":7,"name":"Engineering Sprint","type":"scrum","project_keys":["ENG","PLAT"]}
 	]`)
 	env := append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)

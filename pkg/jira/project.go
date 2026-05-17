@@ -2,6 +2,7 @@ package jira
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -77,6 +78,7 @@ func (s *projectService) List(ctx context.Context, opts *ListOptions) ([]Project
 	}
 	var out []ProjectSummary
 	var lastResp *Response
+	pages := 0
 	for {
 		path := "rest/api/3/project/search?startAt=" + strconv.Itoa(startAt) + "&maxResults=" + strconv.Itoa(page)
 		req, err := s.client.NewRequest(ctx, "GET", path, nil)
@@ -88,6 +90,7 @@ func (s *projectService) List(ctx context.Context, opts *ListOptions) ([]Project
 		if err != nil {
 			return nil, resp, err
 		}
+		pages++
 		for _, v := range p.Values {
 			out = append(out, ProjectSummary{
 				ID:          v.ID,
@@ -98,10 +101,13 @@ func (s *projectService) List(ctx context.Context, opts *ListOptions) ([]Project
 			})
 		}
 		lastResp = resp
-		if p.IsLast || len(p.Values) == 0 {
+		if p.IsLast {
 			break
 		}
-		startAt += len(p.Values)
+		if pages >= defaultMaxPages || len(out) >= defaultMaxResults {
+			return nil, lastResp, fmt.Errorf("project pagination exceeded default bounds")
+		}
+		startAt = nextOffset(startAt, len(p.Values), page, p.MaxResults)
 	}
 	return out, lastResp, nil
 }

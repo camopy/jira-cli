@@ -40,12 +40,12 @@ func TestDynamicCompletionUsesExplicitProfileForCache(t *testing.T) {
 	cfg := writeCompletionConfig(t)
 	cacheRoot := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", cacheRoot)
-	if _, err := cache.Write("play", "boards", json.RawMessage(`[
+	if _, err := cache.Write(cacheKeyForTestConfig(t, cfg, "play", "https://play.atlassian.net"), "boards", json.RawMessage(`[
 		{"id":77,"name":"Play Board","type":"kanban","project_keys":["PLY"]}
 	]`)); err != nil {
 		t.Fatalf("cache.Write play boards: %v", err)
 	}
-	if _, err := cache.Write("work", "boards", json.RawMessage(`[
+	if _, err := cache.Write(cacheKeyForTestConfig(t, cfg, "work", "https://work.atlassian.net"), "boards", json.RawMessage(`[
 		{"id":11,"name":"Work Board","type":"scrum","project_keys":["WRK"]}
 	]`)); err != nil {
 		t.Fatalf("cache.Write work boards: %v", err)
@@ -76,7 +76,7 @@ func TestDynamicCompletionUsesExplicitProfileForCache(t *testing.T) {
 		t.Fatalf("forwarded completion did not preserve --config/--profile:\n%s", got)
 	}
 
-	cmd = exec.Command(bin, "--@complete=cacheboard", "--", "issue", "list", "--profile", "play", "--board")
+	cmd = exec.Command(bin, "--@complete=cacheboard", "--", "issue", "list", "--config", cfg, "--profile", "play", "--board")
 	cmd.Env = append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 	out, err = cmd.CombinedOutput()
 	if err != nil {
@@ -93,7 +93,7 @@ func TestLinkTypeCompletionInsertsTypeName(t *testing.T) {
 	cfg := writeCompletionConfig(t)
 	cacheRoot := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", cacheRoot)
-	if _, err := cache.Write("work", "linktypes", json.RawMessage(`[
+	if _, err := cache.Write(cacheKeyForTestConfig(t, cfg, "work", "https://work.atlassian.net"), "linktypes", json.RawMessage(`[
 		{"id":"10000","name":"Blocks","inward":"is blocked by","outward":"blocks"}
 	]`)); err != nil {
 		t.Fatalf("cache.Write linktypes: %v", err)

@@ -21,7 +21,7 @@ func TestCacheBoardPredictorDescriptors(t *testing.T) {
 	cacheRoot := t.TempDir()
 
 	// Three boards: single-project, two-project, four-project.
-	primeBoardsCache(t, cacheRoot, "default", `[
+	primeBoardsCacheForConfig(t, cacheRoot, cfg, "default", "", `[
 		{"id":1,"name":"Single Project Board","type":"scrum","project_keys":["ENG"]},
 		{"id":2,"name":"Two Project Board","type":"kanban","project_keys":["ENG","PLAT"]},
 		{"id":3,"name":"Four Project Board","type":"scrum","project_keys":["ENG","PLAT","OPS","SRE"]}
@@ -52,7 +52,7 @@ func TestCacheBoardPredictorEmptyProjectsDropsSegment(t *testing.T) {
 	cfg := emptyBaseURLConfig(t)
 	cacheRoot := t.TempDir()
 
-	primeBoardsCache(t, cacheRoot, "default", `[
+	primeBoardsCacheForConfig(t, cacheRoot, cfg, "default", "", `[
 		{"id":7,"name":"No Project Board","type":"scrum","project_keys":[]}
 	]`)
 

@@ -89,6 +89,9 @@ func TestBoardsListColdStartPrimesThenServesFromCache(t *testing.T) {
 	if data["from_cache"] != false {
 		t.Fatalf("first call should be from_cache=false; got %+v", data["from_cache"])
 	}
+	if data["cache_state"] != "missing" || data["cache_source_state"] != "missing" || data["cache_empty"] != false {
+		t.Fatalf("first call cache state wrong: %+v", data)
+	}
 	boards, _ := data["boards"].([]any)
 	if len(boards) != 2 {
 		t.Fatalf("expected 2 boards, got %d (%+v)", len(boards), boards)
@@ -113,7 +116,7 @@ func TestBoardsListColdStartPrimesThenServesFromCache(t *testing.T) {
 		t.Fatalf("data.fetched_at missing: %+v", data)
 	}
 
-	cachePath := filepath.Join(cacheRoot, "jira-cli", "test", "boards.json")
+	cachePath := filepath.Join(cacheRoot, "jira-cli", cacheKeyForTestConfig(t, cfg, "test", srv.URL), "boards.json")
 	if _, err := os.Stat(cachePath); err != nil {
 		t.Fatalf("expected cache file at %s: %v", cachePath, err)
 	}
@@ -131,6 +134,9 @@ func TestBoardsListColdStartPrimesThenServesFromCache(t *testing.T) {
 	data2, _ := second["data"].(map[string]any)
 	if data2["from_cache"] != true {
 		t.Fatalf("second call should be from_cache=true; got %+v", data2["from_cache"])
+	}
+	if data2["cache_state"] != "fresh" || data2["cache_source_state"] != "fresh" || data2["cache_empty"] != false {
+		t.Fatalf("second call cache state wrong: %+v", data2)
 	}
 	if got := fake.pages.Load(); got != pagesBefore {
 		t.Fatalf("expected no additional /board hits on second call (was %d, now %d)", pagesBefore, got)
@@ -194,7 +200,7 @@ func TestBoardsListSurfacesTruncationWarning(t *testing.T) {
 	// Pre-write a cache file that has truncation metadata so the
 	// command serves from cache and surfaces the warning without
 	// hitting the network.
-	cacheDir := filepath.Join(cacheRoot, "jira-cli", "test")
+	cacheDir := filepath.Join(cacheRoot, "jira-cli", cacheKeyForTestConfig(t, cfg, "test", srv.URL))
 	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
 		t.Fatal(err)
 	}

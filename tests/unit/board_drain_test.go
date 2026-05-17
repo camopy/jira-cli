@@ -119,6 +119,24 @@ func TestBoardServiceListAllMaxResultsBoundFires(t *testing.T) {
 	}
 }
 
+func TestBoardServiceListAllExactMaxResultsOnLastPageNotTruncated(t *testing.T) {
+	srv := pagedBoardServer(100, 50)
+	defer srv.Close()
+	client := jira.NewClient(jira.WithBaseURL(srv.URL + "/"))
+	svc := jira.NewBoardService(client)
+
+	res, err := svc.ListAll(context.Background(), jira.BoardDrainOptions{PageSize: 50, MaxResults: 100})
+	if err != nil {
+		t.Fatalf("ListAll: %v", err)
+	}
+	if res.Truncated {
+		t.Fatalf("Truncated = true with exact final-page max-results; reason=%q", res.TruncatedReason)
+	}
+	if len(res.Boards) != 100 {
+		t.Fatalf("Boards len = %d; want 100", len(res.Boards))
+	}
+}
+
 func TestBoardServiceListAllUnboundedEscape(t *testing.T) {
 	// Walks past default 100-page / 10K-result bounds when Unbounded=true.
 	srv := pagedBoardServer(10500, 50)
@@ -135,5 +153,86 @@ func TestBoardServiceListAllUnboundedEscape(t *testing.T) {
 	}
 	if len(res.Boards) != 10500 {
 		t.Fatalf("Boards len = %d; want 10500 (Unbounded should walk full set)", len(res.Boards))
+	}
+}
+
+func TestBoardServiceProjectsForBoardDrainsAllPages(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/rest/agile/1.0/board/42/project", func(w http.ResponseWriter, r *http.Request) {
+		startAt, _ := strconv.Atoi(r.URL.Query().Get("startAt"))
+		switch startAt {
+		case 0:
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"maxResults": 1,
+				"startAt":    0,
+				"isLast":     false,
+				"values":     []map[string]any{{"key": "PLAT"}},
+			})
+		case 1:
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"maxResults": 1,
+				"startAt":    1,
+				"isLast":     true,
+				"values":     []map[string]any{{"key": "ENG"}},
+			})
+		default:
+			t.Fatalf("unexpected startAt %d", startAt)
+		}
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := jira.NewClient(jira.WithBaseURL(srv.URL + "/"))
+	svc := jira.NewBoardService(client)
+	keys, _, err := svc.ProjectsForBoard(context.Background(), 42)
+	if err != nil {
+		t.Fatalf("ProjectsForBoard: %v", err)
+	}
+	if got, want := fmt.Sprint(keys), "[ENG PLAT]"; got != want {
+		t.Fatalf("ProjectsForBoard keys = %s, want %s", got, want)
+	}
+}
+
+func TestBoardServiceProjectsForBoardContinuesPastEmptyNonFinalPage(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/rest/agile/1.0/board/42/project", func(w http.ResponseWriter, r *http.Request) {
+		startAt, _ := strconv.Atoi(r.URL.Query().Get("startAt"))
+		switch startAt {
+		case 0:
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"maxResults": 1,
+				"startAt":    0,
+				"isLast":     false,
+				"values":     []map[string]any{{"key": "PLAT"}},
+			})
+		case 1:
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"maxResults": 1,
+				"startAt":    1,
+				"isLast":     false,
+				"values":     []map[string]any{},
+			})
+		case 2:
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"maxResults": 1,
+				"startAt":    2,
+				"isLast":     true,
+				"values":     []map[string]any{{"key": "ENG"}},
+			})
+		default:
+			t.Fatalf("unexpected startAt %d", startAt)
+		}
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := jira.NewClient(jira.WithBaseURL(srv.URL + "/"))
+	svc := jira.NewBoardService(client)
+	keys, _, err := svc.ProjectsForBoard(context.Background(), 42)
+	if err != nil {
+		t.Fatalf("ProjectsForBoard: %v", err)
+	}
+	if got, want := fmt.Sprint(keys), "[ENG PLAT]"; got != want {
+		t.Fatalf("ProjectsForBoard keys = %s, want %s", got, want)
 	}
 }

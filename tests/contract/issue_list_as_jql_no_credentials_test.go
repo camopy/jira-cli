@@ -21,7 +21,7 @@ func TestIssueListAsJQLBoardScopeWorksWithoutCredentials(t *testing.T) {
 	// will fail. Success here proves the path is genuinely cache-only.
 	cfg := emptyBaseURLConfig(t)
 	cacheRoot := t.TempDir()
-	primeBoardsCache(t, cacheRoot, "default", `[
+	primeBoardsCacheForConfig(t, cacheRoot, cfg, "default", "", `[
 		{"id":42,"name":"Engineering Sprint","type":"scrum","project_keys":["ENG","PLAT"]}
 	]`)
 
@@ -59,7 +59,7 @@ func TestJQLBuildBoardScopeWorksWithoutCredentials(t *testing.T) {
 	bin := buildJiraBinary(t)
 	cfg := emptyBaseURLConfig(t)
 	cacheRoot := t.TempDir()
-	primeBoardsCache(t, cacheRoot, "default", `[
+	primeBoardsCacheForConfig(t, cacheRoot, cfg, "default", "", `[
 		{"id":7,"name":"Solo Board","type":"scrum","project_keys":["SOLO"]}
 	]`)
 

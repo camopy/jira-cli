@@ -23,37 +23,18 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-)
 
-// boardCacheEntry is the on-disk shape persisted by internal/cache.Write.
-type boardCacheEntry struct {
-	Profile   string          `json:"profile"`
-	Resource  string          `json:"resource"`
-	FetchedAt string          `json:"fetched_at"`
-	Data      json.RawMessage `json:"data"`
-}
+	"github.com/matcra587/jira-cli/internal/cache"
+)
 
 // primedBoardsCache writes a boards cache entry whose Data is the JSON
 // `[]Board` payload BoardService.ResolveOne reads. The cache directory
-// path is the per-profile location under cacheRoot (XDG_CACHE_HOME).
-func primedBoardsCache(t *testing.T, cacheRoot, profile, boardsJSON string) {
+// path is the per-config/site/profile location under cacheRoot.
+func primedBoardsCache(t *testing.T, cacheRoot, cfg, profile, baseURL, boardsJSON string) {
 	t.Helper()
-	dir := filepath.Join(cacheRoot, "jira-cli", profile)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		t.Fatalf("MkdirAll cache dir: %v", err)
-	}
-	entry := boardCacheEntry{
-		Profile:   profile,
-		Resource:  "boards",
-		FetchedAt: "2026-05-06T18:00:00Z",
-		Data:      json.RawMessage(boardsJSON),
-	}
-	body, err := json.MarshalIndent(entry, "", "  ")
-	if err != nil {
-		t.Fatalf("Marshal cache entry: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "boards.json"), body, 0o600); err != nil {
-		t.Fatalf("write cache file: %v", err)
+	t.Setenv("XDG_CACHE_HOME", cacheRoot)
+	if _, err := cache.Write(cache.Key(profile, baseURL, cfg), "boards", json.RawMessage(boardsJSON)); err != nil {
+		t.Fatalf("cache.Write boards: %v", err)
 	}
 }
 
@@ -124,10 +105,10 @@ const twoBoardCacheJSON = `[
 func TestDefaultBoardAppliedWhenNoFlag(t *testing.T) {
 	cacheRoot := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", cacheRoot)
-	primedBoardsCache(t, cacheRoot, "default", twoBoardCacheJSON)
 
 	srv := newFakeSearchServer(t)
 	cfg := jiraConfigWithDefaultBoard(t, srv.srv.URL, "Engineering Sprint")
+	primedBoardsCache(t, cacheRoot, cfg, "default", srv.srv.URL, twoBoardCacheJSON)
 
 	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "list", "--output=json")
 	cmd.Env = append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
@@ -158,10 +139,10 @@ func TestDefaultBoardAppliedWhenNoFlag(t *testing.T) {
 func TestDefaultBoardOverriddenByExplicitFlag(t *testing.T) {
 	cacheRoot := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", cacheRoot)
-	primedBoardsCache(t, cacheRoot, "default", twoBoardCacheJSON)
 
 	srv := newFakeSearchServer(t)
 	cfg := jiraConfigWithDefaultBoard(t, srv.srv.URL, "Engineering Sprint")
+	primedBoardsCache(t, cacheRoot, cfg, "default", srv.srv.URL, twoBoardCacheJSON)
 
 	cmd := exec.Command(
 		"go", "run", "../../cmd/jira", "--config", cfg,
@@ -190,10 +171,10 @@ func TestDefaultBoardOverriddenByExplicitFlag(t *testing.T) {
 func TestDefaultBoardSuppressedByEmptyFlag(t *testing.T) {
 	cacheRoot := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", cacheRoot)
-	primedBoardsCache(t, cacheRoot, "default", twoBoardCacheJSON)
 
 	srv := newFakeSearchServer(t)
 	cfg := jiraConfigWithDefaultBoard(t, srv.srv.URL, "Engineering Sprint")
+	primedBoardsCache(t, cacheRoot, cfg, "default", srv.srv.URL, twoBoardCacheJSON)
 
 	cmd := exec.Command(
 		"go", "run", "../../cmd/jira", "--config", cfg,
@@ -229,11 +210,11 @@ func TestDefaultBoardSuppressedByEmptyFlag(t *testing.T) {
 func TestDefaultBoardMissingExitsThreeWithPinnedWording(t *testing.T) {
 	cacheRoot := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", cacheRoot)
-	// Cache has 2 boards but neither matches "Nonexistent".
-	primedBoardsCache(t, cacheRoot, "default", twoBoardCacheJSON)
 
 	srv := newFakeSearchServer(t)
 	cfg := jiraConfigWithDefaultBoard(t, srv.srv.URL, "Nonexistent")
+	// Cache has 2 boards but neither matches "Nonexistent".
+	primedBoardsCache(t, cacheRoot, cfg, "default", srv.srv.URL, twoBoardCacheJSON)
 
 	bin := buildJiraBinary(t)
 	cmd := exec.Command(bin, "--config", cfg, "issue", "list", "--output=json")
@@ -273,10 +254,10 @@ func TestDefaultBoardAmbiguousReturnsCandidates(t *testing.T) {
   {"id":42,"name":"Engineering","type":"scrum","project_keys":["ENG"]},
   {"id":99,"name":"Engineering","type":"kanban","project_keys":["OPS"]}
 ]`
-	primedBoardsCache(t, cacheRoot, "default", ambiguousCacheJSON)
 
 	srv := newFakeSearchServer(t)
 	cfg := jiraConfigWithDefaultBoard(t, srv.srv.URL, "Engineering")
+	primedBoardsCache(t, cacheRoot, cfg, "default", srv.srv.URL, ambiguousCacheJSON)
 
 	bin := buildJiraBinary(t)
 	cmd := exec.Command(bin, "--config", cfg, "issue", "list", "--output=json")

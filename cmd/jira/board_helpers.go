@@ -94,17 +94,19 @@ func boardScopeFromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
 	cfg, _ := config.Load(config.WithPath(configPath(cmd)))
 	profile := config.Profile{}
 	profileName := "default"
+	cacheProfile := cache.Key(profileName, "", cacheConfigPath(cmd))
 	if cfg != nil {
 		profile = activeProfile(cmd, cfg)
 		if profile.Name != "" {
 			profileName = profile.Name
 		}
+		cacheProfile = cacheKeyForProfile(cmd, profile)
 	}
 
 	// Flag path: --board NAME (when non-empty) or --board-id N.
 	switch {
 	case boardIDSet:
-		scope, err := resolveBoardByID(cmd.Context(), profileName, boardID)
+		scope, err := resolveBoardByID(cmd.Context(), cacheProfile, boardID)
 		if err != nil {
 			return jira.BoardScope{}, precedenceFlag, err
 		}
@@ -118,7 +120,7 @@ func boardScopeFromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
 		// backend touched. Pinned by tests/unit/board_resolver_test.go
 		// which fails the test if the resolver hits the network.
 		svc := jira.NewBoardService(nil)
-		scope, err := svc.ResolveOne(cmd.Context(), profileName, boardName)
+		scope, err := svc.ResolveOne(cmd.Context(), cacheProfile, boardName)
 		if err != nil {
 			return jira.BoardScope{}, precedenceFlag, classifyBoardErr(err)
 		}
@@ -131,7 +133,7 @@ func boardScopeFromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
 	// the cache. Empty / unset → no scope, precedence "none".
 	if def := strings.TrimSpace(profile.DefaultBoard); def != "" {
 		svc := jira.NewBoardService(nil)
-		scope, err := svc.ResolveOne(cmd.Context(), profileName, def)
+		scope, err := svc.ResolveOne(cmd.Context(), cacheProfile, def)
 		if err != nil {
 			// Pinned wording when default_board doesn't resolve.
 			if stdliberrors.Is(err, jira.ErrBoardNotFound) {

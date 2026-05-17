@@ -237,13 +237,14 @@ func (s *boardService) ListAll(ctx context.Context, opts BoardDrainOptions) (Boa
 		for i := range page {
 			out.Boards = append(out.Boards, &page[i])
 		}
+		serverDone := resp == nil || resp.IsLast
 		if !opts.Unbounded {
-			if out.PagesFetched >= maxPages {
+			if out.PagesFetched >= maxPages && !serverDone {
 				out.Truncated = true
 				out.TruncatedReason = "max_pages"
 				return out, nil
 			}
-			if len(out.Boards) >= maxResults {
+			if len(out.Boards) > maxResults || (len(out.Boards) == maxResults && !serverDone) {
 				out.Truncated = true
 				out.TruncatedReason = "max_results"
 				if len(out.Boards) > maxResults {
@@ -252,38 +253,52 @@ func (s *boardService) ListAll(ctx context.Context, opts BoardDrainOptions) (Boa
 				return out, nil
 			}
 		}
-		if resp == nil || resp.IsLast {
+		if serverDone {
 			return out, nil
 		}
-		if len(page) == 0 {
-			return out, nil
-		}
-		offset += len(page)
+		offset = nextOffset(offset, len(page), pageSize, resp.MaxResults)
 	}
 }
 
 // ProjectsForBoard returns the project keys for a given board id,
 // sorted ascending alphabetically (deterministic for cache+JQL).
 func (s *boardService) ProjectsForBoard(ctx context.Context, boardID int) ([]string, *Response, error) {
-	path := fmt.Sprintf("rest/agile/1.0/board/%d/project", boardID)
-	req, err := s.client.NewRequest(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	var wire boardProjectWire
-	resp, err := s.client.Do(req, &wire)
-	if err != nil {
-		return nil, resp, err
-	}
-	keys := make([]string, 0, len(wire.Values))
-	for _, v := range wire.Values {
-		if v.Key != "" {
-			keys = append(keys, v.Key)
+	startAt := 0
+	pageSize := 50
+	var (
+		keys     []string
+		lastResp *Response
+		pages    int
+	)
+	for {
+		path := fmt.Sprintf("rest/agile/1.0/board/%d/project?startAt=%d&maxResults=%d", boardID, startAt, pageSize)
+		req, err := s.client.NewRequest(ctx, http.MethodGet, path, nil)
+		if err != nil {
+			return nil, nil, err
 		}
+		var wire boardProjectWire
+		resp, err := s.client.Do(req, &wire)
+		if err != nil {
+			return nil, resp, err
+		}
+		lastResp = resp
+		pages++
+		for _, v := range wire.Values {
+			if v.Key != "" {
+				keys = append(keys, v.Key)
+			}
+		}
+		if wire.IsLast {
+			break
+		}
+		if pages >= defaultMaxPages || len(keys) >= defaultMaxResults {
+			return nil, lastResp, fmt.Errorf("board %d project pagination exceeded default bounds", boardID)
+		}
+		startAt = nextOffset(startAt, len(wire.Values), pageSize, wire.MaxResults)
 	}
 	// Sort ascending for deterministic envelope round-trips.
 	slices.Sort(keys)
-	return keys, resp, nil
+	return keys, lastResp, nil
 }
 
 // BoardsCacheFile is the on-disk envelope persisted under

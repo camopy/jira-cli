@@ -58,16 +58,15 @@ default_board = "Platform Roadmap"
 func TestDefaultBoardPerProfileSemantics(t *testing.T) {
 	cacheRoot := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", cacheRoot)
-
-	// Each profile has its OWN cache namespace under
-	// XDG_CACHE_HOME/jira-cli/<profile>/boards.json. Both prime with
-	// the same two-board JSON for simplicity (the resolver still
-	// picks the per-profile config's name).
-	primedBoardsCache(t, cacheRoot, "default", twoBoardCacheJSON)
-	primedBoardsCache(t, cacheRoot, "work", twoBoardCacheJSON)
-
 	srv := newFakeSearchServer(t)
 	cfg := jiraConfigTwoProfilesEachDefaultBoard(t, srv.srv.URL)
+
+	// Each profile has its OWN cache namespace under
+	// XDG_CACHE_HOME/jira-cli/<cache-key>/boards.json. Both prime with
+	// the same two-board JSON for simplicity; the resolver still picks
+	// the per-profile config's name.
+	primedBoardsCache(t, cacheRoot, cfg, "default", srv.srv.URL, twoBoardCacheJSON)
+	primedBoardsCache(t, cacheRoot, cfg, "work", srv.srv.URL, twoBoardCacheJSON)
 
 	// Run 1: default profile (no --profile flag)
 	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "list", "--output=json")

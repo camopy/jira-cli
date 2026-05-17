@@ -15,9 +15,9 @@ import (
 )
 
 // cacheCommand groups per-resource cache primers + housekeeping. Each
-// subcommand fetches the resource, writes the JSON-encoded list under
-// ~/.cache/jira-cli/<profile>/<resource>.json, and emits the list as the
-// envelope's data so agents (and completion functions) can pipe it.
+// subcommand fetches the resource, writes the JSON-encoded list under a
+// config/site/profile cache namespace, and emits the list as the envelope's
+// data so agents (and completion functions) can pipe it.
 //
 // Reads are cheap (single file) — see `internal/cache` for the format.
 func cacheCommand() *cobra.Command {
@@ -33,24 +33,55 @@ func cacheCommand() *cobra.Command {
 	return cmd
 }
 
+const (
+	cacheStateEmpty     = "empty"
+	cacheStateFresh     = "fresh"
+	cacheStateMalformed = "malformed"
+	cacheStateMissing   = "missing"
+	cacheStateRefresh   = "refresh"
+	cacheStateStale     = "stale"
+)
+
 // cacheReadOrFetch is the read-then-fetch helper every subcommand uses.
-// Returns the JSON-encoded resource bytes plus a flag telling the caller
-// whether the value was served from disk.
-func cacheReadOrFetch(profile, resource string, ttl time.Duration, refresh bool, fetch func() (json.RawMessage, error)) (json.RawMessage, bool, time.Time, error) {
+// Returns the JSON-encoded resource bytes, whether the value was served
+// from disk, and the state observed before any fetch.
+func cacheReadOrFetch(profile, resource string, ttl time.Duration, refresh bool, fetch func() (json.RawMessage, error)) (json.RawMessage, bool, time.Time, string, error) {
+	sourceState := cacheStateRefresh
 	if !refresh {
-		if entry, ok, stale, err := cache.Read(profile, resource, ttl); err == nil && ok && !stale {
-			return entry.Data, true, entry.FetchedAt, nil
+		entry, ok, stale, err := cache.Read(profile, resource, ttl)
+		switch {
+		case err != nil:
+			sourceState = cacheStateMalformed
+		case ok && !stale:
+			return entry.Data, true, entry.FetchedAt, cacheStateFresh, nil
+		case ok && stale:
+			sourceState = cacheStateStale
+		default:
+			sourceState = cacheStateMissing
 		}
 	}
 	data, err := fetch()
 	if err != nil {
-		return nil, false, time.Time{}, err
+		return nil, false, time.Time{}, sourceState, err
 	}
 	entry, err := cache.Write(profile, resource, data)
 	if err != nil {
-		return nil, false, time.Time{}, err
+		return nil, false, time.Time{}, sourceState, err
 	}
-	return entry.Data, false, entry.FetchedAt, nil
+	return entry.Data, false, entry.FetchedAt, sourceState, nil
+}
+
+func cacheStateForCount(sourceState string, count int) string {
+	if count == 0 {
+		return cacheStateEmpty
+	}
+	return sourceState
+}
+
+func addCacheStateFields(data map[string]any, sourceState string, count int) {
+	data["cache_state"] = cacheStateForCount(sourceState, count)
+	data["cache_source_state"] = sourceState
+	data["cache_empty"] = count == 0
 }
 
 // marshalNonNilSlice marshals `v` but rewrites nil slices to `[]` so cache
@@ -80,7 +111,7 @@ func cacheLabelsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, err := cacheReadOrFetch(profile.Name, "labels", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cacheKeyForProfile(cmd, profile), "labels", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.labels")
 				}
@@ -97,13 +128,15 @@ func cacheLabelsCommand() *cobra.Command {
 			if err := json.Unmarshal(data, &labels); err != nil {
 				return fmt.Errorf("cache.labels: decode cached payload: %w", err)
 			}
-			return writeEnvelope(cmd, "cache.labels", map[string]any{
+			envelopeData := map[string]any{
 				"profile":    profile.Name,
 				"labels":     labels,
 				"count":      len(labels),
 				"from_cache": fromCache,
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
-			})
+			}
+			addCacheStateFields(envelopeData, cacheSourceState, len(labels))
+			return writeEnvelope(cmd, "cache.labels", envelopeData)
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
@@ -123,7 +156,7 @@ func cacheProjectsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, err := cacheReadOrFetch(profile.Name, "projects", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cacheKeyForProfile(cmd, profile), "projects", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.projects")
 				}
@@ -140,13 +173,15 @@ func cacheProjectsCommand() *cobra.Command {
 			if err := json.Unmarshal(data, &projects); err != nil {
 				return fmt.Errorf("cache.projects: decode cached payload: %w", err)
 			}
-			return writeEnvelope(cmd, "cache.projects", map[string]any{
+			envelopeData := map[string]any{
 				"profile":    profile.Name,
 				"projects":   projects,
 				"count":      len(projects),
 				"from_cache": fromCache,
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
-			})
+			}
+			addCacheStateFields(envelopeData, cacheSourceState, len(projects))
+			return writeEnvelope(cmd, "cache.projects", envelopeData)
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
@@ -174,7 +209,7 @@ func cacheEpicsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, err := cacheReadOrFetch(profile.Name, "epics", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cacheKeyForProfile(cmd, profile), "epics", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.epics")
 				}
@@ -187,13 +222,15 @@ func cacheEpicsCommand() *cobra.Command {
 			if err := json.Unmarshal(data, &epics); err != nil {
 				return fmt.Errorf("cache.epics: decode cached payload: %w", err)
 			}
-			return writeEnvelope(cmd, "cache.epics", map[string]any{
+			envelopeData := map[string]any{
 				"profile":    profile.Name,
 				"epics":      epics,
 				"count":      len(epics),
 				"from_cache": fromCache,
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
-			})
+			}
+			addCacheStateFields(envelopeData, cacheSourceState, len(epics))
+			return writeEnvelope(cmd, "cache.epics", envelopeData)
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
@@ -245,7 +282,7 @@ func cacheFieldsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, err := cacheReadOrFetch(profile.Name, "fields", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cacheKeyForProfile(cmd, profile), "fields", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.fields")
 				}
@@ -258,13 +295,15 @@ func cacheFieldsCommand() *cobra.Command {
 			if err := json.Unmarshal(data, &fields); err != nil {
 				return fmt.Errorf("cache.fields: decode cached payload: %w", err)
 			}
-			return writeEnvelope(cmd, "cache.fields", map[string]any{
+			envelopeData := map[string]any{
 				"profile":    profile.Name,
 				"fields":     fields,
 				"count":      len(fields),
 				"from_cache": fromCache,
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
-			})
+			}
+			addCacheStateFields(envelopeData, cacheSourceState, len(fields))
+			return writeEnvelope(cmd, "cache.fields", envelopeData)
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
@@ -313,7 +352,7 @@ func cacheIssueTypesCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, err := cacheReadOrFetch(profile.Name, "issuetypes", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cacheKeyForProfile(cmd, profile), "issuetypes", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.issuetypes")
 				}
@@ -326,13 +365,15 @@ func cacheIssueTypesCommand() *cobra.Command {
 			if err := json.Unmarshal(data, &types); err != nil {
 				return fmt.Errorf("cache.issuetypes: decode cached payload: %w", err)
 			}
-			return writeEnvelope(cmd, "cache.issuetypes", map[string]any{
+			envelopeData := map[string]any{
 				"profile":    profile.Name,
 				"issuetypes": types,
 				"count":      len(types),
 				"from_cache": fromCache,
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
-			})
+			}
+			addCacheStateFields(envelopeData, cacheSourceState, len(types))
+			return writeEnvelope(cmd, "cache.issuetypes", envelopeData)
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
@@ -375,7 +416,7 @@ func cacheLinkTypesCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, err := cacheReadOrFetch(profile.Name, "linktypes", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cacheKeyForProfile(cmd, profile), "linktypes", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.linktypes")
 				}
@@ -392,13 +433,15 @@ func cacheLinkTypesCommand() *cobra.Command {
 			if err := json.Unmarshal(data, &types); err != nil {
 				return fmt.Errorf("cache.linktypes: decode cached payload: %w", err)
 			}
-			return writeEnvelope(cmd, "cache.linktypes", map[string]any{
+			envelopeData := map[string]any{
 				"profile":    profile.Name,
 				"link_types": types,
 				"count":      len(types),
 				"from_cache": fromCache,
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
-			})
+			}
+			addCacheStateFields(envelopeData, cacheSourceState, len(types))
+			return writeEnvelope(cmd, "cache.linktypes", envelopeData)
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
@@ -425,10 +468,20 @@ func cacheBoardsCommand() *cobra.Command {
 			}
 			ttl := time.Duration(ttlMinutes) * time.Minute
 
+			cacheSourceState := cacheStateRefresh
+
 			// Cache hit path — short-circuit before fetching unless --refresh.
 			if !refresh {
-				if entry, present, stale, readErr := cache.Read(profile.Name, "boards", ttl); readErr == nil && present && !stale {
-					return emitCachedBoardsEnvelope(cmd, profile.Name, entry, true)
+				entry, present, stale, readErr := cache.Read(cacheKeyForProfile(cmd, profile), "boards", ttl)
+				switch {
+				case readErr != nil:
+					cacheSourceState = cacheStateMalformed
+				case present && !stale:
+					return emitCachedBoardsEnvelope(cmd, profile.Name, entry, true, cacheStateFresh)
+				case present && stale:
+					cacheSourceState = cacheStateStale
+				default:
+					cacheSourceState = cacheStateMissing
 				}
 			}
 
@@ -445,7 +498,7 @@ func cacheBoardsCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("cache.boards: marshal cache: %w", err)
 			}
-			entry, err := cache.Write(profile.Name, "boards", body)
+			entry, err := cache.Write(cacheKeyForProfile(cmd, profile), "boards", body)
 			if err != nil {
 				return fmt.Errorf("cache.boards: write: %w", err)
 			}
@@ -459,6 +512,7 @@ func cacheBoardsCommand() *cobra.Command {
 				"truncated":        file.Truncated,
 				"truncated_reason": file.TruncatedReason,
 			}
+			addCacheStateFields(data, cacheSourceState, len(file.Items))
 			return writeEnvelopeWithRawWarnings(cmd, "cache.boards", data, warnings)
 		},
 	}
@@ -595,7 +649,7 @@ func filterJQLSafeKeys(keys []string, droppedSoFar int) ([]string, int) {
 // emitCachedBoardsEnvelope renders the cache-hit envelope shape
 // (primed=false, from_cache=true). The truncated marker is preserved
 // from the cached file so consumers can detect a stale partial-prime.
-func emitCachedBoardsEnvelope(cmd *cobra.Command, profileName string, entry cache.Entry, fromCache bool) error {
+func emitCachedBoardsEnvelope(cmd *cobra.Command, profileName string, entry cache.Entry, fromCache bool, cacheSourceState string) error {
 	var file jira.BoardsCacheFile
 	if err := json.Unmarshal(entry.Data, &file); err != nil {
 		// Fallback shape: bare boards array (legacy resolver fixtures).
@@ -639,6 +693,7 @@ func emitCachedBoardsEnvelope(cmd *cobra.Command, profileName string, entry cach
 		"truncated":        file.Truncated,
 		"truncated_reason": file.TruncatedReason,
 	}
+	addCacheStateFields(data, cacheSourceState, len(file.Items))
 	return writeEnvelopeWithRawWarnings(cmd, "cache.boards", data, warnings)
 }
 
@@ -665,7 +720,7 @@ func cacheClearCommand() *cobra.Command {
 				return err
 			}
 			if len(args) == 0 {
-				n, err := cache.ClearProfile(profile.Name)
+				n, err := cache.ClearProfile(cacheKeyForProfile(cmd, profile))
 				if err != nil {
 					return err
 				}
@@ -674,7 +729,7 @@ func cacheClearCommand() *cobra.Command {
 					"removed": n,
 				})
 			}
-			ok, err := cache.Clear(profile.Name, args[0])
+			ok, err := cache.Clear(cacheKeyForProfile(cmd, profile), args[0])
 			if err != nil {
 				return err
 			}

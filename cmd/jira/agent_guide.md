@@ -645,7 +645,10 @@ jira cache linktypes --output=json
     ],
     "from_cache": true,
     "fetched_at": "2026-05-05T12:00:00Z",
-    "count": 3
+    "count": 3,
+    "cache_state": "fresh",
+    "cache_source_state": "fresh",
+    "cache_empty": false
   }
 }
 ```
@@ -684,7 +687,10 @@ jira cache clear boards         # drop the cache file
     "from_cache": true,
     "fetched_at": "2026-05-06T18:30:00Z",
     "truncated": false,
-    "truncated_reason": ""
+    "truncated_reason": "",
+    "cache_state": "fresh",
+    "cache_source_state": "fresh",
+    "cache_empty": false
   }
 }
 ```
@@ -946,6 +952,12 @@ Refresh after these events:
 | First call of a fresh session (recommended for `fields`) | as needed |
 | You hit a "not found" on something you know exists   | the relevant resource — your cache is stale |
 
+Cache JSON includes explicit state fields:
+
+- `cache_state`: `fresh`, `missing`, `stale`, `malformed`, `refresh`, or `empty`
+- `cache_source_state`: the cache state before any fetch
+- `cache_empty`: true when the fetched or cached resource list is empty
+
 ### Recommended session pattern for agents
 
 ```sh
@@ -982,10 +994,10 @@ once per session before authoring custom-field values.
 
 ### Concurrency
 
-Both the per-profile cache and the config TOML use atomic temp-file +
-rename writes. Two `jira` invocations running in parallel against the
-same profile will not corrupt each other's state — concurrent writes
-serialize cleanly at the filesystem level.
+Both the config/site/profile cache namespace and the config TOML use
+atomic temp-file + rename writes. Two `jira` invocations running in
+parallel against the same profile will not corrupt each other's state —
+concurrent writes serialize cleanly at the filesystem level.
 
 ## ADF reference
 

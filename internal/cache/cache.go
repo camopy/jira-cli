@@ -9,6 +9,8 @@
 package cache
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -29,6 +31,26 @@ type Entry struct {
 	Resource  string          `json:"resource"`
 	FetchedAt time.Time       `json:"fetched_at"`
 	Data      json.RawMessage `json:"data"`
+}
+
+// Key returns the stable namespace component for one config/site/profile
+// identity. The human profile name stays visible in command output; this key
+// is only for cache storage so profiles with the same name in different Jira
+// sites or config files do not share metadata.
+func Key(profile, siteURL, configPath string) string {
+	profile = strings.TrimSpace(profile)
+	if profile == "" {
+		profile = "default"
+	}
+	siteURL = strings.TrimRight(strings.ToLower(strings.TrimSpace(siteURL)), "/")
+	configPath = strings.TrimSpace(configPath)
+	if configPath != "" {
+		if abs, err := filepath.Abs(configPath); err == nil {
+			configPath = abs
+		}
+	}
+	sum := sha256.Sum256([]byte(configPath + "\x00" + siteURL + "\x00" + profile))
+	return profile + "-" + hex.EncodeToString(sum[:])[:16]
 }
 
 // Path returns the on-disk location for a (profile, resource) pair. The

@@ -23,15 +23,26 @@ import (
 	"github.com/matcra587/jira-cli/internal/cache"
 )
 
-// primeBoardsCache writes a boards cache file the resolver can find.
-func primeBoardsCache(t *testing.T, cacheRoot, profile, body string) {
+func cacheKeyForTestConfig(t *testing.T, cfg, profile, baseURL string) string {
+	t.Helper()
+	return cache.Key(profile, baseURL, cfg)
+}
+
+// primeBoardsCacheForConfig writes a boards cache file the resolver can find.
+func primeBoardsCacheForConfig(t *testing.T, cacheRoot, cfg, profile, baseURL, body string) {
+	t.Helper()
+	primeBoardsCache(t, cacheRoot, cacheKeyForTestConfig(t, cfg, profile, baseURL), body)
+}
+
+// primeBoardsCache writes a boards cache file under the supplied cache namespace.
+func primeBoardsCache(t *testing.T, cacheRoot, cacheProfile, body string) {
 	t.Helper()
 	t.Setenv("XDG_CACHE_HOME", cacheRoot)
-	if _, err := cache.Write(profile, "boards", json.RawMessage(body)); err != nil {
+	if _, err := cache.Write(cacheProfile, "boards", json.RawMessage(body)); err != nil {
 		t.Fatalf("cache.Write boards: %v", err)
 	}
 	// Defensive: confirm the file is on disk.
-	path := filepath.Join(cacheRoot, "jira-cli", profile, "boards.json")
+	path := filepath.Join(cacheRoot, "jira-cli", cacheProfile, "boards.json")
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("expected boards cache at %s: %v", path, err)
 	}
@@ -72,7 +83,7 @@ func TestIssueListBoardByName(t *testing.T) {
 	cacheRoot := t.TempDir()
 
 	// Two-project board for the JQL clause emission contract.
-	primeBoardsCache(t, cacheRoot, "test", `[
+	primeBoardsCacheForConfig(t, cacheRoot, cfg, "test", bss.srv.URL, `[
 		{"id":42,"name":"Engineering Sprint","type":"scrum","project_keys":["ENG","PLAT"]},
 		{"id":99,"name":"Other Team","type":"kanban","project_keys":["OPS"]}
 	]`)
@@ -137,7 +148,7 @@ func TestIssueListBoardByID(t *testing.T) {
 	cfg := writeCacheTestConfig(t, bss.srv.URL)
 	cacheRoot := t.TempDir()
 
-	primeBoardsCache(t, cacheRoot, "test", `[
+	primeBoardsCacheForConfig(t, cacheRoot, cfg, "test", bss.srv.URL, `[
 		{"id":42,"name":"Engineering Sprint","type":"scrum","project_keys":["ENG"]},
 		{"id":99,"name":"Engineering","type":"kanban","project_keys":["OPS"]}
 	]`)

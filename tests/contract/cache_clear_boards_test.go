@@ -36,7 +36,7 @@ func TestCacheClearBoardsRemovesFile(t *testing.T) {
 	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "boards", "--output=json"); err != nil {
 		t.Fatalf("prime cache: %v", err)
 	}
-	cachePath := filepath.Join(cacheRoot, "jira-cli", "test", "boards.json")
+	cachePath := filepath.Join(cacheRoot, "jira-cli", cacheKeyForTestConfig(t, cfg, "test", srv.URL), "boards.json")
 	if _, err := os.Stat(cachePath); err != nil {
 		t.Fatalf("cache file should exist pre-clear: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestCacheClearRejectsUnknownExplicitProfile(t *testing.T) {
 
 	// Seed a cache file under the *real* "work" profile so we can prove
 	// the typoed run leaves it untouched.
-	workCache := filepath.Join(cacheRoot, "jira-cli", "work")
+	workCache := filepath.Join(cacheRoot, "jira-cli", cacheKeyForTestConfig(t, cfg, "work", ""))
 	if err := os.MkdirAll(workCache, 0o700); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
