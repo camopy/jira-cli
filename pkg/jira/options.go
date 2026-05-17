@@ -43,11 +43,15 @@ type Response struct {
 	Total         int
 	IsLast        bool
 	NextPageToken string
+	TokenPage     bool
 	Rate          Rate
 	RawBody       json.RawMessage
 }
 
 func (r Response) NextCursor() string {
+	if r.TokenPage {
+		return r.NextPageToken
+	}
 	if r.NextPageToken != "" {
 		return r.NextPageToken
 	}

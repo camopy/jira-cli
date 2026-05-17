@@ -38,3 +38,64 @@ func TestSearchServiceJQLPaginationAndValidation(t *testing.T) {
 		t.Fatal("JQL() error = nil for empty query")
 	}
 }
+
+func TestSearchServiceDefaultFieldsAreMinimal(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("Decode() error = %v", err)
+		}
+		_, _ = w.Write([]byte(`{"issues":[],"isLast":true}`))
+	}))
+	defer srv.Close()
+
+	service := jira.NewSearchService(jira.NewClient(jira.WithBaseURL(srv.URL + "/")))
+	if _, _, err := service.JQL(context.Background(), &jira.SearchRequest{JQL: "project=PROJ"}); err != nil {
+		t.Fatalf("JQL() error = %v", err)
+	}
+	if _, ok := body["fields"]; ok {
+		t.Fatalf("default search payload included fields = %#v; want Jira default id-only shape", body["fields"])
+	}
+}
+
+func TestSearchServiceUsesExplicitFields(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("Decode() error = %v", err)
+		}
+		_, _ = w.Write([]byte(`{"issues":[],"isLast":true}`))
+	}))
+	defer srv.Close()
+
+	service := jira.NewSearchService(jira.NewClient(jira.WithBaseURL(srv.URL + "/")))
+	if _, _, err := service.JQL(context.Background(), &jira.SearchRequest{JQL: "project=PROJ", Fields: []string{"key", "summary"}}); err != nil {
+		t.Fatalf("JQL() error = %v", err)
+	}
+	fields, ok := body["fields"].([]any)
+	if !ok || len(fields) != 2 || fields[0] != "key" || fields[1] != "summary" {
+		t.Fatalf("fields = %#v, want [key summary]", body["fields"])
+	}
+}
+
+func TestSearchServiceIgnoresOffsetPaginationFields(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"issues":[],"startAt":25,"maxResults":25,"total":100,"isLast":false}`))
+	}))
+	defer srv.Close()
+
+	service := jira.NewSearchService(jira.NewClient(jira.WithBaseURL(srv.URL + "/")))
+	_, resp, err := service.JQL(context.Background(), &jira.SearchRequest{JQL: "project=PROJ"})
+	if err != nil {
+		t.Fatalf("JQL() error = %v", err)
+	}
+	if resp.StartAt != 0 || resp.Total != 0 {
+		t.Fatalf("offset pagination metadata = startAt:%d total:%d, want zero for token search", resp.StartAt, resp.Total)
+	}
+	if resp.MaxResults != 50 {
+		t.Fatalf("MaxResults = %d, want Jira default page size 50", resp.MaxResults)
+	}
+	if cursor := resp.NextCursor(); cursor != "" {
+		t.Fatalf("NextCursor() = %q, want empty without nextPageToken", cursor)
+	}
+}

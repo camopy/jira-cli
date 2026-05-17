@@ -62,13 +62,34 @@ func TestJQLBuilderValidatesSortWithoutAdditionalFilters(t *testing.T) {
 	}
 }
 
-func TestIssueListJQLPrefersRawJQLOverBuilderFlags(t *testing.T) {
+func TestIssueListJQLCombinesRawJQLWithBuilderFilters(t *testing.T) {
 	query, err := issueListJQL("project = RAW", jqlBuildOptions{Projects: []string{"BUILT"}})
 	if err != nil {
 		t.Fatalf("issueListJQL() error = %v", err)
 	}
-	if query != "project = RAW" {
+	if query != `project = BUILT AND (project = RAW)` {
 		t.Fatalf("issueListJQL() = %q", query)
+	}
+}
+
+func TestIssueListJQLLeavesRawJQLAloneWithoutImplicitFilters(t *testing.T) {
+	query, err := issueListJQL("project = RAW ORDER BY created DESC", jqlBuildOptions{})
+	if err != nil {
+		t.Fatalf("issueListJQL() error = %v", err)
+	}
+	if query != "project = RAW ORDER BY created DESC" {
+		t.Fatalf("issueListJQL() = %q", query)
+	}
+}
+
+func TestIssueMineJQLCombinesRawJQLWithAssignee(t *testing.T) {
+	query, err := issueListJQL("status = Open OR priority = High ORDER BY created DESC", jqlBuildOptions{Assignee: "me"})
+	if err != nil {
+		t.Fatalf("issueListJQL() error = %v", err)
+	}
+	want := `assignee = currentUser() AND (status = Open OR priority = High) ORDER BY created DESC`
+	if query != want {
+		t.Fatalf("issueListJQL() = %q, want %q", query, want)
 	}
 }
 
@@ -107,6 +128,44 @@ workday_seconds = 28800
 	}
 	if !strings.Contains(env.Data.JQL, "project = SAM1") || strings.Contains(env.Data.JQL, "currentUser()") {
 		t.Fatalf("issue list default JQL = %q", env.Data.JQL)
+	}
+}
+
+func TestIssueListAsJQLRawQueryIgnoresProfileDefaultProject(t *testing.T) {
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(cfg, []byte(`
+default_profile = "default"
+queries_path = "`+dir+`/queries"
+
+[[profiles]]
+name = "default"
+base_url = ""
+auth_type = "token"
+default_project = "SAM1"
+secret_backend = "keyring"
+refresh_interval = 30
+timeout = 30
+workday_seconds = 28800
+`), 0o600); err != nil {
+		t.Fatalf("WriteFile(config): %v", err)
+	}
+
+	cmd := exec.Command("go", "run", ".", "--config", cfg, "issue", "list", "--jql", "project = CUSTOM", "--as-jql", "--output=json")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("issue list --as-jql error = %v\n%s", err, out)
+	}
+	var env struct {
+		Data struct {
+			JQL string `json:"jql"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(out, &env); err != nil {
+		t.Fatalf("issue list --as-jql output is not JSON: %v\n%s", err, out)
+	}
+	if env.Data.JQL != "project = CUSTOM" {
+		t.Fatalf("issue list raw JQL = %q, want project = CUSTOM", env.Data.JQL)
 	}
 }
 

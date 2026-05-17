@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 )
 
 type SearchService interface {
@@ -44,31 +45,32 @@ func (s *searchService) JQL(ctx context.Context, reqBody *SearchRequest) ([]*Iss
 	var result SearchResult
 	resp, err := s.client.Do(req, &result)
 	if resp != nil {
-		resp.StartAt = result.StartAt
-		resp.MaxResults = firstNonZero(result.MaxResults, reqBody.effectiveMaxResults())
-		resp.Total = result.Total
+		resp.MaxResults = reqBody.effectivePageSize()
 		resp.IsLast = result.IsLast
 		resp.NextPageToken = result.NextPageToken
+		resp.TokenPage = true
 	}
 	return result.Issues, resp, err
 }
 
 func (r *SearchRequest) payload() searchRequestPayload {
-	// Jira's POST /rest/api/3/search/jql endpoint returns id-only when
-	// `fields` is omitted (a behavior change from the deprecated
-	// /search endpoint, which defaulted to all). We default to "*all"
-	// so the CLI's typed output keeps working without per-call config.
-	// Callers that want a smaller payload set Fields explicitly.
-	fields := r.Fields
-	if len(fields) == 0 {
-		fields = []string{"*all"}
-	}
+	fields := compactSearchFields(r.Fields)
 	return searchRequestPayload{
 		JQL:           r.JQL,
 		MaxResults:    r.effectiveMaxResults(),
 		NextPageToken: r.effectiveNextPageToken(),
 		Fields:        fields,
 	}
+}
+
+func compactSearchFields(fields []string) []string {
+	out := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if field = strings.TrimSpace(field); field != "" {
+			out = append(out, field)
+		}
+	}
+	return out
 }
 
 func (r *SearchRequest) effectiveMaxResults() int {
@@ -81,6 +83,13 @@ func (r *SearchRequest) effectiveMaxResults() int {
 	return r.ListOptions.MaxResults
 }
 
+func (r *SearchRequest) effectivePageSize() int {
+	if pageSize := r.effectiveMaxResults(); pageSize > 0 {
+		return pageSize
+	}
+	return 50
+}
+
 func (r *SearchRequest) effectiveNextPageToken() string {
 	if r == nil {
 		return ""
@@ -89,13 +98,4 @@ func (r *SearchRequest) effectiveNextPageToken() string {
 		return r.NextPageToken
 	}
 	return r.ListOptions.NextPageToken
-}
-
-func firstNonZero(values ...int) int {
-	for _, value := range values {
-		if value != 0 {
-			return value
-		}
-	}
-	return 0
 }

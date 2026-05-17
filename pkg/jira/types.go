@@ -77,9 +77,6 @@ type Epic struct {
 
 type SearchResult struct {
 	Issues        []*Issue `json:"issues,omitempty"`
-	StartAt       int      `json:"startAt,omitempty"`
-	MaxResults    int      `json:"maxResults,omitempty"`
-	Total         int      `json:"total,omitempty"`
 	IsLast        bool     `json:"isLast,omitempty"`
 	NextPageToken string   `json:"nextPageToken,omitempty"`
 }

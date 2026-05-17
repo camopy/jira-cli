@@ -79,6 +79,59 @@ func TestSearchAllRespectsExplicitMaxPages(t *testing.T) {
 	}
 }
 
+func TestDrainSearchExactMaxResultsOnLastPageNotTruncated(t *testing.T) {
+	var pageCount atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page := pageCount.Add(1)
+		switch page {
+		case 1:
+			_, _ = w.Write([]byte(`{"issues":[{"key":"KAN-1"}],"isLast":false,"nextPageToken":"next"}`))
+		case 2:
+			_, _ = w.Write([]byte(`{"issues":[{"key":"KAN-2"}],"isLast":true}`))
+		default:
+			t.Fatalf("unexpected page %d", page)
+		}
+	}))
+	defer srv.Close()
+
+	client := jira.NewClient(jira.WithBaseURL(srv.URL))
+	svc := jira.NewSearchService(client)
+
+	collected, info, err := jira.DrainSearch(context.Background(), svc, &jira.SearchRequest{JQL: "project = X"}, jira.DrainOptions{MaxResults: 2})
+	if err != nil {
+		t.Fatalf("DrainSearch: %v", err)
+	}
+	if len(collected) != 2 {
+		t.Fatalf("collected len = %d, want 2", len(collected))
+	}
+	if info.Truncated {
+		t.Fatalf("Truncated = true with exact final-page max-results; reason=%q", info.TruncatedReason)
+	}
+}
+
+func TestDrainSearchExactMaxResultsWithMorePagesIsTruncated(t *testing.T) {
+	var pageCount atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page := pageCount.Add(1)
+		_, _ = w.Write([]byte(`{"issues":[{"key":"KAN-` + itoaPos(page) + `"}],"isLast":false,"nextPageToken":"next"}`))
+	}))
+	defer srv.Close()
+
+	client := jira.NewClient(jira.WithBaseURL(srv.URL))
+	svc := jira.NewSearchService(client)
+
+	collected, info, err := jira.DrainSearch(context.Background(), svc, &jira.SearchRequest{JQL: "project = X"}, jira.DrainOptions{MaxResults: 2})
+	if err != nil {
+		t.Fatalf("DrainSearch: %v", err)
+	}
+	if len(collected) != 2 {
+		t.Fatalf("collected len = %d, want 2", len(collected))
+	}
+	if !info.Truncated || info.TruncatedReason != "max_results" {
+		t.Fatalf("truncation = (%v, %q), want max_results", info.Truncated, info.TruncatedReason)
+	}
+}
+
 // --unbounded MUST remove all bounds. The server side here
 // terminates after a few pages so the test doesn't hang.
 func TestSearchAllUnboundedClearsAllBounds(t *testing.T) {

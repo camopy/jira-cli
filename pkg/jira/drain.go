@@ -57,15 +57,16 @@ func DrainSearch(ctx context.Context, svc SearchService, req *SearchRequest, opt
 		}
 		info.PagesFetched++
 		out = append(out, issues...)
+		serverDone := resp == nil || resp.IsLast || resp.NextPageToken == ""
 
 		// Bound checks (skipped under Unbounded).
 		if !opts.Unbounded {
-			if info.PagesFetched >= maxPages {
+			if info.PagesFetched >= maxPages && !serverDone {
 				info.Truncated = true
 				info.TruncatedReason = "max_pages"
 				return out, info, nil
 			}
-			if len(out) >= maxResults {
+			if len(out) > maxResults || (len(out) == maxResults && !serverDone) {
 				info.Truncated = true
 				info.TruncatedReason = "max_results"
 				if len(out) > maxResults {
@@ -76,12 +77,7 @@ func DrainSearch(ctx context.Context, svc SearchService, req *SearchRequest, opt
 		}
 
 		// Server says we're done.
-		if resp != nil && resp.IsLast {
-			return out, info, nil
-		}
-		// Advance the cursor; bail if the server didn't give us one
-		// (defensive — protects against runaway loops on broken servers).
-		if resp == nil || resp.NextPageToken == "" {
+		if serverDone {
 			return out, info, nil
 		}
 		token = resp.NextPageToken

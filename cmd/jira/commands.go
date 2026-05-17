@@ -1275,7 +1275,7 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 		}
 		profile := activeProfile(cmd, cfg)
 		builder := opts.builder
-		if !scopeActive {
+		if !scopeActive && strings.TrimSpace(opts.jqlQuery) == "" {
 			builder = issueListBuilderWithProfileDefaults(builder, profile)
 		}
 		query, err := issueListJQL(opts.jqlQuery, builder)
@@ -1290,7 +1290,7 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 		return err
 	}
 	builder := opts.builder
-	if !scopeActive {
+	if !scopeActive && strings.TrimSpace(opts.jqlQuery) == "" {
 		builder = issueListBuilderWithProfileDefaults(builder, profile)
 	}
 	query, err := issueListJQL(opts.jqlQuery, builder)
@@ -1333,11 +1333,8 @@ func applyBoardClauseToJQL(query string, scope jira.BoardScope) string {
 	}
 	// Insert the clause before any ORDER BY suffix so the resulting
 	// expression remains a valid `<filters> ORDER BY <field>` query.
-	upper := strings.ToUpper(q)
-	if idx := strings.Index(upper, " ORDER BY "); idx != -1 {
-		return clause + " AND " + q[:idx] + q[idx:]
-	}
-	return clause + " AND " + q
+	filter, orderBy := splitTopLevelOrderBy(q)
+	return combineJQLClauses(clause, parenthesizeJQLIfTopLevelOR(filter)) + orderBy
 }
 
 // boardScopedListData extends issueListOutputData with the new envelope
@@ -2808,22 +2805,36 @@ func searchCommand() *cobra.Command {
 	return cmd
 }
 
+type searchOptions struct {
+	fields []string
+	full   bool
+}
+
 func searchJQLCommand() *cobra.Command {
-	return &cobra.Command{
+	var opts searchOptions
+	cmd := &cobra.Command{
 		Use:   "jql QUERY",
 		Short: "Run a JQL query",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			fields, detail, err := searchOutputFields(opts)
+			if err != nil {
+				return err
+			}
 			client, _, ok, err := jiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
 			if ok {
-				issues, resp, err := searchService(client).JQL(cmd.Context(), &jira.SearchRequest{JQL: args[0], ListOptions: jira.ListOptions{MaxResults: 50}})
+				issues, resp, err := searchService(client).JQL(cmd.Context(), &jira.SearchRequest{
+					JQL:         args[0],
+					Fields:      fields,
+					ListOptions: jira.ListOptions{MaxResults: 50},
+				})
 				if err != nil {
 					return err
 				}
-				return writeEnvelopeWithResponse(cmd, "search.jql", map[string]any{"source": "inline", "jql": args[0], "issues": issueOutput(issues, true)}, resp)
+				return writeEnvelopeWithResponse(cmd, "search.jql", map[string]any{"source": "inline", "jql": args[0], "issues": issueOutput(issues, detail)}, resp)
 			}
 			return writeEnvelope(cmd, "search.jql", map[string]any{
 				"source": "inline",
@@ -2832,14 +2843,21 @@ func searchJQLCommand() *cobra.Command {
 			})
 		},
 	}
+	addSearchOutputFlags(cmd, &opts)
+	return cmd
 }
 
 func searchSavedCommand() *cobra.Command {
-	return &cobra.Command{
+	var opts searchOptions
+	cmd := &cobra.Command{
 		Use:   "saved NAME",
 		Short: "Run a saved JQL query",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			fields, detail, err := searchOutputFields(opts)
+			if err != nil {
+				return err
+			}
 			cfg, err := config.Load(config.WithPath(configPath(cmd)))
 			if err != nil {
 				return err
@@ -2859,11 +2877,15 @@ func searchSavedCommand() *cobra.Command {
 			issues := any([]any{})
 			var resp *jira.Response
 			if hasClient {
-				found, response, err := searchService(client).JQL(cmd.Context(), &jira.SearchRequest{JQL: query.JQL, ListOptions: jira.ListOptions{MaxResults: 50}})
+				found, response, err := searchService(client).JQL(cmd.Context(), &jira.SearchRequest{
+					JQL:         query.JQL,
+					Fields:      fields,
+					ListOptions: jira.ListOptions{MaxResults: 50},
+				})
 				if err != nil {
 					return err
 				}
-				issues = issueOutput(found, true)
+				issues = issueOutput(found, detail)
 				resp = response
 			}
 			data := map[string]any{
@@ -2878,6 +2900,30 @@ func searchSavedCommand() *cobra.Command {
 			return writeEnvelopeWithResponse(cmd, "search.saved", data, resp)
 		},
 	}
+	addSearchOutputFlags(cmd, &opts)
+	return cmd
+}
+
+func addSearchOutputFlags(cmd *cobra.Command, opts *searchOptions) {
+	cmd.Flags().StringSliceVar(&opts.fields, "fields", nil, "Issue fields to request from Jira (comma-separated)")
+	cmd.Flags().BoolVar(&opts.full, "full", false, `Request Jira's full issue payload with fields ["*all"]`)
+	cmd.MarkFlagsMutuallyExclusive("fields", "full")
+	clib.Extend(cmd.Flags().Lookup("fields"), clib.FlagExtra{Group: "Output", Placeholder: "FIELD", Complete: "predictor=cachefield,comma"})
+	clib.Extend(cmd.Flags().Lookup("full"), clib.FlagExtra{Group: "Output"})
+}
+
+func searchOutputFields(opts searchOptions) ([]string, bool, error) {
+	fields := compactStrings(opts.fields)
+	if opts.full && len(fields) > 0 {
+		return nil, false, fmt.Errorf("validation: --fields and --full are mutually exclusive")
+	}
+	if opts.full {
+		return []string{"*all"}, true, nil
+	}
+	if len(fields) > 0 {
+		return fields, true, nil
+	}
+	return append([]string(nil), jira.IssueListFields...), false, nil
 }
 
 func worklogCommand() *cobra.Command {

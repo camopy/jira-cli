@@ -1,9 +1,13 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/BurntSushi/toml"
+	"gopkg.in/yaml.v3"
 )
 
 type Query struct {
@@ -11,6 +15,12 @@ type Query struct {
 	Description string
 	Project     string
 	JQL         string
+}
+
+type queryFrontmatter struct {
+	Name        string `toml:"name" yaml:"name"`
+	Description string `toml:"description" yaml:"description"`
+	Project     string `toml:"project" yaml:"project"`
 }
 
 func LoadQueries(dir string) (map[string]Query, error) {
@@ -31,32 +41,59 @@ func LoadQueries(dir string) (map[string]Query, error) {
 		}
 		key := strings.TrimSuffix(entry.Name(), ".jql")
 		q := Query{Name: key}
-		body := string(b)
-		if strings.HasPrefix(body, "---\n") {
-			rest := strings.TrimPrefix(body, "---\n")
-			head, tail, ok := strings.Cut(rest, "\n---\n")
-			if ok {
-				for _, line := range strings.Split(head, "\n") {
-					k, v, ok := strings.Cut(line, ":")
-					if !ok {
-						continue
-					}
-					switch strings.TrimSpace(k) {
-					case "name":
-						q.Name = strings.TrimSpace(v)
-					case "description":
-						q.Description = strings.TrimSpace(v)
-					case "project":
-						q.Project = strings.TrimSpace(v)
-					}
-				}
-				body = tail
-			}
+		body, meta, err := parseQueryFrontmatter(string(b))
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
 		}
+		if meta.Name != "" {
+			q.Name = meta.Name
+		}
+		q.Description = meta.Description
+		q.Project = meta.Project
 		q.JQL = strings.TrimSpace(body)
 		out[key] = q
 	}
 	return out, nil
+}
+
+func parseQueryFrontmatter(body string) (string, queryFrontmatter, error) {
+	body = strings.ReplaceAll(body, "\r\n", "\n")
+	switch {
+	case strings.HasPrefix(body, "---\n"):
+		head, tail, ok := cutFrontmatter(body, "---")
+		if !ok {
+			return "", queryFrontmatter{}, fmt.Errorf("unterminated YAML frontmatter")
+		}
+		var meta queryFrontmatter
+		if err := yaml.Unmarshal([]byte(head), &meta); err != nil {
+			return "", queryFrontmatter{}, fmt.Errorf("parse YAML frontmatter: %w", err)
+		}
+		return tail, meta, nil
+	case strings.HasPrefix(body, "+++\n"):
+		head, tail, ok := cutFrontmatter(body, "+++")
+		if !ok {
+			return "", queryFrontmatter{}, fmt.Errorf("unterminated TOML frontmatter")
+		}
+		var meta queryFrontmatter
+		if _, err := toml.Decode(head, &meta); err != nil {
+			return "", queryFrontmatter{}, fmt.Errorf("parse TOML frontmatter: %w", err)
+		}
+		return tail, meta, nil
+	default:
+		return body, queryFrontmatter{}, nil
+	}
+}
+
+func cutFrontmatter(body, delimiter string) (string, string, bool) {
+	rest := strings.TrimPrefix(body, delimiter+"\n")
+	end := "\n" + delimiter + "\n"
+	if head, tail, ok := strings.Cut(rest, end); ok {
+		return head, tail, true
+	}
+	if strings.HasSuffix(rest, "\n"+delimiter) {
+		return strings.TrimSuffix(rest, "\n"+delimiter), "", true
+	}
+	return "", "", false
 }
 
 func expandHome(path string) string {

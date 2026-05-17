@@ -333,13 +333,14 @@ func (s *commentService) ListAll(ctx context.Context, key string, opts CommentDr
 		out.PagesFetched++
 		out.LastResp = resp
 		out.Comments = append(out.Comments, comments...)
+		serverDone := resp == nil || resp.IsLast || len(comments) == 0
 		if !opts.Unbounded {
-			if out.PagesFetched >= maxPages {
+			if out.PagesFetched >= maxPages && !serverDone {
 				out.Truncated = true
 				out.TruncatedReason = "max_pages"
 				return out, nil
 			}
-			if len(out.Comments) >= maxResults {
+			if len(out.Comments) > maxResults || (len(out.Comments) == maxResults && !serverDone) {
 				out.Truncated = true
 				out.TruncatedReason = "max_results"
 				if len(out.Comments) > maxResults {
@@ -348,7 +349,7 @@ func (s *commentService) ListAll(ctx context.Context, key string, opts CommentDr
 				return out, nil
 			}
 		}
-		if resp == nil || resp.IsLast {
+		if serverDone {
 			return out, nil
 		}
 		// Advance the offset by the page we received. Tracking our own
@@ -356,10 +357,6 @@ func (s *commentService) ListAll(ctx context.Context, key string, opts CommentDr
 		// keeps the loop deterministic against quirky servers and
 		// confines cursor mechanics to pkg/jira.
 		offset += len(comments)
-		if len(comments) == 0 {
-			// Defensive: empty page with isLast=false would loop forever.
-			return out, nil
-		}
 	}
 }
 

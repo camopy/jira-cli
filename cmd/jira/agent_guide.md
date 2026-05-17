@@ -171,8 +171,10 @@ jira search saved <name>       --output=json    # ~/.config/jira-cli/queries/<na
 in the page. Without it, list returns the summary set
 (`key, summary, status, assignee, priority, updated`).
 
-`search jql` does NOT take `--detail` — it always requests
-`fields:["*all"]` server-side, returning the full Jira shape.
+`search jql` and `search saved` do NOT take `--detail`. They request
+the summary set by default. Use `--full` for `fields:["*all"]`, or
+`--fields key,summary,customfield_10010` for an explicit Jira field
+selector.
 
 ### Known typed-output gaps
 

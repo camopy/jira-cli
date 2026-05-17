@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -54,6 +55,113 @@ func TestSearchCommandsExposeInlineAndSavedJQL(t *testing.T) {
 		if !strings.Contains(string(out), want) {
 			t.Fatalf("search saved output missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestSearchCommandsRequestSummaryFieldsByDefaultAndFullOnDemand(t *testing.T) {
+	var bodies []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/rest/api/3/search/jql" {
+			t.Fatalf("unexpected search request %s %s", r.Method, r.URL.Path)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		bodies = append(bodies, body)
+		_, _ = w.Write([]byte(`{"isLast":true,"issues":[{"key":"PROJ-1","fields":{"summary":"Search result","status":{"name":"To Do"},"updated":"2026-05-03T10:00:00Z"}}]}`))
+	}))
+	defer srv.Close()
+
+	cfg := jiraConfig(t, srv.URL)
+	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
+
+	bin := buildJiraBinary(t)
+	for _, args := range [][]string{
+		{"--config", cfg, "--output=json", "search", "jql", "project = PROJ"},
+		{"--config", cfg, "--output=json", "search", "jql", "project = PROJ", "--full"},
+		{"--config", cfg, "--output=json", "search", "jql", "project = PROJ", "--fields", "key,summary"},
+	} {
+		cmd := exec.Command(bin, args...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("jira %v error = %v\n%s", args, err, out)
+		}
+	}
+	if len(bodies) != 3 {
+		t.Fatalf("request bodies len = %d, want 3", len(bodies))
+	}
+	assertFields := func(idx int, want []string) {
+		t.Helper()
+		raw, ok := bodies[idx]["fields"].([]any)
+		if !ok {
+			t.Fatalf("body %d fields missing or wrong type: %#v", idx, bodies[idx])
+		}
+		if len(raw) != len(want) {
+			t.Fatalf("body %d fields len = %d, want %d: %#v", idx, len(raw), len(want), raw)
+		}
+		for i, field := range want {
+			if raw[i] != field {
+				t.Fatalf("body %d fields[%d] = %v, want %q: %#v", idx, i, raw[i], field, raw)
+			}
+		}
+	}
+	assertFields(0, []string{"key", "summary", "status", "assignee", "priority", "updated"})
+	assertFields(1, []string{"*all"})
+	assertFields(2, []string{"key", "summary"})
+}
+
+func TestTokenSearchCommandsEmitTokenPaginationMetadata(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/rest/api/3/search/jql" {
+			t.Fatalf("unexpected search request %s %s", r.Method, r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"isLast":false,"nextPageToken":"next-token","issues":[{"key":"PROJ-1","fields":{"summary":"Search result","status":{"name":"To Do"},"updated":"2026-05-03T10:00:00Z"}}]}`))
+	}))
+	defer srv.Close()
+
+	cfg := jiraConfig(t, srv.URL)
+	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
+	bin := buildJiraBinary(t)
+
+	for _, tc := range []struct {
+		name string
+		args []string
+	}{
+		{"issue-list", []string{"--config", cfg, "--output=json", "issue", "list"}},
+		{"search-jql", []string{"--config", cfg, "--output=json", "search", "jql", "project = PROJ"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := exec.Command(bin, tc.args...)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("jira %v error = %v\n%s", tc.args, err, out)
+			}
+			var env struct {
+				Meta struct {
+					Pagination struct {
+						StartAt    int    `json:"startAt"`
+						MaxResults int    `json:"maxResults"`
+						Total      int    `json:"total"`
+						IsLast     bool   `json:"isLast"`
+						NextCursor string `json:"nextCursor"`
+					} `json:"pagination"`
+				} `json:"meta"`
+			}
+			if err := json.Unmarshal(out, &env); err != nil {
+				t.Fatalf("decode envelope: %v\n%s", err, out)
+			}
+			pagination := env.Meta.Pagination
+			if pagination.StartAt != 0 || pagination.Total != 0 {
+				t.Fatalf("offset pagination fields = startAt:%d total:%d, want zero for token search", pagination.StartAt, pagination.Total)
+			}
+			if pagination.MaxResults != 50 {
+				t.Fatalf("maxResults = %d, want requested/default page size 50", pagination.MaxResults)
+			}
+			if pagination.IsLast || pagination.NextCursor != "next-token" {
+				t.Fatalf("pagination final/cursor = (%v, %q), want false/next-token", pagination.IsLast, pagination.NextCursor)
+			}
+		})
 	}
 }
 

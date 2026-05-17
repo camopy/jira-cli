@@ -87,3 +87,29 @@ func TestBoardScopeEnvelopeDataAppliedTrueWhenProjectKeysPresent(t *testing.T) {
 		t.Errorf("project_keys = %v; want [ENG PLAT]", out["project_keys"])
 	}
 }
+
+func TestApplyBoardClauseToJQLParenthesizesTopLevelORBeforeOrderBy(t *testing.T) {
+	t.Parallel()
+
+	scope := jira.BoardScope{
+		Board: jira.Board{ProjectKeys: []string{"ENG", "PLAT"}},
+	}
+	got := applyBoardClauseToJQL("status = Open OR priority = High ORDER BY created DESC", scope)
+	want := `project in (ENG, PLAT) AND (status = Open OR priority = High) ORDER BY created DESC`
+	if got != want {
+		t.Fatalf("applyBoardClauseToJQL() = %q, want %q", got, want)
+	}
+}
+
+func TestApplyBoardClauseToJQLDoesNotDoubleWrapSimpleClause(t *testing.T) {
+	t.Parallel()
+
+	scope := jira.BoardScope{
+		Board: jira.Board{ProjectKeys: []string{"ENG"}},
+	}
+	got := applyBoardClauseToJQL("status = Open ORDER BY updated DESC", scope)
+	want := `project in (ENG) AND status = Open ORDER BY updated DESC`
+	if got != want {
+		t.Fatalf("applyBoardClauseToJQL() = %q, want %q", got, want)
+	}
+}

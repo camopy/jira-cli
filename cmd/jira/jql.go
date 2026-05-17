@@ -93,12 +93,21 @@ func readCacheJSON(profile, resource string, v any) bool {
 
 func issueListJQL(raw string, builder jqlBuildOptions) (string, error) {
 	if raw := strings.TrimSpace(raw); raw != "" {
-		return raw, nil
+		clauses := builder.filterClauses()
+		if len(clauses) == 0 {
+			return raw, nil
+		}
+		query, orderBy := splitTopLevelOrderBy(raw)
+		if strings.TrimSpace(query) == "" {
+			return strings.Join(clauses, " AND ") + orderBy, nil
+		}
+		clauses = append(clauses, parenthesizeJQL(query))
+		return strings.Join(clauses, " AND ") + orderBy, nil
 	}
 	return builder.Build()
 }
 
-func (o jqlBuildOptions) Build() (string, error) {
+func (o jqlBuildOptions) filterClauses() []string {
 	clauses := make([]string, 0, 8)
 	appendInClause := func(field string, values []string) {
 		values = compactStrings(values)
@@ -124,6 +133,11 @@ func (o jqlBuildOptions) Build() (string, error) {
 	appendInClause("priority", o.Priorities)
 	appendInClause("labels", o.Labels)
 	appendInClause("issuetype", o.IssueTypes)
+	return clauses
+}
+
+func (o jqlBuildOptions) Build() (string, error) {
+	clauses := o.filterClauses()
 
 	if len(clauses) == 0 && strings.TrimSpace(o.OrderBy) == "" && !o.Descending {
 		return jira.DefaultIssueListJQL, nil
@@ -148,6 +162,140 @@ func (o jqlBuildOptions) Build() (string, error) {
 		query += " ORDER BY " + orderBy + " " + direction
 	}
 	return query, nil
+}
+
+func combineJQLClauses(lhs, rhs string) string {
+	lhs = strings.TrimSpace(lhs)
+	rhs = strings.TrimSpace(rhs)
+	if lhs == "" {
+		return rhs
+	}
+	if rhs == "" {
+		return lhs
+	}
+	return lhs + " AND " + rhs
+}
+
+func parenthesizeJQL(query string) string {
+	query = strings.TrimSpace(query)
+	if query == "" || isWrappedJQL(query) {
+		return query
+	}
+	return "(" + query + ")"
+}
+
+func parenthesizeJQLIfTopLevelOR(query string) string {
+	if hasTopLevelWord(query, "OR") {
+		return parenthesizeJQL(query)
+	}
+	return strings.TrimSpace(query)
+}
+
+func splitTopLevelOrderBy(query string) (string, string) {
+	idx := findTopLevelOrderBy(query)
+	if idx == -1 {
+		return strings.TrimSpace(query), ""
+	}
+	return strings.TrimSpace(query[:idx]), " " + strings.TrimSpace(query[idx:])
+}
+
+func findTopLevelOrderBy(query string) int {
+	tokens := topLevelWordTokens(query)
+	for i := 0; i+1 < len(tokens); i++ {
+		if strings.EqualFold(tokens[i].word, "ORDER") && strings.EqualFold(tokens[i+1].word, "BY") {
+			return tokens[i].start
+		}
+	}
+	return -1
+}
+
+func hasTopLevelWord(query, want string) bool {
+	for _, token := range topLevelWordTokens(query) {
+		if strings.EqualFold(token.word, want) {
+			return true
+		}
+	}
+	return false
+}
+
+type jqlWordToken struct {
+	word  string
+	start int
+}
+
+func topLevelWordTokens(query string) []jqlWordToken {
+	var (
+		tokens []jqlWordToken
+		depth  int
+		quote  rune
+		start  = -1
+	)
+	flush := func(end int) {
+		if start == -1 {
+			return
+		}
+		tokens = append(tokens, jqlWordToken{word: query[start:end], start: start})
+		start = -1
+	}
+	for i, r := range query {
+		if quote != 0 {
+			if r == quote && (i == 0 || query[i-1] != '\\') {
+				quote = 0
+			}
+			continue
+		}
+		switch {
+		case r == '"' || r == '\'':
+			flush(i)
+			quote = r
+		case r == '(':
+			flush(i)
+			depth++
+		case r == ')':
+			flush(i)
+			if depth > 0 {
+				depth--
+			}
+		case depth == 0 && (unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'):
+			if start == -1 {
+				start = i
+			}
+		default:
+			flush(i)
+		}
+	}
+	flush(len(query))
+	return tokens
+}
+
+func isWrappedJQL(query string) bool {
+	query = strings.TrimSpace(query)
+	if len(query) < 2 || query[0] != '(' || query[len(query)-1] != ')' {
+		return false
+	}
+	depth := 0
+	quote := byte(0)
+	for i := 0; i < len(query); i++ {
+		ch := query[i]
+		if quote != 0 {
+			if ch == quote && (i == 0 || query[i-1] != '\\') {
+				quote = 0
+			}
+			continue
+		}
+		switch ch {
+		case '"', '\'':
+			quote = ch
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 && i != len(query)-1 {
+				return false
+			}
+		}
+	}
+	return depth == 0
 }
 
 func userClause(field, value string) string {

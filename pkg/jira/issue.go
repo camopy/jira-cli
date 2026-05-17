@@ -167,11 +167,10 @@ func (s *issueService) List(ctx context.Context, opts *IssueListOptions) ([]*Iss
 	var result SearchResult
 	resp, err := s.client.Do(req, &result)
 	if resp != nil {
-		resp.StartAt = result.StartAt
-		resp.MaxResults = firstNonZero(result.MaxResults, body.effectiveMaxResults())
-		resp.Total = result.Total
+		resp.MaxResults = body.effectivePageSize()
 		resp.IsLast = result.IsLast
 		resp.NextPageToken = result.NextPageToken
+		resp.TokenPage = true
 	}
 	return result.Issues, resp, err
 }

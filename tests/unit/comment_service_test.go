@@ -45,3 +45,55 @@ func TestIssueServiceAddCommentSubmitsADF(t *testing.T) {
 		t.Fatalf("body was not ADF markdown payload: %s", encoded)
 	}
 }
+
+func TestCommentServiceListAllExactMaxResultsOnLastPageNotTruncated(t *testing.T) {
+	var starts []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		startAt := r.URL.Query().Get("startAt")
+		starts = append(starts, startAt)
+		switch startAt {
+		case "":
+			_, _ = w.Write([]byte(`{"comments":[{"id":"100","body":{"type":"doc","version":1,"content":[]}}],"startAt":0,"maxResults":1,"total":2,"isLast":false}`))
+		case "1":
+			_, _ = w.Write([]byte(`{"comments":[{"id":"101","body":{"type":"doc","version":1,"content":[]}}],"startAt":1,"maxResults":1,"total":2,"isLast":true}`))
+		default:
+			t.Fatalf("unexpected startAt %q", startAt)
+		}
+	}))
+	defer srv.Close()
+
+	service := jira.NewCommentService(jira.NewClient(jira.WithBaseURL(srv.URL + "/")))
+	result, err := service.ListAll(context.Background(), "PROJ-1", jira.CommentDrainOptions{PageSize: 1, MaxResults: 2})
+	if err != nil {
+		t.Fatalf("ListAll() error = %v", err)
+	}
+	if len(result.Comments) != 2 {
+		t.Fatalf("comments len = %d, want 2", len(result.Comments))
+	}
+	if result.Truncated {
+		t.Fatalf("Truncated = true with exact final-page max-results; reason=%q", result.TruncatedReason)
+	}
+}
+
+func TestCommentServiceListAllExactMaxResultsWithMorePagesIsTruncated(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		startAt := r.URL.Query().Get("startAt")
+		if startAt == "" {
+			startAt = "0"
+		}
+		_, _ = w.Write([]byte(`{"comments":[{"id":"` + startAt + `","body":{"type":"doc","version":1,"content":[]}}],"startAt":` + startAt + `,"maxResults":1,"total":5,"isLast":false}`))
+	}))
+	defer srv.Close()
+
+	service := jira.NewCommentService(jira.NewClient(jira.WithBaseURL(srv.URL + "/")))
+	result, err := service.ListAll(context.Background(), "PROJ-1", jira.CommentDrainOptions{PageSize: 1, MaxResults: 2})
+	if err != nil {
+		t.Fatalf("ListAll() error = %v", err)
+	}
+	if len(result.Comments) != 2 {
+		t.Fatalf("comments len = %d, want 2", len(result.Comments))
+	}
+	if !result.Truncated || result.TruncatedReason != "max_results" {
+		t.Fatalf("truncation = (%v, %q), want max_results", result.Truncated, result.TruncatedReason)
+	}
+}
