@@ -52,6 +52,10 @@ func newRootCommand(rt *runtime.Runtime) *cobra.Command {
 $ jira search saved my-open-bugs`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		// Enable Cobra's command-name typo suggestions. The field defaults
+		// to 0 (exact match only); 2 is Cobra's documented sweet spot and
+		// the threshold the unknown-command path reads via SuggestionsFor.
+		SuggestionsMinimumDistance: 2,
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			return rootPersistentPreRun(cmd, rt)
 		},
@@ -67,6 +71,12 @@ $ jira search saved my-open-bugs`,
 	root.SetOut(rt.Stdout())
 	root.SetErr(rt.Stderr())
 	root.SetIn(rt.Stdin())
+
+	// Convert pflag parse failures into typed *cli.CLIInputError values.
+	// Set on root, the function is inherited by every subcommand (Cobra
+	// walks the parent chain for FlagErrorFunc). clib's cobra helper
+	// registers none of its own, so there is nothing to chain through.
+	root.SetFlagErrorFunc(newFlagError)
 
 	configureRootFlags(root)
 	configureRootGroups(root)
@@ -134,6 +144,14 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 		event.Str("agent", "null")
 	}
 	event.Msg("output detection")
+
+	// Check required flags here, before Cobra's own ValidateRequiredFlags
+	// runs (PersistentPreRunE precedes it in the command lifecycle), so a
+	// missing required flag leaves the command layer as a typed error
+	// rather than Cobra's untyped "required flag(s) ... not set" string.
+	if missing := missingRequiredFlags(cmd); len(missing) > 0 {
+		return requiredFlagError(missing)
+	}
 	return nil
 }
 
@@ -193,6 +211,10 @@ func NewRootCommand(rt *runtime.Runtime) *cobra.Command {
 		return completionGenerator(root)
 	}))
 	registerCommands(root)
+	// Wrap every command's positional-argument validator so a count
+	// failure surfaces as a typed *cli.CLIInputError. Done after the tree
+	// is fully assembled so it reaches every command.
+	retypeArgValidators(root)
 	return root
 }
 
@@ -326,6 +348,19 @@ func Execute(ctx context.Context) error {
 	}
 	if args != nil {
 		root.SetArgs(args)
+	}
+	// Reject an unknown top-level command before execution so it carries
+	// the stable command_unknown code. Cobra's own unknown-command error
+	// is an untyped string; here it becomes a typed *cli.CLIInputError
+	// with "did you mean" candidates from Cobra's suggestion logic.
+	effectiveArgs := args
+	if effectiveArgs == nil {
+		effectiveArgs = os.Args[1:]
+	}
+	if _, _, ferr := root.Find(effectiveArgs); ferr != nil {
+		cerr := unknownCommandError(root, firstPositional(root, effectiveArgs))
+		writeCommandError(root, cerr)
+		return cerr
 	}
 	// Optional whole-invocation deadline. Derive it here, where Execute
 	// already owns the root context, with a local defer cancel(): no

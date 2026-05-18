@@ -92,6 +92,9 @@ func MapError(err error) Error {
 	if err == nil {
 		return Error{}
 	}
+	if out, ok := mapCLIInputError(err); ok {
+		return out
+	}
 	if out, ok := mapPromptError(err); ok {
 		return out
 	}
@@ -111,6 +114,25 @@ func MapError(err error) Error {
 		return out
 	}
 	return classifyUntyped(err)
+}
+
+// mapCLIInputError adapts a *CLIInputError — a bad flag, a missing
+// required flag, the wrong positional-argument count, or an unknown
+// command. Every such failure is an exit-3 validation error; the typed
+// error supplies the specific code and remediation hint, and the offending
+// flag name when the failure is flag-scoped. Recognizing it here via
+// errors.As keeps it off the substring classifier, where "unknown flag"
+// or "unknown command" carries no stable code.
+func mapCLIInputError(err error) (Error, bool) {
+	var ie *CLIInputError
+	if !errors.As(err, &ie) {
+		return Error{}, false
+	}
+	out := NewError(ErrorTypeValidation, ie.Message)
+	out.Code = ie.code()
+	out.Hint = ie.hint()
+	out.Flag = ie.Flag
+	return out, true
 }
 
 // mapPromptError adapts a *PromptError. Every interactive-prompt

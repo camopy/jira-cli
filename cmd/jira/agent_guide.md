@@ -563,6 +563,27 @@ machine error code.
 Zero matches → exit 2 (`not_found`); the input string is echoed in
 `errors[0].message` so the agent knows what failed to resolve.
 
+### Command-line input errors
+
+A malformed invocation — a bad flag, a missing required flag, the wrong
+positional-argument count, or an unknown command — fails with exit 3 and
+`type: validation` before any Jira request is made. These codes are
+stable; branch on them, not on `message`:
+
+| `code` | Cause |
+|--------|-------|
+| `flag_unknown` | An unrecognized flag. `flag` names it; `hint` may carry a "did you mean". |
+| `flag_value_missing` | A flag that needs a value was given none. |
+| `flag_value_invalid` | A flag value failed type or range parsing. |
+| `flag_syntax_invalid` | A malformed flag token. |
+| `required_flag_missing` | A required flag was not set. `flag` names the first one. |
+| `arg_count_invalid` | The wrong number of positional arguments. |
+| `command_unknown` | An unrecognized command. `hint` may carry a "did you mean". |
+
+When the CLI can identify a near-match, `hint` leads with
+`Did you mean <name>?`; the offending flag is also reported in the `flag`
+field. None of these are retryable — fix the invocation and re-run.
+
 ## Issue links
 
 `KEY` is the inward issue, `--to` the outward. To read "KAN-72
