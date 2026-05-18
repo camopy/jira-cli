@@ -103,7 +103,7 @@ linters:
 
   exclusions:
     rules:
-      - path: '(.+_test\.go|^internal/testutil/)'
+      - path: '(.+_test\.go|^internal/testutil/|^tests/live/)'
         linters:
           - gosec
         text: "G101|G204|G304|G306"

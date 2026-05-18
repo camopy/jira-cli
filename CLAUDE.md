@@ -12,6 +12,9 @@ with Cobra.
 - `internal/jira/` — the Jira REST client and typed services.
 - `internal/adf/` — Atlassian Document Format parsing, validation, rendering.
 - `tests/` — `contract`, `integration`, `unit`, and `guardrails` suites.
+- `tests/live/` — the `live`-tagged end-to-end suite that drives the
+  binary against a real Jira tenant; excluded from `go test ./...`, run
+  with `mise run test:live`.
 
 ## Conventions
 

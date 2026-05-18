@@ -80,6 +80,14 @@ run = "go test -v -race -cover ./..."
 description = "Run integration tests"
 run = "go test -v -tags=integration ./tests/integration -count=1 -timeout 60s"
 
+["test:live"]
+description = "Run every live Jira end-to-end suite (needs JIRA_LIVETEST_PROJECT and a configured profile)"
+run = "go test -v -tags live -count=1 -timeout 20m ./tests/live/..."
+
+["test:live:issues"]
+description = "Run the live Jira issue and worklog end-to-end suite"
+run = "go test -v -tags live -count=1 -timeout 20m ./tests/live/issues/..."
+
 [fmt]
 description = "Format code with gofmt and gofumpt"
 run = ["go fmt ./...", "go tool gofumpt -w ."]
