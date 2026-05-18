@@ -322,6 +322,7 @@ func requireJiraCode(t *testing.T, env livekit.Envelope, wantCode string, wantHT
 	assert.Equal(t, wantCode, got.Code, "error code (full error: %+v)", got)
 	assert.Equal(t, wantHTTP, got.HTTPStatus, "http_status (full error: %+v)", got)
 	assert.False(t, got.Retryable, "a %d client error must not be retryable (full error: %+v)", wantHTTP, got)
+	assert.NotEmpty(t, got.Hint, "a %s failure must carry a remediation hint (full error: %+v)", wantCode, got)
 }
 
 func assertNoIssueWithSummary(t *testing.T, s *livekit.Suite, summary, searchToken string) {

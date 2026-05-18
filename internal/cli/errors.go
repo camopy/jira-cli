@@ -269,6 +269,11 @@ func mapAmbiguousUserError(err error) (Error, bool) {
 
 // jiraCodeForStatus derives jira-cli's normalized snake_case code from
 // the HTTP status. Classification is on status, never on body text.
+//
+// jiraCodeForStatus and jiraHintForStatus move in lockstep: a status
+// added to one MUST be added to the other and to
+// TestEveryMappedJiraStatusCarriesAHint — a jira_* code with no hint is
+// the exact gap that guard exists to catch.
 func jiraCodeForStatus(status int, kind ErrorType) string {
 	switch status {
 	case 401:
@@ -295,12 +300,18 @@ func jiraCodeForStatus(status int, kind ErrorType) string {
 
 func jiraHintForStatus(status int, kind ErrorType) string {
 	switch {
+	case status == 400:
+		return "Jira rejected the request — check the upstream_messages and upstream_field_errors fields for the specifics, then correct the input before resubmitting."
 	case status == 401:
 		return "Check the profile credential with `jira auth status`."
 	case status == 403:
-		return "The credential lacks permission for this resource."
+		return "The credential authenticates but lacks permission here — run `jira auth status` to confirm the active profile, then check the project role or global permission (or token scope) in Jira."
 	case status == 404:
 		return "Verify the issue key or resource ID exists and is visible to this account."
+	case status == 409:
+		return "The resource changed since it was read — re-fetch the issue, then retry the operation against the latest version."
+	case status == 410:
+		return "The resource was permanently deleted from Jira and cannot be restored — drop any cached reference to it."
 	case status == 429:
 		return "Wait for the retry window, then retry."
 	case status >= 500:

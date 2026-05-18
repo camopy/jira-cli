@@ -48,6 +48,12 @@ type Pagination struct {
 // type, code, message, hint, and retryable are always present; agents
 // branch on code (stable snake_case), never on message. The remaining
 // fields are optional context, omitted when empty.
+//
+// message and hint are disjoint. message states what failed — a
+// diagnosis, not a wording contract; it may carry summarized upstream
+// text. hint states what to do next — remediation; it may name
+// commands, fields, or retry behavior. Remediation never belongs in
+// message, and a diagnosis never belongs in hint.
 type Error struct {
 	Type      string `json:"type"`
 	Code      string `json:"code"`
