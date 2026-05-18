@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/gechr/x/shell"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -31,11 +32,11 @@ func aliasListCommand() *cobra.Command {
 		Short:   "List your aliases",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
 			}
-			return writeEnvelope(cmd, "alias.list", cfg.Aliases)
+			return cmdutil.WriteEnvelope(cmd, "alias.list", cfg.Aliases)
 		},
 	}
 }
@@ -59,7 +60,7 @@ keep it.`,
 				return err
 			}
 			expansion := quoteAliasExpansion(args[1:])
-			cfg, err := config.LoadOrInit(config.WithPath(configPath(cmd)))
+			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
 			}
@@ -67,10 +68,10 @@ keep it.`,
 				cfg.Aliases = map[string]string{}
 			}
 			cfg.Aliases[name] = expansion
-			if err := config.Save(configPath(cmd), cfg); err != nil {
+			if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
 				return err
 			}
-			return writeEnvelope(cmd, "alias.set", map[string]any{"name": name, "expansion": expansion})
+			return cmdutil.WriteEnvelope(cmd, "alias.set", map[string]any{"name": name, "expansion": expansion})
 		},
 	}
 }
@@ -84,16 +85,16 @@ func aliasDeleteCommand() *cobra.Command {
 		Annotations:       map[string]string{"clib": "dynamic-args='alias'"},
 		ValidArgsFunction: completeAliasNames,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadOrInit(config.WithPath(configPath(cmd)))
+			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
 			}
 			_, existed := cfg.Aliases[args[0]]
 			delete(cfg.Aliases, args[0])
-			if err := config.Save(configPath(cmd), cfg); err != nil {
+			if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
 				return err
 			}
-			return writeEnvelope(cmd, "alias.delete", map[string]any{"name": args[0], "deleted": existed})
+			return cmdutil.WriteEnvelope(cmd, "alias.delete", map[string]any{"name": args[0], "deleted": existed})
 		},
 	}
 }
@@ -113,7 +114,7 @@ func aliasImportCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			cfg, err := config.LoadOrInit(config.WithPath(configPath(cmd)))
+			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
 			}
@@ -143,10 +144,10 @@ func aliasImportCommand() *cobra.Command {
 				cfg.Aliases[name] = expansion
 				imported = append(imported, name)
 			}
-			if err := config.Save(configPath(cmd), cfg); err != nil {
+			if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
 				return err
 			}
-			return writeEnvelope(cmd, "alias.import", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "alias.import", map[string]any{
 				"imported": len(imported),
 				"aliases":  imported,
 				"skipped":  skipped,
@@ -159,7 +160,7 @@ func aliasImportCommand() *cobra.Command {
 
 // completeAliasNames lists every alias defined in the loaded config.
 func completeAliasNames(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := config.Load(config.WithPath(configPath(cmd)))
+	cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}

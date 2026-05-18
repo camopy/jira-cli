@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cache"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
@@ -84,21 +85,6 @@ func addCacheStateFields(data map[string]any, sourceState string, count int) {
 	data["cache_empty"] = count == 0
 }
 
-// marshalNonNilSlice marshals `v` but rewrites nil slices to `[]` so cache
-// files never contain `null`. Without this, decoding back into a typed
-// slice produces nil and downstream consumers either crash or paper over
-// the bug with `if x == nil` patches.
-func marshalNonNilSlice(v any) (json.RawMessage, error) {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return nil, err
-	}
-	if string(b) == "null" {
-		return json.RawMessage("[]"), nil
-	}
-	return b, nil
-}
-
 func cacheLabelsCommand() *cobra.Command {
 	var refresh bool
 	var ttlMinutes int
@@ -107,7 +93,7 @@ func cacheLabelsCommand() *cobra.Command {
 		Short: "Cache and print the global Jira label list",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, profile, ok, err := jiraClientForCommand(cmd)
+			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -119,7 +105,7 @@ func cacheLabelsCommand() *cobra.Command {
 				if err != nil {
 					return nil, err
 				}
-				return marshalNonNilSlice(labels)
+				return cmdutil.MarshalNonNilSlice(labels)
 			})
 			if err != nil {
 				return err
@@ -136,7 +122,7 @@ func cacheLabelsCommand() *cobra.Command {
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
 			}
 			addCacheStateFields(envelopeData, cacheSourceState, len(labels))
-			return writeEnvelope(cmd, "cache.labels", envelopeData)
+			return cmdutil.WriteEnvelope(cmd, "cache.labels", envelopeData)
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
@@ -152,7 +138,7 @@ func cacheProjectsCommand() *cobra.Command {
 		Short: "Cache and print the visible Jira project list",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, profile, ok, err := jiraClientForCommand(cmd)
+			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -164,7 +150,7 @@ func cacheProjectsCommand() *cobra.Command {
 				if err != nil {
 					return nil, err
 				}
-				return marshalNonNilSlice(projects)
+				return cmdutil.MarshalNonNilSlice(projects)
 			})
 			if err != nil {
 				return err
@@ -181,7 +167,7 @@ func cacheProjectsCommand() *cobra.Command {
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
 			}
 			addCacheStateFields(envelopeData, cacheSourceState, len(projects))
-			return writeEnvelope(cmd, "cache.projects", envelopeData)
+			return cmdutil.WriteEnvelope(cmd, "cache.projects", envelopeData)
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
@@ -205,7 +191,7 @@ func cacheEpicsCommand() *cobra.Command {
 		Short: "Cache and print the visible epic list",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, profile, ok, err := jiraClientForCommand(cmd)
+			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -230,7 +216,7 @@ func cacheEpicsCommand() *cobra.Command {
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
 			}
 			addCacheStateFields(envelopeData, cacheSourceState, len(epics))
-			return writeEnvelope(cmd, "cache.epics", envelopeData)
+			return cmdutil.WriteEnvelope(cmd, "cache.epics", envelopeData)
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
@@ -259,7 +245,7 @@ func fetchEpicsForCache(ctx context.Context, client *jira.Client) (json.RawMessa
 		}
 		out = append(out, e)
 	}
-	return marshalNonNilSlice(out)
+	return cmdutil.MarshalNonNilSlice(out)
 }
 
 // cacheField is the agent-friendly subset of a Jira field. ID is the
@@ -278,7 +264,7 @@ func cacheFieldsCommand() *cobra.Command {
 		Short: "Cache and print the visible Jira field list",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, profile, ok, err := jiraClientForCommand(cmd)
+			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -303,7 +289,7 @@ func cacheFieldsCommand() *cobra.Command {
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
 			}
 			addCacheStateFields(envelopeData, cacheSourceState, len(fields))
-			return writeEnvelope(cmd, "cache.fields", envelopeData)
+			return cmdutil.WriteEnvelope(cmd, "cache.fields", envelopeData)
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
@@ -330,7 +316,7 @@ func fetchFieldsForCache(ctx context.Context, client *jira.Client) (json.RawMess
 	for _, f := range raw {
 		out = append(out, cacheField{ID: f.ID, Name: f.Name, Type: f.Schema.Type})
 	}
-	return marshalNonNilSlice(out)
+	return cmdutil.MarshalNonNilSlice(out)
 }
 
 // cacheIssueType is the cached subset of a project's issue-type schema.
@@ -348,7 +334,7 @@ func cacheIssueTypesCommand() *cobra.Command {
 		Short: "Cache and print the visible Jira issue-type list",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, profile, ok, err := jiraClientForCommand(cmd)
+			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -373,7 +359,7 @@ func cacheIssueTypesCommand() *cobra.Command {
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
 			}
 			addCacheStateFields(envelopeData, cacheSourceState, len(types))
-			return writeEnvelope(cmd, "cache.issuetypes", envelopeData)
+			return cmdutil.WriteEnvelope(cmd, "cache.issuetypes", envelopeData)
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
@@ -398,7 +384,7 @@ func fetchIssueTypesForCache(ctx context.Context, client *jira.Client) (json.Raw
 	for _, t := range raw {
 		out = append(out, cacheIssueType{ID: t.ID, Name: t.Name, Subtask: t.Subtask})
 	}
-	return marshalNonNilSlice(out)
+	return cmdutil.MarshalNonNilSlice(out)
 }
 
 // cacheLinkTypesCommand primes the per-profile cache of issue-link
@@ -412,7 +398,7 @@ func cacheLinkTypesCommand() *cobra.Command {
 		Short: "Cache and print the configured issue-link types",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, profile, ok, err := jiraClientForCommand(cmd)
+			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -424,7 +410,7 @@ func cacheLinkTypesCommand() *cobra.Command {
 				if err != nil {
 					return nil, err
 				}
-				return marshalNonNilSlice(types)
+				return cmdutil.MarshalNonNilSlice(types)
 			})
 			if err != nil {
 				return err
@@ -441,7 +427,7 @@ func cacheLinkTypesCommand() *cobra.Command {
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
 			}
 			addCacheStateFields(envelopeData, cacheSourceState, len(types))
-			return writeEnvelope(cmd, "cache.linktypes", envelopeData)
+			return cmdutil.WriteEnvelope(cmd, "cache.linktypes", envelopeData)
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
@@ -462,7 +448,7 @@ func cacheBoardsCommand() *cobra.Command {
 		Short: "Cache and print the visible Jira agile boards",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, profile, ok, err := jiraClientForCommand(cmd)
+			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -513,7 +499,7 @@ func cacheBoardsCommand() *cobra.Command {
 				"truncated_reason": file.TruncatedReason,
 			}
 			addCacheStateFields(data, cacheSourceState, len(file.Items))
-			return writeEnvelopeWithRawWarnings(cmd, "cache.boards", data, warnings)
+			return cmdutil.WriteEnvelopeWithRawWarnings(cmd, "cache.boards", data, warnings)
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
@@ -708,7 +694,7 @@ func emitCachedBoardsEnvelope(cmd *cobra.Command, profileName string, entry cach
 		"truncated_reason": file.TruncatedReason,
 	}
 	addCacheStateFields(data, cacheSourceState, len(file.Items))
-	return writeEnvelopeWithRawWarnings(cmd, "cache.boards", data, warnings)
+	return cmdutil.WriteEnvelopeWithRawWarnings(cmd, "cache.boards", data, warnings)
 }
 
 func retryAfterSeconds(apiErr *jira.APIError) int {
@@ -732,11 +718,11 @@ func cacheClearCommand() *cobra.Command {
 			return []string{"labels", "projects", "epics", "fields", "issuetypes", "linktypes", "boards"}, cobra.ShellCompDirectiveNoFileComp
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
 			}
-			profile, err := cfg.ResolveProfile(requestedProfile(cmd))
+			profile, err := cfg.ResolveProfile(cmdutil.RequestedProfile(cmd))
 			if err != nil {
 				return err
 			}
@@ -745,7 +731,7 @@ func cacheClearCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return writeEnvelope(cmd, "cache.clear", map[string]any{
+				return cmdutil.WriteEnvelope(cmd, "cache.clear", map[string]any{
 					"profile": profile.Name,
 					"removed": n,
 				})
@@ -754,7 +740,7 @@ func cacheClearCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return writeEnvelope(cmd, "cache.clear", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "cache.clear", map[string]any{
 				"profile":  profile.Name,
 				"resource": args[0],
 				"removed":  ok,

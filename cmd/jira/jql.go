@@ -9,6 +9,7 @@ import (
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/matcra587/jira-cli/internal/cache"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/spf13/cobra"
 )
@@ -48,7 +49,7 @@ func jqlCommand() *cobra.Command {
 				"precedence":  precedence,
 				"board_scope": boardScopeEnvelopeData(scope),
 			}
-			return writeEnvelope(cmd, "jql.build", data)
+			return cmdutil.WriteEnvelope(cmd, "jql.build", data)
 		},
 	}
 	addJQLBuilderFlags(build, &builder)

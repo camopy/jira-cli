@@ -8,6 +8,7 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/pipeline"
 	"github.com/spf13/cobra"
@@ -73,7 +74,7 @@ func commentListCommand() *cobra.Command {
 // plain table otherwise. With --all, the service-layer drain handles
 // pagination and reports rate-limit-during-paginate as partial success.
 func runCommentList(cmd *cobra.Command, key string, limit int, all bool) error {
-	client, _, ok, err := jiraClientForCommand(cmd)
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
 		return err
 	}
@@ -247,18 +248,18 @@ func commentListWarnings(comments []*jira.Comment, rateLimitHit *jira.APIError, 
 
 // writeEnvelopeWithCommentWarnings emits the envelope with snake-case
 // per-comment warnings under warnings[]. We don't reuse
-// writeEnvelopeWithWarnings because that helper is shaped around adf.Warning
+// cmdutil.WriteEnvelopeWithWarnings because that helper is shaped around adf.Warning
 // (Type/Message/Field/NodeType etc.) — comment-list warnings are a different
 // schema.
 func writeEnvelopeWithCommentWarnings(cmd *cobra.Command, command string, data any, warnings []map[string]any) error {
-	if useCompactOutput(cmd) {
-		return cli.WriteCompact(cmd.OutOrStdout(), foldRawWarningsIntoData(data, warnings))
+	if cmdutil.UseCompactOutput(cmd) {
+		return cli.WriteCompact(cmd.OutOrStdout(), cmdutil.FoldRawWarningsIntoData(data, warnings))
 	}
-	if usePlainOutput(cmd) {
-		if err := cli.WriteCommandPlain(cmd.OutOrStdout(), command, data, plainOptionsForCommand(cmd)...); err != nil {
+	if cmdutil.UsePlainOutput(cmd) {
+		if err := cli.WriteCommandPlain(cmd.OutOrStdout(), command, data, cmdutil.PlainOptionsForCommand(cmd)...); err != nil {
 			return err
 		}
-		return mirrorADFWarningsToStderr(cmd.ErrOrStderr(), rawWarningsToCLI(warnings))
+		return cmdutil.MirrorADFWarningsToStderr(cmd.ErrOrStderr(), cmdutil.RawWarningsToCLI(warnings))
 	}
 	body := map[string]any{
 		"ok": true,
@@ -335,7 +336,7 @@ func runCommentAdd(cmd *cobra.Command, key string, flags commentAddFlags) error 
 		return err
 	}
 	pipeOut := pipeline.RunMutation(pipeline.MutationInput{
-		Mode:             adfModeFor(cmd, true),
+		Mode:             cmdutil.ADFModeFor(cmd, true),
 		ADFDoc:           &doc,
 		MarkdownWarnings: markdownWarnings,
 		DryRun:           flags.dryRun,
@@ -348,13 +349,13 @@ func runCommentAdd(cmd *cobra.Command, key string, flags commentAddFlags) error 
 	// always sets SubmitADF.
 	submitDoc := pipeOut.SubmitADF
 	if flags.dryRun {
-		return writeEnvelopeWithWarnings(cmd, "issue.comment.add", map[string]any{
+		return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.comment.add", map[string]any{
 			"issue":   key,
 			"comment": map[string]any{"body": submitDoc},
 			"dry_run": true,
 		}, pipeOut.Warnings)
 	}
-	client, _, ok, err := jiraClientForCommand(cmd)
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
 		return err
 	}
@@ -376,7 +377,7 @@ func runCommentAdd(cmd *cobra.Command, key string, flags commentAddFlags) error 
 	if addErr != nil {
 		return addErr
 	}
-	return writeEnvelopeWithResponseAndWarnings(cmd, "issue.comment.add", map[string]any{
+	return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.comment.add", map[string]any{
 		"issue":   key,
 		"comment": commentToMap(comment),
 		"dry_run": false,
@@ -407,7 +408,7 @@ func buildCommentBody(cmd *cobra.Command, markdown, jsonInput string, noInput bo
 	}
 	if jsonInput != "" {
 		var payload map[string]any
-		if err := readJSONFile(jsonInput, &payload); err != nil {
+		if err := cmdutil.ReadJSONFile(jsonInput, &payload); err != nil {
 			return adf.Document{}, nil, err
 		}
 		if body, ok := payload["body"].(map[string]any); ok {
@@ -487,7 +488,7 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 		return err
 	}
 	pipeOut := pipeline.RunMutation(pipeline.MutationInput{
-		Mode:             adfModeFor(cmd, true),
+		Mode:             cmdutil.ADFModeFor(cmd, true),
 		ADFDoc:           &doc,
 		MarkdownWarnings: markdownWarnings,
 		DryRun:           flags.dryRun,
@@ -499,7 +500,7 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 	// non-nil above, so the pipeline always sets SubmitADF.
 	submitDoc := pipeOut.SubmitADF
 	if flags.dryRun {
-		return writeEnvelopeWithWarnings(cmd, "issue.comment.edit", map[string]any{
+		return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.comment.edit", map[string]any{
 			"issue":             key,
 			"comment_id":        commentID,
 			"body_adf_summary":  submitDoc,
@@ -507,7 +508,7 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 			"dry_run":           true,
 		}, pipeOut.Warnings)
 	}
-	client, _, ok, err := jiraClientForCommand(cmd)
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
 		return err
 	}
@@ -518,7 +519,7 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 	if err != nil {
 		return err
 	}
-	return writeEnvelopeWithResponseAndWarnings(cmd, "issue.comment.edit", map[string]any{
+	return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.comment.edit", map[string]any{
 		"issue":   key,
 		"comment": commentToMap(comment),
 		"dry_run": false,
@@ -548,7 +549,7 @@ func commentDeleteCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			noInput := noInputRequested(cmd)
 			if dryRun {
-				return writeEnvelope(cmd, "issue.comment.delete", map[string]any{
+				return cmdutil.WriteEnvelope(cmd, "issue.comment.delete", map[string]any{
 					"issue":      args[0],
 					"comment_id": args[1],
 					"dry_run":    true,
@@ -558,7 +559,7 @@ func commentDeleteCommand() *cobra.Command {
 			// `link delete`, and `destructiveIssueCommand`. Headless /
 			// agent / --no-input MUST pass --force; TTY humans get an
 			// interactive confirmation when --force is omitted.
-			det := DetectorFromContext(cmd)
+			det := cmdutil.DetectorFromContext(cmd)
 			if !force {
 				if !det.IsTTY || det.Agent || noInput {
 					return fmt.Errorf("issue comment delete requires --force in headless / agent / --no-input mode")
@@ -569,7 +570,7 @@ func commentDeleteCommand() *cobra.Command {
 					return cli.NewPromptError(cli.PromptAborted, "comment delete", nil)
 				}
 			}
-			client, _, ok, err := jiraClientForCommand(cmd)
+			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -580,7 +581,7 @@ func commentDeleteCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return writeEnvelopeWithResponse(cmd, "issue.comment.delete", map[string]any{
+			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.comment.delete", map[string]any{
 				"comment_id": args[1],
 				"deleted":    true,
 			}, resp)

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/zalando/go-keyring"
@@ -109,7 +110,7 @@ func TestCredentialWarningDoesNotLeakAcrossCommands(t *testing.T) {
 	mkCmd := func() (*cobra.Command, *bytes.Buffer) {
 		var buf bytes.Buffer
 		cmd := &cobra.Command{Use: "warn-scope-test"}
-		cmd.SetContext(withCredentialWarnSink(context.Background()))
+		cmd.SetContext(cmdutil.WithCredentialWarnSink(context.Background()))
 		cmd.SetOut(&buf)
 		root := &cobra.Command{Use: "jira"}
 		root.AddCommand(cmd)
@@ -128,10 +129,10 @@ func TestCredentialWarningDoesNotLeakAcrossCommands(t *testing.T) {
 
 	// Command A resolves a legacy credential — its sink records the warning.
 	cmdA, bufA := mkCmd()
-	recordCredentialWarnings(cmdA, []string{
+	cmdutil.RecordCredentialWarnings(cmdA, []string{
 		`profile "work" credential resolved from a legacy keyring entry`,
 	})
-	if err := writeEnvelope(cmdA, "auth.token", map[string]any{"profile": "work"}); err != nil {
+	if err := cmdutil.WriteEnvelope(cmdA, "auth.token", map[string]any{"profile": "work"}); err != nil {
 		t.Fatalf("command A envelope error = %v", err)
 	}
 	if len(envelopeWarnings(t, bufA)) == 0 {
@@ -141,7 +142,7 @@ func TestCredentialWarningDoesNotLeakAcrossCommands(t *testing.T) {
 	// Command B resolves nothing. Its sink is fresh and empty, so its
 	// envelope must carry no warning — nothing leaks from command A.
 	cmdB, bufB := mkCmd()
-	if err := writeEnvelope(cmdB, "auth.status", map[string]any{"profile": "other"}); err != nil {
+	if err := cmdutil.WriteEnvelope(cmdB, "auth.status", map[string]any{"profile": "other"}); err != nil {
 		t.Fatalf("command B envelope error = %v", err)
 	}
 	if warns := envelopeWarnings(t, bufB); len(warns) != 0 {
@@ -160,18 +161,18 @@ func TestRevokeOldCredentialOnReloginRemovesOldKeyringCredential(t *testing.T) {
 	previous := config.Profile{Name: "work", BaseURL: "https://old.atlassian.net", SecretBackend: config.SecretBackendKeyring}
 	updated := config.Profile{Name: "work", BaseURL: "https://new.atlassian.net", SecretBackend: config.SecretBackendKeyring}
 
-	oldRef, err := secretRefFor(previous, previous.SecretBackend)
+	oldRef, err := cmdutil.SecretRefFor(previous, previous.SecretBackend)
 	if err != nil {
-		t.Fatalf("secretRefFor(previous) error = %v", err)
+		t.Fatalf("cmdutil.SecretRefFor(previous) error = %v", err)
 	}
-	if err := credentialStoreFor(config.SecretBackendKeyring).Put(cmd.Context(), oldRef, "old-token"); err != nil {
+	if err := cmdutil.CredentialStoreFor(config.SecretBackendKeyring).Put(cmd.Context(), oldRef, "old-token"); err != nil {
 		t.Fatalf("seed keyring Put error = %v", err)
 	}
 
 	if note := revokeOldCredentialOnRelogin(cmd, previous, updated); note != "" {
 		t.Fatalf("revokeOldCredentialOnRelogin() returned a cleanup-failure note: %q", note)
 	}
-	if _, getErr := credentialStoreFor(config.SecretBackendKeyring).Get(cmd.Context(), oldRef); !errIsCredentialNotFound(getErr) {
+	if _, getErr := cmdutil.CredentialStoreFor(config.SecretBackendKeyring).Get(cmd.Context(), oldRef); !errIsCredentialNotFound(getErr) {
 		t.Fatalf("old keyring credential was not revoked after re-login: err=%v", getErr)
 	}
 }
@@ -186,18 +187,18 @@ func TestRevokeOldCredentialOnReloginRevokesOldBackend(t *testing.T) {
 	previous := config.Profile{Name: "work", BaseURL: "https://company.atlassian.net", SecretBackend: config.SecretBackendKeyring}
 	updated := config.Profile{Name: "work", BaseURL: "https://company.atlassian.net", SecretBackend: config.SecretBackendOnePassword, Vault: "Engineering"}
 
-	oldRef, err := secretRefFor(previous, previous.SecretBackend)
+	oldRef, err := cmdutil.SecretRefFor(previous, previous.SecretBackend)
 	if err != nil {
-		t.Fatalf("secretRefFor(previous) error = %v", err)
+		t.Fatalf("cmdutil.SecretRefFor(previous) error = %v", err)
 	}
-	if err := credentialStoreFor(config.SecretBackendKeyring).Put(cmd.Context(), oldRef, "old-token"); err != nil {
+	if err := cmdutil.CredentialStoreFor(config.SecretBackendKeyring).Put(cmd.Context(), oldRef, "old-token"); err != nil {
 		t.Fatalf("seed keyring Put error = %v", err)
 	}
 
 	if note := revokeOldCredentialOnRelogin(cmd, previous, updated); note != "" {
 		t.Fatalf("revokeOldCredentialOnRelogin() returned a cleanup-failure note: %q", note)
 	}
-	if _, getErr := credentialStoreFor(config.SecretBackendKeyring).Get(cmd.Context(), oldRef); !errIsCredentialNotFound(getErr) {
+	if _, getErr := cmdutil.CredentialStoreFor(config.SecretBackendKeyring).Get(cmd.Context(), oldRef); !errIsCredentialNotFound(getErr) {
 		t.Fatalf("old keyring credential was not revoked after a backend change: err=%v", getErr)
 	}
 }
@@ -212,11 +213,11 @@ func TestRevokeOldCredentialOnReloginSilentWhenIdentityUnchanged(t *testing.T) {
 	previous := config.Profile{Name: "work", BaseURL: "https://company.atlassian.net", SecretBackend: config.SecretBackendKeyring}
 	updated := config.Profile{Name: "work", BaseURL: "company", SecretBackend: config.SecretBackendKeyring}
 
-	oldRef, err := secretRefFor(previous, previous.SecretBackend)
+	oldRef, err := cmdutil.SecretRefFor(previous, previous.SecretBackend)
 	if err != nil {
-		t.Fatalf("secretRefFor(previous) error = %v", err)
+		t.Fatalf("cmdutil.SecretRefFor(previous) error = %v", err)
 	}
-	if err := credentialStoreFor(config.SecretBackendKeyring).Put(cmd.Context(), oldRef, "the-token"); err != nil {
+	if err := cmdutil.CredentialStoreFor(config.SecretBackendKeyring).Put(cmd.Context(), oldRef, "the-token"); err != nil {
 		t.Fatalf("seed keyring Put error = %v", err)
 	}
 
@@ -224,7 +225,7 @@ func TestRevokeOldCredentialOnReloginSilentWhenIdentityUnchanged(t *testing.T) {
 		t.Fatalf("revokeOldCredentialOnRelogin() = %q for an unchanged identity, want \"\"", note)
 	}
 	// The credential must remain — it was not re-pointed.
-	if _, getErr := credentialStoreFor(config.SecretBackendKeyring).Get(cmd.Context(), oldRef); getErr != nil {
+	if _, getErr := cmdutil.CredentialStoreFor(config.SecretBackendKeyring).Get(cmd.Context(), oldRef); getErr != nil {
 		t.Fatalf("revoked a credential whose identity did not change: err=%v", getErr)
 	}
 }

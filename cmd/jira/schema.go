@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -54,10 +55,10 @@ func writeSchema(cmd *cobra.Command) error {
 		"output_schemas": outputs,
 		"input_schemas":  inputs,
 	}
-	if useCompactOutput(cmd) {
+	if cmdutil.UseCompactOutput(cmd) {
 		return cli.WriteCompact(cmd.OutOrStdout(), data)
 	}
-	if usePlainOutput(cmd) {
+	if cmdutil.UsePlainOutput(cmd) {
 		return cli.WritePlain(cmd.OutOrStdout(), data)
 	}
 	env := cli.Envelope{

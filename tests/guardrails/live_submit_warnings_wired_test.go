@@ -9,17 +9,17 @@ import (
 	"go/parser"
 	"go/token"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
 // Every mutation command's live-submit return site MUST pass pipeline
-// warnings into the envelope. The writeEnvelopeWithResponse helper has
-// no warnings parameter — using it for a mutation drops warnings
-// silently. The right helper is writeEnvelopeWithResponseAndWarnings.
+// warnings into the envelope. The cmdutil.WriteEnvelopeWithResponse
+// helper has no warnings parameter — using it for a mutation drops
+// warnings silently. The right helper is
+// cmdutil.WriteEnvelopeWithResponseAndWarnings.
 //
 // This guard parses cmd/jira/commands.go and asserts that every call to
-// writeEnvelopeWithResponse uses the AndWarnings variant when it sits
+// WriteEnvelopeWithResponse uses the AndWarnings variant when it sits
 // inside a known-mutation command. It pins the call sites so a future
 // refactor that drops the warnings argument is caught.
 func TestLiveSubmitMutationsThreadWarnings(t *testing.T) {
@@ -53,20 +53,16 @@ func TestLiveSubmitMutationsThreadWarnings(t *testing.T) {
 		if !mutationFns[fn.Name.Name] {
 			return true
 		}
-		// Walk the function body looking for writeEnvelopeWithResponse
+		// Walk the function body looking for WriteEnvelopeWithResponse
 		// calls that should be AndWarnings.
 		ast.Inspect(fn.Body, func(child ast.Node) bool {
 			call, ok := child.(*ast.CallExpr)
 			if !ok {
 				return true
 			}
-			ident, ok := call.Fun.(*ast.Ident)
-			if !ok {
-				return true
-			}
-			if ident.Name == "writeEnvelopeWithResponse" {
+			if calledName(call) == "WriteEnvelopeWithResponse" {
 				pos := fset.Position(call.Pos())
-				t.Errorf("%s:%d %q uses writeEnvelopeWithResponse (no warnings) inside mutation %q — must use writeEnvelopeWithResponseAndWarnings",
+				t.Errorf("%s:%d %q uses WriteEnvelopeWithResponse (no warnings) inside mutation %q — must use WriteEnvelopeWithResponseAndWarnings",
 					path, pos.Line, callSnippet(call, fset), fn.Name.Name)
 			}
 			return true
@@ -75,13 +71,26 @@ func TestLiveSubmitMutationsThreadWarnings(t *testing.T) {
 	})
 }
 
-// callSnippet returns a short rendering of a call expression for error
-// messages. Caller name + first arg should be enough to locate the line.
-func callSnippet(call *ast.CallExpr, fset *token.FileSet) string {
-	var b strings.Builder
-	if id, ok := call.Fun.(*ast.Ident); ok {
-		b.WriteString(id.Name)
+// calledName returns the function name of a call expression, handling
+// both bare calls (foo()) and qualified calls (pkg.Foo()). The helper
+// moved into the cmdutil package, so call sites are now selector
+// expressions rather than bare identifiers.
+func calledName(call *ast.CallExpr) string {
+	switch fn := call.Fun.(type) {
+	case *ast.Ident:
+		return fn.Name
+	case *ast.SelectorExpr:
+		return fn.Sel.Name
 	}
-	b.WriteString("(...)")
-	return b.String()
+	return ""
+}
+
+// callSnippet returns a short rendering of a call expression for error
+// messages. The name is enough to locate the line.
+func callSnippet(call *ast.CallExpr, _ *token.FileSet) string {
+	name := calledName(call)
+	if name == "" {
+		name = "?"
+	}
+	return name + "(...)"
 }

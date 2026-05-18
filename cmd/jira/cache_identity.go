@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/matcra587/jira-cli/internal/cache"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/spf13/cobra"
 )
@@ -11,7 +12,7 @@ func cacheKeyForProfile(cmd *cobra.Command, profile config.Profile) string {
 }
 
 func cacheConfigPath(cmd *cobra.Command) string {
-	if path := configPath(cmd); path != "" {
+	if path := cmdutil.ConfigPath(cmd); path != "" {
 		return path
 	}
 	return config.DefaultPath()

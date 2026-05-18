@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/spf13/cobra"
 )
 
@@ -54,7 +55,7 @@ workday_seconds = 28800
 	t.Setenv("JIRA_EDITOR", editorScript)
 
 	stdout := &bytes.Buffer{}
-	// configPath / requestedProfile read cmd.Root().PersistentFlags(), so
+	// cmdutil.ConfigPath / cmdutil.RequestedProfile read cmd.Root().PersistentFlags(), so
 	// these must be persistent flags on the root command.
 	root := &cobra.Command{Use: "jira"}
 	rpf := root.PersistentFlags()
@@ -75,7 +76,7 @@ workday_seconds = 28800
 	root.SetErr(stdout)
 	cmd.SetOut(stdout)
 	cmd.SetErr(stdout)
-	cmd.SetContext(context.WithValue(context.Background(), detectorKey, cli.Detection{Mode: cli.ModeJSON, IsTTY: false}))
+	cmd.SetContext(cmdutil.WithDetector(context.Background(), cli.Detection{Mode: cli.ModeJSON, IsTTY: false}))
 	return cmd, stdout
 }
 

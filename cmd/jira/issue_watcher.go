@@ -7,6 +7,7 @@ import (
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/spf13/cobra"
 )
@@ -111,7 +112,7 @@ func watcherListCommand() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, _, ok, err := jiraClientForCommand(cmd)
+			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -127,7 +128,7 @@ func watcherListCommand() *cobra.Command {
 				"is_watching": watchers.IsWatching,
 				"watch_count": watchers.WatchCount,
 			}
-			return writeEnvelopeWithResponse(cmd, "issue.watchers.list", data, resp)
+			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.watchers.list", data, resp)
 		},
 	}
 	return cmd
@@ -200,7 +201,7 @@ func runWatcherAdd(cmd *cobra.Command, args watcherMutationArgs) error {
 		return watcherDryRunPreview(cmd, "issue.watchers.add", args)
 	}
 
-	client, _, ok, err := jiraClientForCommand(cmd)
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
 		return err
 	}
@@ -230,7 +231,7 @@ func runWatcherAdd(cmd *cobra.Command, args watcherMutationArgs) error {
 	}
 
 	if args.NoReadback {
-		return writeEnvelope(cmd, "issue.watchers.add", map[string]any{
+		return cmdutil.WriteEnvelope(cmd, "issue.watchers.add", map[string]any{
 			"account_id": accountID,
 			"attempted":  true,
 		})
@@ -241,7 +242,7 @@ func runWatcherAdd(cmd *cobra.Command, args watcherMutationArgs) error {
 		return err
 	}
 	wasAlready := containsAccount(preState, accountID)
-	return writeEnvelopeWithResponse(cmd, "issue.watchers.add", map[string]any{
+	return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.watchers.add", map[string]any{
 		"watchers":             watcherListData(post.Watchers),
 		"is_watching":          post.IsWatching,
 		"watch_count":          post.WatchCount,
@@ -254,7 +255,7 @@ func runWatcherRemove(cmd *cobra.Command, args watcherMutationArgs) error {
 		return watcherDryRunPreview(cmd, "issue.watchers.remove", args)
 	}
 
-	client, _, ok, err := jiraClientForCommand(cmd)
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
 		return err
 	}
@@ -279,7 +280,7 @@ func runWatcherRemove(cmd *cobra.Command, args watcherMutationArgs) error {
 	}
 
 	if args.NoReadback {
-		return writeEnvelope(cmd, "issue.watchers.remove", map[string]any{
+		return cmdutil.WriteEnvelope(cmd, "issue.watchers.remove", map[string]any{
 			"account_id": accountID,
 			"attempted":  true,
 		})
@@ -290,7 +291,7 @@ func runWatcherRemove(cmd *cobra.Command, args watcherMutationArgs) error {
 		return err
 	}
 	wasAlready := containsAccount(preState, accountID)
-	return writeEnvelopeWithResponse(cmd, "issue.watchers.remove", map[string]any{
+	return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.watchers.remove", map[string]any{
 		"watchers":             watcherListData(post.Watchers),
 		"is_watching":          post.IsWatching,
 		"watch_count":          post.WatchCount,
@@ -316,7 +317,7 @@ func localResolveUser(cmd *cobra.Command, ident string) (string, bool) {
 	}
 	switch strings.ToLower(v) {
 	case "me", "@me":
-		profile, err := profileForCommand(cmd)
+		profile, err := cmdutil.ProfileForCommand(cmd)
 		if err != nil {
 			return "", false
 		}
@@ -349,11 +350,11 @@ func watcherDryRunPreview(cmd *cobra.Command, command string, args watcherMutati
 			data["account_id_resolved"] = id
 			data["user_resolved"] = true
 		}
-		return writeEnvelope(cmd, command, data)
+		return cmdutil.WriteEnvelope(cmd, command, data)
 	}
 	// --validate-remote: resolve via the read-only user service. No
 	// mutation is ever issued on this path.
-	client, _, ok, err := jiraClientForCommand(cmd)
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
 		return err
 	}
@@ -375,7 +376,7 @@ func watcherDryRunPreview(cmd *cobra.Command, command string, args watcherMutati
 	}
 	data["account_id_resolved"] = accountID
 	data["user_resolved"] = true
-	return writeEnvelope(cmd, command, data)
+	return cmdutil.WriteEnvelope(cmd, command, data)
 }
 
 func accountIDFromIdentifier(ident string) (string, bool) {

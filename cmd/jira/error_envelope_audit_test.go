@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -54,10 +55,10 @@ func TestFoldRawWarningsIntoDataPreservesNonMapPayload(t *testing.T) {
 	data := []any{"a", "b"}
 	warnings := []map[string]any{{"type": "credential_cleanup", "message": "stale keyring entry"}}
 
-	out := foldRawWarningsIntoData(data, warnings)
+	out := cmdutil.FoldRawWarningsIntoData(data, warnings)
 	m, ok := out.(map[string]any)
 	if !ok {
-		t.Fatalf("foldRawWarningsIntoData() dropped non-map payload, got %T", out)
+		t.Fatalf("cmdutil.FoldRawWarningsIntoData() dropped non-map payload, got %T", out)
 	}
 	if m["data"] == nil {
 		t.Errorf("wrapped payload missing data key: %v", m)
@@ -73,10 +74,10 @@ func TestFoldWarningsIntoDataPreservesNonMapPayload(t *testing.T) {
 	data := "scalar-payload"
 	warnings := []cli.Warning{{Type: "credential_cleanup", Message: "stale keyring entry"}}
 
-	out := foldWarningsIntoData(data, warnings)
+	out := cmdutil.FoldWarningsIntoData(data, warnings)
 	m, ok := out.(map[string]any)
 	if !ok {
-		t.Fatalf("foldWarningsIntoData() dropped non-map payload, got %T", out)
+		t.Fatalf("cmdutil.FoldWarningsIntoData() dropped non-map payload, got %T", out)
 	}
 	if m["data"] != "scalar-payload" {
 		t.Errorf("wrapped payload data = %v, want scalar-payload", m["data"])

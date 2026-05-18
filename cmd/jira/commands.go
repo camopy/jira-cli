@@ -6,21 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
-	"net/http"
 	"net/url"
 	"os"
-	"slices"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/charmbracelet/huh"
 	clib "github.com/gechr/clib/cli/cobra"
-	"github.com/gechr/x/terminal"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli"
-	"github.com/matcra587/jira-cli/internal/cli/adfmode"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	stdininput "github.com/matcra587/jira-cli/internal/cli/stdin"
 	"github.com/matcra587/jira-cli/internal/config"
 	editorpkg "github.com/matcra587/jira-cli/internal/editor"
@@ -56,7 +50,7 @@ func versionCommand() *cobra.Command {
 		GroupID: "agent",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return writeEnvelope(cmd, "version", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "version", map[string]any{
 				"version":    version.Version,
 				"commit":     version.Commit,
 				"branch":     version.Branch,
@@ -122,14 +116,14 @@ func authWhoamiCommand() *cobra.Command {
 			var ok bool
 			if save {
 				var loadErr error
-				cfg, loadErr = config.LoadOrInit(config.WithPath(configPath(cmd)))
+				cfg, loadErr = config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 				if loadErr != nil {
 					return loadErr
 				}
-				resolved, resolveErr := cfg.ResolveProfile(requestedProfile(cmd))
+				resolved, resolveErr := cfg.ResolveProfile(cmdutil.RequestedProfile(cmd))
 				if resolveErr != nil {
 					if errors.Is(resolveErr, config.ErrProfileNotDefined) {
-						return fmt.Errorf("validation: cannot --save profile %q: it is not defined in the config file (it exists only via a JIRA_* env overlay)", requestedProfile(cmd))
+						return fmt.Errorf("validation: cannot --save profile %q: it is not defined in the config file (it exists only via a JIRA_* env overlay)", cmdutil.RequestedProfile(cmd))
 					}
 					return resolveErr
 				}
@@ -140,9 +134,9 @@ func authWhoamiCommand() *cobra.Command {
 				if envVar := profileBaseURLEnvVar(resolved.Name); os.Getenv(envVar) != "" {
 					return fmt.Errorf("validation: cannot --save profile %q while %s is set: unset that environment variable so --save targets the file-backed Jira tenant", resolved.Name, envVar)
 				}
-				client, profile, ok, clientErr = jiraClientForProfile(cmd, resolved)
+				client, profile, ok, clientErr = cmdutil.JiraClientForProfile(cmd, resolved)
 			} else {
-				client, profile, ok, clientErr = jiraClientForCommand(cmd)
+				client, profile, ok, clientErr = cmdutil.JiraClientForCommand(cmd)
 			}
 			if clientErr != nil {
 				return clientErr
@@ -178,12 +172,12 @@ func authWhoamiCommand() *cobra.Command {
 				if !saved {
 					return fmt.Errorf("validation: cannot --save profile %q: it is not defined in the config file (it exists only via a JIRA_* env overlay)", profile.Name)
 				}
-				if err := config.Save(configPath(cmd), cfg); err != nil {
+				if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
 					return err
 				}
 				data["saved"] = true
 			}
-			return writeEnvelope(cmd, "auth.whoami", data)
+			return cmdutil.WriteEnvelope(cmd, "auth.whoami", data)
 		},
 	}
 	cmd.Flags().BoolVar(&save, "save", false, "Persist the resolved account_id (and email if blank) to the active profile")
@@ -200,7 +194,7 @@ func authLoginCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			noInput := noInputRequested(cmd)
 			if !noInput {
-				if DetectorFromContext(cmd).Mode != cli.ModePlain && DetectorFromContext(cmd).Mode != cli.ModeTUI {
+				if cmdutil.DetectorFromContext(cmd).Mode != cli.ModePlain && cmdutil.DetectorFromContext(cmd).Mode != cli.ModeTUI {
 					return fmt.Errorf("login requires --no-input in JSON, agent, or non-TTY mode")
 				}
 				if err := promptAuthLogin(cmd, &profileName, &baseURL, &authType, &email, &username, &backend, &onePasswordAccount, &vault, &item, &credential); err != nil {
@@ -219,7 +213,7 @@ func authLoginCommand() *cobra.Command {
 					Vault              string `json:"vault"`
 					Item               string `json:"item"`
 				}
-				if err := readJSONFile(jsonInput, &input); err != nil {
+				if err := cmdutil.ReadJSONFile(jsonInput, &input); err != nil {
 					return err
 				}
 				if input.ProfileName != "" && !cmd.Flags().Changed("profile-name") {
@@ -294,7 +288,7 @@ func authLoginCommand() *cobra.Command {
 				}
 				credential = secret
 			}
-			cfg, err := config.LoadOrInit(config.WithPath(configPath(cmd)))
+			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
 			}
@@ -302,7 +296,7 @@ func authLoginCommand() *cobra.Command {
 			// Start from the persisted profile (if any) so that fields not
 			// supplied to `auth login` (email, account_id, default_project,
 			// read_only, editor, …) survive a partial update.
-			previousProfile := existingProfileOrDefault(cfg, profileName)
+			previousProfile := cmdutil.ExistingProfileOrDefault(cfg, profileName)
 			profile := previousProfile
 			if cmd.Flags().Changed("profile-name") || profile.Name == "" {
 				profile.Name = profileName
@@ -344,7 +338,7 @@ func authLoginCommand() *cobra.Command {
 			if profile.WorkdaySeconds == 0 {
 				profile.WorkdaySeconds = config.DefaultWorkdaySeconds
 			}
-			upsertProfile(cfg, profile)
+			cmdutil.UpsertProfile(cfg, profile)
 			cfg.DefaultProfile = profileName
 			if err := cfg.Validate(); err != nil {
 				return err
@@ -354,13 +348,13 @@ func authLoginCommand() *cobra.Command {
 			// the backend, the config is saved, and a save failure rolls the
 			// credential write back so a failed login never leaves an orphaned
 			// secret in the keyring or 1Password.
-			saveConfig := func() error { return config.Save(configPath(cmd), cfg) }
+			saveConfig := func() error { return config.Save(cmdutil.ConfigPath(cmd), cfg) }
 			if credential != "" {
-				ref, refErr := secretRefFor(profile, targetBackend)
+				ref, refErr := cmdutil.SecretRefFor(profile, targetBackend)
 				if refErr != nil {
 					return refErr
 				}
-				if err := config.StoreCredentialTransactionally(cmd.Context(), credentialStoreFor(targetBackend), ref, credential, saveConfig); err != nil {
+				if err := config.StoreCredentialTransactionally(cmd.Context(), cmdutil.CredentialStoreFor(targetBackend), ref, credential, saveConfig); err != nil {
 					return err
 				}
 			} else if err := saveConfig(); err != nil {
@@ -374,9 +368,9 @@ func authLoginCommand() *cobra.Command {
 			// and config save have already committed, so a cleanup failure is
 			// surfaced as a note rather than failing the login.
 			if note := revokeOldCredentialOnRelogin(cmd, previousProfile, profile); note != "" {
-				recordCredentialWarnings(cmd, []string{note})
+				cmdutil.RecordCredentialWarnings(cmd, []string{note})
 			}
-			return writeEnvelope(cmd, "auth.login", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "auth.login", map[string]any{
 				"profile":             profileName,
 				"auth_type":           authType,
 				"secret_backend":      backend,
@@ -509,7 +503,7 @@ func authLoginQuestions() []authLoginQuestion {
 }
 
 func promptAuthLogin(cmd *cobra.Command, profileName, baseURL, authType, email, username, backend, onePasswordAccount, vault, item, credential *string) error {
-	account := firstNonEmpty(*email, *username)
+	account := cmdutil.FirstNonEmpty(*email, *username)
 	form := authLoginForm(profileName, baseURL, authType, &account, backend, onePasswordAccount, vault, item, credential).
 		WithInput(cmd.InOrStdin()).
 		WithOutput(cmd.ErrOrStderr())
@@ -695,14 +689,14 @@ to surface how the token actually behaves end-to-end. Pass --no-probe
 to skip remote calls and run only the local credential check.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
 			}
 			profiles := make([]map[string]any, 0, len(cfg.Profiles))
 			for _, profile := range cfg.Profiles {
 				entry := map[string]any{"profile": profile.Name}
-				ref, refErr := secretRefFor(profile, profile.SecretBackend)
+				ref, refErr := cmdutil.SecretRefFor(profile, profile.SecretBackend)
 				if refErr != nil {
 					entry["valid"] = false
 					entry["error"] = refErr.Error()
@@ -711,7 +705,7 @@ to skip remote calls and run only the local credential check.`,
 				}
 				cred := config.CredentialStatus(
 					cmd.Context(),
-					credentialStoreFor(profile.SecretBackend),
+					cmdutil.CredentialStoreFor(profile.SecretBackend),
 					ref,
 				)
 				entry["valid"] = cred.Valid
@@ -725,7 +719,7 @@ to skip remote calls and run only the local credential check.`,
 				}
 				profiles = append(profiles, entry)
 			}
-			return writeEnvelope(cmd, "auth.status", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "auth.status", map[string]any{
 				"active_profile": cfg.DefaultProfile,
 				"profiles":       profiles,
 			})
@@ -749,7 +743,7 @@ func probeRemoteAuth(cmd *cobra.Command, profile config.Profile, projectKey stri
 	// Route the probe through the same client constructor normal commands
 	// use, so the per-profile request timeout and an mTLS client certificate
 	// both apply to the probe's live calls rather than silently defaulting.
-	client, _, ok, err := jiraClientForProfile(cmd, profile)
+	client, _, ok, err := cmdutil.JiraClientForProfile(cmd, profile)
 	if err != nil {
 		out["error"] = config.SanitizeCredentialError(err)
 		return out
@@ -824,7 +818,7 @@ func authLogoutCommand() *cobra.Command {
 		Annotations:       map[string]string{"clib": "dynamic-args='profile'"},
 		ValidArgsFunction: completeProfileNames,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
 			}
@@ -832,7 +826,7 @@ func authLogoutCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ref, err := secretRefFor(profile, profile.SecretBackend)
+			ref, err := cmdutil.SecretRefFor(profile, profile.SecretBackend)
 			if err != nil {
 				return err
 			}
@@ -840,14 +834,14 @@ func authLogoutCommand() *cobra.Command {
 			// not an error: removed=false reports there was nothing to remove.
 			// A note is returned when revocation left a user-named 1Password
 			// item in place; surface it as an informational warning.
-			removed, note, err := config.RevokeProfileCredential(cmd.Context(), credentialStoreFor(profile.SecretBackend), ref)
+			removed, note, err := config.RevokeProfileCredential(cmd.Context(), cmdutil.CredentialStoreFor(profile.SecretBackend), ref)
 			if err != nil {
 				return err
 			}
 			if note != "" {
-				recordCredentialWarnings(cmd, []string{note})
+				cmdutil.RecordCredentialWarnings(cmd, []string{note})
 			}
-			return writeEnvelope(cmd, "auth.logout", map[string]any{"profile": profile.Name, "removed": removed})
+			return cmdutil.WriteEnvelope(cmd, "auth.logout", map[string]any{"profile": profile.Name, "removed": removed})
 		},
 	}
 }
@@ -860,7 +854,7 @@ func authSwitchCommand() *cobra.Command {
 		Annotations:       map[string]string{"clib": "dynamic-args='profile'"},
 		ValidArgsFunction: completeProfileNames,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadOrInit(config.WithPath(configPath(cmd)))
+			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
 			}
@@ -869,10 +863,10 @@ func authSwitchCommand() *cobra.Command {
 				return err
 			}
 			cfg.DefaultProfile = profile.Name
-			if err := config.Save(configPath(cmd), cfg); err != nil {
+			if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
 				return err
 			}
-			return writeEnvelope(cmd, "auth.switch", map[string]any{"active": profile.Name})
+			return cmdutil.WriteEnvelope(cmd, "auth.switch", map[string]any{"active": profile.Name})
 		},
 	}
 }
@@ -883,11 +877,11 @@ func authRefreshCommand() *cobra.Command {
 		Short: "Refresh credentials",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
 			}
-			profile, err := cfg.ResolveProfile(requestedProfile(cmd))
+			profile, err := cfg.ResolveProfile(cmdutil.RequestedProfile(cmd))
 			if err != nil {
 				return err
 			}
@@ -897,7 +891,7 @@ func authRefreshCommand() *cobra.Command {
 				"refreshed": false,
 			}
 			data["reason"] = "selected auth type has no refresh flow"
-			return writeEnvelope(cmd, "auth.refresh", data)
+			return cmdutil.WriteEnvelope(cmd, "auth.refresh", data)
 		},
 	}
 }
@@ -914,14 +908,14 @@ func authMigrateCommand() *cobra.Command {
 			if target != config.SecretBackendKeyring && target != config.SecretBackendOnePassword {
 				return fmt.Errorf("unsupported secret backend %q", backend)
 			}
-			cfg, err := config.LoadOrInit(config.WithPath(configPath(cmd)))
+			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
 			}
 			// When --profile is explicitly set, resolve it so a typo is
 			// rejected here rather than silently matching no profile and
 			// returning success with an empty result.
-			profileName := requestedProfile(cmd)
+			profileName := cmdutil.RequestedProfile(cmd)
 			if profileName != "" {
 				resolved, rerr := cfg.ResolveProfile(profileName)
 				if rerr != nil {
@@ -990,13 +984,13 @@ func authMigrateCommand() *cobra.Command {
 					ops = append(ops, op)
 					continue
 				}
-				sourceRef, refErr := secretRefFor(*profile, profile.SecretBackend)
+				sourceRef, refErr := cmdutil.SecretRefFor(*profile, profile.SecretBackend)
 				if refErr != nil {
 					op["error"] = refErr.Error()
 					ops = append(ops, op)
 					continue
 				}
-				destRef, refErr := secretRefFor(*profile, target)
+				destRef, refErr := cmdutil.SecretRefFor(*profile, target)
 				if refErr != nil {
 					op["error"] = refErr.Error()
 					ops = append(ops, op)
@@ -1005,8 +999,8 @@ func authMigrateCommand() *cobra.Command {
 				migrations = append(migrations, config.CredentialMigration{
 					Profile:      profile.Name,
 					ProfileIndex: i,
-					Source:       credentialStoreFor(profile.SecretBackend),
-					Destination:  credentialStoreFor(target),
+					Source:       cmdutil.CredentialStoreFor(profile.SecretBackend),
+					Destination:  cmdutil.CredentialStoreFor(target),
 					SourceRef:    sourceRef,
 					DestRef:      destRef,
 				})
@@ -1021,7 +1015,7 @@ func authMigrateCommand() *cobra.Command {
 					// backend metadata. Only a durable save here lets the
 					// source secrets be cleaned up.
 					applyMigratedBackends(cfg, migrations, target)
-					return config.Save(configPath(cmd), cfg)
+					return config.Save(cmdutil.ConfigPath(cmd), cfg)
 				})
 				if migErr != nil {
 					return fmt.Errorf("auth migrate: %w", migErr)
@@ -1038,9 +1032,9 @@ func authMigrateCommand() *cobra.Command {
 				for _, note := range report.CleanupNotes {
 					cleanupNotes = append(cleanupNotes, note.Message)
 				}
-				recordCredentialWarnings(cmd, cleanupNotes)
+				cmdutil.RecordCredentialWarnings(cmd, cleanupNotes)
 			} else if !dryRun {
-				if err := config.Save(configPath(cmd), cfg); err != nil {
+				if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
 					return err
 				}
 			}
@@ -1055,7 +1049,7 @@ func authMigrateCommand() *cobra.Command {
 			if len(cleanupNotes) > 0 {
 				data["cleanup_notes"] = cleanupNotes
 			}
-			return writeEnvelope(cmd, "auth.migrate", data)
+			return cmdutil.WriteEnvelope(cmd, "auth.migrate", data)
 		},
 	}
 	cmd.Flags().StringVar(&backend, "backend", string(config.SecretBackendKeyring), "Target secret backend: keyring or 1password")
@@ -1073,19 +1067,19 @@ func authTokenCommand() *cobra.Command {
 		Short: "Show redacted token diagnostics",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
 			}
-			profile, err := cfg.ResolveProfile(requestedProfile(cmd))
+			profile, err := cfg.ResolveProfile(cmdutil.RequestedProfile(cmd))
 			if err != nil {
 				return err
 			}
-			ref, refErr := secretRefFor(profile, profile.SecretBackend)
+			ref, refErr := cmdutil.SecretRefFor(profile, profile.SecretBackend)
 			if refErr != nil {
 				return refErr
 			}
-			status := config.CredentialStatus(cmd.Context(), credentialStoreFor(profile.SecretBackend), ref)
+			status := config.CredentialStatus(cmd.Context(), cmdutil.CredentialStoreFor(profile.SecretBackend), ref)
 			data := map[string]any{
 				"profile":  profile.Name,
 				"source":   status.Source,
@@ -1102,9 +1096,9 @@ func authTokenCommand() *cobra.Command {
 			if profile.SecretBackend == config.SecretBackendOnePassword {
 				data["onepassword_account"] = profile.OnePasswordAccount
 				data["vault"] = profile.Vault
-				data["item"] = firstNonEmpty(profile.Item, "jira-cli-"+profile.Name)
+				data["item"] = cmdutil.FirstNonEmpty(profile.Item, "jira-cli-"+profile.Name)
 			}
-			return writeEnvelope(cmd, "auth.token", data)
+			return cmdutil.WriteEnvelope(cmd, "auth.token", data)
 		},
 	}
 }
@@ -1158,7 +1152,7 @@ func issueViewCommand() *cobra.Command {
 		Short: "View issue details",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, _, ok, err := jiraClientForCommand(cmd)
+			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -1174,12 +1168,12 @@ func issueViewCommand() *cobra.Command {
 				// warning on a machine path would be false.
 				// Scope the scan to the human output mode only.
 				var warnings []adf.Warning
-				if usePlainOutput(cmd) {
+				if cmdutil.UsePlainOutput(cmd) {
 					warnings = collectIssueLossyWarnings(issue)
 				}
-				return writeEnvelopeWithResponseAndWarnings(cmd, "issue.view", map[string]any{"issue": issue}, resp, warnings)
+				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.view", map[string]any{"issue": issue}, resp, warnings)
 			}
-			return writeEnvelope(cmd, "issue.view", map[string]any{"issue": map[string]any{"key": args[0]}})
+			return cmdutil.WriteEnvelope(cmd, "issue.view", map[string]any{"issue": map[string]any{"key": args[0]}})
 		},
 	}
 }
@@ -1267,13 +1261,13 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 	if opts.asJQL {
 		// --as-jql must not require a credential — it never calls Jira.
 		// boardScopeFromFlags is cache-only (no client probe), and we
-		// load the profile directly here instead of jiraClientForCommand
+		// load the profile directly here instead of cmdutil.JiraClientForCommand
 		// so the secret backend (e.g. 1Password) stays untouched.
-		cfg, cfgErr := config.Load(config.WithPath(configPath(cmd)))
+		cfg, cfgErr := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 		if cfgErr != nil {
 			return cfgErr
 		}
-		profile := activeProfile(cmd, cfg)
+		profile := cmdutil.ActiveProfile(cmd, cfg)
 		builder := opts.builder
 		if !scopeActive && strings.TrimSpace(opts.jqlQuery) == "" {
 			builder = issueListBuilderWithProfileDefaults(builder, profile)
@@ -1283,9 +1277,9 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 			return err
 		}
 		query = applyBoardClauseToJQL(query, scope)
-		return writeEnvelope(cmd, "issue.list.jql", boardScopedListData(cmd, []map[string]any{}, opts.detail, query, scope, precedence))
+		return cmdutil.WriteEnvelope(cmd, "issue.list.jql", boardScopedListData(cmd, []map[string]any{}, opts.detail, query, scope, precedence))
 	}
-	client, profile, ok, err := jiraClientForCommand(cmd)
+	client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
 		return err
 	}
@@ -1299,7 +1293,7 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 	}
 	query = applyBoardClauseToJQL(query, scope)
 	if !ok {
-		return writeEnvelope(cmd, "issue.list", boardScopedListData(cmd, []map[string]any{}, opts.detail, query, scope, precedence))
+		return cmdutil.WriteEnvelope(cmd, "issue.list", boardScopedListData(cmd, []map[string]any{}, opts.detail, query, scope, precedence))
 	}
 	service := issueService(client)
 	fields := jira.DefaultIssueListFields()
@@ -1318,7 +1312,7 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 		return err
 	}
 	issueData := issueOutput(issues, opts.detail)
-	return writeEnvelopeWithResponse(cmd, "issue.list", boardScopedListData(cmd, issueData, opts.detail, query, scope, precedence), resp)
+	return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.list", boardScopedListData(cmd, issueData, opts.detail, query, scope, precedence), resp)
 }
 
 // applyBoardClauseToJQL prepends the board's `project in (...)` clause
@@ -1384,7 +1378,7 @@ func issueCreateCommand() *cobra.Command {
 			noInput := noInputRequested(cmd)
 			payload := map[string]any{"summary": summary}
 			if jsonInput != "" {
-				if err := readJSONFile(jsonInput, &payload); err != nil {
+				if err := cmdutil.ReadJSONFile(jsonInput, &payload); err != nil {
 					return err
 				}
 			}
@@ -1392,7 +1386,7 @@ func issueCreateCommand() *cobra.Command {
 			// --no-input validation, and the dry-run preview only need
 			// profile metadata. Credentials are resolved later, at the
 			// live-submit boundary.
-			profile, err := profileForCommand(cmd)
+			profile, err := cmdutil.ProfileForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -1418,10 +1412,10 @@ func issueCreateCommand() *cobra.Command {
 			// Fill project / issue type from profile defaults BEFORE
 			// normalizing aliases so a default-only create still carries
 			// the target into the wire payload.
-			if firstNonEmpty(stringFromAny(payload["project_key"])) == "" && profile.DefaultProject != "" {
+			if cmdutil.FirstNonEmpty(cmdutil.StringFromAny(payload["project_key"])) == "" && profile.DefaultProject != "" {
 				payload["project_key"] = profile.DefaultProject
 			}
-			if firstNonEmpty(stringFromAny(payload["issue_type"])) == "" && profile.DefaultIssueType != "" {
+			if cmdutil.FirstNonEmpty(cmdutil.StringFromAny(payload["issue_type"])) == "" && profile.DefaultIssueType != "" {
 				payload["issue_type"] = profile.DefaultIssueType
 			}
 			// Normalize the CLI create aliases (project_key / issue_type /
@@ -1430,8 +1424,8 @@ func issueCreateCommand() *cobra.Command {
 			// Screen validation keys on the wire ids; an un-normalized
 			// alias would be flagged off-screen even for a default
 			// create. A conflict (alias and wire key both set) is fatal.
-			projectForSchema := firstNonEmpty(stringFromAny(payload["project_key"]), profile.DefaultProject)
-			issueTypeForSchema := firstNonEmpty(stringFromAny(payload["issue_type"]), profile.DefaultIssueType)
+			projectForSchema := cmdutil.FirstNonEmpty(cmdutil.StringFromAny(payload["project_key"]), profile.DefaultProject)
+			issueTypeForSchema := cmdutil.FirstNonEmpty(cmdutil.StringFromAny(payload["issue_type"]), profile.DefaultIssueType)
 			normalizedPayload, normErr := pipeline.NormalizeCreateAliasesChecked(payload)
 			if normErr != nil {
 				return normErr
@@ -1473,7 +1467,7 @@ func issueCreateCommand() *cobra.Command {
 			if !dryRun {
 				var ok bool
 				var err error
-				client, profile, ok, err = jiraClientForCommand(cmd)
+				client, profile, ok, err = cmdutil.JiraClientForCommand(cmd)
 				if err != nil {
 					return err
 				}
@@ -1482,19 +1476,19 @@ func issueCreateCommand() *cobra.Command {
 				}
 			}
 			pipeIn := pipeline.MutationInput{
-				Mode:             adfModeFor(cmd, true),
+				Mode:             cmdutil.ADFModeFor(cmd, true),
 				Fields:           payload,
 				DryRun:           dryRun,
 				NamedADFDocs:     namedADF,
 				MarkdownWarnings: descMarkdownWarnings,
 			}
-			if client != nil && !readOnlyEnabled(cmd) {
+			if client != nil && !cmdutil.ReadOnlyEnabled(cmd) {
 				// Skip the schema fetch in read-only mode: the client
 				// refuses the create itself, so resolving its screen is
 				// wasted work and would emit a stray read request.
 				pipeIn.SchemaFetcher = newScreenSchemaFetcher(
 					cmd.Context(), servicesForClient(client).Project(0),
-					profileForEnvelope(cmd), projectForSchema, issueTypeForSchema)
+					cmdutil.ProfileForEnvelope(cmd), projectForSchema, issueTypeForSchema)
 			}
 			if descriptionPresent {
 				// FieldCompatibility is left at its zero value with
@@ -1528,7 +1522,7 @@ func issueCreateCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return writeEnvelopeWithWarnings(cmd, "issue.create", map[string]any{
+				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.create", map[string]any{
 					"preview": preview,
 					"dry_run": true,
 				}, pipeOut.Warnings)
@@ -1539,14 +1533,14 @@ func issueCreateCommand() *cobra.Command {
 			// verbatim; Project / IssueType are left empty so it does not
 			// re-wrap a value that is already wire-shaped.
 			req := &jira.IssueCreateRequest{
-				Summary: stringFromAny(submitFields["summary"]),
+				Summary: cmdutil.StringFromAny(submitFields["summary"]),
 				Fields:  submitFields,
 			}
 			issue, resp, err := issueService(client).Create(cmd.Context(), req)
 			if err != nil {
 				return err
 			}
-			return writeEnvelopeWithResponseAndWarnings(cmd, "issue.create", map[string]any{"issue": issue, "dry_run": false}, resp, pipeOut.Warnings)
+			return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.create", map[string]any{"issue": issue, "dry_run": false}, resp, pipeOut.Warnings)
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
@@ -1556,106 +1550,11 @@ func issueCreateCommand() *cobra.Command {
 	return cmd
 }
 
-// configuredEditorFor returns the editor.Resolve(...) "configured"
+// cmdutil.ConfiguredEditorFor returns the editor.Resolve(...) "configured"
 // argument for the active invocation: the active profile's Editor
 // field if set, otherwise the global Config.Editor. The resolver in
 // internal/editor layers $JIRA_EDITOR / $EDITOR / $VISUAL / "vi" on
 // top of whatever this returns.
-func configuredEditorFor(cmd *cobra.Command) string {
-	cfg, err := config.Load(config.WithPath(configPath(cmd)))
-	if err != nil {
-		return ""
-	}
-	name := profileForEnvelope(cmd)
-	if name != "" {
-		profile := cfg.Profile(name)
-		if v := strings.TrimSpace(profile.Editor); v != "" {
-			return v
-		}
-	}
-	return strings.TrimSpace(cfg.Editor)
-}
-
-// adfModeFor resolves the ADF strict/best-effort mode for a single
-// mutation invocation. mutation=true selects the mutation-submit
-// default (strict) when nothing else overrides.
-func adfModeFor(cmd *cobra.Command, mutation bool) adfmode.Mode {
-	flag := adfmode.FlagUnset
-	if v, _ := cmd.Flags().GetBool("adf-strict"); v {
-		flag |= adfmode.FlagStrict
-	}
-	if v, _ := cmd.Flags().GetBool("adf-best-effort"); v {
-		flag |= adfmode.FlagBestEffort
-	}
-	env := os.Getenv("JIRA_ADF_STRICT")
-	// TODO: thread profile.ADFStrict once a typed *bool field lands on
-	// internal/config.Profile (currently only env + flag + default-by-path).
-	var profilePtr *bool
-	path := adfmode.PathRead
-	if mutation {
-		path = adfmode.PathMutationSubmit
-	}
-	mode, err := adfmode.Resolve(adfmode.Inputs{Flag: flag, Env: env, Profile: profilePtr, Path: path})
-	if err != nil {
-		// Resolver only errors on conflicting inputs; default to safe.
-		if mutation {
-			return adfmode.ModeStrict
-		}
-		return adfmode.ModeBestEffort
-	}
-	return mode
-}
-
-// readOnlyEnabled reports whether the active profile (or the JIRA_READ_ONLY
-// env var) blocks mutations. Env wins on the OFF→ON direction so an agent
-// shell can enforce read-only globally without editing config.
-func readOnlyEnabled(cmd *cobra.Command) bool {
-	if envReadOnlyEnabled() {
-		return true
-	}
-	cfg, err := config.Load(config.WithPath(configPath(cmd)))
-	if err != nil {
-		// On config-load failure, fail safe: treat as writable so the
-		// real command surfaces the underlying error rather than masking
-		// it with a read-only refusal.
-		return false
-	}
-	return activeProfile(cmd, cfg).ReadOnly
-}
-
-// dryRunRequested reports whether the active command was invoked with
-// --dry-run. The flag is declared per-command (not persistent), so the
-// lookup tolerates its absence: commands without a --dry-run flag
-// simply return false. Threading this into the Jira client lets the
-// service layer refuse any mutating request as a dry-run safety net.
-func dryRunRequested(cmd *cobra.Command) bool {
-	if cmd == nil {
-		return false
-	}
-	if cmd.Flags().Lookup("dry-run") == nil {
-		// Command has no --dry-run flag — nothing to honor.
-		return false
-	}
-	v, err := cmd.Flags().GetBool("dry-run")
-	if err != nil {
-		// The flag exists but is not a bool (a future redefinition).
-		// Fail SAFE: a dry-run guard that cannot read its flag must
-		// assume dry-run is ON rather than silently disabling itself.
-		return true
-	}
-	return v
-}
-
-func envReadOnlyEnabled() bool {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv("JIRA_READ_ONLY")))
-	switch v {
-	case "1", "true", "yes", "on":
-		return true
-	default:
-		return false
-	}
-}
-
 // resolveAssigneeField turns an --assignee flag value into the Jira `assignee`
 // field shape. Accepted values:
 //   - ""                         → no change (set ok=false)
@@ -1694,13 +1593,13 @@ func resolveAssigneeField(input string, profile config.Profile) (any, bool, erro
 // payload or profile defaults, otherwise returns a validation error.
 func validateIssueCreateRequired(payload map[string]any, profile config.Profile) error {
 	var missing []string
-	if firstNonEmpty(stringFromAny(payload["summary"])) == "" {
+	if cmdutil.FirstNonEmpty(cmdutil.StringFromAny(payload["summary"])) == "" {
 		missing = append(missing, "summary")
 	}
-	if firstNonEmpty(stringFromAny(payload["project_key"]), profile.DefaultProject) == "" {
+	if cmdutil.FirstNonEmpty(cmdutil.StringFromAny(payload["project_key"]), profile.DefaultProject) == "" {
 		missing = append(missing, "project_key")
 	}
-	if firstNonEmpty(stringFromAny(payload["issue_type"]), profile.DefaultIssueType) == "" {
+	if cmdutil.FirstNonEmpty(cmdutil.StringFromAny(payload["issue_type"]), profile.DefaultIssueType) == "" {
 		missing = append(missing, "issue_type")
 	}
 	if len(missing) > 0 {
@@ -1718,16 +1617,16 @@ func validateIssueCreateRequired(payload map[string]any, profile config.Profile)
 // defaults fill project / issue type when the payload omits them.
 func issueCreatePreview(fields map[string]any, profile config.Profile) (map[string]any, error) {
 	preview := map[string]any{
-		"project_key": firstNonEmpty(wireObjectString(fields["project"], "key"), profile.DefaultProject),
-		"issue_type":  firstNonEmpty(wireObjectString(fields["issuetype"], "name"), profile.DefaultIssueType),
-		"summary":     stringFromAny(fields["summary"]),
+		"project_key": cmdutil.FirstNonEmpty(cmdutil.WireObjectString(fields["project"], "key"), profile.DefaultProject),
+		"issue_type":  cmdutil.FirstNonEmpty(cmdutil.WireObjectString(fields["issuetype"], "name"), profile.DefaultIssueType),
+		"summary":     cmdutil.StringFromAny(fields["summary"]),
 	}
 	// description in SubmitFields is the validated ADF document. Surface
 	// it under description_adf so the preview names the wire shape.
 	if doc, ok := fields["description"]; ok && doc != nil {
 		preview["description_adf"] = doc
 	}
-	if acct := wireObjectString(fields["assignee"], "accountId"); acct != "" {
+	if acct := cmdutil.WireObjectString(fields["assignee"], "accountId"); acct != "" {
 		preview["assignee_account_id"] = acct
 	}
 	for _, key := range []string{"priority", "labels", "components", "epic_key", "custom_fields"} {
@@ -1753,7 +1652,7 @@ func issueCreatePreview(fields map[string]any, profile config.Profile) (map[stri
 // doc is what the pipeline validates; the caller writes the pipeline's
 // SubmitADF back into the fields map under `description`.
 func extractDescriptionDoc(payload map[string]any) (doc adf.Document, present bool, warnings []adf.Warning, err error) {
-	if md := stringFromAny(payload["description_markdown"]); md != "" {
+	if md := cmdutil.StringFromAny(payload["description_markdown"]); md != "" {
 		delete(payload, "description_markdown")
 		delete(payload, "description")
 		converted, convWarnings, cerr := adf.FromMarkdownLossy(md)
@@ -1797,7 +1696,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 			noInput := noInputRequested(cmd)
 			payload := map[string]any{"fields": map[string]any{}}
 			if jsonInput != "" {
-				if err := readJSONFile(jsonInput, &payload); err != nil {
+				if err := cmdutil.ReadJSONFile(jsonInput, &payload); err != nil {
 					return err
 				}
 			}
@@ -1808,7 +1707,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 			// --summary / --assignee shortcuts, applied on top of any --json-input.
 			// Resolve the profile only — building a client here would
 			// resolve credentials even on a dry-run or editor-only path.
-			profile, err := profileForCommand(cmd)
+			profile, err := cmdutil.ProfileForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -1831,7 +1730,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 				if noInput {
 					return fmt.Errorf("validation: no fields specified for issue edit; provide --summary, --assignee, or --json-input")
 				}
-				det := DetectorFromContext(cmd)
+				det := cmdutil.DetectorFromContext(cmd)
 				if det.Agent || !stdininput.IsTerminal() {
 					return fmt.Errorf("validation: issue edit requires an interactive terminal for the editor flow; in agent or non-TTY context, provide --summary, --assignee, or --json-input")
 				}
@@ -1853,7 +1752,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 			var editClient *jira.Client
 			if !dryRun {
 				var hasClient bool
-				editClient, _, hasClient, err = jiraClientForCommand(cmd)
+				editClient, _, hasClient, err = cmdutil.JiraClientForCommand(cmd)
 				if err != nil {
 					return err
 				}
@@ -1863,15 +1762,15 @@ In headless mode (--no-input), at least one field flag MUST be provided
 			}
 			// Thread the mutation through the 5-stage pipeline.
 			editIn := pipeline.MutationInput{
-				Mode:         adfModeFor(cmd, true),
+				Mode:         cmdutil.ADFModeFor(cmd, true),
 				Fields:       fields,
 				NamedADFDocs: namedADF,
 				DryRun:       dryRun,
 			}
-			if editClient != nil && !readOnlyEnabled(cmd) {
+			if editClient != nil && !cmdutil.ReadOnlyEnabled(cmd) {
 				editIn.SchemaFetcher = newEditScreenSchemaFetcher(
 					cmd.Context(), servicesForClient(editClient).Project(0),
-					profileForEnvelope(cmd), args[0])
+					cmdutil.ProfileForEnvelope(cmd), args[0])
 			}
 			pipeOut := pipeline.RunMutation(editIn)
 			if pipeOut.Aborted {
@@ -1888,14 +1787,14 @@ In headless mode (--no-input), at least one field flag MUST be provided
 				if err != nil {
 					return err
 				}
-				return writeEnvelopeWithResponseAndWarnings(cmd, "issue.edit", map[string]any{
+				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.edit", map[string]any{
 					"issue":   args[0],
 					"result":  issue,
 					"dry_run": false,
 					"fields":  submitFields,
 				}, resp, pipeOut.Warnings)
 			}
-			return writeEnvelopeWithWarnings(cmd, "issue.edit", map[string]any{
+			return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.edit", map[string]any{
 				"issue":   args[0],
 				"dry_run": true,
 				"fields":  submitFields,
@@ -1910,7 +1809,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 }
 
 func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
-	client, _, ok, err := jiraClientForCommand(cmd)
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
 		return err
 	}
@@ -1937,7 +1836,7 @@ func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
 		IssueKey:  key,
 		FieldName: "description",
 		Document:  doc,
-		EditCmd:   configuredEditorFor(cmd),
+		EditCmd:   cmdutil.ConfiguredEditorFor(cmd),
 	})
 	if err != nil {
 		return err
@@ -1956,7 +1855,7 @@ func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
 	// MarkdownWarnings so strict mode aborts on genuine content loss
 	// before submission.
 	pipeOut := pipeline.RunMutation(pipeline.MutationInput{
-		Mode:             adfModeFor(cmd, true),
+		Mode:             cmdutil.ADFModeFor(cmd, true),
 		ADFDoc:           &updatedDoc,
 		FieldCompat:      &adf.FieldCompatibility{Field: "description", InlineCardSupported: true},
 		MarkdownWarnings: editWarnings,
@@ -1972,7 +1871,7 @@ func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
 		submitFields["description"] = *pipeOut.SubmitADF
 	}
 	if dryRun {
-		return writeEnvelopeWithWarnings(cmd, "issue.edit", map[string]any{
+		return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.edit", map[string]any{
 			"issue":   key,
 			"dry_run": true,
 			"fields":  submitFields,
@@ -1982,7 +1881,7 @@ func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	return writeEnvelopeWithResponseAndWarnings(cmd, "issue.edit", map[string]any{
+	return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.edit", map[string]any{
 		"issue":   key,
 		"result":  updatedIssue,
 		"dry_run": false,
@@ -2003,21 +1902,21 @@ func issueTransitionCommand() *cobra.Command {
 			// validate today (transitions don't carry payload here),
 			// but the parse + dry-run gating still apply.
 			pipeOut := pipeline.RunMutation(pipeline.MutationInput{
-				Mode:   adfModeFor(cmd, true),
+				Mode:   cmdutil.ADFModeFor(cmd, true),
 				DryRun: dryRun,
 			})
 			if pipeOut.Aborted {
 				return pipeOut.Err
 			}
 			if dryRun {
-				return writeEnvelopeWithWarnings(cmd, "issue.transition", map[string]any{"issue": args[0], "transition": transitionID, "dry_run": dryRun}, pipeOut.Warnings)
+				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", map[string]any{"issue": args[0], "transition": transitionID, "dry_run": dryRun}, pipeOut.Warnings)
 			}
 			if transitionID == "" {
 				// List available transitions — this is a READ, not a
 				// mutation; it returns successor IDs the caller chooses
 				// from. Skip the warnings helper since pipeline only
 				// runs to satisfy stage gating consistency.
-				client, _, ok, err := jiraClientForCommand(cmd)
+				client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 				if err != nil {
 					return err
 				}
@@ -2026,10 +1925,10 @@ func issueTransitionCommand() *cobra.Command {
 					if err != nil {
 						return err
 					}
-					return writeEnvelopeWithResponseAndWarnings(cmd, "issue.transitions", map[string]any{"issue": args[0], "transitions": transitions}, resp, pipeOut.Warnings)
+					return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transitions", map[string]any{"issue": args[0], "transitions": transitions}, resp, pipeOut.Warnings)
 				}
 			}
-			client, _, ok, err := jiraClientForCommand(cmd)
+			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -2038,12 +1937,12 @@ func issueTransitionCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return writeEnvelopeWithResponseAndWarnings(cmd, "issue.transition", map[string]any{"issue": args[0], "transition": transitionID, "dry_run": false}, resp, pipeOut.Warnings)
+				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transition", map[string]any{"issue": args[0], "transition": transitionID, "dry_run": false}, resp, pipeOut.Warnings)
 			}
 			if !dryRun && transitionID != "" {
 				return fmt.Errorf("jira base URL is required for issue.transition")
 			}
-			return writeEnvelopeWithWarnings(cmd, "issue.transition", map[string]any{"issue": args[0], "dry_run": dryRun}, pipeOut.Warnings)
+			return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", map[string]any{"issue": args[0], "dry_run": dryRun}, pipeOut.Warnings)
 		},
 	}
 	returnCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
@@ -2062,7 +1961,7 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 			noInput := noInputRequested(cmd)
 			payload := map[string]any{"fields": map[string]any{}}
 			if jsonInput != "" {
-				if err := readJSONFile(jsonInput, &payload); err != nil {
+				if err := cmdutil.ReadJSONFile(jsonInput, &payload); err != nil {
 					return err
 				}
 			}
@@ -2080,7 +1979,7 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 			var err error
 			if !dryRun && name != "delete" {
 				var hasClient bool
-				destructiveClient, _, hasClient, err = jiraClientForCommand(cmd)
+				destructiveClient, _, hasClient, err = cmdutil.JiraClientForCommand(cmd)
 				if err != nil {
 					return err
 				}
@@ -2089,14 +1988,14 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 				}
 			}
 			destructiveIn := pipeline.MutationInput{
-				Mode:   adfModeFor(cmd, true),
+				Mode:   cmdutil.ADFModeFor(cmd, true),
 				Fields: pipeFields,
 				DryRun: dryRun,
 			}
-			if destructiveClient != nil && !readOnlyEnabled(cmd) {
+			if destructiveClient != nil && !cmdutil.ReadOnlyEnabled(cmd) {
 				destructiveIn.SchemaFetcher = newEditScreenSchemaFetcher(
 					cmd.Context(), servicesForClient(destructiveClient).Project(0),
-					profileForEnvelope(cmd), args[0])
+					cmdutil.ProfileForEnvelope(cmd), args[0])
 			}
 			pipeOut := pipeline.RunMutation(destructiveIn)
 			if pipeOut.Aborted {
@@ -2109,14 +2008,14 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 				submitFields = map[string]any{}
 			}
 			if dryRun {
-				return writeEnvelopeWithWarnings(cmd, "issue."+name, map[string]any{"issue": args[0], "payload": map[string]any{"fields": submitFields}, "dry_run": true}, pipeOut.Warnings)
+				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue."+name, map[string]any{"issue": args[0], "payload": map[string]any{"fields": submitFields}, "dry_run": true}, pipeOut.Warnings)
 			}
 			// Destructive op safety: in TTY mode (a human at the
 			// keyboard) require either --force OR an interactive
 			// "are you sure?" confirmation. Headless / agent shells
 			// MUST pass --force explicitly — the auto-detect refuses
 			// to prompt them.
-			det := DetectorFromContext(cmd)
+			det := cmdutil.DetectorFromContext(cmd)
 			if !force {
 				// Non-TTY / agent / --no-input → MUST pass --force.
 				// We refuse to prompt headless callers and refuse to
@@ -2135,7 +2034,7 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 			// schema fetcher; delete resolves one here.
 			client, ok := destructiveClient, destructiveClient != nil
 			if client == nil {
-				client, _, ok, err = jiraClientForCommand(cmd)
+				client, _, ok, err = cmdutil.JiraClientForCommand(cmd)
 				if err != nil {
 					return err
 				}
@@ -2155,7 +2054,7 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return writeEnvelopeWithResponseAndWarnings(cmd, "issue."+name, map[string]any{"issue": args[0], "result": issue, "dry_run": false}, resp, pipeOut.Warnings)
+				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue."+name, map[string]any{"issue": args[0], "result": issue, "dry_run": false}, resp, pipeOut.Warnings)
 			}
 			return fmt.Errorf("jira base URL is required for issue.%s", name)
 		},
@@ -2223,14 +2122,14 @@ func issueWebLinkCommand() *cobra.Command {
 				return err
 			}
 			if dryRun {
-				return writeEnvelope(cmd, "issue.weblink", map[string]any{
+				return cmdutil.WriteEnvelope(cmd, "issue.weblink", map[string]any{
 					"issue": args[0], "url": url, "title": title, "dry_run": true,
 					// Be explicit that dry-run did NOT contact the
 					// target URL — only its syntax was checked locally.
 					"url_remote_checked": false,
 				})
 			}
-			client, _, ok, err := jiraClientForCommand(cmd)
+			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -2243,7 +2142,7 @@ func issueWebLinkCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return writeEnvelopeWithResponse(cmd, "issue.weblink", map[string]any{
+			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.weblink", map[string]any{
 				"issue": args[0], "url": url, "title": title, "dry_run": false,
 			}, resp)
 		},
@@ -2278,7 +2177,7 @@ func issueFieldsFromPayload(payload map[string]any) map[string]any {
 	}
 	if rawFields, ok := payload["fields"]; ok {
 		if fields, ok := rawFields.(map[string]any); ok {
-			return copyAnyMap(fields)
+			return cmdutil.CopyAnyMap(fields)
 		}
 	}
 	out := make(map[string]any, len(payload))
@@ -2288,12 +2187,6 @@ func issueFieldsFromPayload(payload map[string]any) map[string]any {
 		}
 		out[key] = value
 	}
-	return out
-}
-
-func copyAnyMap(in map[string]any) map[string]any {
-	out := make(map[string]any, len(in))
-	maps.Copy(out, in)
 	return out
 }
 
@@ -2317,7 +2210,7 @@ func worklogAddCommand() *cobra.Command {
 					CommentMarkdown string          `json:"comment_markdown"`
 					Comment         json.RawMessage `json:"comment"`
 				}
-				if err := readJSONFile(jsonInput, &input); err != nil {
+				if err := cmdutil.ReadJSONFile(jsonInput, &input); err != nil {
 					return err
 				}
 				if input.TimeSpent == "" {
@@ -2365,7 +2258,7 @@ func worklogAddCommand() *cobra.Command {
 			}
 			// Thread worklog comment ADF through the pipeline.
 			pipeOut := pipeline.RunMutation(pipeline.MutationInput{
-				Mode:             adfModeFor(cmd, true),
+				Mode:             cmdutil.ADFModeFor(cmd, true),
 				ADFDoc:           comment,
 				MarkdownWarnings: commentMarkdownWarnings,
 				DryRun:           dryRun,
@@ -2377,7 +2270,7 @@ func worklogAddCommand() *cobra.Command {
 			// not the pre-pipeline comment doc.
 			comment = pipeOut.SubmitADF
 			if !dryRun {
-				client, _, ok, err := jiraClientForCommand(cmd)
+				client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 				if err != nil {
 					return err
 				}
@@ -2386,11 +2279,11 @@ func worklogAddCommand() *cobra.Command {
 					if err != nil {
 						return err
 					}
-					return writeEnvelopeWithResponseAndWarnings(cmd, "worklog.add", map[string]any{"issue": args[0], "worklog": worklog, "dry_run": false}, resp, pipeOut.Warnings)
+					return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "worklog.add", map[string]any{"issue": args[0], "worklog": worklog, "dry_run": false}, resp, pipeOut.Warnings)
 				}
 				return fmt.Errorf("jira base URL is required for worklog.add")
 			}
-			return writeEnvelopeWithWarnings(cmd, "worklog.add", map[string]any{
+			return cmdutil.WriteEnvelopeWithWarnings(cmd, "worklog.add", map[string]any{
 				"issue": args[0],
 				"worklog": map[string]any{
 					"time_spent_seconds": seconds,
@@ -2409,262 +2302,6 @@ func worklogAddCommand() *cobra.Command {
 	return cmd
 }
 
-func writeEnvelope(cmd *cobra.Command, command string, data any) error {
-	return writeEnvelopeWithWarnings(cmd, command, data, nil)
-}
-
-// writeEnvelopeWithRawWarnings emits the standard envelope shape with a
-// caller-supplied list of free-form warning maps. Necessary for warnings
-// whose schema (cache-truncated, rate-limit-during-paginate) carries
-// fields outside the cli.Warning struct's Type/Message/Field/Path/etc.
-// surface — see contracts/envelope-shapes.md.
-func writeEnvelopeWithRawWarnings(cmd *cobra.Command, command string, data any, warnings []map[string]any) error {
-	for _, cw := range collectedCredentialWarnings(cmd) {
-		warnings = append(warnings, map[string]any{
-			"type":    cw.Type,
-			"message": cw.Message,
-			"lossy":   cw.Lossy,
-		})
-	}
-	if useCompactOutput(cmd) {
-		// compact is the data payload without the envelope. Warnings have
-		// no envelope to ride in, so fold any non-empty warning set into
-		// the data so credential-cleanup and pagination notices stay
-		// visible to agents (they would otherwise be silently dropped).
-		return cli.WriteCompact(cmd.OutOrStdout(), foldRawWarningsIntoData(data, warnings))
-	}
-	if usePlainOutput(cmd) {
-		if err := cli.WriteCommandPlain(cmd.OutOrStdout(), command, data, plainOptionsForCommand(cmd)...); err != nil {
-			return err
-		}
-		return mirrorADFWarningsToStderr(cmd.ErrOrStderr(), rawWarningsToCLI(warnings))
-	}
-	body := map[string]any{
-		"ok": true,
-		"meta": map[string]any{
-			"command":    command,
-			"timestamp":  time.Now().UTC().Format(time.RFC3339),
-			"request_id": cli.NewRequestID(),
-		},
-		"data":     data,
-		"errors":   []any{},
-		"warnings": rawWarningsOrEmpty(warnings),
-	}
-	enc := json.NewEncoder(cmd.OutOrStdout())
-	enc.SetIndent("", "  ")
-	return enc.Encode(body)
-}
-
-// foldWarnings merges a non-empty warning slice into a compact-mode data
-// payload so a correctness warning survives a mode that has no envelope
-// to carry it. A map payload gets a "warnings" key alongside its existing
-// fields; a non-map payload (slice or scalar) is wrapped as
-// {"data": ..., "warnings": ...} so the warning is never silently
-// dropped. An empty warning set returns the data unchanged.
-func foldWarnings[T any](data any, warnings []T) any {
-	if len(warnings) == 0 {
-		return data
-	}
-	if m, ok := data.(map[string]any); ok {
-		out := copyAnyMap(m)
-		out["warnings"] = warnings
-		return out
-	}
-	return map[string]any{"data": data, "warnings": warnings}
-}
-
-// foldRawWarningsIntoData folds a raw map-shaped warning slice into a
-// compact payload. See foldWarnings.
-func foldRawWarningsIntoData(data any, warnings []map[string]any) any {
-	return foldWarnings(data, warnings)
-}
-
-// foldWarningsIntoData folds a typed cli.Warning slice into a compact
-// payload. See foldWarnings.
-func foldWarningsIntoData(data any, warnings []cli.Warning) any {
-	return foldWarnings(data, warnings)
-}
-
-func rawWarningsOrEmpty(w []map[string]any) []map[string]any {
-	if w == nil {
-		return []map[string]any{}
-	}
-	return w
-}
-
-func rawWarningsToCLI(warnings []map[string]any) []cli.Warning {
-	out := make([]cli.Warning, 0, len(warnings))
-	for _, warning := range warnings {
-		if len(warning) == 0 {
-			continue
-		}
-		out = append(out, cli.Warning{
-			Type:    stringField(warning, "type"),
-			Message: rawWarningMessage(warning),
-			Field:   stringField(warning, "field"),
-			Path:    stringField(warning, "path"),
-			Lossy:   boolField(warning, "lossy"),
-		})
-	}
-	return out
-}
-
-func rawWarningMessage(warning map[string]any) string {
-	for _, key := range []string{"message", "remediation", "reason", "type"} {
-		if value := stringField(warning, key); value != "" {
-			return value
-		}
-	}
-	return "warning"
-}
-
-func stringField(m map[string]any, key string) string {
-	if v, ok := m[key].(string); ok {
-		return v
-	}
-	if v, ok := m[key]; ok && v != nil {
-		return fmt.Sprint(v)
-	}
-	return ""
-}
-
-func boolField(m map[string]any, key string) bool {
-	if v, ok := m[key].(bool); ok {
-		return v
-	}
-	return false
-}
-
-// writeEnvelopeWithWarnings is the warning-emitting envelope entry
-// point — every command emitting structured warnings (typically from
-// pipeline.RunMutation) calls this so warnings travel in the envelope
-// under JSON mode and mirror to stderr under TTY/--plain (via the
-// route helper).
-func writeEnvelopeWithWarnings(cmd *cobra.Command, command string, data any, warnings []adf.Warning) error {
-	cliWarnings := make([]cli.Warning, 0, len(warnings))
-	for _, w := range warnings {
-		cliWarnings = append(cliWarnings, cli.WarningFrom(w))
-	}
-	cliWarnings = append(cliWarnings, collectedCredentialWarnings(cmd)...)
-	if useCompactOutput(cmd) {
-		// compact has no envelope; fold warnings into the data so a failed
-		// credential cleanup or other correctness notice is not lost.
-		return cli.WriteCompact(cmd.OutOrStdout(), foldWarningsIntoData(data, cliWarnings))
-	}
-	if usePlainOutput(cmd) {
-		// Data on stdout, warnings on stderr as clog WRN.
-		if err := cli.WriteCommandPlain(cmd.OutOrStdout(), command, data, plainOptionsForCommand(cmd)...); err != nil {
-			return err
-		}
-		return mirrorADFWarningsToStderr(cmd.ErrOrStderr(), cliWarnings)
-	}
-	env := cli.Envelope{
-		OK: true,
-		Meta: cli.Meta{
-			Command:   command,
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
-			RequestID: cli.NewRequestID(),
-		},
-		Data:     data,
-		Errors:   []cli.Error{},
-		Warnings: cliWarnings,
-	}
-	if env.Warnings == nil {
-		env.Warnings = []cli.Warning{}
-	}
-	return cli.WriteEnvelope(cmd.OutOrStdout(), env)
-}
-
-func writeEnvelopeWithResponse(cmd *cobra.Command, command string, data any, resp *jira.Response) error {
-	return writeEnvelopeWithResponseAndWarnings(cmd, command, data, resp, nil)
-}
-
-// writeEnvelopeWithResponseAndWarnings is the warning-emitting
-// envelope entry point for commands that BOTH have a paginated/HTTP
-// response AND need to surface
-// pipeline warnings (e.g., live-submit issue create / edit / comment /
-// worklog where the pipeline has already validated and produced
-// best-effort warnings before the API call). Mirrors
-// writeEnvelopeWithWarnings's TTY routing for plain mode so the data
-// stays on stdout and warnings mirror to stderr as clog WRN lines.
-func writeEnvelopeWithResponseAndWarnings(cmd *cobra.Command, command string, data any, resp *jira.Response, warnings []adf.Warning) error {
-	if resp == nil {
-		// writeEnvelopeWithWarnings collects the credential warnings itself.
-		return writeEnvelopeWithWarnings(cmd, command, data, warnings)
-	}
-	cliWarnings := make([]cli.Warning, 0, len(warnings))
-	for _, w := range warnings {
-		cliWarnings = append(cliWarnings, cli.WarningFrom(w))
-	}
-	cliWarnings = append(cliWarnings, collectedCredentialWarnings(cmd)...)
-	if useCompactOutput(cmd) {
-		if m, ok := data.(map[string]any); ok {
-			m["pagination"] = paginationFromResponse(resp)
-			return cli.WriteCompact(cmd.OutOrStdout(), foldWarningsIntoData(m, cliWarnings))
-		}
-		return cli.WriteCompact(cmd.OutOrStdout(), data)
-	}
-	if usePlainOutput(cmd) {
-		if err := cli.WriteCommandPlain(cmd.OutOrStdout(), command, data, plainOptionsForCommand(cmd)...); err != nil {
-			return err
-		}
-		return mirrorADFWarningsToStderr(cmd.ErrOrStderr(), cliWarnings)
-	}
-	env := cli.Envelope{
-		OK: true,
-		Meta: cli.Meta{
-			Command:    command,
-			Timestamp:  time.Now().UTC().Format(time.RFC3339),
-			RequestID:  cli.NewRequestID(),
-			Pagination: paginationFromResponse(resp),
-		},
-		Data:     data,
-		Errors:   []cli.Error{},
-		Warnings: cliWarnings,
-	}
-	if env.Warnings == nil {
-		env.Warnings = []cli.Warning{}
-	}
-	return cli.WriteEnvelope(cmd.OutOrStdout(), env)
-}
-
-// mirrorADFWarningsToStderr is a thin wrapper around cli.RouteWarnings
-// for the plain-mode warning-only path used by both
-// writeEnvelopeWithWarnings and writeEnvelopeWithResponseAndWarnings.
-func mirrorADFWarningsToStderr(stderr io.Writer, warnings []cli.Warning) error {
-	if len(warnings) == 0 || stderr == nil {
-		return nil
-	}
-	return cli.RouteWarnings(cli.RouteOptions{
-		Stderr:   stderr,
-		Stdout:   io.Discard, // data was already written above
-		Mode:     cli.RoutePlain,
-		Command:  "",
-		Data:     map[string]any{}, // no-op data, we only want the WRN lines
-		Warnings: warnings,
-	})
-}
-
-func plainOptionsForCommand(cmd *cobra.Command) []cli.PlainOption {
-	det := DetectorFromContext(cmd)
-	opts := []cli.PlainOption{
-		cli.WithPlainTTY(det.IsTTY),
-		cli.WithPlainTermWidth(terminal.Width(os.Stdout)),
-	}
-	if baseURL := plainBaseURL(cmd); baseURL != "" {
-		opts = append(opts, cli.WithPlainBaseURL(baseURL))
-	}
-	return opts
-}
-
-func plainBaseURL(cmd *cobra.Command) string {
-	cfg, err := config.Load(config.WithPath(configPath(cmd)))
-	if err != nil {
-		return ""
-	}
-	return activeProfile(cmd, cfg).BaseURL
-}
-
 func epicCommand() *cobra.Command {
 	cmd := groupCommand("epic", "Work with Jira epics", "resources")
 	cmd.AddCommand(epicListCommand())
@@ -2680,7 +2317,7 @@ func epicListCommand() *cobra.Command {
 		Short: "List epics",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, _, ok, err := jiraClientForCommand(cmd)
+			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -2689,9 +2326,9 @@ func epicListCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return writeEnvelopeWithResponse(cmd, "epic.list", map[string]any{"jql": "issuetype = Epic", "epics": epics, "detail": false}, resp)
+				return cmdutil.WriteEnvelopeWithResponse(cmd, "epic.list", map[string]any{"jql": "issuetype = Epic", "epics": epics, "detail": false}, resp)
 			}
-			return writeEnvelope(cmd, "epic.list", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "epic.list", map[string]any{
 				"jql":    "issuetype = Epic",
 				"epics":  []any{},
 				"detail": false,
@@ -2706,12 +2343,12 @@ func epicBoardCommand() *cobra.Command {
 		Short: "Open the epic board",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, _, ok, err := jiraClientForCommand(cmd)
+			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
 			if !ok {
-				return writeEnvelope(cmd, "epic.board", map[string]any{
+				return cmdutil.WriteEnvelope(cmd, "epic.board", map[string]any{
 					"epics":  []any{},
 					"totals": emptyEpicCounts(),
 				})
@@ -2753,7 +2390,7 @@ func epicBoardCommand() *cobra.Command {
 					"counts":  counts,
 				})
 			}
-			return writeEnvelope(cmd, "epic.board", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "epic.board", map[string]any{
 				"epics":  rows,
 				"totals": totals,
 			})
@@ -2773,7 +2410,7 @@ func epicAddCommand() *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !dryRun {
-				client, _, ok, err := jiraClientForCommand(cmd)
+				client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 				if err != nil {
 					return err
 				}
@@ -2782,11 +2419,11 @@ func epicAddCommand() *cobra.Command {
 					if err != nil {
 						return err
 					}
-					return writeEnvelopeWithResponse(cmd, "epic.add", map[string]any{"issue": args[0], "epic": args[1], "dry_run": false, "added": true}, resp)
+					return cmdutil.WriteEnvelopeWithResponse(cmd, "epic.add", map[string]any{"issue": args[0], "epic": args[1], "dry_run": false, "added": true}, resp)
 				}
 				return fmt.Errorf("jira base URL is required for epic.add")
 			}
-			return writeEnvelope(cmd, "epic.add", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "epic.add", map[string]any{
 				"issue":   args[0],
 				"epic":    args[1],
 				"dry_run": dryRun,
@@ -2806,7 +2443,7 @@ func epicRemoveCommand() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !dryRun {
-				client, _, ok, err := jiraClientForCommand(cmd)
+				client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 				if err != nil {
 					return err
 				}
@@ -2815,11 +2452,11 @@ func epicRemoveCommand() *cobra.Command {
 					if err != nil {
 						return err
 					}
-					return writeEnvelopeWithResponse(cmd, "epic.remove", map[string]any{"issue": args[0], "dry_run": false, "removed": true}, resp)
+					return cmdutil.WriteEnvelopeWithResponse(cmd, "epic.remove", map[string]any{"issue": args[0], "dry_run": false, "removed": true}, resp)
 				}
 				return fmt.Errorf("jira base URL is required for epic.remove")
 			}
-			return writeEnvelope(cmd, "epic.remove", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "epic.remove", map[string]any{
 				"issue":   args[0],
 				"dry_run": dryRun,
 				"removed": !dryRun,
@@ -2853,7 +2490,7 @@ func searchJQLCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			client, _, ok, err := jiraClientForCommand(cmd)
+			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -2866,9 +2503,9 @@ func searchJQLCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return writeEnvelopeWithResponse(cmd, "search.jql", map[string]any{"source": "inline", "jql": args[0], "issues": issueOutput(issues, detail)}, resp)
+				return cmdutil.WriteEnvelopeWithResponse(cmd, "search.jql", map[string]any{"source": "inline", "jql": args[0], "issues": issueOutput(issues, detail)}, resp)
 			}
-			return writeEnvelope(cmd, "search.jql", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "search.jql", map[string]any{
 				"source": "inline",
 				"jql":    args[0],
 				"issues": []any{},
@@ -2890,7 +2527,7 @@ func searchSavedCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
 			}
@@ -2902,7 +2539,7 @@ func searchSavedCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("saved query %q not found", args[0])
 			}
-			client, _, hasClient, err := jiraClientForCommand(cmd)
+			client, _, hasClient, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -2929,7 +2566,7 @@ func searchSavedCommand() *cobra.Command {
 				"jql":         query.JQL,
 				"issues":      issues,
 			}
-			return writeEnvelopeWithResponse(cmd, "search.saved", data, resp)
+			return cmdutil.WriteEnvelopeWithResponse(cmd, "search.saved", data, resp)
 		},
 	}
 	addSearchOutputFlags(cmd, &opts)
@@ -2971,7 +2608,7 @@ func worklogListCommand() *cobra.Command {
 		Short: "List worklogs",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, _, ok, err := jiraClientForCommand(cmd)
+			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -2980,9 +2617,9 @@ func worklogListCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return writeEnvelopeWithResponse(cmd, "worklog.list", map[string]any{"issue": args[0], "worklogs": worklogs}, resp)
+				return cmdutil.WriteEnvelopeWithResponse(cmd, "worklog.list", map[string]any{"issue": args[0], "worklogs": worklogs}, resp)
 			}
-			return writeEnvelope(cmd, "worklog.list", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "worklog.list", map[string]any{
 				"issue":    args[0],
 				"worklogs": []any{},
 			})
@@ -3007,7 +2644,7 @@ func configThemeCommand() *cobra.Command {
 		Short: "Manage TUI theme configuration",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := config.LoadOrInit(config.WithPath(configPath(cmd)))
+			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
 			}
@@ -3024,11 +2661,11 @@ func configThemeCommand() *cobra.Command {
 				if err := cfg.Validate(); err != nil {
 					return err
 				}
-				if err := config.Save(configPath(cmd), cfg); err != nil {
+				if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
 					return err
 				}
 			}
-			return writeEnvelope(cmd, "config.theme", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "config.theme", map[string]any{
 				"name":    cfg.Theme.Name,
 				"path":    cfg.Theme.Path,
 				"changed": changed,
@@ -3047,7 +2684,7 @@ func configInitCommand() *cobra.Command {
 		Short: "Create initial configuration",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			profile := requestedProfile(cmd)
+			profile := cmdutil.RequestedProfile(cmd)
 			if profile == "" {
 				profile = "default"
 			}
@@ -3070,10 +2707,10 @@ func configInitCommand() *cobra.Command {
 			if err := cfg.Validate(); err != nil {
 				return err
 			}
-			if err := config.Save(configPath(cmd), &cfg); err != nil {
+			if err := config.Save(cmdutil.ConfigPath(cmd), &cfg); err != nil {
 				return err
 			}
-			return writeEnvelope(cmd, "config.init", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "config.init", map[string]any{
 				"profile":     profile,
 				"base_url":    baseURL,
 				"auth_type":   authType,
@@ -3094,7 +2731,7 @@ func configProfileCommand() *cobra.Command {
 		Short: "List configured profiles",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
 			}
@@ -3105,7 +2742,7 @@ func configProfileCommand() *cobra.Command {
 					"active": p.Name == cfg.DefaultProfile,
 				})
 			}
-			return writeEnvelope(cmd, "config.profile", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "config.profile", map[string]any{
 				"active_profile": cfg.DefaultProfile,
 				"profiles":       profiles,
 			})
@@ -3121,7 +2758,7 @@ func configGetCommand() *cobra.Command {
 		Annotations:       map[string]string{"clib": "dynamic-args='configkey'"},
 		ValidArgsFunction: completeConfigKeys,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load(config.WithPath(configPath(cmd)))
+			cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
 			}
@@ -3129,7 +2766,7 @@ func configGetCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("unknown config key %q", args[0])
 			}
-			return writeEnvelope(cmd, "config.get", map[string]any{"key": args[0], "value": val})
+			return cmdutil.WriteEnvelope(cmd, "config.get", map[string]any{"key": args[0], "value": val})
 		},
 	}
 }
@@ -3142,7 +2779,7 @@ func configSetCommand() *cobra.Command {
 		Annotations:       map[string]string{"clib": "dynamic-args='configkey,configvalue'"},
 		ValidArgsFunction: completeConfigSetArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadOrInit(config.WithPath(configPath(cmd)))
+			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
 			}
@@ -3152,17 +2789,17 @@ func configSetCommand() *cobra.Command {
 			if err := cfg.Validate(); err != nil {
 				return err
 			}
-			if err := config.Save(configPath(cmd), cfg); err != nil {
+			if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
 				return err
 			}
-			return writeEnvelope(cmd, "config.set", map[string]any{"key": args[0], "value": args[1]})
+			return cmdutil.WriteEnvelope(cmd, "config.set", map[string]any{"key": args[0], "value": args[1]})
 		},
 	}
 }
 
 // completeProfileNames completes the names of all profiles in the config.
 func completeProfileNames(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := config.Load(config.WithPath(configPath(cmd)))
+	cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -3177,7 +2814,7 @@ func completeProfileNames(cmd *cobra.Command, _ []string, _ string) ([]string, c
 // expanded for each present profile) along with its description. Falls back
 // to template form when the config can't be loaded.
 func completeConfigKeys(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-	cfg, _ := config.Load(config.WithPath(configPath(cmd)))
+	cfg, _ := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 	keys := config.Keys(cfg)
 	out := make([]string, len(keys))
 	for i, k := range keys {
@@ -3201,11 +2838,6 @@ func completeConfigSetArgs(cmd *cobra.Command, args []string, _ string) ([]strin
 	return nil, cobra.ShellCompDirectiveNoFileComp
 }
 
-func configPath(cmd *cobra.Command) string {
-	path, _ := cmd.Root().PersistentFlags().GetString("config")
-	return path
-}
-
 func groupCommand(use, short, group string) *cobra.Command {
 	return &cobra.Command{
 		Use:     use,
@@ -3214,174 +2846,16 @@ func groupCommand(use, short, group string) *cobra.Command {
 	}
 }
 
-func requestedProfile(cmd *cobra.Command) string {
-	profile, _ := cmd.Root().PersistentFlags().GetString("profile")
-	return profile
-}
-
-// resolvedOutputMode returns the output mode resolved by PersistentPreRunE
-// from the --output flag and terminal/agent detection. It is the single
-// source of truth for every command output helper.
-func resolvedOutputMode(cmd *cobra.Command) cli.Mode {
-	return DetectorFromContext(cmd).Mode
-}
-
-func useCompactOutput(cmd *cobra.Command) bool {
-	return resolvedOutputMode(cmd) == cli.ModeCompact
-}
-
-func usePlainOutput(cmd *cobra.Command) bool {
-	mode := resolvedOutputMode(cmd)
-	return mode == cli.ModePlain || mode == cli.ModeTUI
-}
-
 func workdaySecondsForCommand(cmd *cobra.Command) int {
-	cfg, err := config.Load(config.WithPath(configPath(cmd)))
+	cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 	if err != nil {
 		return config.DefaultWorkdaySeconds
 	}
-	profile := activeProfile(cmd, cfg)
+	profile := cmdutil.ActiveProfile(cmd, cfg)
 	if profile.WorkdaySeconds <= 0 {
 		return config.DefaultWorkdaySeconds
 	}
 	return profile.WorkdaySeconds
-}
-
-func activeProfile(cmd *cobra.Command, cfg *config.Config) config.Profile {
-	return cfg.Profile(requestedProfile(cmd))
-}
-
-// profileForCommand resolves the active profile for a command WITHOUT
-// constructing a Jira client or touching any credential backend. Local
-// preview and dry-run paths use this so a validation-only run cannot fail
-// on a locked keyring or an offline 1Password backend. Commands that make
-// live HTTP calls must still go through jiraClientForCommand.
-func profileForCommand(cmd *cobra.Command) (config.Profile, error) {
-	cfg, err := config.Load(config.WithPath(configPath(cmd)))
-	if err != nil {
-		return config.Profile{}, err
-	}
-	return cfg.ResolveProfile(requestedProfile(cmd))
-}
-
-func profileForEnvelope(cmd *cobra.Command) string {
-	if profile := requestedProfile(cmd); profile != "" {
-		return profile
-	}
-	cfg, err := config.Load(config.WithPath(configPath(cmd)))
-	if err != nil || cfg.DefaultProfile == "" {
-		return "default"
-	}
-	return cfg.DefaultProfile
-}
-
-func credentialStoreFor(backend config.SecretBackend) config.CredentialStore {
-	if backend == config.SecretBackendOnePassword {
-		return config.OnePasswordStore{}
-	}
-	return config.KeyringStore{}
-}
-
-// credentialWarnSink is a per-command collector for credential notices (a
-// migration cleanup note, a kept user-named 1Password item on logout, an
-// orphaned credential after a site change). It is installed into the command
-// context by PersistentPreRunE, so each command invocation owns a fresh,
-// isolated sink — a notice raised by one command can never reach another.
-type credentialWarnSink struct {
-	mu    sync.Mutex
-	warns []string
-}
-
-func (s *credentialWarnSink) add(warns []string) {
-	if len(warns) == 0 {
-		return
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, w := range warns {
-		if !slices.Contains(s.warns, w) {
-			s.warns = append(s.warns, w)
-		}
-	}
-}
-
-func (s *credentialWarnSink) collected() []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return slices.Clone(s.warns)
-}
-
-// withCredentialWarnSink returns a context carrying a fresh credential-warning
-// sink. PersistentPreRunE installs one per command invocation.
-func withCredentialWarnSink(ctx context.Context) context.Context {
-	return context.WithValue(ctx, credentialWarnSinkKey, &credentialWarnSink{})
-}
-
-// recordCredentialWarnings appends resolution warnings to the command's sink,
-// if one is installed. Commands without a sink (direct test calls) drop the
-// warnings silently — they are diagnostics, not results.
-func recordCredentialWarnings(cmd *cobra.Command, warns []string) {
-	if len(warns) == 0 || cmd == nil {
-		return
-	}
-	if sink, ok := cmd.Context().Value(credentialWarnSinkKey).(*credentialWarnSink); ok {
-		sink.add(warns)
-	}
-}
-
-// collectedCredentialWarnings returns the credential warnings recorded for the
-// current command as envelope warnings. The sink is per-command, so this
-// only ever returns warnings from the command currently executing.
-func collectedCredentialWarnings(cmd *cobra.Command) []cli.Warning {
-	if cmd == nil {
-		return nil
-	}
-	sink, ok := cmd.Context().Value(credentialWarnSinkKey).(*credentialWarnSink)
-	if !ok {
-		return nil
-	}
-	return credentialWarningsToEnvelope(sink.collected())
-}
-
-// credentialWarningsToEnvelope renders credential notices — a migration
-// cleanup note, a kept user-named 1Password item, an orphaned credential
-// after a site change — as envelope warnings under one informational type.
-func credentialWarningsToEnvelope(msgs []string) []cli.Warning {
-	if len(msgs) == 0 {
-		return nil
-	}
-	out := make([]cli.Warning, 0, len(msgs))
-	for _, msg := range msgs {
-		out = append(out, cli.Warning{
-			Type:    "credential_notice",
-			Message: msg,
-			Lossy:   false,
-		})
-	}
-	return out
-}
-
-// existingProfileOrDefault returns a copy of the named profile from cfg if it
-// exists, or a new Profile with the given name. Used by authLoginCommand to
-// merge a partial update instead of wholesale replacing the persisted profile
-// (: preserves fields not supplied to `auth login`).
-func existingProfileOrDefault(cfg *config.Config, name string) config.Profile {
-	for _, p := range cfg.Profiles {
-		if p.Name == name {
-			return p
-		}
-	}
-	return config.Profile{Name: name}
-}
-
-func upsertProfile(cfg *config.Config, profile config.Profile) {
-	for i := range cfg.Profiles {
-		if cfg.Profiles[i].Name == profile.Name {
-			cfg.Profiles[i] = profile
-			return
-		}
-	}
-	cfg.Profiles = append(cfg.Profiles, profile)
 }
 
 // profileBaseURLEnvVar returns the name of the environment variable that
@@ -3390,16 +2864,6 @@ func upsertProfile(cfg *config.Config, profile config.Profile) {
 // with '-' replaced by '_'.
 func profileBaseURLEnvVar(name string) string {
 	return "JIRA_PROFILE_" + strings.ToUpper(strings.ReplaceAll(name, "-", "_")) + "_BASE_URL"
-}
-
-// secretRefFor derives the credential identity for a profile under a given
-// backend. The credential is keyed by the profile's Jira site host and name;
-// an unsafe profile name is rejected here rather than producing a malformed
-// keyring entry.
-func secretRefFor(profile config.Profile, backend config.SecretBackend) (config.SecretRef, error) {
-	scoped := profile
-	scoped.SecretBackend = backend
-	return config.CredentialIdentity(scoped)
 }
 
 // revokeOldCredentialOnRelogin revokes the previous credential after an auth
@@ -3419,15 +2883,15 @@ func revokeOldCredentialOnRelogin(cmd *cobra.Command, previous, updated config.P
 	if previous.BaseURL == "" {
 		return ""
 	}
-	oldRef, err := secretRefFor(previous, previous.SecretBackend)
+	oldRef, err := cmdutil.SecretRefFor(previous, previous.SecretBackend)
 	if err != nil {
 		return ""
 	}
-	newRef, err := secretRefFor(updated, updated.SecretBackend)
+	newRef, err := cmdutil.SecretRefFor(updated, updated.SecretBackend)
 	if err != nil {
 		return ""
 	}
-	return revokeOldCredential(cmd.Context(), credentialStoreFor(previous.SecretBackend), oldRef, newRef)
+	return revokeOldCredential(cmd.Context(), cmdutil.CredentialStoreFor(previous.SecretBackend), oldRef, newRef)
 }
 
 // revokeOldCredential revokes the credential at oldRef when it addresses
@@ -3458,95 +2922,6 @@ func applyMigratedBackends(cfg *config.Config, migrations []config.CredentialMig
 		if m.ProfileIndex >= 0 && m.ProfileIndex < len(cfg.Profiles) {
 			cfg.Profiles[m.ProfileIndex].SecretBackend = target
 		}
-	}
-}
-
-func jiraClientForCommand(cmd *cobra.Command) (*jira.Client, config.Profile, bool, error) {
-	cfg, err := config.Load(config.WithPath(configPath(cmd)))
-	if err != nil {
-		return nil, config.Profile{}, false, err
-	}
-	return jiraClientForProfile(cmd, activeProfile(cmd, cfg))
-}
-
-// jiraClientForProfile builds a Jira client targeting an explicit profile
-// rather than the env-overlaid active profile. Read-modify-write commands
-// that persist server data (`auth whoami --save`) use this so the live
-// request and the saved record come from the same file-backed profile: a
-// JIRA_PROFILE_*_BASE_URL overlay cannot redirect the request to another
-// tenant whose identity would then be written into the file profile.
-// Credential env sources (token/password env vars) are still honored.
-func jiraClientForProfile(cmd *cobra.Command, profile config.Profile) (*jira.Client, config.Profile, bool, error) {
-	if profile.BaseURL == "" {
-		return nil, profile, false, nil
-	}
-	debug, _ := cmd.Root().PersistentFlags().GetBool("debug")
-	opts := []jira.Option{
-		jira.WithBaseURL(profile.BaseURL),
-		jira.WithHTTPClient(&http.Client{Timeout: time.Duration(profile.TimeoutSeconds) * time.Second}),
-		// Single source of truth for the read-only gate. Set on the client
-		// so EVERY mutation across EVERY command is automatically refused
-		// without per-command boilerplate that's easy to forget.
-		jira.WithReadOnly(readOnlyEnabled(cmd)),
-		// Service-level dry-run guard: when --dry-run is set, the client
-		// refuses every state-changing request. Defense in depth behind
-		// the command-layer dry-run branches.
-		jira.WithDryRun(dryRunRequested(cmd)),
-		jira.WithDebug(debug),
-	}
-	if profile.AuthType == config.AuthTypeMTLS {
-		if profile.MTLSCertRef == "" || profile.MTLSKeyRef == "" {
-			return nil, profile, false, fmt.Errorf("mTLS profile %q requires mtls_cert_ref and mtls_key_ref", profile.Name)
-		}
-		httpClient, err := jira.MTLSHTTPClient(profile.MTLSCertRef, profile.MTLSKeyRef, time.Duration(profile.TimeoutSeconds)*time.Second)
-		if err != nil {
-			return nil, profile, false, err
-		}
-		opts = append(opts, jira.WithHTTPClient(httpClient))
-	} else {
-		ref, refErr := secretRefFor(profile, profile.SecretBackend)
-		if refErr != nil {
-			return nil, profile, false, refErr
-		}
-		secret, secretErr := config.ResolveCredential(cmd.Context(), credentialStoreFor(profile.SecretBackend), ref)
-		if secretErr != nil && !isLocalBaseURL(profile.BaseURL) {
-			return nil, profile, false, fmt.Errorf("credential for profile %q is required: %w", profile.Name, secretErr)
-		}
-		if secret != "" {
-			switch profile.AuthType {
-			case config.AuthTypeBasic, config.AuthTypeToken:
-				opts = append(opts, jira.WithBasicAuth(firstNonEmpty(profile.Email, profile.Username), secret))
-			case config.AuthTypePAT:
-				opts = append(opts, jira.WithBearerToken(secret))
-			}
-		}
-	}
-	client, err := jira.NewClientE(opts...)
-	if err != nil {
-		return nil, profile, false, err
-	}
-	return client, profile, true, nil
-}
-
-func isLocalBaseURL(raw string) bool {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return false
-	}
-	host := u.Hostname()
-	return host == "localhost" || host == "127.0.0.1" || host == "::1"
-}
-
-func paginationFromResponse(resp *jira.Response) *cli.Pagination {
-	if resp == nil {
-		return nil
-	}
-	return &cli.Pagination{
-		StartAt:    resp.StartAt, // pagination-exempt: output-shape, not consumer cursor
-		MaxResults: resp.MaxResults,
-		Total:      resp.Total,
-		IsLast:     resp.NextCursor() == "",
-		NextCursor: resp.NextCursor(),
 	}
 }
 
@@ -3611,66 +2986,6 @@ func assigneeSummary(user *jira.User) map[string]any {
 	return out
 }
 
-func readJSONFile(path string, dst any) error {
-	r, err := stdininput.JSONInput(path)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = r.Close() }()
-	dec := json.NewDecoder(r)
-	if err := dec.Decode(dst); err != nil {
-		return err
-	}
-	// A --json-input file must hold exactly one JSON document. Decode a
-	// second value into a throwaway target: io.EOF is the only acceptable
-	// result. Anything else — a second value, a stray trailing `}`/`]`, or
-	// a syntax error — means a malformed or concatenated payload. A
-	// Decoder.More() check is insufficient: More() reports false for a
-	// trailing structural byte, letting `{"summary":"ok"}}` through.
-	var trailing json.RawMessage
-	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return fmt.Errorf("invalid json input %q: unexpected data after the JSON value", path)
-	}
-	return nil
-}
-
-func stringFromAny(v any) string {
-	switch v := v.(type) {
-	case string:
-		return v
-	default:
-		return ""
-	}
-}
-
-// wireObjectString reads a string field out of a Jira wire object value
-// (e.g. the "key" of a {"key":"KAN"} project object). It returns "" when
-// the value is not an object or the field is absent / not a string.
-func wireObjectString(v any, key string) string {
-	m, ok := v.(map[string]any)
-	if !ok {
-		return ""
-	}
-	return stringFromAny(m[key])
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
-// extractNamedADFDocs walks a payload map, finds every value whose JSON shape
-// is an ADF root document ({"type":"doc","version":N,"content":[...]}), parses
-// it, and returns a map keyed by the original field name. Detection is by
-// value shape, not key suffix — Jira's API expects ADF under bare field names
-// (`description`, `environment`, `customfield_NNNN`), and a key-suffix
-// convention (`description_adf`) would be forwarded verbatim and rejected by
-// Jira as an unknown field. The CLI now validates whichever ADF-shaped values
-// the caller supplies under their actual destination key.
 func extractNamedADFDocs(payload map[string]any) (map[string]adf.Document, error) {
 	var named map[string]adf.Document
 	for k, v := range payload {

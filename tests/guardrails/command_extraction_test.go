@@ -29,6 +29,10 @@ const cliPackageRoot = "../../internal/cli"
 // rules. The os.Exit ban still applies tree-wide.
 var commandPackageExemptDirs = map[string]bool{
 	"runtime": true,
+	// cmdutil is the shared command-helper layer (envelope writers,
+	// client/profile accessors, output-mode and gate helpers), not a
+	// command-domain package — it is a dependency boundary like runtime.
+	"cmdutil": true,
 }
 
 // cliGoFiles returns every non-test .go file under internal/cli, keyed

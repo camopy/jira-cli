@@ -8,14 +8,15 @@ import (
 	"testing"
 
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/spf13/cobra"
 )
 
 func TestTTYCommandsDefaultToHumanClogOutput(t *testing.T) {
 	cmd, stdout, _ := outputModeTestCommand(cli.ModePlain)
 
-	if err := writeEnvelope(cmd, "issue.list", map[string]any{"issues": []any{}}); err != nil {
-		t.Fatalf("writeEnvelope() error = %v", err)
+	if err := cmdutil.WriteEnvelope(cmd, "issue.list", map[string]any{"issues": []any{}}); err != nil {
+		t.Fatalf("cmdutil.WriteEnvelope() error = %v", err)
 	}
 	got := stdout.String()
 	if strings.Contains(got, `"meta"`) || strings.Contains(got, `"errors"`) {
@@ -29,8 +30,8 @@ func TestTTYCommandsDefaultToHumanClogOutput(t *testing.T) {
 func TestNonTTYCommandsDefaultToJSONEnvelope(t *testing.T) {
 	cmd, stdout, _ := outputModeTestCommand(cli.ModeJSON)
 
-	if err := writeEnvelope(cmd, "issue.list", map[string]any{"issues": []any{}}); err != nil {
-		t.Fatalf("writeEnvelope() error = %v", err)
+	if err := cmdutil.WriteEnvelope(cmd, "issue.list", map[string]any{"issues": []any{}}); err != nil {
+		t.Fatalf("cmdutil.WriteEnvelope() error = %v", err)
 	}
 	got := stdout.String()
 	if !strings.Contains(got, `"meta"`) || !strings.Contains(got, `"errors"`) {
@@ -42,8 +43,8 @@ func TestNonTTYCommandsDefaultToJSONEnvelope(t *testing.T) {
 // honor by emitting the full envelope even when the terminal is a TTY.
 func TestOutputJSONModeForcesEnvelope(t *testing.T) {
 	cmd, stdout, _ := outputModeTestCommand(cli.ModeJSON)
-	if err := writeEnvelope(cmd, "issue.list", map[string]any{"issues": []any{}}); err != nil {
-		t.Fatalf("writeEnvelope() error = %v", err)
+	if err := cmdutil.WriteEnvelope(cmd, "issue.list", map[string]any{"issues": []any{}}); err != nil {
+		t.Fatalf("cmdutil.WriteEnvelope() error = %v", err)
 	}
 	got := stdout.String()
 	if !strings.Contains(got, `"meta"`) || !strings.Contains(got, `"errors"`) || !strings.Contains(got, `"ok"`) {
@@ -55,8 +56,8 @@ func TestOutputJSONModeForcesEnvelope(t *testing.T) {
 // wrapper and emits the data payload only.
 func TestOutputCompactModeDropsEnvelope(t *testing.T) {
 	cmd, stdout, _ := outputModeTestCommand(cli.ModeCompact)
-	if err := writeEnvelope(cmd, "issue.list", map[string]any{"issues": []any{}}); err != nil {
-		t.Fatalf("writeEnvelope() error = %v", err)
+	if err := cmdutil.WriteEnvelope(cmd, "issue.list", map[string]any{"issues": []any{}}); err != nil {
+		t.Fatalf("cmdutil.WriteEnvelope() error = %v", err)
 	}
 	got := stdout.String()
 	if strings.Contains(got, `"meta"`) {
@@ -83,10 +84,10 @@ func TestRemovedLegacyFlagNamesAreNotOutputModes(t *testing.T) {
 // never be silently dropped, or a stale secret stays invisible.
 func TestCompactModePreservesCredentialCleanupWarning(t *testing.T) {
 	cmd, stdout, _ := outputModeTestCommand(cli.ModeCompact)
-	recordCredentialWarnings(cmd, []string{"revoking the previous credential failed: keyring locked"})
+	cmdutil.RecordCredentialWarnings(cmd, []string{"revoking the previous credential failed: keyring locked"})
 
-	if err := writeEnvelope(cmd, "auth.login", map[string]any{"profile": "work", "logged_in": true}); err != nil {
-		t.Fatalf("writeEnvelope() error = %v", err)
+	if err := cmdutil.WriteEnvelope(cmd, "auth.login", map[string]any{"profile": "work", "logged_in": true}); err != nil {
+		t.Fatalf("cmdutil.WriteEnvelope() error = %v", err)
 	}
 	got := stdout.String()
 	if strings.Contains(got, `"meta"`) {
@@ -100,12 +101,12 @@ func TestCompactModePreservesCredentialCleanupWarning(t *testing.T) {
 func TestPlainRawWarningsRouteToStderr(t *testing.T) {
 	cmd, stdout, stderr := outputModeTestCommand(cli.ModePlain)
 
-	err := writeEnvelopeWithRawWarnings(cmd, "cache.boards", map[string]any{"boards": []any{}}, []map[string]any{{
+	err := cmdutil.WriteEnvelopeWithRawWarnings(cmd, "cache.boards", map[string]any{"boards": []any{}}, []map[string]any{{
 		"type":    "rate-limit-during-paginate",
 		"message": "retry later",
 	}})
 	if err != nil {
-		t.Fatalf("writeEnvelopeWithRawWarnings() error = %v", err)
+		t.Fatalf("cmdutil.WriteEnvelopeWithRawWarnings() error = %v", err)
 	}
 	if strings.Contains(stdout.String(), "retry later") || strings.Contains(stdout.String(), "rate-limit-during-paginate") {
 		t.Fatalf("plain raw warning leaked to stdout:\n%s", stdout.String())
@@ -138,8 +139,8 @@ func TestIssueListPlainOutputHidesJQLUnlessDebug(t *testing.T) {
 		t.Fatalf("Set(output) error = %v", err)
 	}
 	data := issueListOutputData(cmd, []map[string]any{}, false, "assignee = currentUser() ORDER BY updated DESC")
-	if err := writeEnvelope(cmd, "issue.list", data); err != nil {
-		t.Fatalf("writeEnvelope() error = %v", err)
+	if err := cmdutil.WriteEnvelope(cmd, "issue.list", data); err != nil {
+		t.Fatalf("cmdutil.WriteEnvelope() error = %v", err)
 	}
 	if strings.Contains(stdout.String(), "jql=") {
 		t.Fatalf("issue list plain output leaked JQL without debug:\n%s", stdout.String())
@@ -156,8 +157,8 @@ func TestIssueListPlainOutputHidesJQLUnlessDebug(t *testing.T) {
 		t.Fatalf("Set(debug) error = %v", err)
 	}
 	data = issueListOutputData(cmd, []map[string]any{}, false, "assignee = currentUser() ORDER BY updated DESC")
-	if err := writeEnvelope(cmd, "issue.list", data); err != nil {
-		t.Fatalf("writeEnvelope(debug) error = %v", err)
+	if err := cmdutil.WriteEnvelope(cmd, "issue.list", data); err != nil {
+		t.Fatalf("cmdutil.WriteEnvelope(debug) error = %v", err)
 	}
 	if !strings.Contains(stdout.String(), "jql=") {
 		t.Fatalf("issue list debug output omitted JQL:\n%s", stdout.String())
@@ -191,8 +192,8 @@ func TestPlainOutputExtractsNestedADFText(t *testing.T) {
 			},
 		},
 	}
-	if err := writeEnvelope(cmd, "issue.comment", data); err != nil {
-		t.Fatalf("writeEnvelope() error = %v", err)
+	if err := cmdutil.WriteEnvelope(cmd, "issue.comment", data); err != nil {
+		t.Fatalf("cmdutil.WriteEnvelope() error = %v", err)
 	}
 	got := stdout.String()
 	if strings.Contains(got, "comment=1") || !strings.Contains(got, `comment.body="hello world"`) || !strings.Contains(got, "INF") {
@@ -231,8 +232,8 @@ func outputModeTestCommand(mode cli.Mode) (*cobra.Command, *bytes.Buffer, *bytes
 	root.SetErr(stderr)
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
-	ctx := context.WithValue(context.Background(), detectorKey, cli.Detection{Mode: mode, IsTTY: mode == cli.ModePlain})
-	ctx = withCredentialWarnSink(ctx)
+	ctx := cmdutil.WithDetector(context.Background(), cli.Detection{Mode: mode, IsTTY: mode == cli.ModePlain})
+	ctx = cmdutil.WithCredentialWarnSink(ctx)
 	cmd.SetContext(ctx)
 	return cmd, stdout, stderr
 }

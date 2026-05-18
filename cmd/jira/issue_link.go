@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -57,11 +58,11 @@ Default action — no sub-command:
 				return fmt.Errorf("validation: --to and --type are required")
 			}
 			if dryRun {
-				return writeEnvelope(cmd, "issue.link", map[string]any{
+				return cmdutil.WriteEnvelope(cmd, "issue.link", map[string]any{
 					"inward_issue": args[0], "outward_issue": to, "type": linkType, "dry_run": true,
 				})
 			}
-			client, _, ok, err := jiraClientForCommand(cmd)
+			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -74,7 +75,7 @@ Default action — no sub-command:
 			if err != nil {
 				return err
 			}
-			return writeEnvelopeWithResponse(cmd, "issue.link", map[string]any{
+			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.link", map[string]any{
 				"inward_issue": args[0], "outward_issue": to, "type": linkType, "dry_run": false,
 			}, resp)
 		},
@@ -110,7 +111,7 @@ func issueLinkListCommand() *cobra.Command {
 		Args:        cobra.ExactArgs(1),
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, _, ok, err := jiraClientForCommand(cmd)
+			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -121,7 +122,7 @@ func issueLinkListCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return writeEnvelope(cmd, "issue.link.list", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "issue.link.list", map[string]any{
 				"key":   args[0],
 				"links": links,
 				"count": len(links),
@@ -148,13 +149,13 @@ func issueLinkDeleteCommand() *cobra.Command {
 			noInput := noInputRequested(cmd)
 			key, linkID := args[0], args[1]
 			if dryRun {
-				return writeEnvelope(cmd, "issue.link.delete", map[string]any{
+				return cmdutil.WriteEnvelope(cmd, "issue.link.delete", map[string]any{
 					"key":     key,
 					"link_id": linkID,
 					"dry_run": true,
 				})
 			}
-			det := DetectorFromContext(cmd)
+			det := cmdutil.DetectorFromContext(cmd)
 			if !force {
 				if !det.IsTTY || det.Agent || noInput {
 					return fmt.Errorf("issue link delete requires --force in headless / agent / --no-input mode")
@@ -165,7 +166,7 @@ func issueLinkDeleteCommand() *cobra.Command {
 					return cli.NewPromptError(cli.PromptAborted, "link delete", nil)
 				}
 			}
-			client, _, ok, err := jiraClientForCommand(cmd)
+			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -179,7 +180,7 @@ func issueLinkDeleteCommand() *cobra.Command {
 			// data.link_id MUST echo the supplied id verbatim
 			// regardless of the source KEY — links are global; the
 			// CLI is explicit about which id was removed.
-			return writeEnvelopeWithResponse(cmd, "issue.link.delete", map[string]any{
+			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.link.delete", map[string]any{
 				"key":     key,
 				"link_id": linkID,
 				"deleted": true,
@@ -208,7 +209,7 @@ func issueLinkTypesCommand() *cobra.Command {
 		Short: "Show the configured link types in this Jira instance",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, profile, ok, err := jiraClientForCommand(cmd)
+			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -233,7 +234,7 @@ func issueLinkTypesCommand() *cobra.Command {
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
 			}
 			addCacheStateFields(envelopeData, cacheSourceState, len(types))
-			return writeEnvelope(cmd, "issue.link.types", envelopeData)
+			return cmdutil.WriteEnvelope(cmd, "issue.link.types", envelopeData)
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
@@ -249,5 +250,5 @@ func fetchLinkTypesForCache(cmd *cobra.Command, client *jira.Client) (json.RawMe
 	if err != nil {
 		return nil, err
 	}
-	return marshalNonNilSlice(types)
+	return cmdutil.MarshalNonNilSlice(types)
 }

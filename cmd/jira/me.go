@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -19,7 +20,7 @@ func meCommand() *cobra.Command {
 		GroupID: "configuration",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, profile, ok, err := jiraClientForCommand(cmd)
+			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -30,7 +31,7 @@ func meCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return writeEnvelope(cmd, "me", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "me", map[string]any{
 				"profile":       profile.Name,
 				"account_id":    user.AccountID,
 				"display_name":  user.DisplayName,

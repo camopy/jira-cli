@@ -16,17 +16,10 @@ import (
 	"github.com/gechr/clog"
 	"github.com/gechr/x/terminal"
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/cli/runtime"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-)
-
-type contextKey string
-
-const (
-	detectorKey contextKey = "detector"
-	// credentialWarnSinkKey carries the per-command credential-warning sink.
-	credentialWarnSinkKey contextKey = "credential-warn-sink"
 )
 
 // errCompletionHandled is returned by Execute when a shell-completion
@@ -128,11 +121,11 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	// ExecuteContextC, which seeds every command's context from main's
 	// signal-aware root context.
 	ctx := cmd.Context()
-	ctx = context.WithValue(ctx, detectorKey, det)
+	ctx = cmdutil.WithDetector(ctx, det)
 	// Install a fresh credential-warning sink for this command invocation
 	// so a legacy-keyring-fallback warning is scoped to the command that
 	// produced it and cannot bleed into another.
-	ctx = withCredentialWarnSink(ctx)
+	ctx = cmdutil.WithCredentialWarnSink(ctx)
 	cmd.SetContext(ctx)
 	event := clog.Debug().Str("mode", string(det.Mode))
 	if det.AgentName != "" {
@@ -148,7 +141,7 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 // interactive, print help for a human TTY, or emit JSON discovery for a
 // pipe/agent.
 func rootRun(cmd *cobra.Command, rt *runtime.Runtime) error {
-	det := DetectorFromContext(cmd)
+	det := cmdutil.DetectorFromContext(cmd)
 	interactive, _ := cmd.Root().PersistentFlags().GetBool("interactive")
 	if interactive && !runtimeStdoutIsTTY(rt) {
 		return fmt.Errorf("tui requires an interactive terminal")
@@ -491,9 +484,4 @@ func exitCodeForError(err error) int {
 // special case: every error envelope is built one way.
 func outputErrorFor(err error) cli.Error {
 	return cli.MapError(err)
-}
-
-func DetectorFromContext(cmd *cobra.Command) cli.Detection {
-	v, _ := cmd.Context().Value(detectorKey).(cli.Detection)
-	return v
 }

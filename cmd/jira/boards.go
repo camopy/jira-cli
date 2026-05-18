@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cache"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -46,7 +47,7 @@ func boardsListCommand() *cobra.Command {
 		Short: "List the boards visible to this profile",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, profile, ok, err := jiraClientForCommand(cmd)
+			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -79,7 +80,7 @@ func boardsListCommand() *cobra.Command {
 			}
 			addCacheStateFields(envelopeData, cacheSourceState, len(boards))
 			warnings := boardsTruncationWarnings(file)
-			return writeEnvelopeWithRawWarnings(cmd, "boards.list", envelopeData, warnings)
+			return cmdutil.WriteEnvelopeWithRawWarnings(cmd, "boards.list", envelopeData, warnings)
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a re-prime even when the cache is fresh")
@@ -235,6 +236,6 @@ func safeIntPtr(p *int) int {
 	return *p
 }
 
-// writeEnvelopeWithRawWarnings is the shared helper in commands.go for
+// cmdutil.WriteEnvelopeWithRawWarnings is the shared helper in commands.go for
 // emitting standard envelopes alongside free-form warning shapes (e.g.
 // the cache-truncated warning) that don't fit cli.Warning's typed fields.

@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/spf13/cobra"
 )
@@ -42,7 +43,7 @@ func IssueAttachmentCommand() *cobra.Command {
 // service binding. Returns ok=false when no base URL is configured
 // (matches the pattern used elsewhere in this package).
 func attachmentClient(cmd *cobra.Command) (jira.AttachmentService, bool, error) {
-	client, _, ok, err := jiraClientForCommand(cmd)
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
 		return nil, false, err
 	}
@@ -99,7 +100,7 @@ func issueAttachmentListCommand() *cobra.Command {
 					"next_page_token": nil,
 				},
 			}
-			return writeEnvelope(cmd, "issue.attachment.list", data)
+			return cmdutil.WriteEnvelope(cmd, "issue.attachment.list", data)
 		},
 	}
 	cmd.Flags().IntVar(&limit, "limit", 50, "Page size (max attachments returned without --all)")
@@ -137,7 +138,7 @@ func issueAttachmentAddCommand() *cobra.Command {
 				})
 			}
 			if dryRun {
-				return writeEnvelope(cmd, "issue.attachment.add", map[string]any{
+				return cmdutil.WriteEnvelope(cmd, "issue.attachment.add", map[string]any{
 					"key":     key,
 					"files":   previews,
 					"dry_run": true,
@@ -177,7 +178,7 @@ func issueAttachmentAddCommand() *cobra.Command {
 			for _, a := range uploaded {
 				rows = append(rows, attachmentToOutput(a))
 			}
-			return writeEnvelope(cmd, "issue.attachment.add", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "issue.attachment.add", map[string]any{
 				"key":         key,
 				"attachments": rows,
 				"dry_run":     false,
@@ -234,13 +235,13 @@ func issueAttachmentDeleteCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			key, attachmentID := args[0], args[1]
 			if dryRun {
-				return writeEnvelope(cmd, "issue.attachment.delete", map[string]any{
+				return cmdutil.WriteEnvelope(cmd, "issue.attachment.delete", map[string]any{
 					"key":           key,
 					"attachment_id": attachmentID,
 					"dry_run":       true,
 				})
 			}
-			det := DetectorFromContext(cmd)
+			det := cmdutil.DetectorFromContext(cmd)
 			noInput := noInputRequested(cmd)
 			// Destructive op MUST require --force under --no-input
 			// or any non-TTY / agent context. No interactive
@@ -265,7 +266,7 @@ func issueAttachmentDeleteCommand() *cobra.Command {
 			if _, err := service.Delete(cmd.Context(), attachmentID); err != nil {
 				return err
 			}
-			return writeEnvelope(cmd, "issue.attachment.delete", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "issue.attachment.delete", map[string]any{
 				"attachment_id": attachmentID,
 				"deleted":       true,
 			})
@@ -297,7 +298,7 @@ func issueAttachmentDownloadCommand() *cobra.Command {
 				}
 			}
 			if dryRun {
-				return writeEnvelope(cmd, "issue.attachment.download", map[string]any{
+				return cmdutil.WriteEnvelope(cmd, "issue.attachment.download", map[string]any{
 					"key":           key,
 					"attachment_id": attachmentID,
 					"mode":          string(mode),
@@ -336,7 +337,7 @@ func issueAttachmentDownloadCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return writeEnvelope(cmd, "issue.attachment.download", map[string]any{
+			return cmdutil.WriteEnvelope(cmd, "issue.attachment.download", map[string]any{
 				"attachment_id": attachmentID,
 				"written_to":    target,
 				"bytes":         wrote,

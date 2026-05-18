@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/adf"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jira/customfield"
 )
 
@@ -125,7 +126,7 @@ func agentADFMatrixCommand() *cobra.Command {
 			for _, r := range rows {
 				data = append(data, r)
 			}
-			return writeEnvelope(cmd, "agent.adf-matrix", data)
+			return cmdutil.WriteEnvelope(cmd, "agent.adf-matrix", data)
 		},
 	}
 }
@@ -144,7 +145,7 @@ func agentFieldTypesCommand() *cobra.Command {
 			for _, r := range rows {
 				data = append(data, r)
 			}
-			return writeEnvelope(cmd, "agent.fieldtypes", data)
+			return cmdutil.WriteEnvelope(cmd, "agent.fieldtypes", data)
 		},
 	}
 	return cmd

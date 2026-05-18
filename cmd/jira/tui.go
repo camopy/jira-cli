@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui"
@@ -16,13 +17,13 @@ func tuiRun(cmd *cobra.Command) (any, error) {
 
 func tuiOptionsForCommand(cmd *cobra.Command) tui.Options {
 	opts := tui.Options{}
-	client, profile, ok, err := jiraClientForCommand(cmd)
+	client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
 		opts.InitialError = err.Error()
 		return opts
 	}
-	if cfg, err := config.Load(config.WithPath(configPath(cmd))); err == nil {
-		opts.ActiveProfile = activeProfile(cmd, cfg).Name
+	if cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd))); err == nil {
+		opts.ActiveProfile = cmdutil.ActiveProfile(cmd, cfg).Name
 		for _, profile := range cfg.Profiles {
 			opts.Profiles = append(opts.Profiles, profile.Name)
 		}

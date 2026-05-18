@@ -14,11 +14,12 @@ import (
 	"testing"
 
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/spf13/cobra"
 )
 
 // newWatcherTestRoot wires a minimal cobra root + persistent flags so the
-// watcher commands resolve `jiraClientForCommand` via a temp config that
+// watcher commands resolve `cmdutil.JiraClientForCommand` via a temp config that
 // points at the supplied httptest URL. Token credential is provided via
 // JIRA_TOKEN_DEFAULT env so credential resolution succeeds without a
 // keyring.
@@ -65,7 +66,7 @@ workday_seconds = 28800
 
 	root.SetOut(stdout)
 	root.SetErr(stderr)
-	root.SetContext(context.WithValue(context.Background(), detectorKey, cli.Detection{Mode: cli.ModeJSON, IsTTY: false}))
+	root.SetContext(cmdutil.WithDetector(context.Background(), cli.Detection{Mode: cli.ModeJSON, IsTTY: false}))
 	return root, stdout, stderr
 }
 

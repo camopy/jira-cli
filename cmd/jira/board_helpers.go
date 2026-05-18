@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cache"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
@@ -91,12 +92,12 @@ func boardScopeFromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
 	// fallthrough AND to drive the resolver. Failing config load is
 	// non-fatal here: we treat it as "no default" and only return an
 	// error if the user explicitly asked for a board.
-	cfg, _ := config.Load(config.WithPath(configPath(cmd)))
+	cfg, _ := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 	profile := config.Profile{}
 	profileName := "default"
 	cacheProfile := cache.Key(profileName, "", cacheConfigPath(cmd))
 	if cfg != nil {
-		profile = activeProfile(cmd, cfg)
+		profile = cmdutil.ActiveProfile(cmd, cfg)
 		if profile.Name != "" {
 			profileName = profile.Name
 		}
