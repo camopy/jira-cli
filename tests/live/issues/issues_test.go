@@ -257,6 +257,73 @@ func TestLiveIssuesEndToEnd(t *testing.T) {
 	})
 }
 
+// TestLiveIssuesFailureModes proves the CLI surfaces real Jira failures
+// as structured JSON error envelopes — a non-zero exit and an ok=false
+// body with a stable error code — instead of crashing or emitting
+// unstructured output. Every case feeds a deliberately invalid input.
+func TestLiveIssuesFailureModes(t *testing.T) {
+	s := livekit.NewSuite(t)
+	// A well-formed key in the real project whose issue number cannot
+	// exist — Jira answers a clean 404 rather than a malformed-key 400.
+	missingKey := s.Project + "-999999999"
+
+	t.Run("view a missing issue reports jira_not_found", func(t *testing.T) {
+		env := s.RunExpectError(t, "issue", "view", missingKey)
+		requireJiraCode(t, env, "jira_not_found", 404)
+	})
+
+	t.Run("edit a missing issue reports jira_not_found", func(t *testing.T) {
+		env := s.RunExpectError(t, "issue", "edit", missingKey, "--summary", "must not apply")
+		requireJiraCode(t, env, "jira_not_found", 404)
+	})
+
+	t.Run("comment on a missing issue reports jira_not_found", func(t *testing.T) {
+		env := s.RunExpectError(t, "issue", "comment", "add", missingKey, "--body-markdown", "must not post")
+		requireJiraCode(t, env, "jira_not_found", 404)
+	})
+
+	t.Run("delete a missing issue reports jira_not_found", func(t *testing.T) {
+		env := s.RunExpectError(t, "issue", "delete", missingKey, "--force")
+		requireJiraCode(t, env, "jira_not_found", 404)
+	})
+
+	t.Run("an invalid JQL query reports jira_bad_request", func(t *testing.T) {
+		env := s.RunExpectError(t, "issue", "list", "--jql", "this is not )( valid jql")
+		requireJiraCode(t, env, "jira_bad_request", 400)
+	})
+
+	t.Run("create in a missing project is a structured failure", func(t *testing.T) {
+		// Code is left unpinned: an unknown project can surface either
+		// as the create call's 400 or as a 404 from project resolution
+		// upstream of it. RunExpectError already pins the structured
+		// contract — a non-zero exit, ok=false, a stable code, a message.
+		s.RunExpectError(t, "issue", "create", "--json-input", s.WriteJSON(t, "missing-project.json", map[string]any{
+			"project_key": "ZZNOSUCHPROJECT",
+			"issue_type":  s.IssueType,
+			"summary":     s.Marker + " must never be created",
+		}))
+	})
+
+	t.Run("an invalid transition id is a structured failure", func(t *testing.T) {
+		// Code is left unpinned for the same reason — the rejection may
+		// come from the CLI's transition lookup or from Jira's 400.
+		key := s.CreateIssue(t, s.Marker+" failure-mode transition target", nil)
+		s.TrackCleanup(key)
+		s.RunExpectError(t, "issue", "transition", key, "--transition", "99999999")
+	})
+}
+
+// requireJiraCode asserts a failure envelope's first error carries the
+// expected stable code and HTTP status, and is correctly marked
+// non-retryable — Jira client errors (4xx) are never retryable.
+func requireJiraCode(t *testing.T, env livekit.Envelope, wantCode string, wantHTTP int) {
+	t.Helper()
+	got := env.Errors[0]
+	assert.Equal(t, wantCode, got.Code, "error code (full error: %+v)", got)
+	assert.Equal(t, wantHTTP, got.HTTPStatus, "http_status (full error: %+v)", got)
+	assert.False(t, got.Retryable, "a %d client error must not be retryable (full error: %+v)", wantHTTP, got)
+}
+
 func assertNoIssueWithSummary(t *testing.T, s *livekit.Suite, summary, searchToken string) {
 	t.Helper()
 	env := s.Run(t, "issue", "list", "--jql", fmt.Sprintf("project = %s AND summary ~ %q", s.Project, searchToken))

@@ -43,12 +43,16 @@ type Envelope struct {
 	Warnings []any          `json:"warnings"`
 }
 
-// Error is one entry in an envelope's errors array.
+// Error is one entry in an envelope's errors array. code is the stable
+// snake_case contract a failure test asserts on; http_status and
+// retryable carry the transport-level shape of the failure.
 type Error struct {
-	Type    string `json:"type"`
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Hint    string `json:"hint"`
+	Type       string `json:"type"`
+	Code       string `json:"code"`
+	Message    string `json:"message"`
+	Hint       string `json:"hint"`
+	Retryable  bool   `json:"retryable"`
+	HTTPStatus int    `json:"http_status,omitempty"`
 }
 
 // Suite is one live-test run: a built binary, a target project, and a
@@ -318,6 +322,25 @@ func (s *Suite) runAllowFailure(t *testing.T, args ...string) (Envelope, error) 
 		return env, fmt.Errorf("jira %s returned ok=false: errors=%+v\nstdout:\n%s\nstderr:\n%s", strings.Join(args, " "), env.Errors, stdout, stderr)
 	}
 	return env, nil
+}
+
+// RunExpectError runs a jira subcommand that is expected to fail and
+// asserts the CLI surfaced the failure as a structured JSON error
+// envelope: a non-zero exit, parseable stdout, ok=false, and a first
+// error carrying a stable code and a message. It returns the envelope
+// so callers can assert the specific code and HTTP status.
+func (s *Suite) RunExpectError(t *testing.T, args ...string) Envelope {
+	t.Helper()
+	stdout, stderr, err := s.RunRaw(t, append([]string{"--output=json", "--no-input", "--timeout=90s"}, args...)...)
+	require.Error(t, err, "jira %s expected a non-zero exit\nstdout:\n%s\nstderr:\n%s", strings.Join(args, " "), stdout, stderr)
+	var env Envelope
+	require.NoError(t, json.Unmarshal([]byte(stdout), &env),
+		"jira %s expected a JSON error envelope on stdout, got:\n%s\nstderr:\n%s", strings.Join(args, " "), stdout, stderr)
+	require.False(t, env.OK, "jira %s expected ok=false, got ok=true:\n%s", strings.Join(args, " "), stdout)
+	require.NotEmpty(t, env.Errors, "jira %s returned ok=false with an empty errors array:\n%s", strings.Join(args, " "), stdout)
+	require.NotEmpty(t, env.Errors[0].Code, "jira %s error[0] carries no stable code:\n%s", strings.Join(args, " "), stdout)
+	require.NotEmpty(t, env.Errors[0].Message, "jira %s error[0] carries no message:\n%s", strings.Join(args, " "), stdout)
+	return env
 }
 
 // IssueSummary extracts issue.fields.summary from a view envelope.
