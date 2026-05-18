@@ -8,7 +8,9 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -18,57 +20,79 @@ import (
 // warnings silently. The right helper is
 // cmdutil.WriteEnvelopeWithResponseAndWarnings.
 //
-// This guard parses cmd/jira/commands.go and asserts that every call to
-// WriteEnvelopeWithResponse uses the AndWarnings variant when it sits
-// inside a known-mutation command. It pins the call sites so a future
-// refactor that drops the warnings argument is caught.
+// This guard parses every non-test .go file under cmd/jira/ and asserts
+// that every call to WriteEnvelopeWithResponse uses the AndWarnings
+// variant when it sits inside a known-mutation command. Scanning the
+// whole command directory keeps the guard live regardless of which file
+// a mutation command currently lives in.
 func TestLiveSubmitMutationsThreadWarnings(t *testing.T) {
-	path := filepath.Join("..", "..", "cmd", "jira", "commands.go")
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, path, nil, parser.AllErrors)
+	dir := filepath.Join("..", "..", "cmd", "jira")
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		t.Fatalf("parse %s: %v", path, err)
+		t.Fatalf("read %s: %v", dir, err)
 	}
 
 	// Mutation command function names — every live-submit return inside
-	// these MUST go through writeEnvelopeWithResponseAndWarnings. The
-	// external-editor helper (issueEditWithEditor) is included because
-	// it's a mutation path even though it's a helper, not a command
-	// builder.
+	// these MUST go through writeEnvelopeWithResponseAndWarnings.
+	// Mutation paths implemented as run* helpers (issueEditWithEditor,
+	// runCommentAdd, runCommentEdit) are listed alongside the command
+	// builders because they own a live-submit return site too.
 	mutationFns := map[string]bool{
 		"issueCreateCommand":      true,
 		"issueEditCommand":        true,
 		"issueEditWithEditor":     true,
-		"issueCommentCommand":     true,
+		"runCommentAdd":           true,
+		"runCommentEdit":          true,
 		"issueTransitionCommand":  true,
 		"worklogAddCommand":       true,
 		"destructiveIssueCommand": true,
 	}
 
-	ast.Inspect(file, func(n ast.Node) bool {
-		fn, ok := n.(*ast.FuncDecl)
-		if !ok || fn.Name == nil {
-			return true
+	sawMutationFn := false
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
 		}
-		if !mutationFns[fn.Name.Name] {
-			return true
+		path := filepath.Join(dir, name)
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, path, nil, parser.AllErrors)
+		if err != nil {
+			t.Fatalf("parse %s: %v", path, err)
 		}
-		// Walk the function body looking for WriteEnvelopeWithResponse
-		// calls that should be AndWarnings.
-		ast.Inspect(fn.Body, func(child ast.Node) bool {
-			call, ok := child.(*ast.CallExpr)
-			if !ok {
+		ast.Inspect(file, func(n ast.Node) bool {
+			fn, ok := n.(*ast.FuncDecl)
+			if !ok || fn.Name == nil {
 				return true
 			}
-			if calledName(call) == "WriteEnvelopeWithResponse" {
-				pos := fset.Position(call.Pos())
-				t.Errorf("%s:%d %q uses WriteEnvelopeWithResponse (no warnings) inside mutation %q — must use WriteEnvelopeWithResponseAndWarnings",
-					path, pos.Line, callSnippet(call, fset), fn.Name.Name)
+			if !mutationFns[fn.Name.Name] {
+				return true
 			}
+			sawMutationFn = true
+			// Walk the function body looking for WriteEnvelopeWithResponse
+			// calls that should be AndWarnings.
+			ast.Inspect(fn.Body, func(child ast.Node) bool {
+				call, ok := child.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				if calledName(call) == "WriteEnvelopeWithResponse" {
+					pos := fset.Position(call.Pos())
+					t.Errorf("%s:%d %q uses WriteEnvelopeWithResponse (no warnings) inside mutation %q — must use WriteEnvelopeWithResponseAndWarnings",
+						path, pos.Line, callSnippet(call, fset), fn.Name.Name)
+				}
+				return true
+			})
 			return true
 		})
-		return true
-	})
+	}
+
+	// A guard that traverses zero mutation commands is inert. If a
+	// rename or move drops every mutation function out of cmd/jira/,
+	// fail loudly rather than passing silently.
+	if !sawMutationFn {
+		t.Fatalf("no mutation command functions found under %s — guard is inert", dir)
+	}
 }
 
 // calledName returns the function name of a call expression, handling

@@ -26,20 +26,57 @@ func TestJiraServicesAreExportedInterfaces(t *testing.T) {
 }
 
 func TestCommandLayerDoesNotConstructConcreteJiraServicesDirectly(t *testing.T) {
-	content, err := os.ReadFile("../../cmd/jira/commands.go")
+	dir := "../../cmd/jira"
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		t.Fatalf("ReadFile(commands.go) error = %v", err)
+		t.Fatalf("ReadDir(%s) error = %v", dir, err)
 	}
-	for _, forbidden := range []string{
+	// Two files are allowed to construct services directly:
+	//
+	//   services.go — the injected service factory itself. Building the
+	//   concrete services is its whole purpose; it is the factory every
+	//   other file is told to use.
+	//
+	//   cache.go — warms the local cache by constructing services
+	//   directly. That predates this guard (which historically read only
+	//   commands.go) and is a known, pre-existing gap the command file
+	//   split neither introduced nor widened.
+	//
+	// Every other file in the command layer must go through the factory.
+	allowedDirectConstruction := map[string]bool{
+		"services.go": true,
+		"cache.go":    true,
+	}
+	forbidden := []string{
 		"jira.NewIssueService(",
 		"jira.NewEpicService(",
 		"jira.NewSearchService(",
 		"jira.NewWorklogService(",
 		"jira.NewProjectService(",
-	} {
-		if strings.Contains(string(content), forbidden) {
-			t.Fatalf("command layer directly constructs service %s; use injected service factory", forbidden)
+	}
+	scanned := 0
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
 		}
+		if allowedDirectConstruction[name] {
+			continue
+		}
+		scanned++
+		path := dir + "/" + name
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("ReadFile(%s) error = %v", path, err)
+		}
+		for _, f := range forbidden {
+			if strings.Contains(string(content), f) {
+				t.Fatalf("%s directly constructs service %s; use injected service factory", path, f)
+			}
+		}
+	}
+	if scanned == 0 {
+		t.Fatalf("no command files found under %s — guard is inert", dir)
 	}
 }
 
