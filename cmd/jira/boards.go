@@ -86,6 +86,7 @@ func boardsListCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a re-prime even when the cache is fresh")
 	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
 	cmd.Flags().BoolVar(&unbounded, "unbounded", false, "Walk every page (disables the default 100-page / 10 000-board cap)")
+	extendRefreshFlags(cmd.Flags())
 	// No --dry-run: `boards list` always performs a live read and a
 	// cache write, so a "dry-run" flag here could not be honest.
 	return cmd

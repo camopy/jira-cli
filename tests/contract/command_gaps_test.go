@@ -169,12 +169,12 @@ func TestConfigThemeCommandShowsAndUpdatesTheme(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "config.toml")
 	initConfig(t, cfg)
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json", "config", "theme", "--name", "primer", "--path", "/tmp/theme.toml")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json", "config", "theme", "--name", "dracula", "--path", "/tmp/theme.toml")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("config theme set error = %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), `"name": "primer"`) || !strings.Contains(string(out), `"path": "/tmp/theme.toml"`) {
+	if !strings.Contains(string(out), `"name": "dracula"`) || !strings.Contains(string(out), `"path": "/tmp/theme.toml"`) {
 		t.Fatalf("config theme set output = %s", out)
 	}
 
@@ -183,7 +183,7 @@ func TestConfigThemeCommandShowsAndUpdatesTheme(t *testing.T) {
 	if err != nil {
 		t.Fatalf("config theme show error = %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), `"name": "primer"`) || !strings.Contains(string(out), `"path": "/tmp/theme.toml"`) {
+	if !strings.Contains(string(out), `"name": "dracula"`) || !strings.Contains(string(out), `"path": "/tmp/theme.toml"`) {
 		t.Fatalf("config theme show output = %s", out)
 	}
 }

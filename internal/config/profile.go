@@ -167,6 +167,9 @@ func (c *Config) Validate() error {
 	if _, ok := seen[c.DefaultProfile]; !ok {
 		return fmt.Errorf("default profile %q is not defined", c.DefaultProfile)
 	}
+	if err := ValidateThemeName(c.Theme.Name); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/gechr/clib/help"
-	"github.com/gechr/clib/theme"
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/adf"
@@ -86,12 +84,8 @@ func agentGuideCommand() *cobra.Command {
 	// available section names instead of being told to read the guide first
 	// to discover what sections it contains.
 	cmd.SetHelpFunc(func(c *cobra.Command, _ []string) {
-		th := theme.Default().With(
-			theme.WithEnumStyle(theme.EnumStyleHighlightBoth),
-			theme.WithHelpRepeatEllipsisEnabled(true),
-		)
-		renderer := help.NewRenderer(th)
-		standard := clib.SectionsWithOptions(clib.WithSubcommandOptional())(c)
+		renderer := newHelpRenderer()
+		standard := standardHelpSections(c)
 		group := make(help.CommandGroup, 0, len(sections))
 		for _, s := range sections {
 			group = append(group, help.Command{Name: s.slug, Desc: s.title})

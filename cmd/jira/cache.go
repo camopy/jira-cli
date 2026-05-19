@@ -127,6 +127,7 @@ func cacheLabelsCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
 	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
+	extendRefreshFlags(cmd.Flags())
 	return cmd
 }
 
@@ -172,6 +173,7 @@ func cacheProjectsCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
 	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
+	extendRefreshFlags(cmd.Flags())
 	return cmd
 }
 
@@ -221,6 +223,7 @@ func cacheEpicsCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
 	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
+	extendRefreshFlags(cmd.Flags())
 	return cmd
 }
 
@@ -294,6 +297,7 @@ func cacheFieldsCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
 	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
+	extendRefreshFlags(cmd.Flags())
 	return cmd
 }
 
@@ -364,6 +368,7 @@ func cacheIssueTypesCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
 	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
+	extendRefreshFlags(cmd.Flags())
 	return cmd
 }
 
@@ -432,6 +437,7 @@ func cacheLinkTypesCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
 	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
+	extendRefreshFlags(cmd.Flags())
 	return cmd
 }
 
@@ -505,6 +511,7 @@ func cacheBoardsCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
 	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
 	cmd.Flags().BoolVar(&unbounded, "unbounded", false, "Walk every page (disables the default 100-page / 10 000-board cap)")
+	extendRefreshFlags(cmd.Flags())
 	// No --dry-run: the cache primer's whole purpose is a live fetch
 	// plus a cache write, so a "dry-run" flag here could not be honest.
 	return cmd

@@ -89,7 +89,9 @@ Default action — no sub-command:
 	cmd.MarkFlagsRequiredTogether("to", "type")
 	// --type completion driven by the cachelinktype predictor.
 	// Cache primer: `jira cache linktypes`.
-	clib.Extend(cmd.Flags().Lookup("type"), clib.FlagExtra{Placeholder: "NAME", Complete: "predictor=cachelinktype"})
+	extendFlag(cmd.Flags(), "to", clib.FlagExtra{Group: "Link", Placeholder: "KEY", Complete: "predictor=issuekey"})
+	extendFlag(cmd.Flags(), "type", clib.FlagExtra{Group: "Link", Placeholder: "NAME", Complete: "predictor=cachelinktype"})
+	extendDryRunFlag(cmd.Flags())
 
 	cmd.AddCommand(issueLinkListCommand())
 	cmd.AddCommand(issueLinkDeleteCommand())
@@ -190,6 +192,8 @@ func issueLinkDeleteCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive removal (required under --no-input)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without removing the link")
+	extendForceFlag(cmd.Flags())
+	extendDryRunFlag(cmd.Flags())
 	return cmd
 }
 
@@ -239,6 +243,7 @@ func issueLinkTypesCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
 	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
+	extendRefreshFlags(cmd.Flags())
 	return cmd
 }
 

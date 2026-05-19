@@ -282,6 +282,7 @@ func configureRootFlags(root *cobra.Command) {
 	})
 	clib.Extend(pf.Lookup("interactive"), clib.FlagExtra{Group: "Dashboard", Terse: "launch dashboard"})
 	clib.Extend(pf.Lookup("debug"), clib.FlagExtra{Group: "Output", Terse: "debug output"})
+	clib.Extend(pf.Lookup("no-input"), clib.FlagExtra{Group: "Runtime", Terse: "disable prompts"})
 	clib.Extend(pf.Lookup("color"), clib.FlagExtra{
 		Group:       "Output",
 		Enum:        []string{"auto", "always", "never"},
@@ -289,6 +290,8 @@ func configureRootFlags(root *cobra.Command) {
 		EnumDefault: "auto",
 		Terse:       "color mode",
 	})
+	clib.Extend(pf.Lookup("adf-strict"), clib.FlagExtra{Group: "ADF", Terse: "reject lossy ADF"})
+	clib.Extend(pf.Lookup("adf-best-effort"), clib.FlagExtra{Group: "ADF", Terse: "allow lossy ADF"})
 
 	root.MarkFlagsMutuallyExclusive("adf-strict", "adf-best-effort")
 }
@@ -305,13 +308,20 @@ func configureRootGroups(root *cobra.Command) {
 
 // configureRootHelp installs the themed clib help renderer on root.
 func configureRootHelp(root *cobra.Command) {
+	root.SetHelpFunc(clib.HelpFunc(newHelpRenderer(), standardHelpSections))
+}
+
+func newHelpRenderer() *help.Renderer {
 	theme.SetEnvPrefix("JIRA")
 	th := theme.Default().With(
 		theme.WithEnumStyle(theme.EnumStyleHighlightBoth),
 		theme.WithHelpRepeatEllipsisEnabled(true),
 	)
-	renderer := help.NewRenderer(th)
-	root.SetHelpFunc(clib.HelpFunc(renderer, clib.SectionsWithOptions(clib.WithSubcommandOptional())))
+	return help.NewRenderer(th)
+}
+
+func standardHelpSections(cmd *cobra.Command) []help.Section {
+	return clib.SectionsWithOptions(clib.WithSubcommandOptional())(cmd)
 }
 
 // Execute builds the runtime and root command for a process invocation,

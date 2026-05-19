@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -62,6 +61,8 @@ func issueWatchCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Local preview only — does not contact Jira")
 	cmd.Flags().BoolVar(&noReadback, "no-readback", false, "Skip the post-mutation GET")
 	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve --user against Jira (read-only); use with --dry-run")
+	extendDryRunFlag(cmd.Flags())
+	extendWatcherValidationFlags(cmd.Flags())
 	return cmd
 }
 
@@ -84,6 +85,8 @@ func issueUnwatchCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Local preview only — does not contact Jira")
 	cmd.Flags().BoolVar(&noReadback, "no-readback", false, "Skip the post-mutation GET")
 	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve --user against Jira (read-only); use with --dry-run")
+	extendDryRunFlag(cmd.Flags())
+	extendWatcherValidationFlags(cmd.Flags())
 	return cmd
 }
 
@@ -157,10 +160,12 @@ func watcherAddCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&user, "user", "", "User identifier (me / accountId:<id> / email)")
-	clib.Extend(cmd.Flags().Lookup("user"), clib.FlagExtra{Placeholder: "IDENTIFIER"})
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Local preview only — does not contact Jira")
 	cmd.Flags().BoolVar(&noReadback, "no-readback", false, "Skip the post-mutation GET")
 	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve --user against Jira (read-only); use with --dry-run")
+	extendWatcherUserFlag(cmd.Flags())
+	extendDryRunFlag(cmd.Flags())
+	extendWatcherValidationFlags(cmd.Flags())
 	return cmd
 }
 
@@ -187,10 +192,12 @@ func watcherRemoveCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&user, "user", "", "User identifier (me / accountId:<id> / email)")
-	clib.Extend(cmd.Flags().Lookup("user"), clib.FlagExtra{Placeholder: "IDENTIFIER"})
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Local preview only — does not contact Jira")
 	cmd.Flags().BoolVar(&noReadback, "no-readback", false, "Skip the post-mutation GET")
 	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve --user against Jira (read-only); use with --dry-run")
+	extendWatcherUserFlag(cmd.Flags())
+	extendDryRunFlag(cmd.Flags())
+	extendWatcherValidationFlags(cmd.Flags())
 	return cmd
 }
 

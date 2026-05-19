@@ -69,6 +69,18 @@ func TestConfigInitProfileGetSetMetadataOnly(t *testing.T) {
 	}
 }
 
+func TestConfigThemeRejectsUnknownPreset(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "config", "theme", "--name", "no-such-theme")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("config theme accepted unknown preset:\n%s", out)
+	}
+	if !strings.Contains(string(out), "unknown theme") {
+		t.Fatalf("error did not explain unknown theme:\n%s", out)
+	}
+}
+
 // A read-only command pointed at a missing explicit --config must not
 // create that file on disk: an explicit-path typo is a hard error, not a
 // silent default-config write.

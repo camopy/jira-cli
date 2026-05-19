@@ -105,6 +105,7 @@ func issueAttachmentListCommand() *cobra.Command {
 	}
 	cmd.Flags().IntVar(&limit, "limit", 50, "Page size (max attachments returned without --all)")
 	cmd.Flags().BoolVar(&all, "all", false, "Return every attachment regardless of --limit")
+	extendPaginationFlags(cmd.Flags())
 	return cmd
 }
 
@@ -190,6 +191,8 @@ func issueAttachmentAddCommand() *cobra.Command {
 	// "report,final.pdf" into two bogus paths. Each --file is one path.
 	cmd.Flags().StringArrayVar(&files, "file", nil, "Path to attach (repeatable)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without uploading")
+	extendFileFlag(cmd.Flags(), "file", "Input", "PATH")
+	extendDryRunFlag(cmd.Flags())
 	return cmd
 }
 
@@ -274,6 +277,8 @@ func issueAttachmentDeleteCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive removal under --no-input / non-TTY")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without deleting")
+	extendForceFlag(cmd.Flags())
+	extendDryRunFlag(cmd.Flags())
 	return cmd
 }
 
@@ -348,6 +353,9 @@ func issueAttachmentDownloadCommand() *cobra.Command {
 	cmd.Flags().StringVar(&output, "to", "", "Write the attachment to PATH (default: current directory)")
 	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing target file")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without downloading")
+	extendFileFlag(cmd.Flags(), "to", "Output", "PATH")
+	extendForceFlag(cmd.Flags())
+	extendDryRunFlag(cmd.Flags())
 	return cmd
 }
 

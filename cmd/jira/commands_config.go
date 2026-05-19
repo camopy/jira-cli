@@ -56,6 +56,17 @@ func configThemeCommand() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&name, "name", "", "Theme name")
 	cmd.Flags().StringVar(&path, "path", "", "Theme TOML path")
+	clib.Extend(cmd.Flags().Lookup("name"), clib.FlagExtra{
+		Group:       "Theme",
+		Placeholder: "NAME",
+		Enum:        config.ThemeNameValues,
+		EnumDefault: "default",
+	})
+	clib.Extend(cmd.Flags().Lookup("path"), clib.FlagExtra{
+		Group:       "Theme",
+		Placeholder: "PATH",
+		Hint:        "file",
+	})
 	return cmd
 }
 

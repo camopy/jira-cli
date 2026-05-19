@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
@@ -121,6 +122,11 @@ func worklogAddCommand() *cobra.Command {
 	cmd.Flags().StringVar(&commentMarkdown, "comment-markdown", "", "Worklog comment as Markdown")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read worklog payload from JSON file")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
+	extendFlag(cmd.Flags(), "time-spent", clib.FlagExtra{Group: "Worklog", Placeholder: "DURATION"})
+	extendFlag(cmd.Flags(), "started", clib.FlagExtra{Group: "Worklog", Placeholder: "TIME"})
+	extendFlag(cmd.Flags(), "comment-markdown", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
+	extendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
+	extendDryRunFlag(cmd.Flags())
 	return cmd
 }
 

@@ -155,6 +155,7 @@ func aliasImportCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&clobber, "clobber", false, "Overwrite existing aliases of the same name")
+	extendSafetyFlag(cmd.Flags(), "clobber")
 	return cmd
 }
 

@@ -138,6 +138,7 @@ func epicAddCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
+	extendDryRunFlag(cmd.Flags())
 	return cmd
 }
 
@@ -170,5 +171,6 @@ func epicRemoveCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
+	extendDryRunFlag(cmd.Flags())
 	return cmd
 }

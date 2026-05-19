@@ -198,6 +198,7 @@ func TestKeyChoices_Enums(t *testing.T) {
 		"profiles.default.auth_type":      {"token", "basic", "pat", "mtls"},
 		"profiles.default.secret_backend": {"keyring", "1password"},
 		"profiles.default.read_only":      {"true", "false"},
+		"theme.name":                      config.ThemeNameValues,
 		"tui.default_tab":                 {"issues", "epics", "search", "activity"},
 	}
 	for key, want := range cases {
