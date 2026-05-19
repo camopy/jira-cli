@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/gechr/x/shell"
 	"github.com/go-viper/mapstructure/v2"
 	koanftoml "github.com/knadh/koanf/parsers/toml"
 	"github.com/knadh/koanf/providers/confmap"
@@ -236,13 +237,11 @@ func (c *Config) Set(key, value string) error {
 }
 
 func DefaultPath() string {
-	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "jira-cli", "config.toml")
+	root, err := shell.XDGConfigHome()
+	if err != nil || root == "" {
+		root = ".config"
 	}
-	if home := os.Getenv("HOME"); home != "" {
-		return filepath.Join(home, ".config", "jira-cli", "config.toml")
-	}
-	return filepath.Join(".config", "jira-cli", "config.toml")
+	return filepath.Join(root, "jira-cli", "config.toml")
 }
 
 func ensureConfig(path string) error {

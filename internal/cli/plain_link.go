@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/gechr/clog"
+	termansi "github.com/gechr/x/ansi"
 )
 
 func WriteLinkListPlain(w io.Writer, command string, data any, opts ...PlainOption) error {
@@ -146,21 +146,17 @@ func WriteLinkTypesPlain(w io.Writer, command string, data any, opts ...PlainOpt
 }
 
 func padRight(s string, n int) string {
-	if width := utf8.RuneCountInString(s); width < n {
+	if width := termansi.StringWidth(s); width < n {
 		return s + strings.Repeat(" ", n-width)
 	}
 	return s
 }
 
 func truncate(s string, n int) string {
-	if utf8.RuneCountInString(s) <= n {
-		return s
+	if n <= 0 {
+		return ""
 	}
-	runes := []rune(s)
-	if n <= 1 {
-		return string(runes[:n])
-	}
-	return string(runes[:n-1]) + "…"
+	return termansi.Truncate(s, n, "…")
 }
 
 func plainPluralize(n int, singular, plural string) string {

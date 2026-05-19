@@ -31,7 +31,7 @@ func TestRenderADFEmitsOSC8WhenTerminalAndPlainOtherwise(t *testing.T) {
 	tty := adf.RenderActivatable(doc, adf.RenderOptions{IsTerminal: true, BaseURL: "https://example.atlassian.net"})
 	plain := adf.RenderActivatable(doc, adf.RenderOptions{IsTerminal: false, BaseURL: "https://example.atlassian.net"})
 
-	// TTY output MUST contain the OSC 8 escape (0x1b]8;;<url>\x1b\\<text>\x1b]8;;\x1b\\)
+	// TTY output MUST contain the OSC 8 hyperlink introducer.
 	if !strings.Contains(tty, "\x1b]8;;") {
 		t.Fatalf("expected OSC 8 escape in TTY render; got: %q", tty)
 	}

@@ -62,8 +62,7 @@ func TestRenderADFStyledMarksHeadingsBoldListsCodeLinks(t *testing.T) {
 	}
 
 	// Link MUST emit an OSC 8 hyperlink so modern terminals render the
-	// text as activatable. The OSC 8 prefix is a stable bytes sequence:
-	// \x1b]8;;<url>\x1b\\<text>\x1b]8;;\x1b\\
+	// text as activatable.
 	if !strings.Contains(out, "\x1b]8;;https://example.com") {
 		t.Fatalf("link must emit OSC 8 escape with URL; got %q", out)
 	}

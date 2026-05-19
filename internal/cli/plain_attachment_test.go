@@ -6,20 +6,20 @@ import (
 )
 
 // Human byte sizes must use a unit label consistent with the divisor.
-// The renderer divides by 1024, so the label must be the binary IEC
-// unit (KiB/MiB), never the decimal SI label (KB/MB) — a 1024-divisor
-// with a "KB" label misreports the size.
+// The formatter uses a binary IEC divisor, so labels must be KiB/MiB,
+// never decimal SI labels.
 func TestAttachmentHumanBytesUsesBinaryUnitsForBinaryDivisor(t *testing.T) {
+	const kib int64 = 1 << 10
 	cases := []struct {
 		n    int64
 		want string
 	}{
 		{0, "0 B"},
 		{512, "512 B"},
-		{1024, "1.0 KiB"},
-		{1536, "1.5 KiB"},
-		{1024 * 1024, "1.0 MiB"},
-		{5 * 1024 * 1024 * 1024, "5.0 GiB"},
+		{kib, "1.00 KiB"},
+		{kib + kib/2, "1.50 KiB"},
+		{kib * kib, "1.00 MiB"},
+		{5 * kib * kib * kib, "5.00 GiB"},
 	}
 	for _, c := range cases {
 		if got := attachmentHumanBytes(c.n); got != c.want {
@@ -39,5 +39,14 @@ func TestAttachmentHumanCreatedHandlesFutureTimestamp(t *testing.T) {
 	}
 	if got[0] == '-' || got == "just now" {
 		t.Fatalf("future timestamp rendered as a negative/now age: %q", got)
+	}
+}
+
+func TestAttachmentHumanCreatedUsesReferenceTime(t *testing.T) {
+	now := time.Date(2026, 5, 19, 12, 0, 0, 0, time.UTC)
+	ts := now.Add(-2 * time.Hour).Format(time.RFC3339)
+	got := attachmentHumanCreatedFrom(ts, now)
+	if got != "2h ago" {
+		t.Fatalf("attachmentHumanCreatedFrom = %q, want 2h ago", got)
 	}
 }

@@ -3,6 +3,8 @@ package adf
 import (
 	"regexp"
 	"strings"
+
+	termansi "github.com/gechr/x/ansi"
 )
 
 // RenderOptions configure RenderActivatable.
@@ -34,12 +36,8 @@ var issueKeyPattern = regexp.MustCompile(`\b([A-Z][A-Z0-9_]+)-(\d+)\b`)
 var urlPattern = regexp.MustCompile(`https?://[^\s]+`)
 
 // activate wraps every issue-key and bare URL with an OSC 8 hyperlink
-// escape. The OSC 8 sequence is:
-//
-//	\x1b]8;;<URL>\x1b\\<TEXT>\x1b]8;;\x1b\\
-//
-// Modern terminals render <TEXT> as a clickable link to <URL>; older
-// terminals strip the escapes and show only <TEXT>.
+// escape. Modern terminals render the visible text as a clickable link
+// to the URL; older terminals strip the escapes and show only the text.
 //
 // The plain text is stripped of C0/C1 control bytes first: a
 // Jira-controlled string could carry a bare ESC or BEL that would
@@ -50,11 +48,8 @@ func activate(text, baseURL string) string {
 	text = urlPattern.ReplaceAllStringFunc(text, func(m string) string {
 		return osc8(m, m)
 	})
-	// Issue keys (skip those already wrapped in OSC 8).
+	// Issue keys.
 	text = issueKeyPattern.ReplaceAllStringFunc(text, func(m string) string {
-		if strings.HasPrefix(m, "\x1b]8") {
-			return m
-		}
 		base := strings.TrimRight(baseURL, "/")
 		if base == "" {
 			return m
@@ -70,7 +65,7 @@ func activate(text, baseURL string) string {
 func osc8(url, text string) string {
 	url = stripControlBytes(url)
 	text = stripControlBytes(text)
-	return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\"
+	return termansi.Force().Hyperlink(url, text)
 }
 
 // stripControlBytes drops C0 and C1 control characters. Tab, newline and

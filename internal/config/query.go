@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/gechr/x/human"
 	"gopkg.in/yaml.v3"
 )
 
@@ -97,15 +98,5 @@ func cutFrontmatter(body, delimiter string) (string, string, bool) {
 }
 
 func expandHome(path string) string {
-	if path == "~" {
-		if home, err := os.UserHomeDir(); err == nil && home != "" {
-			return home
-		}
-	}
-	if strings.HasPrefix(path, "~/") {
-		if home, err := os.UserHomeDir(); err == nil && home != "" {
-			return filepath.Join(home, strings.TrimPrefix(path, "~/"))
-		}
-	}
-	return path
+	return human.ExpandPath(path)
 }

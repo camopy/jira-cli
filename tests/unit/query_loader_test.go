@@ -22,6 +22,26 @@ func TestNamedQueryLoaderFrontmatterAndRawJQL(t *testing.T) {
 	}
 }
 
+func TestNamedQueryLoaderExpandsEnvInDirectory(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "queries")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "mine.jql"), []byte("assignee = currentUser()"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JIRA_CLI_QUERIES_ROOT", root)
+
+	queries, err := config.LoadQueries("$JIRA_CLI_QUERIES_ROOT/queries")
+	if err != nil {
+		t.Fatalf("LoadQueries() error = %v", err)
+	}
+	if queries["mine"].JQL != "assignee = currentUser()" {
+		t.Fatalf("query = %+v", queries["mine"])
+	}
+}
+
 func TestNamedQueryLoaderParsesQuotedYAMLFrontmatter(t *testing.T) {
 	dir := t.TempDir()
 	body := `---

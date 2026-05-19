@@ -63,6 +63,19 @@ func TestCacheKeyNormalizesSiteTrailingSlash(t *testing.T) {
 	}
 }
 
+func TestCachePathUsesXDGCacheHome(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", root)
+	path, err := cache.Path("default", "labels")
+	if err != nil {
+		t.Fatalf("Path: %v", err)
+	}
+	want := filepath.Join(root, "jira-cli", "default", "labels.json")
+	if path != want {
+		t.Fatalf("cache path = %q, want %q", path, want)
+	}
+}
+
 func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

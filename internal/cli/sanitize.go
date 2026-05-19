@@ -60,7 +60,7 @@ func SanitizeCompletionField(s string) string {
 func Hyperlink(url, text string) string {
 	url = SanitizeTerminalText(url)
 	text = SanitizeTerminalText(text)
-	return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\"
+	return termansi.Force().Hyperlink(url, text)
 }
 
 // isControlRune reports whether r is a C0 or C1 control character (the

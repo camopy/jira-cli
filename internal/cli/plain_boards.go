@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/gechr/clog"
+	termansi "github.com/gechr/x/ansi"
 )
 
 // WriteBoardListPlain renders the `boards.list` envelope's data block
@@ -138,7 +139,7 @@ func boardProjectDescriptor(keys []string) string {
 
 // padLeft right-aligns s in an n-column slot using ASCII spaces.
 func padLeft(s string, n int) string {
-	if width := len(s); width < n {
+	if width := termansi.StringWidth(s); width < n {
 		return strings.Repeat(" ", n-width) + s
 	}
 	return s

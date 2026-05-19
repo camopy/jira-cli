@@ -23,8 +23,11 @@ func TestStripControlBytesDropsCorruptingBytes(t *testing.T) {
 // byte cannot break the span open/close pair or smuggle a second link.
 func TestOSC8SanitizesURLAndText(t *testing.T) {
 	got := osc8("https://x\x07.test", "li\x1bnk")
-	if strings.ContainsRune(got, '\x07') {
-		t.Fatalf("BEL survived in osc8 url: %q", got)
+	if strings.Contains(got, "x\x07.test") {
+		t.Fatalf("BEL survived in osc8 url payload: %q", got)
+	}
+	if strings.Contains(got, "li\x1bnk") {
+		t.Fatalf("ESC survived in osc8 text payload: %q", got)
 	}
 	// Exactly two OSC 8 introducers: the open and the close.
 	if strings.Count(got, "\x1b]8;;") != 2 {

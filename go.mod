@@ -14,7 +14,7 @@ require (
 	github.com/gechr/clib v0.4.4
 	github.com/gechr/clog v0.9.3
 	github.com/gechr/primer v0.0.14
-	github.com/gechr/x v0.0.6
+	github.com/gechr/x v0.0.7
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/knadh/koanf/parsers/toml v0.1.0
 	github.com/knadh/koanf/providers/confmap v1.0.0

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	termansi "github.com/gechr/x/ansi"
 
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/tui/theme"
@@ -156,7 +157,7 @@ func applyMarks(n adf.Node, strongStyle, emStyle, codeStyle lipgloss.Style) stri
 			out = codeStyle.Render(out)
 		case "link":
 			if href, ok := m.Attrs["href"].(string); ok && href != "" {
-				out = "\x1b]8;;" + href + "\x1b\\" + out + " (" + href + ")" + "\x1b]8;;\x1b\\"
+				out = termansi.Force().Hyperlink(href, out+" ("+href+")")
 			}
 		}
 	}

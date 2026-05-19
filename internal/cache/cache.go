@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/gechr/x/shell"
 )
 
 // DefaultTTL is the freshness window before `Read` reports stale=true.
@@ -170,13 +172,11 @@ func ClearProfile(profile string) (int, error) {
 }
 
 func dirRoot() string {
-	if x := os.Getenv("XDG_CACHE_HOME"); x != "" {
-		return filepath.Join(x, "jira-cli")
+	root, err := shell.XDGCacheHome()
+	if err != nil || root == "" {
+		root = ".cache"
 	}
-	if h := os.Getenv("HOME"); h != "" {
-		return filepath.Join(h, ".cache", "jira-cli")
-	}
-	return filepath.Join(".cache", "jira-cli")
+	return filepath.Join(root, "jira-cli")
 }
 
 // sanitize turns a profile/resource name into a filesystem-safe component.

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gechr/clog"
+	"github.com/gechr/x/human"
 )
 
 // WriteAttachmentListPlain renders the `issue.attachment.list` envelope
@@ -105,27 +106,18 @@ func attachmentInt64Field(m map[string]any, key string) int64 {
 	return 0
 }
 
-// attachmentHumanBytes renders a byte count in a binary (1024-based)
-// unit. The label is the IEC binary unit (KiB/MiB/...) so it matches
-// the 1024 divisor — a 1024-divisor labeled "KB" misreports the size.
 func attachmentHumanBytes(n int64) string {
-	const unit = 1024
-	if n < unit {
-		return fmt.Sprintf("%d B", n)
-	}
-	div, exp := int64(unit), 0
-	for x := n / unit; x >= unit; x /= unit {
-		div *= unit
-		exp++
-	}
-	suffix := []string{"KiB", "MiB", "GiB", "TiB", "PiB"}[exp]
-	return fmt.Sprintf("%.1f %s", float64(n)/float64(div), suffix)
+	return human.FormatIECBytes(float64(n))
 }
 
 // attachmentHumanCreated returns "Xm ago" / "Xh ago" / "Xd ago" /
 // "YYYY-MM-DD" depending on how recent the timestamp is. Falls back to
 // the raw string when parsing fails so we never lose information.
 func attachmentHumanCreated(ts string) string {
+	return attachmentHumanCreatedFrom(ts, time.Now().UTC())
+}
+
+func attachmentHumanCreatedFrom(ts string, now time.Time) string {
 	if ts == "" {
 		return ""
 	}
@@ -138,24 +130,11 @@ func attachmentHumanCreated(ts string) string {
 		if err != nil {
 			continue
 		}
-		delta := time.Since(t)
-		switch {
-		// A timestamp in the future (clock skew, a bad upstream value)
-		// would produce a negative relative age like "-5m ago"; fall
-		// back to the absolute date instead.
-		case delta < 0:
-			return t.Format("2006-01-02")
-		case delta < time.Minute:
-			return "just now"
-		case delta < time.Hour:
-			return fmt.Sprintf("%dm ago", int(delta.Minutes()))
-		case delta < 24*time.Hour:
-			return fmt.Sprintf("%dh ago", int(delta.Hours()))
-		case delta < 7*24*time.Hour:
-			return fmt.Sprintf("%dd ago", int(delta.Hours()/24))
-		default:
+		delta := now.Sub(t)
+		if delta < 0 || delta >= 7*24*time.Hour {
 			return t.Format("2006-01-02")
 		}
+		return human.FormatTimeAgoCompactFrom(t, now)
 	}
 	return ts
 }

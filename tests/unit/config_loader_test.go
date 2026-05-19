@@ -60,6 +60,15 @@ func TestLoadDoesNotCreateFileForExplicitMissingPath(t *testing.T) {
 	}
 }
 
+func TestDefaultPathUsesXDGConfigHome(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", root)
+	want := filepath.Join(root, "jira-cli", "config.toml")
+	if got := config.DefaultPath(); got != want {
+		t.Fatalf("DefaultPath = %q, want %q", got, want)
+	}
+}
+
 // Load must not create the default config file when none exists; it
 // returns usable defaults without writing disk.
 func TestLoadDoesNotCreateDefaultConfigFile(t *testing.T) {
