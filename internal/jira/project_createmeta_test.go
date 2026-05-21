@@ -3,7 +3,6 @@ package jira
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -15,7 +14,7 @@ import (
 // Cloud.
 func TestGetFieldSchemaResolvesIssueTypeNameToID(t *testing.T) {
 	var fieldMetaPath string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/createmeta/KAN/issuetypes"):
@@ -38,9 +37,8 @@ func TestGetFieldSchemaResolvesIssueTypeNameToID(t *testing.T) {
 			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
 		}
 	}))
-	defer srv.Close()
 
-	svc := NewProjectService(NewClient(WithBaseURL(srv.URL)), 0)
+	svc := NewProjectService(client, 0)
 	schema, _, err := svc.GetFieldSchemaForProfile(context.Background(), "default", "KAN", "Task")
 	if err != nil {
 		t.Fatalf("GetFieldSchemaForProfile: %v", err)
@@ -56,7 +54,7 @@ func TestGetFieldSchemaResolvesIssueTypeNameToID(t *testing.T) {
 // An unknown issue-type name has no id to resolve — the lookup fails
 // rather than calling the field-metadata endpoint with a bad path.
 func TestGetFieldSchemaUnknownIssueTypeNameFails(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if strings.HasSuffix(r.URL.Path, "/createmeta/KAN/issuetypes") {
 			_, _ = w.Write([]byte(`{"startAt":0,"maxResults":50,"total":1,"issueTypes":[{"id":"10001","name":"Bug"}]}`))
@@ -64,9 +62,8 @@ func TestGetFieldSchemaUnknownIssueTypeNameFails(t *testing.T) {
 		}
 		http.Error(w, "should not reach field metadata", http.StatusInternalServerError)
 	}))
-	defer srv.Close()
 
-	svc := NewProjectService(NewClient(WithBaseURL(srv.URL)), 0)
+	svc := NewProjectService(client, 0)
 	_, _, err := svc.GetFieldSchemaForProfile(context.Background(), "default", "KAN", "Nonexistent")
 	if err == nil {
 		t.Fatal("an unknown issue-type name must produce an error, not a bad-path call")
@@ -76,7 +73,7 @@ func TestGetFieldSchemaUnknownIssueTypeNameFails(t *testing.T) {
 // The issuetypes page is itself paginated — an issue type on page 2
 // must still resolve.
 func TestGetFieldSchemaResolvesIssueTypeOnSecondPage(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/createmeta/KAN/issuetypes"):
@@ -91,9 +88,8 @@ func TestGetFieldSchemaResolvesIssueTypeOnSecondPage(t *testing.T) {
 			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
 		}
 	}))
-	defer srv.Close()
 
-	svc := NewProjectService(NewClient(WithBaseURL(srv.URL)), 0)
+	svc := NewProjectService(client, 0)
 	if _, _, err := svc.GetFieldSchemaForProfile(context.Background(), "default", "KAN", "Task"); err != nil {
 		t.Fatalf("issue type on page 2 must resolve: %v", err)
 	}
@@ -103,7 +99,7 @@ func TestGetFieldSchemaResolvesIssueTypeOnSecondPage(t *testing.T) {
 // loop every page. A custom field on page 2 must appear in the resolved
 // schema, otherwise a valid field would be wrongly rejected.
 func TestGetFieldSchemaWalksAllFieldPages(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/createmeta/KAN/issuetypes"):
@@ -124,9 +120,8 @@ func TestGetFieldSchemaWalksAllFieldPages(t *testing.T) {
 			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
 		}
 	}))
-	defer srv.Close()
 
-	svc := NewProjectService(NewClient(WithBaseURL(srv.URL)), 0)
+	svc := NewProjectService(client, 0)
 	schema, _, err := svc.GetFieldSchemaForProfile(context.Background(), "default", "KAN", "Task")
 	if err != nil {
 		t.Fatalf("GetFieldSchemaForProfile: %v", err)

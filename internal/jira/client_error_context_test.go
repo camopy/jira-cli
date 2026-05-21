@@ -5,8 +5,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 )
@@ -140,13 +138,11 @@ func TestClientDoBoundsErrorBodyRead(t *testing.T) {
 }
 
 func TestAPIErrorRedactsSensitiveBodyFields(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"errorMessages":["bad"],"access_token":"secret-token","errors":{"password":"secret-password"}}`))
 	}))
-	defer srv.Close()
 
-	client := NewClient(WithBaseURL(srv.URL + "/"))
 	req, err := client.NewRequest(context.Background(), http.MethodGet, RESTPath("myself"), nil)
 	if err != nil {
 		t.Fatalf("NewRequest() error = %v", err)
@@ -165,12 +161,10 @@ func TestAPIErrorRedactsSensitiveBodyFields(t *testing.T) {
 }
 
 func TestClientDoRedactsInvalidJSONBodyPrefix(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`token=server-secret`))
 	}))
-	defer srv.Close()
 
-	client := NewClient(WithBaseURL(srv.URL + "/"))
 	req, err := client.NewRequest(context.Background(), http.MethodGet, RESTPath("myself"), nil)
 	if err != nil {
 		t.Fatalf("NewRequest() error = %v", err)
@@ -190,31 +184,29 @@ func TestClientDoRedactsInvalidJSONBodyPrefix(t *testing.T) {
 }
 
 func TestClientDebugRedactsSensitiveRequestAndResponseBodies(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"access_token":"server-secret"}`))
-	}))
-	defer srv.Close()
+	ctx, debugLogs := newDebugLogContext(t)
 
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("Pipe() error = %v", err)
-	}
-	orig := os.Stderr
-	os.Stderr = writer
-	t.Cleanup(func() { os.Stderr = orig })
-
-	client := NewClient(WithBaseURL(srv.URL+"/"), WithDebug(true))
-	req, err := client.NewRequest(context.Background(), http.MethodPost, RESTPath("issue"), map[string]any{"token": "client-secret"})
+	client := NewClient(
+		WithBaseURL("https://jira.example.com/"),
+		WithHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(`{"access_token":"server-secret"}`)),
+				Request:    req,
+			}, nil
+		})}),
+		WithDebug(true),
+	)
+	req, err := client.NewRequest(ctx, http.MethodPost, RESTPath("issue"), map[string]any{"token": "client-secret"})
 	if err != nil {
 		t.Fatalf("NewRequest() error = %v", err)
 	}
 	if _, err := client.Do(req, nil); err != nil {
 		t.Fatalf("Do() error = %v", err)
 	}
-	_ = writer.Close()
-	logBytes, _ := io.ReadAll(reader)
-	logText := string(logBytes)
+	logText := debugLogs.String()
 	if strings.Contains(logText, "client-secret") || strings.Contains(logText, "server-secret") {
 		t.Fatalf("debug log leaked sensitive body fields:\n%s", logText)
 	}

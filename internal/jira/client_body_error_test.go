@@ -5,10 +5,25 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+type partialErrReadCloser struct {
+	done bool
+}
+
+func (r *partialErrReadCloser) Read(p []byte) (int, error) {
+	if r.done {
+		return 0, io.EOF
+	}
+	r.done = true
+	return copy(p, "partial"), io.ErrUnexpectedEOF
+}
+
+func (r *partialErrReadCloser) Close() error {
+	return nil
+}
 
 // HTTP body read errors MUST surface as a classified error rather
 // than be silently dropped. Previously
@@ -16,20 +31,21 @@ import (
 // caller saw "unexpected end of JSON input" or empty data — neither
 // of which points at the actual cause (network blip mid-read).
 //
-// We exercise this by serving a hijacked response whose body fails
-// part-way through. After the fix, Do() returns a typed server error.
+// We exercise this with a transport response whose body fails part-way
+// through. After the fix, Do() returns a typed server error.
 func TestBodyReadErrorPropagatesAsServerError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		// Advertise more bytes than we'll write, then close mid-stream.
-		w.Header().Set("Content-Length", "100")
-		_, _ = w.Write([]byte("partial"))
-		// The httptest framework will close after the handler returns;
-		// the client sees Content-Length: 100 with only 7 bytes
-		// available — a read error on the next ReadAll call.
-	}))
-	defer srv.Close()
-
-	client := NewClient(WithBaseURL(srv.URL))
+	client := NewClient(
+		WithBaseURL("https://jira.example.com/"),
+		WithHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Header:     http.Header{},
+				Body:       &partialErrReadCloser{},
+				Request:    req,
+			}, nil
+		})}),
+	)
 	req, err := client.NewRequest(context.Background(), http.MethodGet, "/some/path", nil)
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
@@ -57,10 +73,8 @@ func TestBodyReadErrorPropagatesAsServerError(t *testing.T) {
 // Belt-and-braces: an io.Reader that returns ErrUnexpectedEOF mid-stream
 // also propagates as a server error. Tests the explicit fix path.
 func TestBodyReadErrorFromReader(t *testing.T) {
-	// We can't easily inject a custom reader through net/http without
-	// a custom Transport. The httptest case above covers the realistic
-	// path; this test pins the contract via a sanity assertion that
-	// io.ErrUnexpectedEOF is the kind of error we'd see in practice.
+	// This pins the concrete error shape used by the transport-level
+	// regression above.
 	if !errors.Is(io.ErrUnexpectedEOF, io.ErrUnexpectedEOF) {
 		t.Fatal("sanity check failed")
 	}
@@ -77,14 +91,12 @@ func TestBodyReadErrorFromReader(t *testing.T) {
 // end-to-end assertion lives in tests/contract/i1_envelope_invariants_test.go
 // (TestI1HTMLServerResponseEnvelope).
 func TestAPIErrorServerCategoryForHTMLBody(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		w.WriteHeader(http.StatusOK) // 200 — passes the status-code gate
 		_, _ = w.Write([]byte("<html><body>maintenance</body></html>"))
 	}))
-	defer srv.Close()
 
-	client := NewClient(WithBaseURL(srv.URL))
 	req, err := client.NewRequest(context.Background(), http.MethodGet, "/some/path", nil)
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)

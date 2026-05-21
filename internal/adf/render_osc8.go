@@ -1,10 +1,11 @@
 package adf
 
 import (
+	"io"
 	"regexp"
 	"strings"
 
-	termansi "github.com/gechr/x/ansi"
+	"github.com/gechr/clog"
 )
 
 // RenderOptions configure RenderActivatable.
@@ -65,7 +66,7 @@ func activate(text, baseURL string) string {
 func osc8(url, text string) string {
 	url = stripControlBytes(url)
 	text = stripControlBytes(text)
-	return termansi.Force().Hyperlink(url, text)
+	return clog.NewOutput(io.Discard, clog.ColorAlways).Hyperlink(url, text)
 }
 
 // stripControlBytes drops C0 and C1 control characters. Tab, newline and

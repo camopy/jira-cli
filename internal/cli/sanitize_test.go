@@ -3,6 +3,8 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"github.com/gechr/clog"
 )
 
 func TestSanitizeTerminalTextStripsControlBytes(t *testing.T) {
@@ -46,5 +48,18 @@ func TestHyperlinkSanitizesInnerText(t *testing.T) {
 	got := Hyperlink("https://example.com", "te\x1b]8;;evilxt")
 	if strings.Contains(got, "evil") && strings.Count(got, "\x1b]8;;") > 2 {
 		t.Fatalf("injected OSC 8 span survived: %q", got)
+	}
+}
+
+func TestHyperlinkHonorsClogHyperlinkDisabled(t *testing.T) {
+	clog.SetHyperlinkEnabled(false)
+	t.Cleanup(func() { clog.SetHyperlinkEnabled(true) })
+
+	got := Hyperlink("https://example.com", "example")
+	if strings.Contains(got, "\x1b]8;;") {
+		t.Fatalf("hyperlink emitted OSC 8 escape while disabled: %q", got)
+	}
+	if got != "example" {
+		t.Fatalf("Hyperlink = %q, want example", got)
 	}
 }

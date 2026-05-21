@@ -3,6 +3,8 @@ package adf
 import (
 	"strings"
 	"testing"
+
+	"github.com/gechr/clog"
 )
 
 // A Jira-controlled string carrying C0/C1 control bytes (NUL, BEL, a
@@ -32,5 +34,18 @@ func TestOSC8SanitizesURLAndText(t *testing.T) {
 	// Exactly two OSC 8 introducers: the open and the close.
 	if strings.Count(got, "\x1b]8;;") != 2 {
 		t.Fatalf("osc8 span corrupted, want 2 introducers: %q", got)
+	}
+}
+
+func TestOSC8HonorsClogHyperlinkDisabled(t *testing.T) {
+	clog.SetHyperlinkEnabled(false)
+	t.Cleanup(func() { clog.SetHyperlinkEnabled(true) })
+
+	got := osc8("https://example.com", "example")
+	if strings.Contains(got, "\x1b]8;;") {
+		t.Fatalf("osc8 emitted OSC 8 escape while disabled: %q", got)
+	}
+	if got != "example" {
+		t.Fatalf("osc8 = %q, want example", got)
 	}
 }

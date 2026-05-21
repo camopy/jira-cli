@@ -11,9 +11,12 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gechr/clog"
 )
 
 const (
@@ -421,8 +424,9 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 			Message: "dry-run is active; refusing to send " + req.Method + " " + req.URL.Path,
 		}
 	}
+	ctx := req.Context()
 	if c.debug {
-		c.dumpRequest(req)
+		c.dumpRequest(ctx, req)
 	}
 	res, err := c.client.Do(req)
 	if err != nil {
@@ -430,7 +434,7 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 	}
 	defer func() { _ = res.Body.Close() }()
 	if c.debug {
-		c.dumpResponseHead(res)
+		c.dumpResponseHead(ctx, res)
 	}
 	resp := &Response{Response: res, Rate: parseRate(res)}
 	bodyLimit := maxResponseBodyBytes
@@ -439,7 +443,7 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 	}
 	body, truncated, readErr := readLimitedBody(res.Body, bodyLimit)
 	if c.debug {
-		c.dumpResponseBody(body)
+		c.dumpResponseBody(ctx, body)
 	}
 	if readErr != nil {
 		// A network blip mid-read MUST surface as a typed server error
@@ -520,11 +524,11 @@ func (c *Client) validateRequestTarget(req *http.Request) error {
 	return nil
 }
 
-// dumpRequest writes the outbound request to stderr in clog DBG style.
+// dumpRequest writes the outbound request through the context logger.
 // The Authorization header is redacted to "REDACTED" so token material
 // never reaches the log. Body is reset after read so the http.Client
 // still sees it on the actual send.
-func (c *Client) dumpRequest(req *http.Request) {
+func (c *Client) dumpRequest(ctx context.Context, req *http.Request) {
 	headers := redactHeaders(req.Header)
 	bodyText := ""
 	if req.Body != nil && req.GetBody != nil {
@@ -542,13 +546,11 @@ func (c *Client) dumpRequest(req *http.Request) {
 			bodyText = "(redacted non-json body)"
 		}
 	}
-	fmt.Fprintf(os.Stderr, "DBG ▶ %s %s\n", req.Method, req.URL.String())
-	for k, v := range headers {
-		fmt.Fprintf(os.Stderr, "DBG    %s: %s\n", k, strings.Join(v, ", "))
-	}
-	if bodyText != "" {
-		fmt.Fprintf(os.Stderr, "DBG    body: %s\n", oneLineSnippet(bodyText, 1024))
-	}
+	event := debugLogger(ctx).Debug().
+		Str("method", req.Method).
+		Str("url", req.URL.String()).
+		Dict("headers", debugHeaderDict(headers))
+	addDebugBody(event, bodyText, 1024).Msg("jira request")
 }
 
 func isDebuggableBody(contentType string) bool {
@@ -556,22 +558,55 @@ func isDebuggableBody(contentType string) bool {
 	return strings.HasPrefix(contentType, "application/json")
 }
 
-// dumpResponseHead writes status + headers to stderr.
-func (c *Client) dumpResponseHead(res *http.Response) {
-	fmt.Fprintf(os.Stderr, "DBG ◀ %d %s\n", res.StatusCode, res.Status)
-	for k, v := range redactHeaders(res.Header) {
-		fmt.Fprintf(os.Stderr, "DBG    %s: %s\n", k, strings.Join(v, ", "))
-	}
+// dumpResponseHead writes status + headers through the context logger.
+func (c *Client) dumpResponseHead(ctx context.Context, res *http.Response) {
+	debugLogger(ctx).Debug().
+		Int("status_code", res.StatusCode).
+		Str("status", res.Status).
+		Dict("headers", debugHeaderDict(redactHeaders(res.Header))).
+		Msg("jira response")
 }
 
-// dumpResponseBody writes the response body — truncated to keep logs
-// usable. Pretty-prints JSON when the body parses cleanly.
-func (c *Client) dumpResponseBody(body []byte) {
+// dumpResponseBody writes the response body through the context logger.
+func (c *Client) dumpResponseBody(ctx context.Context, body []byte) {
 	if len(body) == 0 {
-		fmt.Fprintln(os.Stderr, "DBG    body: (empty)")
+		addDebugBody(debugLogger(ctx).Debug(), "(empty)", 2048).Msg("jira response body")
 		return
 	}
-	fmt.Fprintf(os.Stderr, "DBG    body: %s\n", oneLineSnippet(string(redactSensitiveBytes(body)), 2048))
+	addDebugBody(debugLogger(ctx).Debug(), string(redactSensitiveBytes(body)), 2048).Msg("jira response body")
+}
+
+func debugLogger(ctx context.Context) *clog.Logger {
+	logger := clog.Ctx(ctx)
+	if logger != clog.Default || logger.LevelEnabled(clog.LevelDebug) {
+		return logger
+	}
+
+	// Preserve direct use of WithDebug(true) outside the Cobra command
+	// path. CLI execution normally configures clog.Default to stderr.
+	fallback := clog.New(clog.NewOutput(os.Stderr, clog.ColorAuto))
+	fallback.SetLevel(clog.LevelDebug)
+	return fallback
+}
+
+func debugHeaderDict(headers http.Header) *clog.Event {
+	dict := clog.Dict()
+	keys := make([]string, 0, len(headers))
+	for k := range headers {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		dict.Str(k, strings.Join(headers[k], ", "))
+	}
+	return dict
+}
+
+func addDebugBody(event *clog.Event, bodyText string, maxLen int) *clog.Event {
+	if bodyText == "" {
+		return event
+	}
+	return event.Str("body", oneLineSnippet(bodyText, maxLen))
 }
 
 // redactHeaders returns a copy of h with sensitive headers replaced by

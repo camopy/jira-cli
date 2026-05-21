@@ -115,6 +115,7 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	} else {
 		clog.SetOutput(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAuto))
 	}
+	logger := clog.With().Logger()
 
 	outputRaw, _ := pf.GetString("output")
 	outputMode, err := cli.ParseOutputMode(outputRaw)
@@ -136,8 +137,9 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	// so a legacy-keyring-fallback warning is scoped to the command that
 	// produced it and cannot bleed into another.
 	ctx = cmdutil.WithCredentialWarnSink(ctx)
+	ctx = logger.WithContext(ctx)
 	cmd.SetContext(ctx)
-	event := clog.Debug().Str("mode", string(det.Mode))
+	event := logger.Debug().Str("mode", string(det.Mode))
 	if det.AgentName != "" {
 		event.Str("agent", det.AgentName)
 	} else {
@@ -345,7 +347,7 @@ func Execute(ctx context.Context) error {
 	root := NewRootCommand(rt) //nolint:contextcheck // context flows via ExecuteContextC, not construction
 
 	if handled, err := handleCompletionPreflight(root); err != nil {
-		writeCommandError(root, err)
+		writeCommandError(ctx, root, err)
 		return err
 	} else if handled {
 		return errCompletionHandled
@@ -353,7 +355,7 @@ func Execute(ctx context.Context) error {
 
 	args, err := expandAliasArgs(root, os.Args[1:])
 	if err != nil {
-		writeCommandError(root, err)
+		writeCommandError(ctx, root, err)
 		return err
 	}
 	if args != nil {
@@ -369,7 +371,7 @@ func Execute(ctx context.Context) error {
 	}
 	if _, _, ferr := root.Find(effectiveArgs); ferr != nil {
 		cerr := unknownCommandError(root, firstPositional(root, effectiveArgs))
-		writeCommandError(root, cerr)
+		writeCommandError(ctx, root, cerr)
 		return cerr
 	}
 	// Optional whole-invocation deadline. Derive it here, where Execute
@@ -388,7 +390,11 @@ func Execute(ctx context.Context) error {
 	// cmd.Context() inherits cancellation.
 	cmd, err := root.ExecuteContextC(ctx)
 	if err != nil {
-		writeCommandError(cmd, err)
+		if cmd != nil {
+			writeCommandError(cmd.Context(), cmd, err) //nolint:contextcheck // use command context seeded by PersistentPreRunE
+			return err
+		}
+		writeCommandError(ctx, root, err)
 		return err
 	}
 	return nil
@@ -441,12 +447,16 @@ func timeoutFromArgs(args []string) time.Duration {
 	return *timeout
 }
 
-func writeCommandError(cmd *cobra.Command, err error) {
+func writeCommandError(ctx context.Context, cmd *cobra.Command, err error) {
 	if err == nil {
 		return
 	}
 	// Failures always emit a clog diagnostic on stderr.
-	clog.New(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAuto)).Error().Err(err).Send()
+	logger := clog.Ctx(ctx)
+	if logger == clog.Default {
+		logger = clog.New(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAuto))
+	}
+	logger.Error().Err(err).Send()
 	// Some RunEs (e.g. watcher add ambiguous-resolution) write a richer
 	// envelope to stdout themselves (with structured candidates etc.) and
 	// signal that with an envelopeWritten wrapper. Avoid double-writing.

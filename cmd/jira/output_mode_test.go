@@ -119,7 +119,7 @@ func TestPlainRawWarningsRouteToStderr(t *testing.T) {
 func TestCommandErrorsUseClogDiagnosticsOnStderr(t *testing.T) {
 	cmd, _, stderr := outputModeTestCommand(cli.ModePlain)
 
-	writeCommandError(cmd, errors.New("jira API failed"))
+	writeCommandError(cmd.Context(), cmd, errors.New("jira API failed"))
 	got := stderr.String()
 	if strings.Contains(got, `"errors"`) || strings.Contains(got, `"meta"`) || !strings.Contains(got, "jira API failed") {
 		t.Fatalf("command error did not emit clog diagnostic stderr:\n%s", got)

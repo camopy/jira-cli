@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -23,14 +22,13 @@ func TestRESTPathEscapesDynamicSegments(t *testing.T) {
 
 func TestIssueServiceGetEscapesIssueKeyPathSegment(t *testing.T) {
 	var requestURI string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestURI = r.RequestURI
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"key":"PROJ-1"}`))
 	}))
-	defer srv.Close()
 
-	service := NewIssueService(NewClient(WithBaseURL(srv.URL + "/")))
+	service := NewIssueService(client)
 	if _, _, err := service.Get(context.Background(), "PROJ-1/../../evil space", nil); err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
@@ -136,7 +134,7 @@ func TestIssueListDoesNotReadExportedMutableDefaultFields(t *testing.T) {
 	defer func() { IssueListFields = original }()
 
 	var fields []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload struct {
 			Fields []string `json:"fields"`
 		}
@@ -147,9 +145,8 @@ func TestIssueListDoesNotReadExportedMutableDefaultFields(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"issues":[],"isLast":true}`))
 	}))
-	defer srv.Close()
 
-	service := NewIssueService(NewClient(WithBaseURL(srv.URL + "/")))
+	service := NewIssueService(client)
 	if _, _, err := service.List(context.Background(), &IssueListOptions{JQL: "project=KAN"}); err != nil {
 		t.Fatalf("List() error = %v", err)
 	}

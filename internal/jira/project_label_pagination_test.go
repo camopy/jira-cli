@@ -3,7 +3,6 @@ package jira
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,7 +11,7 @@ import (
 
 func TestProjectServiceListStopsAtDefaultPageBound(t *testing.T) {
 	calls := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/rest/api/3/project/search" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
@@ -26,9 +25,8 @@ func TestProjectServiceListStopsAtDefaultPageBound(t *testing.T) {
 			"values":[{"id":"` + strconv.Itoa(calls) + `","key":"P` + strconv.Itoa(calls) + `","name":"Project ` + strconv.Itoa(calls) + `"}]
 		}`))
 	}))
-	defer srv.Close()
 
-	svc := NewProjectService(NewClient(WithBaseURL(srv.URL+"/")), time.Minute)
+	svc := NewProjectService(client, time.Minute)
 	_, _, err := svc.List(context.Background(), &ListOptions{MaxResults: 1})
 	if err == nil {
 		t.Fatal("List returned nil error for never-ending project pagination")
@@ -42,7 +40,7 @@ func TestProjectServiceListStopsAtDefaultPageBound(t *testing.T) {
 }
 
 func TestProjectServiceListContinuesPastEmptyNonFinalPage(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/rest/api/3/project/search" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
@@ -59,9 +57,8 @@ func TestProjectServiceListContinuesPastEmptyNonFinalPage(t *testing.T) {
 			t.Fatalf("unexpected startAt %d", startAt)
 		}
 	}))
-	defer srv.Close()
 
-	svc := NewProjectService(NewClient(WithBaseURL(srv.URL+"/")), time.Minute)
+	svc := NewProjectService(client, time.Minute)
 	projects, _, err := svc.List(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -73,7 +70,7 @@ func TestProjectServiceListContinuesPastEmptyNonFinalPage(t *testing.T) {
 
 func TestLabelServiceListStopsAtDefaultPageBound(t *testing.T) {
 	calls := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/rest/api/3/label" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
@@ -87,9 +84,8 @@ func TestLabelServiceListStopsAtDefaultPageBound(t *testing.T) {
 			"values":["label-` + strconv.Itoa(calls) + `"]
 		}`))
 	}))
-	defer srv.Close()
 
-	svc := NewLabelService(NewClient(WithBaseURL(srv.URL + "/")))
+	svc := NewLabelService(client)
 	_, _, err := svc.List(context.Background(), &ListOptions{MaxResults: 1})
 	if err == nil {
 		t.Fatal("List returned nil error for never-ending label pagination")
@@ -103,7 +99,7 @@ func TestLabelServiceListStopsAtDefaultPageBound(t *testing.T) {
 }
 
 func TestLabelServiceListContinuesPastEmptyNonFinalPage(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/rest/api/3/label" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
@@ -120,9 +116,8 @@ func TestLabelServiceListContinuesPastEmptyNonFinalPage(t *testing.T) {
 			t.Fatalf("unexpected startAt %d", startAt)
 		}
 	}))
-	defer srv.Close()
 
-	svc := NewLabelService(NewClient(WithBaseURL(srv.URL + "/")))
+	svc := NewLabelService(client)
 	labels, _, err := svc.List(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("List: %v", err)

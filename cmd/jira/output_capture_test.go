@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gechr/clog"
 	"github.com/matcra587/jira-cli/internal/cli/runtime"
 )
 
@@ -96,5 +97,36 @@ func TestParallelRootCommandsDoNotShareOutputState(t *testing.T) {
 	}
 	if strings.Contains(outB.String(), "\"ok\"") {
 		t.Errorf("root B (compact mode) emitted an envelope; output mode bled from a shared detector:\n%s", outB.String())
+	}
+}
+
+func TestRootPersistentPreRunStoresConfiguredClogLoggerInContext(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	root, _, err := NewRootCommandForTest(
+		runtime.WithStdout(&stdout),
+		runtime.WithStderr(&stderr),
+	)
+	if err != nil {
+		t.Fatalf("NewRootCommandForTest: %v", err)
+	}
+
+	root.SetArgs([]string{"--debug", "version", "--output=json"})
+	executed, execErr := root.ExecuteContextC(context.Background())
+	if execErr != nil {
+		t.Fatalf("execute version: %v\nstderr=%s", execErr, stderr.String())
+	}
+
+	logger := clog.Ctx(executed.Context())
+	if logger == clog.Default {
+		t.Fatal("root persistent pre-run stored clog.Default in command context; want a command-scoped logger")
+	}
+
+	const probe = "context logger debug probe"
+	logger.Debug().Msg(probe)
+	if strings.Contains(stdout.String(), probe) {
+		t.Fatalf("context debug log wrote to stdout:\n%s", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), probe) {
+		t.Fatalf("context debug log did not write to stderr:\n%s", stderr.String())
 	}
 }

@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"io"
 	"strings"
 
+	"github.com/gechr/clog"
 	termansi "github.com/gechr/x/ansi"
 )
 
@@ -60,7 +62,7 @@ func SanitizeCompletionField(s string) string {
 func Hyperlink(url, text string) string {
 	url = SanitizeTerminalText(url)
 	text = SanitizeTerminalText(text)
-	return termansi.Force().Hyperlink(url, text)
+	return clog.NewOutput(io.Discard, clog.ColorAlways).Hyperlink(url, text)
 }
 
 // isControlRune reports whether r is a C0 or C1 control character (the
