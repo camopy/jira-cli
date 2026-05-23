@@ -11,6 +11,7 @@ import (
 
 	"github.com/gechr/x/shell"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/cli/startup"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -192,11 +193,11 @@ func readAliasImport(cmd *cobra.Command, filename string) (map[string]string, er
 }
 
 func expandAliasArgs(root *cobra.Command, args []string) ([]string, error) {
-	prefix, name, rest, ok := splitFirstCommandArg(args)
+	prefix, name, rest, ok := startup.SplitFirstCommandArg(args)
 	if !ok || name == "alias" || isRootCommand(root, name) {
 		return args, nil
 	}
-	cfg, err := config.Load(config.WithPath(startupGlobalsFromArgs(args).ConfigPath))
+	cfg, err := config.Load(config.WithPath(startup.GlobalsFromArgs(args).ConfigPath))
 	if err != nil {
 		return nil, err
 	}
@@ -216,124 +217,6 @@ func expandAliasArgs(root *cobra.Command, args []string) ([]string, error) {
 	out = append(out, expanded...)
 	out = append(out, rest...)
 	return out, nil
-}
-
-func splitFirstCommandArg(args []string) (prefix []string, command string, rest []string, ok bool) {
-	_, prefix, command, rest, ok = parseStartupArgs(args)
-	return prefix, command, rest, ok
-}
-
-type startupGlobals struct {
-	ConfigPath string
-	Profile    string
-}
-
-func startupGlobalsFromArgs(args []string) startupGlobals {
-	return scanStartupGlobals(args)
-}
-
-func parseStartupArgs(args []string) (globals startupGlobals, prefix []string, command string, rest []string, ok bool) {
-	globals = scanStartupGlobals(args)
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if arg == "--" {
-			if i+1 >= len(args) {
-				return globals, args, "", nil, false
-			}
-			return globals, args[:i+1], args[i+1], args[i+2:], true
-		}
-		if consumeStartupGlobal(args, &i, &globals) {
-			continue
-		}
-		if strings.HasPrefix(arg, "-") {
-			continue
-		}
-		return globals, args[:i], arg, args[i+1:], true
-	}
-	return globals, args, "", nil, false
-}
-
-func scanStartupGlobals(args []string) startupGlobals {
-	var globals startupGlobals
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if arg == "--" {
-			break
-		}
-		if strings.HasPrefix(arg, "--") {
-			name, value, hasValue := strings.Cut(strings.TrimPrefix(arg, "--"), "=")
-			switch name {
-			case "config":
-				globals.ConfigPath = startupFlagValue(args, &i, value, hasValue)
-			case "profile":
-				globals.Profile = startupFlagValue(args, &i, value, hasValue)
-			}
-			continue
-		}
-		if strings.HasPrefix(arg, "-c") && arg != "-" {
-			globals.ConfigPath = startupShortFlagValue(args, &i, arg)
-			continue
-		}
-		if strings.HasPrefix(arg, "-p") && arg != "-" {
-			globals.Profile = startupShortFlagValue(args, &i, arg)
-			continue
-		}
-	}
-	return globals
-}
-
-func consumeStartupGlobal(args []string, i *int, globals *startupGlobals) bool {
-	arg := args[*i]
-	if strings.HasPrefix(arg, "--") {
-		name, value, hasValue := strings.Cut(strings.TrimPrefix(arg, "--"), "=")
-		switch name {
-		case "config":
-			globals.ConfigPath = startupFlagValue(args, i, value, hasValue)
-			return true
-		case "profile":
-			globals.Profile = startupFlagValue(args, i, value, hasValue)
-			return true
-		case "output", "timeout", "color":
-			_ = startupFlagValue(args, i, value, hasValue)
-			return true
-		case "interactive", "debug", "no-input", "adf-strict", "adf-best-effort":
-			return true
-		default:
-			return hasValue
-		}
-	}
-	if strings.HasPrefix(arg, "-c") && arg != "-" {
-		globals.ConfigPath = startupShortFlagValue(args, i, arg)
-		return true
-	}
-	if strings.HasPrefix(arg, "-p") && arg != "-" {
-		globals.Profile = startupShortFlagValue(args, i, arg)
-		return true
-	}
-	return arg == "-i" || arg == "-d"
-}
-
-func startupFlagValue(args []string, i *int, value string, hasValue bool) string {
-	if hasValue {
-		return value
-	}
-	if *i+1 >= len(args) {
-		return ""
-	}
-	*i = *i + 1
-	return args[*i]
-}
-
-func startupShortFlagValue(args []string, i *int, arg string) string {
-	if len(arg) > 2 {
-		value := strings.TrimPrefix(arg[2:], "=")
-		return value
-	}
-	if *i+1 >= len(args) {
-		return ""
-	}
-	*i = *i + 1
-	return args[*i]
 }
 
 func validateAliasName(root *cobra.Command, name string) error {
@@ -359,7 +242,7 @@ func isRootCommand(root *cobra.Command, name string) bool {
 }
 
 func validAliasExpansion(root *cobra.Command, cfg *config.Config, expansion string) bool {
-	_, name, _, ok := splitFirstCommandArg(mustSplitAliasExpansion(expansion))
+	_, name, _, ok := startup.SplitFirstCommandArg(mustSplitAliasExpansion(expansion))
 	if !ok {
 		return false
 	}

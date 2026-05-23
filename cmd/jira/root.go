@@ -16,6 +16,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/cli/runtime"
+	"github.com/matcra587/jira-cli/internal/cli/startup"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -396,16 +397,16 @@ func handleCompletionPreflight(root *cobra.Command) (bool, error) {
 		return false, nil
 	}
 	gen := completionGenerator(root)
-	startup := startupGlobalsFromArgs(os.Args[1:])
-	if forwarded := startupGlobalsFromArgs(positional); forwarded.ConfigPath != "" || forwarded.Profile != "" {
+	globals := startup.GlobalsFromArgs(os.Args[1:])
+	if forwarded := startup.GlobalsFromArgs(positional); forwarded.ConfigPath != "" || forwarded.Profile != "" {
 		if forwarded.ConfigPath != "" {
-			startup.ConfigPath = forwarded.ConfigPath
+			globals.ConfigPath = forwarded.ConfigPath
 		}
 		if forwarded.Profile != "" {
-			startup.Profile = forwarded.Profile
+			globals.Profile = forwarded.Profile
 		}
 	}
-	handled, err := flags.Handle(gen, completionHandler(startup), complete.WithArgs(positional))
+	handled, err := flags.Handle(gen, completionHandler(globals), complete.WithArgs(positional))
 	if err != nil {
 		return false, err
 	}

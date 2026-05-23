@@ -9,6 +9,7 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/cache"
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/startup"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
@@ -21,12 +22,12 @@ import (
 // Each predictor name corresponds either to a flag's
 // `clib.FlagExtra{Complete: "predictor=foo"}` or to an entry in a command's
 // `Annotations["clib"]` `dynamic-args='foo,bar'` list.
-func completionHandler(startup startupGlobals) complete.Handler {
+func completionHandler(globals startup.Globals) complete.Handler {
 	return func(shell, kind string, args []string) {
 		_ = shell
 		switch kind {
 		case "profile":
-			cfg, err := config.Load(config.WithPath(startup.ConfigPath))
+			cfg, err := config.Load(config.WithPath(globals.ConfigPath))
 			if err != nil {
 				return
 			}
@@ -34,7 +35,7 @@ func completionHandler(startup startupGlobals) complete.Handler {
 				_, _ = fmt.Fprintln(os.Stdout, p.Name)
 			}
 		case "configkey":
-			cfg, _ := config.Load(config.WithPath(startup.ConfigPath))
+			cfg, _ := config.Load(config.WithPath(globals.ConfigPath))
 			for _, k := range config.Keys(cfg) {
 				_, _ = fmt.Fprintf(os.Stdout, "%s\t%s\n", k.Name, k.Description)
 			}
@@ -47,7 +48,7 @@ func completionHandler(startup startupGlobals) complete.Handler {
 				_, _ = fmt.Fprintln(os.Stdout, choice)
 			}
 		case "alias":
-			cfg, err := config.Load(config.WithPath(startup.ConfigPath))
+			cfg, err := config.Load(config.WithPath(globals.ConfigPath))
 			if err != nil {
 				return
 			}
@@ -59,17 +60,17 @@ func completionHandler(startup startupGlobals) complete.Handler {
 				_, _ = fmt.Fprintln(os.Stdout, r)
 			}
 		case "cacheproject":
-			emitCachedProjects(completionCacheKey(startup))
+			emitCachedProjects(completionCacheKey(globals))
 		case "cacheepic":
-			emitCachedEpics(completionCacheKey(startup))
+			emitCachedEpics(completionCacheKey(globals))
 		case "cachelabel":
-			emitCachedLabels(completionCacheKey(startup))
+			emitCachedLabels(completionCacheKey(globals))
 		case "cacheissuetype":
-			emitCachedIssueTypes(completionCacheKey(startup))
+			emitCachedIssueTypes(completionCacheKey(globals))
 		case "cachelinktype":
-			emitCachedLinkTypes(completionCacheKey(startup))
+			emitCachedLinkTypes(completionCacheKey(globals))
 		case "cacheboard":
-			emitCachedBoards(completionCacheKey(startup))
+			emitCachedBoards(completionCacheKey(globals))
 		case "issuekey":
 			// Every command taking an issue key positionally carries the
 			// dynamic-args='issuekey' annotation so a future issue-key
@@ -85,18 +86,18 @@ func completionHandler(startup startupGlobals) complete.Handler {
 
 // completionCacheKey picks the cache namespace for cache-backed completion.
 // Falls back to the default profile identity when the config is missing.
-func completionCacheKey(startup startupGlobals) string {
-	cfg, err := config.Load(config.WithPath(startup.ConfigPath))
-	if startup.Profile != "" {
+func completionCacheKey(globals startup.Globals) string {
+	cfg, err := config.Load(config.WithPath(globals.ConfigPath))
+	if globals.Profile != "" {
 		if err != nil {
-			return cacheKeyFromStartup(startup, nil, startup.Profile)
+			return cacheKeyFromStartup(globals, nil, globals.Profile)
 		}
-		return cacheKeyFromStartup(startup, cfg, startup.Profile)
+		return cacheKeyFromStartup(globals, cfg, globals.Profile)
 	}
 	if err != nil || cfg.DefaultProfile == "" {
-		return cacheKeyFromStartup(startup, nil, "default")
+		return cacheKeyFromStartup(globals, nil, "default")
 	}
-	return cacheKeyFromStartup(startup, cfg, cfg.DefaultProfile)
+	return cacheKeyFromStartup(globals, cfg, cfg.DefaultProfile)
 }
 
 func emitCachedProjects(profile string) {

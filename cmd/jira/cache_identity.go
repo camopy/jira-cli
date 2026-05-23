@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/matcra587/jira-cli/internal/cache"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/cli/startup"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/spf13/cobra"
 )
@@ -18,16 +19,16 @@ func cacheConfigPath(cmd *cobra.Command) string {
 	return config.DefaultPath()
 }
 
-func cacheKeyFromStartup(startup startupGlobals, cfg *config.Config, profileName string) string {
-	if startup.ConfigPath == "" {
-		startup.ConfigPath = config.DefaultPath()
+func cacheKeyFromStartup(globals startup.Globals, cfg *config.Config, profileName string) string {
+	if globals.ConfigPath == "" {
+		globals.ConfigPath = config.DefaultPath()
 	}
 	if cfg == nil {
-		return cache.Key(profileName, "", startup.ConfigPath)
+		return cache.Key(profileName, "", globals.ConfigPath)
 	}
 	profile, err := cfg.ResolveProfile(profileName)
 	if err != nil {
-		return cache.Key(profileName, "", startup.ConfigPath)
+		return cache.Key(profileName, "", globals.ConfigPath)
 	}
-	return cache.Key(profile.Name, profile.BaseURL, startup.ConfigPath)
+	return cache.Key(profile.Name, profile.BaseURL, globals.ConfigPath)
 }
