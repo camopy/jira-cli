@@ -17,6 +17,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/config"
 	editorpkg "github.com/matcra587/jira-cli/internal/editor"
 	"github.com/matcra587/jira-cli/internal/jira"
+	"github.com/matcra587/jira-cli/internal/jql"
 	"github.com/matcra587/jira-cli/internal/pipeline"
 	"github.com/spf13/cobra"
 )
@@ -160,7 +161,7 @@ func collectIssueLossyWarnings(issue *jira.Issue) []adf.Warning {
 // issueListOptions captures every input the issue-list runner needs.
 // Both `issue list` and `issue mine` populate it from their flags.
 type issueListOptions struct {
-	builder  jqlBuildOptions
+	builder  jql.BuildOptions
 	jqlQuery string
 	detail   bool
 	asJQL    bool
@@ -195,7 +196,7 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 		if !scopeActive && strings.TrimSpace(opts.jqlQuery) == "" {
 			builder = issueListBuilderWithProfileDefaults(builder, profile)
 		}
-		query, err := issueListJQL(opts.jqlQuery, builder)
+		query, err := jql.IssueList(opts.jqlQuery, builder)
 		if err != nil {
 			return err
 		}
@@ -210,7 +211,7 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 	if !scopeActive && strings.TrimSpace(opts.jqlQuery) == "" {
 		builder = issueListBuilderWithProfileDefaults(builder, profile)
 	}
-	query, err := issueListJQL(opts.jqlQuery, builder)
+	query, err := jql.IssueList(opts.jqlQuery, builder)
 	if err != nil {
 		return err
 	}
@@ -252,8 +253,8 @@ func applyBoardClauseToJQL(query string, scope jira.BoardScope) string {
 	}
 	// Insert the clause before any ORDER BY suffix so the resulting
 	// expression remains a valid `<filters> ORDER BY <field>` query.
-	filter, orderBy := splitTopLevelOrderBy(q)
-	return combineJQLClauses(clause, parenthesizeJQLIfTopLevelOR(filter)) + orderBy
+	filter, orderBy := jql.SplitTopLevelOrderBy(q)
+	return jql.CombineClauses(clause, jql.ParenthesizeIfTopLevelOR(filter)) + orderBy
 }
 
 // boardScopedListData extends issueListOutputData with the new envelope
@@ -271,8 +272,8 @@ func boardScopedListData(cmd *cobra.Command, issues any, detail bool, query stri
 // (issueListBuilderWithProfileDefaults, issueListOutputData) remain in
 // this file because they are shared with `issue mine`.
 
-func issueListBuilderWithProfileDefaults(builder jqlBuildOptions, profile config.Profile) jqlBuildOptions {
-	if len(compactStrings(builder.Projects)) == 0 && profile.DefaultProject != "" {
+func issueListBuilderWithProfileDefaults(builder jql.BuildOptions, profile config.Profile) jql.BuildOptions {
+	if len(jql.CompactStrings(builder.Projects)) == 0 && profile.DefaultProject != "" {
 		builder.Projects = []string{profile.DefaultProject}
 	}
 	return builder

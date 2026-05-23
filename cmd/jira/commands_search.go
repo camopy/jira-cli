@@ -7,6 +7,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
+	"github.com/matcra587/jira-cli/internal/jql"
 	"github.com/spf13/cobra"
 )
 
@@ -125,7 +126,7 @@ func addSearchOutputFlags(cmd *cobra.Command, opts *searchOptions) {
 }
 
 func searchOutputFields(opts searchOptions) ([]string, bool, error) {
-	fields := compactStrings(opts.fields)
+	fields := jql.CompactStrings(opts.fields)
 	if opts.full && len(fields) > 0 {
 		return nil, false, fmt.Errorf("validation: --fields and --full are mutually exclusive")
 	}

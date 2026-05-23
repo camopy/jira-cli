@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/matcra587/jira-cli/internal/jira"
+	"github.com/matcra587/jira-cli/internal/jql"
 )
 
 func TestCommandsUseConfiguredJiraServices(t *testing.T) {
@@ -29,7 +29,7 @@ func TestCommandsUseConfiguredJiraServices(t *testing.T) {
 			}
 			seenJQL = append(seenJQL, body.JQL)
 			switch body.JQL {
-			case jira.DefaultIssueListJQL:
+			case jql.DefaultIssueListJQL:
 				_, _ = w.Write([]byte(`{"isLast":true,"issues":[{"key":"PROJ-1","fields":{"summary":"From server","status":{"name":"To Do"},"priority":{"name":"High"},"updated":"2026-05-03T10:00:00Z"}}]}`))
 			case "project = CUSTOM":
 				_, _ = w.Write([]byte(`{"isLast":true,"issues":[{"key":"CUSTOM-1","fields":{"summary":"Custom search"}}]}`))
@@ -66,7 +66,7 @@ func TestCommandsUseConfiguredJiraServices(t *testing.T) {
 			t.Fatalf("jira %v output missing %s=%v:\n%s", tc.args, tc.key, tc.val, out)
 		}
 	}
-	for _, want := range []string{jira.DefaultIssueListJQL, "project = CUSTOM", "project = PROJ"} {
+	for _, want := range []string{jql.DefaultIssueListJQL, "project = CUSTOM", "project = PROJ"} {
 		if !slices.Contains(seenJQL, want) {
 			t.Fatalf("missing JQL %q in %v", want, seenJQL)
 		}

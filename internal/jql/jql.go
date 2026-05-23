@@ -1,0 +1,305 @@
+// Package jql builds and composes Jira Query Language strings from
+// structured inputs. It is pure string logic — no cobra, config, or I/O —
+// so the jql/search/issue command layers and shell completion can all share
+// one query builder without import cycles.
+package jql
+
+import (
+	"fmt"
+	"strings"
+	"unicode"
+)
+
+// DefaultIssueListJQL is the bounded default query used when an issue list is
+// requested with no filters and no explicit sort. It is owned here, in the
+// query domain, and consumed by the Jira issue service as its List default.
+const DefaultIssueListJQL = "updated >= -365d ORDER BY updated DESC"
+
+// BuildOptions captures the structured filters that compose into a JQL query.
+type BuildOptions struct {
+	Projects   []string
+	Epics      []string
+	Assignee   string
+	Reporter   string
+	Statuses   []string
+	Priorities []string
+	Labels     []string
+	IssueTypes []string
+	OrderBy    string
+	Descending bool
+}
+
+// Build renders the options into a complete JQL query (with ORDER BY). With
+// no filters and no explicit sort it returns the default bounded issue list.
+func (o BuildOptions) Build() (string, error) {
+	clauses := o.filterClauses()
+
+	if len(clauses) == 0 && strings.TrimSpace(o.OrderBy) == "" && !o.Descending {
+		return DefaultIssueListJQL, nil
+	}
+	if len(clauses) == 0 {
+		clauses = append(clauses, "updated >= -365d")
+	}
+
+	query := strings.Join(clauses, " AND ")
+	orderBy := strings.TrimSpace(o.OrderBy)
+	if orderBy == "" {
+		orderBy = "updated"
+	}
+	if orderBy != "none" {
+		if !isSafeJQLIdentifier(orderBy) {
+			return "", fmt.Errorf("invalid order-by field %q", orderBy)
+		}
+		direction := "ASC"
+		if o.Descending {
+			direction = "DESC"
+		}
+		query += " ORDER BY " + orderBy + " " + direction
+	}
+	return query, nil
+}
+
+func (o BuildOptions) filterClauses() []string {
+	clauses := make([]string, 0, 8)
+	appendInClause := func(field string, values []string) {
+		values = CompactStrings(values)
+		if len(values) == 0 {
+			return
+		}
+		if len(values) == 1 {
+			clauses = append(clauses, field+" = "+jqlValue(values[0]))
+			return
+		}
+		clauses = append(clauses, field+" in ("+joinJQLValues(values)+")")
+	}
+
+	appendInClause("project", o.Projects)
+	if clause := userClause("assignee", o.Assignee); clause != "" {
+		clauses = append(clauses, clause)
+	}
+	if clause := userClause("reporter", o.Reporter); clause != "" {
+		clauses = append(clauses, clause)
+	}
+	appendInClause("parent", o.Epics)
+	appendInClause("status", o.Statuses)
+	appendInClause("priority", o.Priorities)
+	appendInClause("labels", o.Labels)
+	appendInClause("issuetype", o.IssueTypes)
+	return clauses
+}
+
+// IssueList combines a raw JQL string with the builder's structured filters.
+// A non-empty raw query is parenthesized and AND-ed beneath the filters,
+// preserving any top-level ORDER BY suffix. An empty raw query falls back to
+// Build.
+func IssueList(raw string, builder BuildOptions) (string, error) {
+	if raw := strings.TrimSpace(raw); raw != "" {
+		clauses := builder.filterClauses()
+		if len(clauses) == 0 {
+			return raw, nil
+		}
+		query, orderBy := SplitTopLevelOrderBy(raw)
+		if strings.TrimSpace(query) == "" {
+			return strings.Join(clauses, " AND ") + orderBy, nil
+		}
+		clauses = append(clauses, parenthesizeJQL(query))
+		return strings.Join(clauses, " AND ") + orderBy, nil
+	}
+	return builder.Build()
+}
+
+// CombineClauses AND-joins two JQL fragments, dropping either side when blank.
+func CombineClauses(lhs, rhs string) string {
+	lhs = strings.TrimSpace(lhs)
+	rhs = strings.TrimSpace(rhs)
+	if lhs == "" {
+		return rhs
+	}
+	if rhs == "" {
+		return lhs
+	}
+	return lhs + " AND " + rhs
+}
+
+func parenthesizeJQL(query string) string {
+	query = strings.TrimSpace(query)
+	if query == "" || isWrappedJQL(query) {
+		return query
+	}
+	return "(" + query + ")"
+}
+
+// ParenthesizeIfTopLevelOR wraps query in parentheses only when it contains a
+// top-level OR, so AND-composition with another clause keeps the original
+// precedence.
+func ParenthesizeIfTopLevelOR(query string) string {
+	if hasTopLevelWord(query, "OR") {
+		return parenthesizeJQL(query)
+	}
+	return strings.TrimSpace(query)
+}
+
+// SplitTopLevelOrderBy splits query into the filter portion and a leading-space
+// " ORDER BY ..." suffix (empty when there is no top-level ORDER BY).
+func SplitTopLevelOrderBy(query string) (string, string) {
+	idx := findTopLevelOrderBy(query)
+	if idx == -1 {
+		return strings.TrimSpace(query), ""
+	}
+	return strings.TrimSpace(query[:idx]), " " + strings.TrimSpace(query[idx:])
+}
+
+func findTopLevelOrderBy(query string) int {
+	tokens := topLevelWordTokens(query)
+	for i := 0; i+1 < len(tokens); i++ {
+		if strings.EqualFold(tokens[i].word, "ORDER") && strings.EqualFold(tokens[i+1].word, "BY") {
+			return tokens[i].start
+		}
+	}
+	return -1
+}
+
+func hasTopLevelWord(query, want string) bool {
+	for _, token := range topLevelWordTokens(query) {
+		if strings.EqualFold(token.word, want) {
+			return true
+		}
+	}
+	return false
+}
+
+type jqlWordToken struct {
+	word  string
+	start int
+}
+
+func topLevelWordTokens(query string) []jqlWordToken {
+	var (
+		tokens []jqlWordToken
+		depth  int
+		quote  rune
+		start  = -1
+	)
+	flush := func(end int) {
+		if start == -1 {
+			return
+		}
+		tokens = append(tokens, jqlWordToken{word: query[start:end], start: start})
+		start = -1
+	}
+	for i, r := range query {
+		if quote != 0 {
+			if r == quote && (i == 0 || query[i-1] != '\\') {
+				quote = 0
+			}
+			continue
+		}
+		switch {
+		case r == '"' || r == '\'':
+			flush(i)
+			quote = r
+		case r == '(':
+			flush(i)
+			depth++
+		case r == ')':
+			flush(i)
+			if depth > 0 {
+				depth--
+			}
+		case depth == 0 && (unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'):
+			if start == -1 {
+				start = i
+			}
+		default:
+			flush(i)
+		}
+	}
+	flush(len(query))
+	return tokens
+}
+
+func isWrappedJQL(query string) bool {
+	query = strings.TrimSpace(query)
+	if len(query) < 2 || query[0] != '(' || query[len(query)-1] != ')' {
+		return false
+	}
+	depth := 0
+	quote := byte(0)
+	for i := 0; i < len(query); i++ {
+		ch := query[i]
+		if quote != 0 {
+			if ch == quote && (i == 0 || query[i-1] != '\\') {
+				quote = 0
+			}
+			continue
+		}
+		switch ch {
+		case '"', '\'':
+			quote = ch
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 && i != len(query)-1 {
+				return false
+			}
+		}
+	}
+	return depth == 0
+}
+
+func userClause(field, value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	switch strings.ToLower(value) {
+	case "me", "currentuser()":
+		return field + " = currentUser()"
+	case "none", "empty", "unassigned":
+		return field + " is EMPTY"
+	default:
+		return field + " = " + jqlValue(value)
+	}
+}
+
+// CompactStrings returns values with empty/whitespace-only entries dropped and
+// the rest trimmed.
+func CompactStrings(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+func joinJQLValues(values []string) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		parts = append(parts, jqlValue(value))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func jqlValue(value string) string {
+	value = strings.TrimSpace(value)
+	if isSafeJQLIdentifier(value) {
+		return value
+	}
+	return `"` + strings.ReplaceAll(value, `"`, `\"`) + `"`
+}
+
+func isSafeJQLIdentifier(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '-' || r == '.' {
+			continue
+		}
+		return false
+	}
+	return true
+}

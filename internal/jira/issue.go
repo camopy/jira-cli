@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/matcra587/jira-cli/internal/adf"
+	"github.com/matcra587/jira-cli/internal/jql"
 )
 
 // lexorankPattern matches Jira Software's lexorank tokens (e.g. "0|i0003z:",
@@ -66,8 +67,6 @@ type RemoteLinkRequest struct {
 type issueService struct {
 	client *Client
 }
-
-const DefaultIssueListJQL = "updated >= -365d ORDER BY updated DESC"
 
 var defaultIssueListFields = []string{"key", "summary", "status", "assignee", "priority", "updated"}
 
@@ -180,7 +179,7 @@ func (s *issueService) List(ctx context.Context, opts *IssueListOptions) ([]*Iss
 		body.Fields = DefaultIssueListFields()
 	}
 	if strings.TrimSpace(body.JQL) == "" {
-		body.JQL = DefaultIssueListJQL
+		body.JQL = jql.DefaultIssueListJQL
 	}
 	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("search", "jql"), body.payload())
 	if err != nil {

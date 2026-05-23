@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/matcra587/jira-cli/internal/jira"
+	"github.com/matcra587/jira-cli/internal/jql"
 )
 
 func TestIssueServiceListGetPaginationAndRateLimit(t *testing.T) {
@@ -49,8 +50,8 @@ func TestIssueServiceListGetPaginationAndRateLimit(t *testing.T) {
 	if got := requests[0].body["maxResults"]; got != float64(50) {
 		t.Fatalf("List() maxResults body = %#v", requests[0].body)
 	}
-	if got := requests[0].body["jql"]; got != jira.DefaultIssueListJQL {
-		t.Fatalf("List() default jql = %#v, want %q", got, jira.DefaultIssueListJQL)
+	if got := requests[0].body["jql"]; got != jql.DefaultIssueListJQL {
+		t.Fatalf("List() default jql = %#v, want %q", got, jql.DefaultIssueListJQL)
 	}
 	fields, ok := requests[0].body["fields"].([]any)
 	if !ok {
