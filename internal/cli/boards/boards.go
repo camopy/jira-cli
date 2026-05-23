@@ -4,7 +4,7 @@
 // The cache primer lives in cache.go (`jira cache boards`); this file
 // renders the cached list and primes transparently when the cache is
 // empty so first-run UX requires no extra step.
-package main
+package boards
 
 import (
 	"encoding/json"
@@ -19,10 +19,10 @@ import (
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
-// boardsCommand is the parent group for `jira boards <subcommand>`.
+// NewCommand is the parent group for `jira boards <subcommand>`.
 // Today only `list` exists; future feature slices may add `boards
 // view`, `boards rename`, etc.
-func boardsCommand() *cobra.Command {
+func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("boards", "Browse the boards visible to this profile", "resources")
 	cmd.AddCommand(boardsListCommand())
 	return cmd
@@ -78,7 +78,7 @@ func boardsListCommand() *cobra.Command {
 				"truncated":        file.Truncated,
 				"truncated_reason": file.TruncatedReason,
 			}
-			addCacheStateFields(envelopeData, cacheSourceState, len(boards))
+			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(boards))
 			warnings := boardsTruncationWarnings(file)
 			return cmdutil.WriteEnvelopeWithRawWarnings(cmd, "boards.list", envelopeData, warnings)
 		},
@@ -101,29 +101,29 @@ func boardsListCommand() *cobra.Command {
 // "transparent first-run" UX would otherwise leave new users with an
 // empty list. --refresh always primes regardless of staleness.
 func readOrPrimeBoardsCache(cmd *cobra.Command, client *jira.Client, cacheProfile string, hasClient bool, ttl time.Duration, ttlMinutes int, refresh, unbounded bool) (jira.BoardsCacheFile, time.Time, bool, string, error) {
-	cacheSourceState := cacheStateRefresh
+	cacheSourceState := cmdutil.CacheStateRefresh
 	if !refresh {
 		entry, present, stale, readErr := cache.Read(cacheProfile, "boards", ttl)
 		switch {
 		case readErr != nil:
-			cacheSourceState = cacheStateMalformed
+			cacheSourceState = cmdutil.CacheStateMalformed
 		case present && !stale:
 			items, err := jira.DecodeBoardsCache(entry.Data)
 			if err != nil {
-				return jira.BoardsCacheFile{}, time.Time{}, false, cacheStateFresh, fmt.Errorf("boards.list: decode cache: %w", err)
+				return jira.BoardsCacheFile{}, time.Time{}, false, cmdutil.CacheStateFresh, fmt.Errorf("boards.list: decode cache: %w", err)
 			}
 			file := boardsCacheFileFromEntry(entry.Data, items)
-			return file, entry.FetchedAt, true, cacheStateFresh, nil
+			return file, entry.FetchedAt, true, cmdutil.CacheStateFresh, nil
 		case present && stale:
-			cacheSourceState = cacheStateStale
+			cacheSourceState = cmdutil.CacheStateStale
 		default:
-			cacheSourceState = cacheStateMissing
+			cacheSourceState = cmdutil.CacheStateMissing
 		}
 	}
 	if !hasClient {
 		return jira.BoardsCacheFile{}, time.Time{}, false, cacheSourceState, fmt.Errorf("jira base URL is required for boards.list")
 	}
-	file, _, err := primeBoards(cmd.Context(), client, ttlMinutes, unbounded)
+	file, _, err := cmdutil.PrimeBoards(cmd.Context(), client, ttlMinutes, unbounded)
 	if err != nil {
 		return jira.BoardsCacheFile{}, time.Time{}, false, cacheSourceState, err
 	}
@@ -236,7 +236,3 @@ func safeIntPtr(p *int) int {
 	}
 	return *p
 }
-
-// cmdutil.WriteEnvelopeWithRawWarnings is the shared helper in commands.go for
-// emitting standard envelopes alongside free-form warning shapes (e.g.
-// the cache-truncated warning) that don't fit cli.Warning's typed fields.

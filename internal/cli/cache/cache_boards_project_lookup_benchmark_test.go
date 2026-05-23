@@ -1,4 +1,4 @@
-package main
+package cache_test
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -35,7 +36,7 @@ func BenchmarkPrimeBoardsDuplicateBoardProjectCache(b *testing.B) {
 	client := jira.NewClient(jira.WithBaseURL(srv.URL + "/"))
 	b.ReportAllocs()
 	for b.Loop() {
-		if _, _, err := primeBoards(context.Background(), client, 60, false); err != nil {
+		if _, _, err := cmdutil.PrimeBoards(context.Background(), client, 60, false); err != nil {
 			b.Fatal(err)
 		}
 	}

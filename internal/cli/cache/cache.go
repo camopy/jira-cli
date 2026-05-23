@@ -1,10 +1,9 @@
-package main
+package cache
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -15,13 +14,13 @@ import (
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
-// cacheCommand groups per-resource cache primers + housekeeping. Each
+// NewCommand groups per-resource cache primers + housekeeping. Each
 // subcommand fetches the resource, writes the JSON-encoded list under a
 // config/site/profile cache namespace, and emits the list as the envelope's
 // data so agents (and completion functions) can pipe it.
 //
 // Reads are cheap (single file) — see `internal/cache` for the format.
-func cacheCommand() *cobra.Command {
+func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("cache", "Prime / inspect the local Jira metadata cache", "agent")
 	cmd.AddCommand(cacheLabelsCommand())
 	cmd.AddCommand(cacheProjectsCommand())
@@ -32,57 +31,6 @@ func cacheCommand() *cobra.Command {
 	cmd.AddCommand(cacheBoardsCommand())
 	cmd.AddCommand(cacheClearCommand())
 	return cmd
-}
-
-const (
-	cacheStateEmpty     = "empty"
-	cacheStateFresh     = "fresh"
-	cacheStateMalformed = "malformed"
-	cacheStateMissing   = "missing"
-	cacheStateRefresh   = "refresh"
-	cacheStateStale     = "stale"
-)
-
-// cacheReadOrFetch is the read-then-fetch helper every subcommand uses.
-// Returns the JSON-encoded resource bytes, whether the value was served
-// from disk, and the state observed before any fetch.
-func cacheReadOrFetch(profile, resource string, ttl time.Duration, refresh bool, fetch func() (json.RawMessage, error)) (json.RawMessage, bool, time.Time, string, error) {
-	sourceState := cacheStateRefresh
-	if !refresh {
-		entry, ok, stale, err := cache.Read(profile, resource, ttl)
-		switch {
-		case err != nil:
-			sourceState = cacheStateMalformed
-		case ok && !stale:
-			return entry.Data, true, entry.FetchedAt, cacheStateFresh, nil
-		case ok && stale:
-			sourceState = cacheStateStale
-		default:
-			sourceState = cacheStateMissing
-		}
-	}
-	data, err := fetch()
-	if err != nil {
-		return nil, false, time.Time{}, sourceState, err
-	}
-	entry, err := cache.Write(profile, resource, data)
-	if err != nil {
-		return nil, false, time.Time{}, sourceState, err
-	}
-	return entry.Data, false, entry.FetchedAt, sourceState, nil
-}
-
-func cacheStateForCount(sourceState string, count int) string {
-	if count == 0 {
-		return cacheStateEmpty
-	}
-	return sourceState
-}
-
-func addCacheStateFields(data map[string]any, sourceState string, count int) {
-	data["cache_state"] = cacheStateForCount(sourceState, count)
-	data["cache_source_state"] = sourceState
-	data["cache_empty"] = count == 0
 }
 
 func cacheLabelsCommand() *cobra.Command {
@@ -97,7 +45,7 @@ func cacheLabelsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "labels", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cmdutil.CacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "labels", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.labels")
 				}
@@ -121,7 +69,7 @@ func cacheLabelsCommand() *cobra.Command {
 				"from_cache": fromCache,
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
 			}
-			addCacheStateFields(envelopeData, cacheSourceState, len(labels))
+			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(labels))
 			return cmdutil.WriteEnvelope(cmd, "cache.labels", envelopeData)
 		},
 	}
@@ -143,7 +91,7 @@ func cacheProjectsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "projects", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cmdutil.CacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "projects", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.projects")
 				}
@@ -167,7 +115,7 @@ func cacheProjectsCommand() *cobra.Command {
 				"from_cache": fromCache,
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
 			}
-			addCacheStateFields(envelopeData, cacheSourceState, len(projects))
+			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(projects))
 			return cmdutil.WriteEnvelope(cmd, "cache.projects", envelopeData)
 		},
 	}
@@ -197,7 +145,7 @@ func cacheEpicsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "epics", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cmdutil.CacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "epics", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.epics")
 				}
@@ -217,7 +165,7 @@ func cacheEpicsCommand() *cobra.Command {
 				"from_cache": fromCache,
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
 			}
-			addCacheStateFields(envelopeData, cacheSourceState, len(epics))
+			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(epics))
 			return cmdutil.WriteEnvelope(cmd, "cache.epics", envelopeData)
 		},
 	}
@@ -271,7 +219,7 @@ func cacheFieldsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "fields", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cmdutil.CacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "fields", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.fields")
 				}
@@ -291,7 +239,7 @@ func cacheFieldsCommand() *cobra.Command {
 				"from_cache": fromCache,
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
 			}
-			addCacheStateFields(envelopeData, cacheSourceState, len(fields))
+			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(fields))
 			return cmdutil.WriteEnvelope(cmd, "cache.fields", envelopeData)
 		},
 	}
@@ -342,7 +290,7 @@ func cacheIssueTypesCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "issuetypes", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cmdutil.CacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "issuetypes", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.issuetypes")
 				}
@@ -362,7 +310,7 @@ func cacheIssueTypesCommand() *cobra.Command {
 				"from_cache": fromCache,
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
 			}
-			addCacheStateFields(envelopeData, cacheSourceState, len(types))
+			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(types))
 			return cmdutil.WriteEnvelope(cmd, "cache.issuetypes", envelopeData)
 		},
 	}
@@ -407,7 +355,7 @@ func cacheLinkTypesCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "linktypes", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cmdutil.CacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "linktypes", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.linktypes")
 				}
@@ -431,7 +379,7 @@ func cacheLinkTypesCommand() *cobra.Command {
 				"from_cache": fromCache,
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
 			}
-			addCacheStateFields(envelopeData, cacheSourceState, len(types))
+			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(types))
 			return cmdutil.WriteEnvelope(cmd, "cache.linktypes", envelopeData)
 		},
 	}
@@ -460,20 +408,20 @@ func cacheBoardsCommand() *cobra.Command {
 			}
 			ttl := time.Duration(ttlMinutes) * time.Minute
 
-			cacheSourceState := cacheStateRefresh
+			cacheSourceState := cmdutil.CacheStateRefresh
 
 			// Cache hit path — short-circuit before fetching unless --refresh.
 			if !refresh {
 				entry, present, stale, readErr := cache.Read(cmdutil.CacheKeyForProfile(cmd, profile), "boards", ttl)
 				switch {
 				case readErr != nil:
-					cacheSourceState = cacheStateMalformed
+					cacheSourceState = cmdutil.CacheStateMalformed
 				case present && !stale:
-					return emitCachedBoardsEnvelope(cmd, profile.Name, entry, true, cacheStateFresh)
+					return emitCachedBoardsEnvelope(cmd, profile.Name, entry, true, cmdutil.CacheStateFresh)
 				case present && stale:
-					cacheSourceState = cacheStateStale
+					cacheSourceState = cmdutil.CacheStateStale
 				default:
-					cacheSourceState = cacheStateMissing
+					cacheSourceState = cmdutil.CacheStateMissing
 				}
 			}
 
@@ -481,7 +429,7 @@ func cacheBoardsCommand() *cobra.Command {
 				return fmt.Errorf("jira base URL is required for cache.boards")
 			}
 
-			file, warnings, err := primeBoards(cmd.Context(), client, ttlMinutes, unbounded)
+			file, warnings, err := cmdutil.PrimeBoards(cmd.Context(), client, ttlMinutes, unbounded)
 			if err != nil {
 				return err
 			}
@@ -504,7 +452,7 @@ func cacheBoardsCommand() *cobra.Command {
 				"truncated":        file.Truncated,
 				"truncated_reason": file.TruncatedReason,
 			}
-			addCacheStateFields(data, cacheSourceState, len(file.Items))
+			cmdutil.AddCacheStateFields(data, cacheSourceState, len(file.Items))
 			return cmdutil.WriteEnvelopeWithRawWarnings(cmd, "cache.boards", data, warnings)
 		},
 	}
@@ -515,140 +463,6 @@ func cacheBoardsCommand() *cobra.Command {
 	// No --dry-run: the cache primer's whole purpose is a live fetch
 	// plus a cache write, so a "dry-run" flag here could not be honest.
 	return cmd
-}
-
-// primeBoards drains /rest/agile/1.0/board, populates per-board project
-// keys via /board/{id}/project, and assembles a BoardsCacheFile ready
-// for cache.Write. Surfaces truncation as both file markers and
-// envelope warnings.
-func primeBoards(ctx context.Context, client *jira.Client, ttlMinutes int, unbounded bool) (jira.BoardsCacheFile, []map[string]any, error) {
-	svc := jira.NewBoardService(client)
-	res, err := svc.ListAll(ctx, jira.BoardDrainOptions{Unbounded: unbounded})
-	if err != nil {
-		return jira.BoardsCacheFile{}, nil, err
-	}
-
-	// One pass: dereference, normalize name, enforce data-model
-	// invariants (ID > 0, trimmed Name non-empty), fetch project keys,
-	// strip any key carrying JQL meta-characters. Bad-record drops,
-	// project-fetch failures, and key drops are counted separately so
-	// the warning surface tells the user exactly what was lost.
-	items := make([]jira.Board, 0, len(res.Boards))
-	var (
-		droppedRecords  int
-		droppedKeys     int
-		failedFetches   []int
-		projectKeysByID = map[int][]string{}
-	)
-	for _, b := range res.Boards {
-		if b == nil {
-			continue
-		}
-		clean := *b
-		if clean.Name != nil {
-			n := jira.NormalizeBoardName(*clean.Name)
-			clean.Name = &n
-		}
-		if clean.ID == nil || *clean.ID <= 0 ||
-			clean.Name == nil || strings.TrimSpace(*clean.Name) == "" {
-			droppedRecords++
-			continue
-		}
-		id := *clean.ID
-		keys, found := projectKeysByID[id]
-		if !found {
-			var perr error
-			keys, _, perr = svc.ProjectsForBoard(ctx, id)
-			if perr != nil {
-				failedFetches = append(failedFetches, id)
-				clean.ProjectKeys = []string{}
-				items = append(items, clean)
-				continue
-			}
-			projectKeysByID[id] = append([]string(nil), keys...)
-		}
-		clean.ProjectKeys, droppedKeys = filterJQLSafeKeys(keys, droppedKeys)
-		items = append(items, clean)
-	}
-
-	ttl := ttlMinutes * 60
-	file := jira.BoardsCacheFile{
-		FetchedAt:         time.Now().UTC().Format(time.RFC3339),
-		TTLSeconds:        ttl,
-		Truncated:         res.Truncated,
-		TruncatedReason:   res.TruncatedReason,
-		PagesFetched:      res.PagesFetched,
-		RetryAfterSeconds: retryAfterSeconds(res.RateLimitHit),
-		Items:             items,
-	}
-
-	var warnings []map[string]any
-	switch res.TruncatedReason {
-	case "max_pages", "max_results":
-		limit := 100
-		if res.TruncatedReason == "max_results" {
-			limit = 10_000
-		}
-		warnings = append(warnings, map[string]any{
-			"type":        "cache-truncated",
-			"resource":    "boards",
-			"reason":      res.TruncatedReason,
-			"limit":       limit,
-			"remediation": "Re-run with --unbounded if you need every board.",
-		})
-	case "rate_limit":
-		warnings = append(warnings, map[string]any{
-			"type":                "rate-limit-during-paginate",
-			"resource":            "boards",
-			"pages_fetched":       res.PagesFetched,
-			"retry_after_seconds": retryAfterSeconds(res.RateLimitHit),
-			"remediation":         "Re-run `jira cache boards --refresh` after the rate-limit window resets.",
-		})
-	}
-	if droppedRecords > 0 {
-		warnings = append(warnings, map[string]any{
-			"type":     "bad-records-dropped",
-			"resource": "boards",
-			"count":    droppedRecords,
-			"reason":   "missing or invalid id/name",
-		})
-	}
-	if droppedKeys > 0 {
-		warnings = append(warnings, map[string]any{
-			"type":     "bad-project-keys-dropped",
-			"resource": "boards",
-			"count":    droppedKeys,
-			"reason":   "key contains JQL meta-characters",
-		})
-	}
-	if len(failedFetches) > 0 {
-		warnings = append(warnings, map[string]any{
-			"type":        "project-fetch-failed",
-			"resource":    "boards",
-			"board_ids":   failedFetches,
-			"count":       len(failedFetches),
-			"remediation": "Re-run `jira cache boards --refresh` to retry the failed boards.",
-		})
-	}
-	return file, warnings, nil
-}
-
-// filterJQLSafeKeys drops project keys that would corrupt the JQL
-// emitted by BoardScope.JQLClause (`project in (P1, P2, ...)`). The
-// clause does not quote keys, so any key carrying whitespace, commas,
-// parens, quotes, or newlines must be filtered before it reaches the
-// wire. Atlassian constrains keys server-side; this is defense in
-// depth against malformed wire data.
-func filterJQLSafeKeys(keys []string, droppedSoFar int) ([]string, int) {
-	out := make([]string, 0, len(keys))
-	for _, k := range keys {
-		if k == "" || strings.ContainsAny(k, " \t\n\r,()'\"") {
-			droppedSoFar++
-			continue
-		}
-		out = append(out, k)
-	}
-	return out, droppedSoFar
 }
 
 // emitCachedBoardsEnvelope renders the cache-hit envelope shape
@@ -700,15 +514,8 @@ func emitCachedBoardsEnvelope(cmd *cobra.Command, profileName string, entry cach
 		"truncated":        file.Truncated,
 		"truncated_reason": file.TruncatedReason,
 	}
-	addCacheStateFields(data, cacheSourceState, len(file.Items))
+	cmdutil.AddCacheStateFields(data, cacheSourceState, len(file.Items))
 	return cmdutil.WriteEnvelopeWithRawWarnings(cmd, "cache.boards", data, warnings)
-}
-
-func retryAfterSeconds(apiErr *jira.APIError) int {
-	if apiErr == nil {
-		return 0
-	}
-	return apiErr.RetryAfterSeconds
 }
 
 func cacheClearCommand() *cobra.Command {

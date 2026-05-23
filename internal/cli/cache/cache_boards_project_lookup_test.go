@@ -1,4 +1,4 @@
-package main
+package cache_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -35,7 +36,7 @@ func TestPrimeBoardsDeduplicatesProjectLookupsByBoardID(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	file, warnings, err := primeBoards(context.Background(), jira.NewClient(jira.WithBaseURL(srv.URL+"/")), 60, false)
+	file, warnings, err := cmdutil.PrimeBoards(context.Background(), jira.NewClient(jira.WithBaseURL(srv.URL+"/")), 60, false)
 	if err != nil {
 		t.Fatalf("primeBoards() error = %v", err)
 	}

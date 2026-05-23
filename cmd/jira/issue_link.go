@@ -218,7 +218,7 @@ func issueLinkTypesCommand() *cobra.Command {
 				return err
 			}
 			ttl := time.Duration(ttlMinutes) * time.Minute
-			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "linktypes", ttl, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cmdutil.CacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "linktypes", ttl, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for issue.link.types")
 				}
@@ -237,7 +237,7 @@ func issueLinkTypesCommand() *cobra.Command {
 				"from_cache": fromCache,
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
 			}
-			addCacheStateFields(envelopeData, cacheSourceState, len(types))
+			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(types))
 			return cmdutil.WriteEnvelope(cmd, "issue.link.types", envelopeData)
 		},
 	}
