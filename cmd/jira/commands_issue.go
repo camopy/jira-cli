@@ -236,7 +236,7 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 	if err != nil {
 		return err
 	}
-	issueData := issueOutput(issues, opts.detail)
+	issueData := cmdutil.IssueOutput(issues, opts.detail)
 	return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.list", boardScopedListData(cmd, issueData, opts.detail, query, scope, precedence), resp)
 }
 
@@ -1113,67 +1113,6 @@ func issueFieldsFromPayload(payload map[string]any) map[string]any {
 			continue
 		}
 		out[key] = value
-	}
-	return out
-}
-
-func issueOutput(issues []*jira.Issue, detail bool) any {
-	if detail {
-		return issues
-	}
-	out := make([]map[string]any, 0, len(issues))
-	for _, issue := range issues {
-		out = append(out, issueSummary(issue))
-	}
-	return out
-}
-
-func issueSummary(issue *jira.Issue) map[string]any {
-	summary := map[string]any{
-		"key":      "",
-		"summary":  "",
-		"status":   "",
-		"assignee": nil,
-		"priority": nil,
-		"updated":  "",
-	}
-	if issue == nil {
-		return summary
-	}
-	if issue.Key != nil {
-		summary["key"] = *issue.Key
-	}
-	if issue.Fields == nil {
-		return summary
-	}
-	if issue.Fields.Summary != nil {
-		summary["summary"] = *issue.Fields.Summary
-	}
-	if issue.Fields.Status != nil && issue.Fields.Status.Name != nil {
-		summary["status"] = *issue.Fields.Status.Name
-	}
-	if user := issue.Fields.Assignee; user != nil {
-		summary["assignee"] = assigneeSummary(user)
-	}
-	if issue.Fields.Priority != nil && issue.Fields.Priority.Name != nil {
-		summary["priority"] = *issue.Fields.Priority.Name
-	}
-	if issue.Fields.Updated != nil {
-		summary["updated"] = *issue.Fields.Updated
-	}
-	return summary
-}
-
-func assigneeSummary(user *jira.User) map[string]any {
-	out := map[string]any{
-		"account_id":   "",
-		"display_name": "",
-	}
-	if user.AccountID != nil {
-		out["account_id"] = *user.AccountID
-	}
-	if user.DisplayName != nil {
-		out["display_name"] = *user.DisplayName
 	}
 	return out
 }

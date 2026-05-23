@@ -1,4 +1,4 @@
-package main
+package cmdutil
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 )
 
 func TestIssueSummaryAlwaysIncludesSpecKeys(t *testing.T) {
-	got := issueSummary(&jira.Issue{
+	got := IssueSummary(&jira.Issue{
 		Key: jira.String("PROJ-1"),
 		Fields: &jira.IssueFields{
 			Summary: jira.String("Hello"),
@@ -23,7 +23,7 @@ func TestIssueSummaryAlwaysIncludesSpecKeys(t *testing.T) {
 }
 
 func TestIssueSummaryAssigneeIsNilWhenUnassigned(t *testing.T) {
-	got := issueSummary(&jira.Issue{
+	got := IssueSummary(&jira.Issue{
 		Key:    jira.String("PROJ-1"),
 		Fields: &jira.IssueFields{Summary: jira.String("Hi")},
 	})
@@ -33,7 +33,7 @@ func TestIssueSummaryAssigneeIsNilWhenUnassigned(t *testing.T) {
 }
 
 func TestIssueSummaryAssigneeUsesOnlyAccountIDAndDisplayName(t *testing.T) {
-	got := issueSummary(&jira.Issue{
+	got := IssueSummary(&jira.Issue{
 		Key: jira.String("PROJ-1"),
 		Fields: &jira.IssueFields{
 			Assignee: &jira.User{
@@ -61,14 +61,14 @@ func TestIssueSummaryAssigneeUsesOnlyAccountIDAndDisplayName(t *testing.T) {
 }
 
 func TestIssueSummaryPriorityIsNilWhenAbsent(t *testing.T) {
-	got := issueSummary(&jira.Issue{Key: jira.String("PROJ-1"), Fields: &jira.IssueFields{}})
+	got := IssueSummary(&jira.Issue{Key: jira.String("PROJ-1"), Fields: &jira.IssueFields{}})
 	if got["priority"] != nil {
 		t.Fatalf("priority = %#v, want nil", got["priority"])
 	}
 }
 
 func TestIssueSummaryPriorityIsStringWhenPresent(t *testing.T) {
-	got := issueSummary(&jira.Issue{
+	got := IssueSummary(&jira.Issue{
 		Key:    jira.String("PROJ-1"),
 		Fields: &jira.IssueFields{Priority: &jira.Priority{Name: jira.String("High")}},
 	})

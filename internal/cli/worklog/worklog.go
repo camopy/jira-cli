@@ -1,4 +1,4 @@
-package main
+package worklog
 
 import (
 	"encoding/json"
@@ -130,7 +130,8 @@ func worklogAddCommand() *cobra.Command {
 	return cmd
 }
 
-func worklogCommand() *cobra.Command {
+// NewCommand returns the `worklog` command group for managing issue worklogs.
+func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("worklog", "Manage issue worklogs", "resources")
 	cmd.AddCommand(worklogAddCommand())
 	cmd.AddCommand(worklogListCommand())

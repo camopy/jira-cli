@@ -4,11 +4,14 @@ import (
 	"os"
 
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/alias"
 	"github.com/matcra587/jira-cli/internal/cli/config"
 	"github.com/matcra587/jira-cli/internal/cli/epic"
 	"github.com/matcra587/jira-cli/internal/cli/jql"
 	"github.com/matcra587/jira-cli/internal/cli/me"
+	"github.com/matcra587/jira-cli/internal/cli/search"
 	"github.com/matcra587/jira-cli/internal/cli/version"
+	"github.com/matcra587/jira-cli/internal/cli/worklog"
 	"github.com/spf13/cobra"
 )
 
@@ -24,9 +27,9 @@ func registerCommands(root *cobra.Command) {
 		boardsCommand(),
 		epic.NewCommand(),
 		jql.NewCommand(),
-		aliasCommand(),
-		searchCommand(),
-		worklogCommand(),
+		alias.NewCommand(),
+		search.NewCommand(),
+		worklog.NewCommand(),
 		config.NewCommand(),
 	)
 }

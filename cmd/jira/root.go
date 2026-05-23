@@ -14,6 +14,7 @@ import (
 	"github.com/gechr/clog"
 	"github.com/gechr/x/terminal"
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/alias"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/cli/runtime"
 	"github.com/matcra587/jira-cli/internal/cli/startup"
@@ -339,7 +340,7 @@ func Execute(ctx context.Context) error {
 		return errCompletionHandled
 	}
 
-	args, err := expandAliasArgs(root, os.Args[1:])
+	args, err := alias.ExpandAliasArgs(root, os.Args[1:])
 	if err != nil {
 		writeCommandError(ctx, root, err)
 		return err

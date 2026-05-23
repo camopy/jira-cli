@@ -1,4 +1,4 @@
-package main
+package search
 
 import (
 	"fmt"
@@ -11,7 +11,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func searchCommand() *cobra.Command {
+// NewCommand returns the `search` command group for running Jira searches.
+func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("search", "Run Jira searches", "resources")
 	cmd.AddCommand(searchJQLCommand())
 	cmd.AddCommand(searchSavedCommand())
@@ -47,7 +48,7 @@ func searchJQLCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return cmdutil.WriteEnvelopeWithResponse(cmd, "search.jql", map[string]any{"source": "inline", "jql": args[0], "issues": issueOutput(issues, detail)}, resp)
+				return cmdutil.WriteEnvelopeWithResponse(cmd, "search.jql", map[string]any{"source": "inline", "jql": args[0], "issues": cmdutil.IssueOutput(issues, detail)}, resp)
 			}
 			return cmdutil.WriteEnvelope(cmd, "search.jql", map[string]any{
 				"source": "inline",
@@ -98,7 +99,7 @@ func searchSavedCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				issues = issueOutput(found, detail)
+				issues = cmdutil.IssueOutput(found, detail)
 				resp = response
 			}
 			data := map[string]any{

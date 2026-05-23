@@ -1,4 +1,4 @@
-package main
+package alias
 
 import (
 	"errors"
@@ -17,7 +17,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func aliasCommand() *cobra.Command {
+// NewCommand returns the `alias` command group for managing command aliases.
+func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("alias", "Manage command aliases", "configuration")
 	cmd.AddCommand(aliasDeleteCommand())
 	cmd.AddCommand(aliasImportCommand())
@@ -192,7 +193,9 @@ func readAliasImport(cmd *cobra.Command, filename string) (map[string]string, er
 	return aliases, nil
 }
 
-func expandAliasArgs(root *cobra.Command, args []string) ([]string, error) {
+// ExpandAliasArgs rewrites argv so a leading alias name is replaced by its
+// configured expansion before cobra dispatches the command.
+func ExpandAliasArgs(root *cobra.Command, args []string) ([]string, error) {
 	prefix, name, rest, ok := startup.SplitFirstCommandArg(args)
 	if !ok || name == "alias" || isRootCommand(root, name) {
 		return args, nil

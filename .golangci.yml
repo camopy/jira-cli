@@ -115,7 +115,7 @@ linters:
         linters:
           - gosec
         text: "G304"
-      - path: '^(cmd/jira/alias|internal/config/(loader|query))\.go$'
+      - path: '^(internal/cli/alias/alias|internal/config/(loader|query))\.go$'
         linters:
           - gosec
         text: "G304"
