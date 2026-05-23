@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/boardscope"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
@@ -15,8 +16,8 @@ import (
 // — never let the substring classifier infer not_found/exit 2.
 func TestBoardValidationStdoutEnvelopeReportsValidationExitCode(t *testing.T) {
 	cmd, stdout, _ := outputModeTestCommand(cli.ModeJSON)
-	bve := boardValidationError{
-		msg: jira.DefaultBoardMissingMessage("default", "Engineering Sprint"),
+	bve := boardscope.ValidationError{
+		Msg: jira.DefaultBoardMissingMessage("default", "Engineering Sprint"),
 	}
 	if err := writeErrorEnvelopeToStdout(cmd, bve); err != nil {
 		t.Fatalf("writeErrorEnvelopeToStdout() error = %v", err)

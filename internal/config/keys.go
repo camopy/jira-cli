@@ -203,7 +203,7 @@ func (c *Config) setProfileField(key, value string) error {
 		p.DefaultIssueType = value
 	case "default_board":
 		// NO validation at set time. Cache may be empty.
-		// Use-time consumers (boardScopeFromFlags) validate.
+		// Use-time consumers (boardscope.FromFlags) validate.
 		p.DefaultBoard = value
 	case "refresh_interval":
 		n, err := strconv.Atoi(value)

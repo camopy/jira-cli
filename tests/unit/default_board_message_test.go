@@ -5,7 +5,7 @@ package unit
 // a faster RED-line for any future drift.
 //
 // Wording lives in pkg/jira.DefaultBoardMissingMessage so the
-// boardScopeFromFlags helper can call it without re-defining the text.
+// boardscope.FromFlags helper can call it without re-defining the text.
 
 import (
 	"testing"

@@ -8,7 +8,7 @@ package main
 // issue_watcher.go).
 
 import (
-	clib "github.com/gechr/clib/cli/cobra"
+	"github.com/matcra587/jira-cli/internal/cli/boardscope"
 	"github.com/spf13/cobra"
 )
 
@@ -26,17 +26,6 @@ func issueListCommand() *cobra.Command {
 	cmd.Flags().StringVar(&opts.jqlQuery, "jql", "", "Run a custom JQL query for the issue list")
 	cmd.Flags().BoolVar(&opts.asJQL, "as-jql", false, "Print the built JQL query without calling Jira")
 	addJQLBuilderFlags(cmd, &opts.builder)
-	addBoardScopeFlags(cmd)
+	boardscope.AddFlags(cmd)
 	return cmd
-}
-
-// addBoardScopeFlags wires the `--board NAME` / `--board-id N` flag pair
-// (with mutual exclusion) onto a list-style command. Shared by
-// `issue list` and `jql build` so the surface stays in lockstep.
-func addBoardScopeFlags(cmd *cobra.Command) {
-	cmd.Flags().String("board", "", "Restrict to issues whose project belongs to the named board (case-insensitive exact match against the cache)")
-	cmd.Flags().Int("board-id", 0, "Restrict to issues whose project belongs to the board with this id")
-	cmd.MarkFlagsMutuallyExclusive("board", "board-id")
-	clib.Extend(cmd.Flags().Lookup("board"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Complete: "predictor=cacheboard"})
-	clib.Extend(cmd.Flags().Lookup("board-id"), clib.FlagExtra{Group: "Filters", Placeholder: "N"})
 }

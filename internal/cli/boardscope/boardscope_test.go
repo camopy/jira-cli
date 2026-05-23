@@ -1,26 +1,22 @@
-// boardScopeEnvelopeData translates a resolved BoardScope into the
-// envelope's `data.board_scope` map. The `applied` flag tracks whether
-// a JQL clause was actually emitted — not just whether a board was
-// identified — so an envelope reader can correlate the envelope's
-// scope with the JQL string in `data.jql`.
-package main
+package boardscope_test
 
 import (
 	"testing"
 
+	"github.com/matcra587/jira-cli/internal/cli/boardscope"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
-func TestBoardScopeEnvelopeDataAppliedFalseOnZeroValueScope(t *testing.T) {
+func TestEnvelopeDataAppliedFalseOnZeroValueScope(t *testing.T) {
 	t.Parallel()
 
-	out := boardScopeEnvelopeData(jira.BoardScope{})
+	out := boardscope.EnvelopeData(jira.BoardScope{})
 	if got, ok := out["applied"]; !ok || got != false {
 		t.Errorf("zero-value scope: applied = %v (ok=%v); want false", got, ok)
 	}
 }
 
-func TestBoardScopeEnvelopeDataAppliedFalseWhenProjectKeysEmpty(t *testing.T) {
+func TestEnvelopeDataAppliedFalseWhenProjectKeysEmpty(t *testing.T) {
 	t.Parallel()
 
 	id := 42
@@ -35,7 +31,7 @@ func TestBoardScopeEnvelopeDataAppliedFalseWhenProjectKeysEmpty(t *testing.T) {
 		},
 		Precedence: "flag",
 	}
-	out := boardScopeEnvelopeData(scope)
+	out := boardscope.EnvelopeData(scope)
 
 	// applied=false because no JQL clause is emitted (JQLClause returns
 	// empty for zero project keys).
@@ -60,7 +56,7 @@ func TestBoardScopeEnvelopeDataAppliedFalseWhenProjectKeysEmpty(t *testing.T) {
 	}
 }
 
-func TestBoardScopeEnvelopeDataAppliedTrueWhenProjectKeysPresent(t *testing.T) {
+func TestEnvelopeDataAppliedTrueWhenProjectKeysPresent(t *testing.T) {
 	t.Parallel()
 
 	id := 7
@@ -75,7 +71,7 @@ func TestBoardScopeEnvelopeDataAppliedTrueWhenProjectKeysPresent(t *testing.T) {
 		},
 		Precedence: "flag",
 	}
-	out := boardScopeEnvelopeData(scope)
+	out := boardscope.EnvelopeData(scope)
 	if out["applied"] != true {
 		t.Errorf("applied = %v; want true", out["applied"])
 	}
@@ -88,28 +84,28 @@ func TestBoardScopeEnvelopeDataAppliedTrueWhenProjectKeysPresent(t *testing.T) {
 	}
 }
 
-func TestApplyBoardClauseToJQLParenthesizesTopLevelORBeforeOrderBy(t *testing.T) {
+func TestApplyClauseToJQLParenthesizesTopLevelORBeforeOrderBy(t *testing.T) {
 	t.Parallel()
 
 	scope := jira.BoardScope{
 		Board: jira.Board{ProjectKeys: []string{"ENG", "PLAT"}},
 	}
-	got := applyBoardClauseToJQL("status = Open OR priority = High ORDER BY created DESC", scope)
+	got := boardscope.ApplyClauseToJQL("status = Open OR priority = High ORDER BY created DESC", scope)
 	want := `project in (ENG, PLAT) AND (status = Open OR priority = High) ORDER BY created DESC`
 	if got != want {
-		t.Fatalf("applyBoardClauseToJQL() = %q, want %q", got, want)
+		t.Fatalf("ApplyClauseToJQL() = %q, want %q", got, want)
 	}
 }
 
-func TestApplyBoardClauseToJQLDoesNotDoubleWrapSimpleClause(t *testing.T) {
+func TestApplyClauseToJQLDoesNotDoubleWrapSimpleClause(t *testing.T) {
 	t.Parallel()
 
 	scope := jira.BoardScope{
 		Board: jira.Board{ProjectKeys: []string{"ENG"}},
 	}
-	got := applyBoardClauseToJQL("status = Open ORDER BY updated DESC", scope)
+	got := boardscope.ApplyClauseToJQL("status = Open ORDER BY updated DESC", scope)
 	want := `project in (ENG) AND status = Open ORDER BY updated DESC`
 	if got != want {
-		t.Fatalf("applyBoardClauseToJQL() = %q, want %q", got, want)
+		t.Fatalf("ApplyClauseToJQL() = %q, want %q", got, want)
 	}
 }

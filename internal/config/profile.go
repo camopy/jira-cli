@@ -66,7 +66,7 @@ type Profile struct {
 	// no `--board`/`--board-id` flag is supplied, the consuming command
 	// resolves it against the boards cache and applies the resulting
 	// scope. NOT validated at set time; the cache may not exist yet.
-	// Use-time validation lives in boardScopeFromFlags. An explicit
+	// Use-time validation lives in boardscope.FromFlags. An explicit
 	// `--board ""` suppresses any configured default.
 	DefaultBoard       string        `koanf:"default_board" toml:"default_board"`
 	RefreshInterval    int           `koanf:"refresh_interval" toml:"refresh_interval"`

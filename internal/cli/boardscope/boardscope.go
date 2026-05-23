@@ -1,9 +1,8 @@
-// Helpers shared between commands that consume `--board` / `--board-id`
-// (issue list, jql build) plus the future surfaces. The `boardScopeFromFlags`
-// entrypoint is the single place that resolves the user's board input
-// against the cache and decides which precedence path won (flag, default,
-// or none).
-package main
+// Package boardscope resolves the `--board NAME` / `--board-id N` flag pair
+// against the local board cache and renders the result into JQL clauses and
+// envelope data. FromFlags is the single place that decides which precedence
+// path won (flag, default, or none); it is shared by issue list and jql build.
+package boardscope
 
 import (
 	"context"
@@ -12,50 +11,49 @@ import (
 	"strconv"
 	"strings"
 
+	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cache"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
+	"github.com/matcra587/jira-cli/internal/jql"
 )
 
-// PrecedenceFlag / PrecedenceDefault / PrecedenceNone are the three
-// values the envelope's `data.precedence` field carries when a `--board`
-// scope is in play.
+// The three values the envelope's data.precedence field carries when a
+// --board scope is in play.
 const (
 	precedenceFlag    = "flag"
 	precedenceDefault = "default_board"
 	precedenceNone    = "none"
 )
 
-// boardValidationError is a typed error that asks outputErrorFor to
-// classify the failure as ErrorTypeValidation (exit 3) — used for both
-// default-board-missing and ambiguous-name disambiguation.
-type boardValidationError struct {
-	msg        string
-	candidates []map[string]any
+// ValidationError is a typed error that asks the error mapper to classify the
+// failure as a validation error (exit 3) — used for both default-board-missing
+// and ambiguous-name disambiguation. Its BoardCandidates method lets the
+// envelope writer surface disambiguation choices.
+type ValidationError struct {
+	Msg        string
+	Candidates []map[string]any
 }
 
-func (e boardValidationError) Error() string                     { return e.msg }
-func (e boardValidationError) BoardCandidates() []map[string]any { return e.candidates }
+func (e ValidationError) Error() string                     { return e.Msg }
+func (e ValidationError) BoardCandidates() []map[string]any { return e.Candidates }
 
-// boardScopeFromFlags reads the active command's `--board NAME` /
-// `--board-id N` flag values, falls through to the active profile's
-// `default_board` config (when defined), resolves the requested board
-// against the cache, and returns the resulting (scope, precedence, err).
+// FromFlags reads the active command's `--board NAME` / `--board-id N` flag
+// values, falls through to the active profile's `default_board` config (when
+// defined), resolves the requested board against the cache, and returns the
+// resulting (scope, precedence, err).
 //
-// Precedence rules (data-model.md > Precedence with --board flags):
+// Precedence rules:
 //
 //	--board NAME explicit → flag wins, precedence "flag"
 //	--board-id N  explicit → flag wins, precedence "flag"
 //	--board ""    explicit → suppresses default, precedence "none"
 //	neither + default set → resolves default, precedence "default_board"
 //	neither + no default  → no scope, precedence "none"
-//
-// The default_board config field is owned by a later change; until then this
-// helper treats a missing or empty value as "no default applied".
-func boardScopeFromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
+func FromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
 	flags := cmd.Flags()
 
 	// Distinguish "flag absent" from "flag present with empty value" —
@@ -107,7 +105,7 @@ func boardScopeFromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
 	// Flag path: --board NAME (when non-empty) or --board-id N.
 	switch {
 	case boardIDSet:
-		scope, err := resolveBoardByID(cmd.Context(), cacheProfile, boardID)
+		scope, err := resolveByID(cmd.Context(), cacheProfile, boardID)
 		if err != nil {
 			return jira.BoardScope{}, precedenceFlag, err
 		}
@@ -123,7 +121,7 @@ func boardScopeFromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
 		svc := jira.NewBoardService(nil)
 		scope, err := svc.ResolveOne(cmd.Context(), cacheProfile, boardName)
 		if err != nil {
-			return jira.BoardScope{}, precedenceFlag, classifyBoardErr(err)
+			return jira.BoardScope{}, precedenceFlag, classifyErr(err)
 		}
 		scope.Precedence = precedenceFlag
 		return scope, precedenceFlag, nil
@@ -138,11 +136,11 @@ func boardScopeFromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
 		if err != nil {
 			// Pinned wording when default_board doesn't resolve.
 			if stdliberrors.Is(err, jira.ErrBoardNotFound) {
-				return jira.BoardScope{}, precedenceDefault, boardValidationError{
-					msg: jira.DefaultBoardMissingMessage(profileName, def),
+				return jira.BoardScope{}, precedenceDefault, ValidationError{
+					Msg: jira.DefaultBoardMissingMessage(profileName, def),
 				}
 			}
-			return jira.BoardScope{}, precedenceDefault, classifyBoardErr(err)
+			return jira.BoardScope{}, precedenceDefault, classifyErr(err)
 		}
 		scope.Precedence = precedenceDefault
 		return scope, precedenceDefault, nil
@@ -151,12 +149,11 @@ func boardScopeFromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
 	return jira.BoardScope{}, precedenceNone, nil
 }
 
-// classifyBoardErr maps a BoardService.ResolveOne error onto the right
-// CLI exit code. Ambiguous-name → validation (exit 3). The bare
-// ErrBoardNotFound returned for explicit --board NAME / --board-id N
-// remains classified as not_found (exit 2) by outputErrorFor's default
-// substring rules.
-func classifyBoardErr(err error) error {
+// classifyErr maps a BoardService.ResolveOne error onto the right CLI exit
+// code. Ambiguous-name → validation (exit 3). The bare ErrBoardNotFound
+// returned for explicit --board NAME / --board-id N remains classified as
+// not_found (exit 2) by the error mapper's default substring rules.
+func classifyErr(err error) error {
 	var ambig *jira.AmbiguousBoardError
 	if stdliberrors.As(err, &ambig) {
 		cands := make([]map[string]any, 0, len(ambig.Candidates))
@@ -174,15 +171,15 @@ func classifyBoardErr(err error) error {
 			row["project_keys"] = b.ProjectKeys
 			cands = append(cands, row)
 		}
-		return boardValidationError{msg: err.Error(), candidates: cands}
+		return ValidationError{Msg: err.Error(), Candidates: cands}
 	}
 	return err
 }
 
-// resolveBoardByID does a numeric-id lookup against the local cache.
-// Mirrors BoardService.ResolveOne but keyed off the unambiguous id
-// rather than the name. Cache-only — never round-trips to the server.
-func resolveBoardByID(_ context.Context, profile string, id int) (jira.BoardScope, error) {
+// resolveByID does a numeric-id lookup against the local cache. Mirrors
+// BoardService.ResolveOne but keyed off the unambiguous id rather than the
+// name. Cache-only — never round-trips to the server.
+func resolveByID(_ context.Context, profile string, id int) (jira.BoardScope, error) {
 	entry, ok, _, err := cache.Read(profile, "boards", 0)
 	if err != nil {
 		return jira.BoardScope{}, fmt.Errorf("board resolve by id: %w", err)
@@ -202,12 +199,11 @@ func resolveBoardByID(_ context.Context, profile string, id int) (jira.BoardScop
 	return jira.BoardScope{}, fmt.Errorf("%w: id=%d", jira.ErrBoardNotFound, id)
 }
 
-// boardScopeEnvelopeData renders a BoardScope into the envelope's
-// `data.board_scope` map. The `applied` flag is sourced from
-// JQLClause — that's the single owner of the "did this scope produce
-// a clause?" decision, so any future emission rule (e.g. saved-filter
-// resolution) flows through one predicate.
-func boardScopeEnvelopeData(scope jira.BoardScope) map[string]any {
+// EnvelopeData renders a BoardScope into the envelope's data.board_scope map.
+// The `applied` flag is sourced from JQLClause — the single owner of the "did
+// this scope produce a clause?" decision — so any future emission rule flows
+// through one predicate.
+func EnvelopeData(scope jira.BoardScope) map[string]any {
 	_, applied := scope.JQLClause()
 	resolved := (scope.Board.ID != nil && *scope.Board.ID != 0) ||
 		(scope.Board.Name != nil && *scope.Board.Name != "")
@@ -231,4 +227,30 @@ func boardScopeEnvelopeData(scope jira.BoardScope) map[string]any {
 		out["type"] = *scope.Board.Type
 	}
 	return out
+}
+
+// ApplyClauseToJQL inserts the board scope's JQL clause into query, preserving
+// any top-level ORDER BY suffix so the result stays a valid query.
+func ApplyClauseToJQL(query string, scope jira.BoardScope) string {
+	clause, ok := scope.JQLClause()
+	if !ok {
+		return query
+	}
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return clause
+	}
+	filter, orderBy := jql.SplitTopLevelOrderBy(q)
+	return jql.CombineClauses(clause, jql.ParenthesizeIfTopLevelOR(filter)) + orderBy
+}
+
+// AddFlags wires the `--board NAME` / `--board-id N` flag pair (with mutual
+// exclusion) onto a list-style command. Shared by `issue list` and `jql build`
+// so the surface stays in lockstep.
+func AddFlags(cmd *cobra.Command) {
+	cmd.Flags().String("board", "", "Restrict to issues whose project belongs to the named board (case-insensitive exact match against the cache)")
+	cmd.Flags().Int("board-id", 0, "Restrict to issues whose project belongs to the board with this id")
+	cmd.MarkFlagsMutuallyExclusive("board", "board-id")
+	clib.Extend(cmd.Flags().Lookup("board"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Complete: "predictor=cacheboard"})
+	clib.Extend(cmd.Flags().Lookup("board-id"), clib.FlagExtra{Group: "Filters", Placeholder: "N"})
 }

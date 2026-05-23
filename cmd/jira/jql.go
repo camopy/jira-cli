@@ -6,6 +6,7 @@ import (
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/matcra587/jira-cli/internal/cache"
+	"github.com/matcra587/jira-cli/internal/cli/boardscope"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jql"
 	"github.com/spf13/cobra"
@@ -19,7 +20,7 @@ func jqlCommand() *cobra.Command {
 		Short: "Build a JQL query from flags",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			scope, precedence, err := boardScopeFromFlags(cmd)
+			scope, precedence, err := boardscope.FromFlags(cmd)
 			if err != nil {
 				return err
 			}
@@ -27,17 +28,17 @@ func jqlCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			query = applyBoardClauseToJQL(query, scope)
+			query = boardscope.ApplyClauseToJQL(query, scope)
 			data := map[string]any{
 				"jql":         query,
 				"precedence":  precedence,
-				"board_scope": boardScopeEnvelopeData(scope),
+				"board_scope": boardscope.EnvelopeData(scope),
 			}
 			return cmdutil.WriteEnvelope(cmd, "jql.build", data)
 		},
 	}
 	addJQLBuilderFlags(build, &builder)
-	addBoardScopeFlags(build)
+	boardscope.AddFlags(build)
 	cmd.AddCommand(build)
 	return cmd
 }

@@ -12,6 +12,7 @@ import (
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/boardscope"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	stdininput "github.com/matcra587/jira-cli/internal/cli/stdin"
 	"github.com/matcra587/jira-cli/internal/config"
@@ -173,7 +174,7 @@ type issueListOptions struct {
 // client is configured. Output flows through the same `issue.list` envelope
 // shape so consumers can't tell which command emitted it.
 func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
-	scope, precedence, scopeErr := boardScopeFromFlags(cmd)
+	scope, precedence, scopeErr := boardscope.FromFlags(cmd)
 	if scopeErr != nil {
 		return scopeErr
 	}
@@ -184,7 +185,7 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 	scopeActive := len(scope.Board.ProjectKeys) > 0
 	if opts.asJQL {
 		// --as-jql must not require a credential — it never calls Jira.
-		// boardScopeFromFlags is cache-only (no client probe), and we
+		// boardscope.FromFlags is cache-only (no client probe), and we
 		// load the profile directly here instead of cmdutil.JiraClientForCommand
 		// so the secret backend (e.g. 1Password) stays untouched.
 		cfg, cfgErr := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
@@ -200,7 +201,7 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 		if err != nil {
 			return err
 		}
-		query = applyBoardClauseToJQL(query, scope)
+		query = boardscope.ApplyClauseToJQL(query, scope)
 		return cmdutil.WriteEnvelope(cmd, "issue.list.jql", boardScopedListData(cmd, []map[string]any{}, opts.detail, query, scope, precedence))
 	}
 	client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
@@ -215,7 +216,7 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 	if err != nil {
 		return err
 	}
-	query = applyBoardClauseToJQL(query, scope)
+	query = boardscope.ApplyClauseToJQL(query, scope)
 	if !ok {
 		return cmdutil.WriteEnvelope(cmd, "issue.list", boardScopedListData(cmd, []map[string]any{}, opts.detail, query, scope, precedence))
 	}
@@ -239,31 +240,13 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 	return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.list", boardScopedListData(cmd, issueData, opts.detail, query, scope, precedence), resp)
 }
 
-// applyBoardClauseToJQL prepends the board's `project in (...)` clause
-// onto an existing JQL string with top-level AND. Returns the input
-// unchanged when scope contributes no clause (no-flag-no-default).
-func applyBoardClauseToJQL(query string, scope jira.BoardScope) string {
-	clause, ok := scope.JQLClause()
-	if !ok {
-		return query
-	}
-	q := strings.TrimSpace(query)
-	if q == "" {
-		return clause
-	}
-	// Insert the clause before any ORDER BY suffix so the resulting
-	// expression remains a valid `<filters> ORDER BY <field>` query.
-	filter, orderBy := jql.SplitTopLevelOrderBy(q)
-	return jql.CombineClauses(clause, jql.ParenthesizeIfTopLevelOR(filter)) + orderBy
-}
-
 // boardScopedListData extends issueListOutputData with the new envelope
 // fields per contracts/envelope-shapes.md > issue list --board.
 func boardScopedListData(cmd *cobra.Command, issues any, detail bool, query string, scope jira.BoardScope, precedence string) map[string]any {
 	data := issueListOutputData(cmd, issues, detail, query)
 	data["jql"] = query
 	data["precedence"] = precedence
-	data["board_scope"] = boardScopeEnvelopeData(scope)
+	data["board_scope"] = boardscope.EnvelopeData(scope)
 	return data
 }
 
