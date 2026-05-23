@@ -20,7 +20,7 @@ var agentGuide string
 // and guide endpoints together give an agent everything needed to interact
 // with the CLI in two calls (tree + how-to).
 func agentCommand() *cobra.Command {
-	cmd := groupCommand("agent", "Agent tooling: schema and guide for AI coding assistants", "agent")
+	cmd := cmdutil.GroupCommand("agent", "Agent tooling: schema and guide for AI coding assistants", "agent")
 	cmd.AddCommand(agentSchemaCommand())
 	cmd.AddCommand(agentGuideCommand())
 	cmd.AddCommand(agentADFMatrixCommand())
@@ -84,8 +84,8 @@ func agentGuideCommand() *cobra.Command {
 	// available section names instead of being told to read the guide first
 	// to discover what sections it contains.
 	cmd.SetHelpFunc(func(c *cobra.Command, _ []string) {
-		renderer := newHelpRenderer()
-		standard := standardHelpSections(c)
+		renderer := cmdutil.NewHelpRenderer()
+		standard := cmdutil.StandardHelpSections(c)
 		group := make(help.CommandGroup, 0, len(sections))
 		for _, s := range sections {
 			group = append(group, help.Command{Name: s.slug, Desc: s.title})

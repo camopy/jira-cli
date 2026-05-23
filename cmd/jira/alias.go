@@ -17,7 +17,7 @@ import (
 )
 
 func aliasCommand() *cobra.Command {
-	cmd := groupCommand("alias", "Manage command aliases", "configuration")
+	cmd := cmdutil.GroupCommand("alias", "Manage command aliases", "configuration")
 	cmd.AddCommand(aliasDeleteCommand())
 	cmd.AddCommand(aliasImportCommand())
 	cmd.AddCommand(aliasListCommand())
@@ -155,7 +155,7 @@ func aliasImportCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&clobber, "clobber", false, "Overwrite existing aliases of the same name")
-	extendSafetyFlag(cmd.Flags(), "clobber")
+	cmdutil.ExtendSafetyFlag(cmd.Flags(), "clobber")
 	return cmd
 }
 

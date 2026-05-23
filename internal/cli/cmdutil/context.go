@@ -43,3 +43,16 @@ func ConfigPath(cmd *cobra.Command) string {
 	path, _ := cmd.Root().PersistentFlags().GetString("config")
 	return path
 }
+
+// NoInputRequested reports whether the caller opted out of interactive
+// prompts via the root --no-input flag. It is the single source of truth
+// for headless-mode detection across every subcommand.
+//
+// Commands MUST read root persistent flags through this helper rather than
+// re-declaring a same-name local flag: a local flag of the same name shadows
+// the inherited one, so `jira --no-input issue create` would set the root
+// flag while the handler read an unset local copy.
+func NoInputRequested(cmd *cobra.Command) bool {
+	v, _ := cmd.Root().PersistentFlags().GetBool("no-input")
+	return v
+}

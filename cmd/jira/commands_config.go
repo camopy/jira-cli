@@ -10,7 +10,7 @@ import (
 )
 
 func configCommand() *cobra.Command {
-	cmd := groupCommand("config", "Manage configuration", "configuration")
+	cmd := cmdutil.GroupCommand("config", "Manage configuration", "configuration")
 	cmd.AddCommand(configInitCommand())
 	cmd.AddCommand(configProfileCommand())
 	cmd.AddCommand(configGetCommand())

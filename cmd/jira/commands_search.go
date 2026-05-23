@@ -11,7 +11,7 @@ import (
 )
 
 func searchCommand() *cobra.Command {
-	cmd := groupCommand("search", "Run Jira searches", "resources")
+	cmd := cmdutil.GroupCommand("search", "Run Jira searches", "resources")
 	cmd.AddCommand(searchJQLCommand())
 	cmd.AddCommand(searchSavedCommand())
 	return cmd

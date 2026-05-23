@@ -67,7 +67,7 @@ func commentListCommand() *cobra.Command {
 	}
 	cmd.Flags().IntVar(&limit, "limit", 50, "Maximum comments per page")
 	cmd.Flags().BoolVar(&all, "all", false, "Walk every page until isLast")
-	extendPaginationFlags(cmd.Flags())
+	cmdutil.ExtendPaginationFlags(cmd.Flags())
 	return cmd
 }
 
@@ -316,11 +316,11 @@ func registerCommentAddFlags(cmd *cobra.Command, flags *commentAddFlags) {
 	cmd.Flags().StringVar(&flags.visRole, "visibility-role", "", "Restrict comment to a Jira role (e.g. Developers)")
 	cmd.Flags().StringVar(&flags.visGroup, "visibility-group", "", "Restrict comment to a Jira group")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Preview mutation without submitting")
-	extendFlag(cmd.Flags(), "body-markdown", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
-	extendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
-	extendFlag(cmd.Flags(), "visibility-role", clib.FlagExtra{Group: "Visibility", Placeholder: "ROLE"})
-	extendFlag(cmd.Flags(), "visibility-group", clib.FlagExtra{Group: "Visibility", Placeholder: "GROUP"})
-	extendDryRunFlag(cmd.Flags())
+	cmdutil.ExtendFlag(cmd.Flags(), "body-markdown", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
+	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
+	cmdutil.ExtendFlag(cmd.Flags(), "visibility-role", clib.FlagExtra{Group: "Visibility", Placeholder: "ROLE"})
+	cmdutil.ExtendFlag(cmd.Flags(), "visibility-group", clib.FlagExtra{Group: "Visibility", Placeholder: "GROUP"})
+	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	// Exactly one body source: a Markdown convenience string or a native
 	// ADF JSON file. Declared as Cobra flag metadata so the conflict is
 	// rejected before RunE reads either source.
@@ -328,7 +328,7 @@ func registerCommentAddFlags(cmd *cobra.Command, flags *commentAddFlags) {
 }
 
 func runCommentAdd(cmd *cobra.Command, key string, flags commentAddFlags) error {
-	doc, markdownWarnings, err := buildCommentBody(cmd, flags.markdown, flags.jsonInput, noInputRequested(cmd))
+	doc, markdownWarnings, err := buildCommentBody(cmd, flags.markdown, flags.jsonInput, cmdutil.NoInputRequested(cmd))
 	if err != nil {
 		return err
 	}
@@ -474,12 +474,12 @@ func commentEditCommand() *cobra.Command {
 	cmd.Flags().StringVar(&flags.visGroup, "visibility-group", "", "Replace visibility with a Jira group")
 	cmd.Flags().BoolVar(&flags.visClear, "clear-visibility", false, "Remove any existing visibility restriction")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Preview without calling Jira")
-	extendFlag(cmd.Flags(), "body-markdown", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
-	extendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
-	extendFlag(cmd.Flags(), "visibility-role", clib.FlagExtra{Group: "Visibility", Placeholder: "ROLE"})
-	extendFlag(cmd.Flags(), "visibility-group", clib.FlagExtra{Group: "Visibility", Placeholder: "GROUP"})
-	extendFlag(cmd.Flags(), "clear-visibility", clib.FlagExtra{Group: "Visibility"})
-	extendDryRunFlag(cmd.Flags())
+	cmdutil.ExtendFlag(cmd.Flags(), "body-markdown", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
+	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
+	cmdutil.ExtendFlag(cmd.Flags(), "visibility-role", clib.FlagExtra{Group: "Visibility", Placeholder: "ROLE"})
+	cmdutil.ExtendFlag(cmd.Flags(), "visibility-group", clib.FlagExtra{Group: "Visibility", Placeholder: "GROUP"})
+	cmdutil.ExtendFlag(cmd.Flags(), "clear-visibility", clib.FlagExtra{Group: "Visibility"})
+	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	cmd.MarkFlagsMutuallyExclusive("body-markdown", "json-input")
 	return cmd
 }
@@ -495,7 +495,7 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 	if err != nil {
 		return err
 	}
-	doc, markdownWarnings, err := buildCommentBody(cmd, flags.markdown, flags.jsonInput, noInputRequested(cmd))
+	doc, markdownWarnings, err := buildCommentBody(cmd, flags.markdown, flags.jsonInput, cmdutil.NoInputRequested(cmd))
 	if err != nil {
 		return err
 	}
@@ -559,7 +559,7 @@ func commentDeleteCommand() *cobra.Command {
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		Args:        cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			noInput := noInputRequested(cmd)
+			noInput := cmdutil.NoInputRequested(cmd)
 			if dryRun {
 				return cmdutil.WriteEnvelope(cmd, "issue.comment.delete", map[string]any{
 					"issue":      args[0],
@@ -601,7 +601,7 @@ func commentDeleteCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive delete under --no-input / non-TTY")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without calling Jira")
-	extendForceFlag(cmd.Flags())
-	extendDryRunFlag(cmd.Flags())
+	cmdutil.ExtendForceFlag(cmd.Flags())
+	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	return cmd
 }

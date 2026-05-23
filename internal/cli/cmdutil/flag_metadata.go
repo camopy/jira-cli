@@ -1,0 +1,63 @@
+package cmdutil
+
+import (
+	clib "github.com/gechr/clib/cli/cobra"
+	"github.com/spf13/pflag"
+)
+
+// ExtendFlag attaches clib display metadata to the named flag in flags.
+func ExtendFlag(flags *pflag.FlagSet, name string, extra clib.FlagExtra) {
+	clib.Extend(flags.Lookup(name), extra)
+}
+
+// ExtendFileFlag marks a flag as a file-path input with the given group and
+// placeholder label.
+func ExtendFileFlag(flags *pflag.FlagSet, name, group, placeholder string) {
+	ExtendFlag(flags, name, clib.FlagExtra{
+		Group:       group,
+		Placeholder: placeholder,
+		Hint:        "file",
+	})
+}
+
+// ExtendDryRunFlag attaches Safety-group metadata to the --dry-run flag.
+func ExtendDryRunFlag(flags *pflag.FlagSet) {
+	ExtendFlag(flags, "dry-run", clib.FlagExtra{Group: "Safety", Terse: "preview only"})
+}
+
+// ExtendForceFlag attaches Safety-group metadata to the --force flag.
+func ExtendForceFlag(flags *pflag.FlagSet) {
+	ExtendFlag(flags, "force", clib.FlagExtra{Group: "Safety", Terse: "confirm destructive action"})
+}
+
+// ExtendPaginationFlags attaches Pagination-group metadata to the --limit and
+// --all flags.
+func ExtendPaginationFlags(flags *pflag.FlagSet) {
+	ExtendFlag(flags, "limit", clib.FlagExtra{Group: "Pagination", Placeholder: "N"})
+	ExtendFlag(flags, "all", clib.FlagExtra{Group: "Pagination"})
+}
+
+// ExtendRefreshFlags attaches Cache-group metadata to the --refresh and
+// --ttl-minutes flags, and Pagination-group metadata to --unbounded.
+func ExtendRefreshFlags(flags *pflag.FlagSet) {
+	ExtendFlag(flags, "refresh", clib.FlagExtra{Group: "Cache"})
+	ExtendFlag(flags, "ttl-minutes", clib.FlagExtra{Group: "Cache", Placeholder: "N"})
+	ExtendFlag(flags, "unbounded", clib.FlagExtra{Group: "Pagination"})
+}
+
+// ExtendSafetyFlag attaches Safety-group metadata to the named flag.
+func ExtendSafetyFlag(flags *pflag.FlagSet, name string) {
+	ExtendFlag(flags, name, clib.FlagExtra{Group: "Safety"})
+}
+
+// ExtendWatcherUserFlag attaches User-group metadata to the --user flag.
+func ExtendWatcherUserFlag(flags *pflag.FlagSet) {
+	ExtendFlag(flags, "user", clib.FlagExtra{Group: "User", Placeholder: "IDENTIFIER"})
+}
+
+// ExtendWatcherValidationFlags attaches Validation-group metadata to the
+// --no-readback and --validate-remote flags.
+func ExtendWatcherValidationFlags(flags *pflag.FlagSet) {
+	ExtendFlag(flags, "no-readback", clib.FlagExtra{Group: "Validation"})
+	ExtendFlag(flags, "validate-remote", clib.FlagExtra{Group: "Validation"})
+}

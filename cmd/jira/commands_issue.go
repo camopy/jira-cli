@@ -22,7 +22,7 @@ import (
 )
 
 func issueCommand() *cobra.Command {
-	cmd := groupCommand("issue", "Work with Jira issues", "resources")
+	cmd := cmdutil.GroupCommand("issue", "Work with Jira issues", "resources")
 	cmd.AddCommand(issueListCommand())
 	cmd.AddCommand(issueMineCommand())
 	cmd.AddCommand(issueViewCommand())
@@ -61,11 +61,11 @@ func issueMineCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.asJQL, "as-jql", false, "Print the built JQL without calling Jira")
 	cmd.Flags().StringSliceVar(&opts.builder.Statuses, "status", nil, "Restrict by status name")
 	cmd.Flags().StringSliceVar(&opts.builder.Projects, "project", nil, "Restrict by project key")
-	extendFlag(cmd.Flags(), "detail", clib.FlagExtra{Group: "Output"})
-	extendFlag(cmd.Flags(), "jql", clib.FlagExtra{Group: "Filters", Placeholder: "JQL"})
-	extendFlag(cmd.Flags(), "as-jql", clib.FlagExtra{Group: "Output"})
-	extendFlag(cmd.Flags(), "status", clib.FlagExtra{Group: "Filters", Placeholder: "NAME"})
-	extendFlag(cmd.Flags(), "project", clib.FlagExtra{Group: "Filters", Placeholder: "KEY", Complete: "predictor=cacheproject,comma"})
+	cmdutil.ExtendFlag(cmd.Flags(), "detail", clib.FlagExtra{Group: "Output"})
+	cmdutil.ExtendFlag(cmd.Flags(), "jql", clib.FlagExtra{Group: "Filters", Placeholder: "JQL"})
+	cmdutil.ExtendFlag(cmd.Flags(), "as-jql", clib.FlagExtra{Group: "Output"})
+	cmdutil.ExtendFlag(cmd.Flags(), "status", clib.FlagExtra{Group: "Filters", Placeholder: "NAME"})
+	cmdutil.ExtendFlag(cmd.Flags(), "project", clib.FlagExtra{Group: "Filters", Placeholder: "KEY", Complete: "predictor=cacheproject,comma"})
 	return cmd
 }
 
@@ -298,7 +298,7 @@ func issueCreateCommand() *cobra.Command {
 		Short: "Create an issue",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			noInput := noInputRequested(cmd)
+			noInput := cmdutil.NoInputRequested(cmd)
 			payload := map[string]any{"summary": summary}
 			if jsonInput != "" {
 				if err := cmdutil.ReadJSONFile(jsonInput, &payload); err != nil {
@@ -471,10 +471,10 @@ func issueCreateCommand() *cobra.Command {
 	cmd.Flags().StringVar(&summary, "summary", "", "Issue summary")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read issue create payload from JSON file")
 	cmd.Flags().StringVar(&assignee, "assignee", "", `Assign on creation: "me" or a Jira account ID`)
-	extendDryRunFlag(cmd.Flags())
-	extendFlag(cmd.Flags(), "summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
-	extendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
-	extendFlag(cmd.Flags(), "assignee", clib.FlagExtra{Group: "Fields", Placeholder: "USER"})
+	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.ExtendFlag(cmd.Flags(), "summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
+	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
+	cmdutil.ExtendFlag(cmd.Flags(), "assignee", clib.FlagExtra{Group: "Fields", Placeholder: "USER"})
 	return cmd
 }
 
@@ -621,7 +621,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 — there is no editor to open and silent no-ops are validation errors.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			noInput := noInputRequested(cmd)
+			noInput := cmdutil.NoInputRequested(cmd)
 			payload := map[string]any{"fields": map[string]any{}}
 			if jsonInput != "" {
 				if err := cmdutil.ReadJSONFile(jsonInput, &payload); err != nil {
@@ -734,10 +734,10 @@ In headless mode (--no-input), at least one field flag MUST be provided
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read issue edit payload from JSON file")
 	cmd.Flags().StringVar(&summary, "summary", "", "Replace the issue summary")
 	cmd.Flags().StringVar(&assignee, "assignee", "", `Set assignee: "me", "none"/"unassigned", or a Jira account ID`)
-	extendDryRunFlag(cmd.Flags())
-	extendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
-	extendFlag(cmd.Flags(), "summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
-	extendFlag(cmd.Flags(), "assignee", clib.FlagExtra{Group: "Fields", Placeholder: "USER"})
+	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
+	cmdutil.ExtendFlag(cmd.Flags(), "summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
+	cmdutil.ExtendFlag(cmd.Flags(), "assignee", clib.FlagExtra{Group: "Fields", Placeholder: "USER"})
 	return cmd
 }
 
@@ -880,8 +880,8 @@ func issueTransitionCommand() *cobra.Command {
 	}
 	returnCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
 	returnCmd.Flags().StringVar(&transitionID, "transition", "", "Transition ID to execute")
-	extendDryRunFlag(returnCmd.Flags())
-	extendFlag(returnCmd.Flags(), "transition", clib.FlagExtra{Group: "Transition", Placeholder: "ID"})
+	cmdutil.ExtendDryRunFlag(returnCmd.Flags())
+	cmdutil.ExtendFlag(returnCmd.Flags(), "transition", clib.FlagExtra{Group: "Transition", Placeholder: "ID"})
 	return returnCmd
 }
 
@@ -893,7 +893,7 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 		Short: short,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			noInput := noInputRequested(cmd)
+			noInput := cmdutil.NoInputRequested(cmd)
 			payload := map[string]any{"fields": map[string]any{}}
 			if jsonInput != "" {
 				if err := cmdutil.ReadJSONFile(jsonInput, &payload); err != nil {
@@ -999,10 +999,10 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive mutation")
 	cmd.Flags().BoolVar(&deleteSubtasks, "delete-subtasks", false, "(delete only) also delete the issue's subtasks (Jira refuses delete otherwise when subtasks exist)")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read mutation payload from JSON file")
-	extendDryRunFlag(cmd.Flags())
-	extendForceFlag(cmd.Flags())
-	extendFlag(cmd.Flags(), "delete-subtasks", clib.FlagExtra{Group: "Safety"})
-	extendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
+	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.ExtendForceFlag(cmd.Flags())
+	cmdutil.ExtendFlag(cmd.Flags(), "delete-subtasks", clib.FlagExtra{Group: "Safety"})
+	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
 	return cmd
 }
 
@@ -1090,9 +1090,9 @@ func issueWebLinkCommand() *cobra.Command {
 	cmd.Flags().StringVar(&url, "url", "", "Web link target URL (required)")
 	cmd.Flags().StringVar(&title, "title", "", "Display title for the link")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without creating the link")
-	extendFlag(cmd.Flags(), "url", clib.FlagExtra{Group: "Link", Placeholder: "URL", Hint: "url"})
-	extendFlag(cmd.Flags(), "title", clib.FlagExtra{Group: "Link", Placeholder: "TEXT"})
-	extendDryRunFlag(cmd.Flags())
+	cmdutil.ExtendFlag(cmd.Flags(), "url", clib.FlagExtra{Group: "Link", Placeholder: "URL", Hint: "url"})
+	cmdutil.ExtendFlag(cmd.Flags(), "title", clib.FlagExtra{Group: "Link", Placeholder: "TEXT"})
+	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	return cmd
 }
 

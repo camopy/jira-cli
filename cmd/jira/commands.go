@@ -63,11 +63,3 @@ func tuiCommand() *cobra.Command {
 		},
 	}
 }
-
-func groupCommand(use, short, group string) *cobra.Command {
-	return &cobra.Command{
-		Use:     use,
-		Short:   short,
-		GroupID: group,
-	}
-}

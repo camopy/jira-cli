@@ -29,7 +29,7 @@ type jqlBuildOptions struct {
 
 func jqlCommand() *cobra.Command {
 	var builder jqlBuildOptions
-	cmd := groupCommand("jql", "Build JQL queries", "resources")
+	cmd := cmdutil.GroupCommand("jql", "Build JQL queries", "resources")
 	build := &cobra.Command{
 		Use:   "build",
 		Short: "Build a JQL query from flags",

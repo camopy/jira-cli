@@ -89,9 +89,9 @@ Default action — no sub-command:
 	cmd.MarkFlagsRequiredTogether("to", "type")
 	// --type completion driven by the cachelinktype predictor.
 	// Cache primer: `jira cache linktypes`.
-	extendFlag(cmd.Flags(), "to", clib.FlagExtra{Group: "Link", Placeholder: "KEY", Complete: "predictor=issuekey"})
-	extendFlag(cmd.Flags(), "type", clib.FlagExtra{Group: "Link", Placeholder: "NAME", Complete: "predictor=cachelinktype"})
-	extendDryRunFlag(cmd.Flags())
+	cmdutil.ExtendFlag(cmd.Flags(), "to", clib.FlagExtra{Group: "Link", Placeholder: "KEY", Complete: "predictor=issuekey"})
+	cmdutil.ExtendFlag(cmd.Flags(), "type", clib.FlagExtra{Group: "Link", Placeholder: "NAME", Complete: "predictor=cachelinktype"})
+	cmdutil.ExtendDryRunFlag(cmd.Flags())
 
 	cmd.AddCommand(issueLinkListCommand())
 	cmd.AddCommand(issueLinkDeleteCommand())
@@ -148,7 +148,7 @@ func issueLinkDeleteCommand() *cobra.Command {
 		Args:        cobra.ExactArgs(2),
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			noInput := noInputRequested(cmd)
+			noInput := cmdutil.NoInputRequested(cmd)
 			key, linkID := args[0], args[1]
 			if dryRun {
 				return cmdutil.WriteEnvelope(cmd, "issue.link.delete", map[string]any{
@@ -192,8 +192,8 @@ func issueLinkDeleteCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive removal (required under --no-input)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without removing the link")
-	extendForceFlag(cmd.Flags())
-	extendDryRunFlag(cmd.Flags())
+	cmdutil.ExtendForceFlag(cmd.Flags())
+	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	return cmd
 }
 
@@ -243,7 +243,7 @@ func issueLinkTypesCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
 	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
-	extendRefreshFlags(cmd.Flags())
+	cmdutil.ExtendRefreshFlags(cmd.Flags())
 	return cmd
 }
 

@@ -9,7 +9,7 @@ import (
 )
 
 func epicCommand() *cobra.Command {
-	cmd := groupCommand("epic", "Work with Jira epics", "resources")
+	cmd := cmdutil.GroupCommand("epic", "Work with Jira epics", "resources")
 	cmd.AddCommand(epicListCommand())
 	cmd.AddCommand(epicBoardCommand())
 	cmd.AddCommand(epicAddCommand())
@@ -138,7 +138,7 @@ func epicAddCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
-	extendDryRunFlag(cmd.Flags())
+	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	return cmd
 }
 
@@ -171,6 +171,6 @@ func epicRemoveCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
-	extendDryRunFlag(cmd.Flags())
+	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	return cmd
 }

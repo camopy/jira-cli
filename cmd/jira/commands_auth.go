@@ -18,7 +18,7 @@ import (
 )
 
 func authCommand() *cobra.Command {
-	cmd := groupCommand("auth", "Manage Jira authentication", "configuration")
+	cmd := cmdutil.GroupCommand("auth", "Manage Jira authentication", "configuration")
 	cmd.AddCommand(authLoginCommand())
 	cmd.AddCommand(authStatusCommand())
 	cmd.AddCommand(authLogoutCommand())
@@ -130,7 +130,7 @@ func authLoginCommand() *cobra.Command {
 		Short: "Configure authentication for a profile",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			noInput := noInputRequested(cmd)
+			noInput := cmdutil.NoInputRequested(cmd)
 			if !noInput {
 				if cmdutil.DetectorFromContext(cmd).Mode != cli.ModePlain && cmdutil.DetectorFromContext(cmd).Mode != cli.ModeTUI {
 					return fmt.Errorf("login requires --no-input in JSON, agent, or non-TTY mode")

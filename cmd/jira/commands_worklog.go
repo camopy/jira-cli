@@ -122,16 +122,16 @@ func worklogAddCommand() *cobra.Command {
 	cmd.Flags().StringVar(&commentMarkdown, "comment-markdown", "", "Worklog comment as Markdown")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read worklog payload from JSON file")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
-	extendFlag(cmd.Flags(), "time-spent", clib.FlagExtra{Group: "Worklog", Placeholder: "DURATION"})
-	extendFlag(cmd.Flags(), "started", clib.FlagExtra{Group: "Worklog", Placeholder: "TIME"})
-	extendFlag(cmd.Flags(), "comment-markdown", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
-	extendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
-	extendDryRunFlag(cmd.Flags())
+	cmdutil.ExtendFlag(cmd.Flags(), "time-spent", clib.FlagExtra{Group: "Worklog", Placeholder: "DURATION"})
+	cmdutil.ExtendFlag(cmd.Flags(), "started", clib.FlagExtra{Group: "Worklog", Placeholder: "TIME"})
+	cmdutil.ExtendFlag(cmd.Flags(), "comment-markdown", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
+	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
+	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	return cmd
 }
 
 func worklogCommand() *cobra.Command {
-	cmd := groupCommand("worklog", "Manage issue worklogs", "resources")
+	cmd := cmdutil.GroupCommand("worklog", "Manage issue worklogs", "resources")
 	cmd.AddCommand(worklogAddCommand())
 	cmd.AddCommand(worklogListCommand())
 	return cmd

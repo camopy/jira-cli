@@ -11,8 +11,6 @@ import (
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/gechr/clib/complete"
-	"github.com/gechr/clib/help"
-	"github.com/gechr/clib/theme"
 	"github.com/gechr/clog"
 	"github.com/gechr/x/terminal"
 	"github.com/matcra587/jira-cli/internal/cli"
@@ -310,20 +308,7 @@ func configureRootGroups(root *cobra.Command) {
 
 // configureRootHelp installs the themed clib help renderer on root.
 func configureRootHelp(root *cobra.Command) {
-	root.SetHelpFunc(clib.HelpFunc(newHelpRenderer(), standardHelpSections))
-}
-
-func newHelpRenderer() *help.Renderer {
-	theme.SetEnvPrefix("JIRA")
-	th := theme.Default().With(
-		theme.WithEnumStyle(theme.EnumStyleHighlightBoth),
-		theme.WithHelpRepeatEllipsisEnabled(true),
-	)
-	return help.NewRenderer(th)
-}
-
-func standardHelpSections(cmd *cobra.Command) []help.Section {
-	return clib.SectionsWithOptions(clib.WithSubcommandOptional())(cmd)
+	root.SetHelpFunc(clib.HelpFunc(cmdutil.NewHelpRenderer(), cmdutil.StandardHelpSections))
 }
 
 // Execute builds the runtime and root command for a process invocation,
