@@ -97,7 +97,7 @@ func cacheLabelsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cacheKeyForProfile(cmd, profile), "labels", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "labels", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.labels")
 				}
@@ -143,7 +143,7 @@ func cacheProjectsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cacheKeyForProfile(cmd, profile), "projects", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "projects", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.projects")
 				}
@@ -197,7 +197,7 @@ func cacheEpicsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cacheKeyForProfile(cmd, profile), "epics", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "epics", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.epics")
 				}
@@ -271,7 +271,7 @@ func cacheFieldsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cacheKeyForProfile(cmd, profile), "fields", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "fields", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.fields")
 				}
@@ -342,7 +342,7 @@ func cacheIssueTypesCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cacheKeyForProfile(cmd, profile), "issuetypes", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "issuetypes", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.issuetypes")
 				}
@@ -407,7 +407,7 @@ func cacheLinkTypesCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cacheKeyForProfile(cmd, profile), "linktypes", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			data, fromCache, fetchedAt, cacheSourceState, err := cacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "linktypes", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.linktypes")
 				}
@@ -464,7 +464,7 @@ func cacheBoardsCommand() *cobra.Command {
 
 			// Cache hit path — short-circuit before fetching unless --refresh.
 			if !refresh {
-				entry, present, stale, readErr := cache.Read(cacheKeyForProfile(cmd, profile), "boards", ttl)
+				entry, present, stale, readErr := cache.Read(cmdutil.CacheKeyForProfile(cmd, profile), "boards", ttl)
 				switch {
 				case readErr != nil:
 					cacheSourceState = cacheStateMalformed
@@ -490,7 +490,7 @@ func cacheBoardsCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("cache.boards: marshal cache: %w", err)
 			}
-			entry, err := cache.Write(cacheKeyForProfile(cmd, profile), "boards", body)
+			entry, err := cache.Write(cmdutil.CacheKeyForProfile(cmd, profile), "boards", body)
 			if err != nil {
 				return fmt.Errorf("cache.boards: write: %w", err)
 			}
@@ -734,7 +734,7 @@ func cacheClearCommand() *cobra.Command {
 				return err
 			}
 			if len(args) == 0 {
-				n, err := cache.ClearProfile(cacheKeyForProfile(cmd, profile))
+				n, err := cache.ClearProfile(cmdutil.CacheKeyForProfile(cmd, profile))
 				if err != nil {
 					return err
 				}
@@ -743,7 +743,7 @@ func cacheClearCommand() *cobra.Command {
 					"removed": n,
 				})
 			}
-			ok, err := cache.Clear(cacheKeyForProfile(cmd, profile), args[0])
+			ok, err := cache.Clear(cmdutil.CacheKeyForProfile(cmd, profile), args[0])
 			if err != nil {
 				return err
 			}

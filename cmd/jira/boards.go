@@ -52,7 +52,7 @@ func boardsListCommand() *cobra.Command {
 				return err
 			}
 			ttl := time.Duration(ttlMinutes) * time.Minute
-			file, fetchedAt, fromCache, cacheSourceState, err := readOrPrimeBoardsCache(cmd, client, cacheKeyForProfile(cmd, profile), ok, ttl, ttlMinutes, refresh, unbounded)
+			file, fetchedAt, fromCache, cacheSourceState, err := readOrPrimeBoardsCache(cmd, client, cmdutil.CacheKeyForProfile(cmd, profile), ok, ttl, ttlMinutes, refresh, unbounded)
 			if err != nil {
 				return err
 			}

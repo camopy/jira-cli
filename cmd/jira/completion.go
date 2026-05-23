@@ -9,6 +9,7 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/cache"
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/cli/startup"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -90,14 +91,14 @@ func completionCacheKey(globals startup.Globals) string {
 	cfg, err := config.Load(config.WithPath(globals.ConfigPath))
 	if globals.Profile != "" {
 		if err != nil {
-			return cacheKeyFromStartup(globals, nil, globals.Profile)
+			return cmdutil.CacheKeyFromStartup(globals, nil, globals.Profile)
 		}
-		return cacheKeyFromStartup(globals, cfg, globals.Profile)
+		return cmdutil.CacheKeyFromStartup(globals, cfg, globals.Profile)
 	}
 	if err != nil || cfg.DefaultProfile == "" {
-		return cacheKeyFromStartup(globals, nil, "default")
+		return cmdutil.CacheKeyFromStartup(globals, nil, "default")
 	}
-	return cacheKeyFromStartup(globals, cfg, cfg.DefaultProfile)
+	return cmdutil.CacheKeyFromStartup(globals, cfg, cfg.DefaultProfile)
 }
 
 func emitCachedProjects(profile string) {

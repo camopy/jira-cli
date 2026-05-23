@@ -95,13 +95,13 @@ func boardScopeFromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
 	cfg, _ := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 	profile := config.Profile{}
 	profileName := "default"
-	cacheProfile := cache.Key(profileName, "", cacheConfigPath(cmd))
+	cacheProfile := cache.Key(profileName, "", cmdutil.CacheConfigPath(cmd))
 	if cfg != nil {
 		profile = cmdutil.ActiveProfile(cmd, cfg)
 		if profile.Name != "" {
 			profileName = profile.Name
 		}
-		cacheProfile = cacheKeyForProfile(cmd, profile)
+		cacheProfile = cmdutil.CacheKeyForProfile(cmd, profile)
 	}
 
 	// Flag path: --board NAME (when non-empty) or --board-id N.
