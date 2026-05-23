@@ -17,6 +17,13 @@ func TestDetectAgentWithMatchesGHStyleSignals(t *testing.T) {
 		{name: "copilot cli", env: map[string]string{"COPILOT_CLI": "1"}, want: agentCopilotCLI},
 		{name: "cursor", env: map[string]string{"CURSOR_TERMINAL": "1"}, want: agentCursor},
 		{name: "claude code", env: map[string]string{"CLAUDECODE": "1"}, want: agentClaudeCode},
+		{name: "aider", env: map[string]string{"AIDER": "1"}, want: agentAider},
+		{name: "cline", env: map[string]string{"CLINE": "1"}, want: agentCline},
+		{name: "windsurf", env: map[string]string{"WINDSURF": "1"}, want: agentWindsurf},
+		{name: "windsurf agent", env: map[string]string{"WINDSURF_AGENT": "1"}, want: agentWindsurf},
+		{name: "amazon q", env: map[string]string{"AMAZON_Q": "1"}, want: agentAmazonQ},
+		{name: "aws q developer", env: map[string]string{"AWS_Q_DEVELOPER": "1"}, want: agentAmazonQ},
+		{name: "codeium", env: map[string]string{"CODEIUM": "1"}, want: agentCodeium},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

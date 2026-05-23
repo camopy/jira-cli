@@ -55,7 +55,6 @@ func WriteEnvelopeWithRawWarnings(cmd *cobra.Command, command string, data any, 
 		"warnings": rawWarningsOrEmpty(warnings),
 	}
 	enc := json.NewEncoder(cmd.OutOrStdout())
-	enc.SetIndent("", "  ")
 	return enc.Encode(body)
 }
 

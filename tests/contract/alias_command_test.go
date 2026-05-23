@@ -43,7 +43,7 @@ func TestAliasSetListDeleteAndExpansion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("alias list error = %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), `"mine": "issue list --jql 'project = PROJ'"`) {
+	if !envelopeHasKV(t, out, "mine", "issue list --jql 'project = PROJ'") {
 		t.Fatalf("alias list output = %s", out)
 	}
 
@@ -52,7 +52,7 @@ func TestAliasSetListDeleteAndExpansion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("alias expansion error = %v\n%s", err, out)
 	}
-	if seenJQL != "project = PROJ" || !strings.Contains(string(out), `"key": "PROJ-1"`) {
+	if seenJQL != "project = PROJ" || !envelopeHasKV(t, out, "key", "PROJ-1") {
 		t.Fatalf("alias expansion seenJQL=%q output=%s", seenJQL, out)
 	}
 
@@ -78,7 +78,7 @@ func TestAliasImportFromYAML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("alias import error = %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), `"imported": 1`) || !strings.Contains(string(out), `"mine"`) {
+	if !envelopeHasKV(t, out, "imported", 1) || !envelopeHasValue(t, out, "mine") {
 		t.Fatalf("alias import output = %s", out)
 	}
 
@@ -87,7 +87,7 @@ func TestAliasImportFromYAML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("alias list error = %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), `"mine": "issue list --jql \"assignee = currentUser()\""`) {
+	if !envelopeHasKV(t, out, "mine", `issue list --jql "assignee = currentUser()"`) {
 		t.Fatalf("alias list after import = %s", out)
 	}
 }

@@ -216,6 +216,21 @@ func TestMapErrorClassifiesContextCancellation(t *testing.T) {
 	}
 }
 
+// A timed-out or canceled invocation must carry its own exit code (7 and
+// 6) distinct from the generic server failure (5), so a caller can tell a
+// deadline/cancellation apart from a real backend error without parsing
+// the message.
+func TestExitCodeForTimeoutAndCanceled(t *testing.T) {
+	timeout := cli.MapError(fmt.Errorf("Get %q: %w", "http://x", context.DeadlineExceeded))
+	if got := cli.ExitCode(timeout); got != 7 {
+		t.Fatalf("timeout exit = %d, want 7", got)
+	}
+	canceled := cli.MapError(fmt.Errorf("Get %q: %w", "http://x", context.Canceled))
+	if got := cli.ExitCode(canceled); got != 6 {
+		t.Fatalf("canceled exit = %d, want 6", got)
+	}
+}
+
 // A prompt that the user aborts or that is canceled by SIGINT/timeout
 // must map to a typed envelope entry — not flow through the substring
 // classifier, where "auth login aborted" would be misread as an auth

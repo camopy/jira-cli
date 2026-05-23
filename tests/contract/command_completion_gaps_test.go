@@ -49,20 +49,21 @@ func TestCommandsUseConfiguredJiraServices(t *testing.T) {
 	cfg := jiraConfig(t, srv.URL)
 	for _, tc := range []struct {
 		args []string
-		want string
+		key  string
+		val  any
 	}{
-		{[]string{"issue", "list", "--output=json"}, `"key": "PROJ-1"`},
-		{[]string{"issue", "list", "--jql", "project = CUSTOM", "--output=json"}, `"key": "CUSTOM-1"`},
-		{[]string{"search", "jql", "project = PROJ", "--output=json"}, `"key": "PROJ-2"`},
-		{[]string{"worklog", "list", "PROJ-1", "--output=json"}, `"timeSpentSeconds": 60`},
+		{[]string{"issue", "list", "--output=json"}, "key", "PROJ-1"},
+		{[]string{"issue", "list", "--jql", "project = CUSTOM", "--output=json"}, "key", "CUSTOM-1"},
+		{[]string{"search", "jql", "project = PROJ", "--output=json"}, "key", "PROJ-2"},
+		{[]string{"worklog", "list", "PROJ-1", "--output=json"}, "timeSpentSeconds", 60},
 	} {
 		cmd := exec.Command("go", append([]string{"run", "../../cmd/jira", "--config", cfg}, tc.args...)...)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("jira %v error = %v\n%s", tc.args, err, out)
 		}
-		if !strings.Contains(string(out), tc.want) {
-			t.Fatalf("jira %v output missing %q:\n%s", tc.args, tc.want, out)
+		if !envelopeHasKV(t, out, tc.key, tc.val) {
+			t.Fatalf("jira %v output missing %s=%v:\n%s", tc.args, tc.key, tc.val, out)
 		}
 	}
 	for _, want := range []string{jira.DefaultIssueListJQL, "project = CUSTOM", "project = PROJ"} {

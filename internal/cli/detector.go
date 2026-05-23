@@ -86,13 +86,18 @@ type Detection struct {
 type AgentName string
 
 const (
+	agentAider      AgentName = "aider"
+	agentAmazonQ    AgentName = "amazon-q"
 	agentAmp        AgentName = "amp"
 	agentClaudeCode AgentName = "claude-code"
+	agentCline      AgentName = "cline"
+	agentCodeium    AgentName = "codeium"
 	agentCodex      AgentName = "codex"
 	agentCopilotCLI AgentName = "copilot-cli"
 	agentCursor     AgentName = "cursor"
 	agentGeminiCLI  AgentName = "gemini-cli"
 	agentOpencode   AgentName = "opencode"
+	agentWindsurf   AgentName = "windsurf"
 )
 
 var validAgentName = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
@@ -162,6 +167,21 @@ func detectAgentWith(lookup func(string) (string, bool)) AgentName {
 	}
 	if isSet("CLAUDECODE") || isSet("CLAUDE_CODE") {
 		return agentClaudeCode
+	}
+	if isSet("AIDER") {
+		return agentAider
+	}
+	if isSet("CLINE") {
+		return agentCline
+	}
+	if isSet("WINDSURF") || isSet("WINDSURF_AGENT") {
+		return agentWindsurf
+	}
+	if isSet("AMAZON_Q") || isSet("AWS_Q_DEVELOPER") {
+		return agentAmazonQ
+	}
+	if isSet("CODEIUM") {
+		return agentCodeium
 	}
 	return ""
 }

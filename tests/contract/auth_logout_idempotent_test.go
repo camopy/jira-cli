@@ -42,7 +42,7 @@ workday_seconds = 28800
 	if strings.Contains(strings.ToLower(string(out)), "keyring") {
 		t.Fatalf("auth logout surfaced a keyring backend error for a missing entry:\n%s", out)
 	}
-	if !strings.Contains(string(out), `"removed": false`) {
+	if !envelopeHasKV(t, out, "removed", false) {
 		t.Fatalf("auth logout of an absent credential did not report removed=false:\n%s", out)
 	}
 }

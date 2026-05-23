@@ -275,7 +275,6 @@ func writeEnvelopeWithCommentWarnings(cmd *cobra.Command, command string, data a
 		"warnings": warningsOrEmpty(warnings),
 	}
 	enc := json.NewEncoder(cmd.OutOrStdout())
-	enc.SetIndent("", "  ")
 	return enc.Encode(body)
 }
 

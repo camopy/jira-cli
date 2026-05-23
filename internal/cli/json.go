@@ -134,7 +134,7 @@ func WarningFrom(src WarningSource) Warning {
 // write failure is surfaced to the caller rather than silently dropped.
 func WriteEnvelope(w io.Writer, env Envelope) error {
 	ew := &errWriter{w: w}
-	clog.New(clog.NewOutput(ew, clog.ColorNever)).Print().JSON(env)
+	clog.New(clog.NewOutput(ew, clog.ColorNever)).Print().Mode(clog.JSONFlat).JSON(env)
 	return ew.err
 }
 

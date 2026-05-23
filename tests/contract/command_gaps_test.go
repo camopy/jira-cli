@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -29,7 +28,7 @@ func TestSearchCommandsExposeInlineAndSavedJQL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("search jql error = %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), `"jql": "project = PROJ"`) || !strings.Contains(string(out), `"source": "inline"`) {
+	if !envelopeHasKV(t, out, "jql", "project = PROJ") || !envelopeHasKV(t, out, "source", "inline") {
 		t.Fatalf("search jql output = %s", out)
 	}
 
@@ -51,9 +50,16 @@ func TestSearchCommandsExposeInlineAndSavedJQL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("search saved error = %v\n%s", err, out)
 	}
-	for _, want := range []string{`"source": "saved"`, `"name": "My Bugs"`, `"jql": "assignee = currentUser()"`} {
-		if !strings.Contains(string(out), want) {
-			t.Fatalf("search saved output missing %q:\n%s", want, out)
+	for _, kv := range []struct {
+		key string
+		val any
+	}{
+		{"source", "saved"},
+		{"name", "My Bugs"},
+		{"jql", "assignee = currentUser()"},
+	} {
+		if !envelopeHasKV(t, out, kv.key, kv.val) {
+			t.Fatalf("search saved output missing %s=%v:\n%s", kv.key, kv.val, out)
 		}
 	}
 }
@@ -174,7 +180,7 @@ func TestConfigThemeCommandShowsAndUpdatesTheme(t *testing.T) {
 	if err != nil {
 		t.Fatalf("config theme set error = %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), `"name": "dracula"`) || !strings.Contains(string(out), `"path": "/tmp/theme.toml"`) {
+	if !envelopeHasKV(t, out, "name", "dracula") || !envelopeHasKV(t, out, "path", "/tmp/theme.toml") {
 		t.Fatalf("config theme set output = %s", out)
 	}
 
@@ -183,7 +189,7 @@ func TestConfigThemeCommandShowsAndUpdatesTheme(t *testing.T) {
 	if err != nil {
 		t.Fatalf("config theme show error = %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), `"name": "dracula"`) || !strings.Contains(string(out), `"path": "/tmp/theme.toml"`) {
+	if !envelopeHasKV(t, out, "name", "dracula") || !envelopeHasKV(t, out, "path", "/tmp/theme.toml") {
 		t.Fatalf("config theme show output = %s", out)
 	}
 }
@@ -197,7 +203,7 @@ func TestAuthRefreshAndMigrateReportConcreteState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("auth refresh error = %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), `"refreshed": false`) || !strings.Contains(string(out), `"reason"`) {
+	if !envelopeHasKV(t, out, "refreshed", false) || !envelopeHasKey(t, out, "reason") {
 		t.Fatalf("auth refresh output = %s", out)
 	}
 
@@ -206,7 +212,7 @@ func TestAuthRefreshAndMigrateReportConcreteState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("auth migrate error = %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), `"target_backend": "1password"`) || !strings.Contains(string(out), `"dry_run": true`) {
+	if !envelopeHasKV(t, out, "target_backend", "1password") || !envelopeHasKV(t, out, "dry_run", true) {
 		t.Fatalf("auth migrate output = %s", out)
 	}
 }

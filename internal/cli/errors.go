@@ -47,6 +47,18 @@ func defaultCodeForType(kind ErrorType) string {
 }
 
 func ExitCode(err Error) int {
+	// canceled and timeout carry their own exit codes (6, 7) so a caller
+	// can distinguish a cancellation or deadline from a real backend
+	// failure (5). They are emitted with ErrorTypeServer, so this Code
+	// branch must precede the type switch. The codes are set only by
+	// mapContextError; prompt cancellation uses prompt_canceled and is
+	// unaffected.
+	switch err.Code {
+	case "canceled":
+		return 6
+	case "timeout":
+		return 7
+	}
 	switch ErrorType(err.Type) {
 	case ErrorTypeAuth:
 		return 1

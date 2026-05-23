@@ -131,7 +131,7 @@ func TestIssueLinkDeleteDryRunNoCall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("issue link delete --dry-run error = %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), `"dry_run": true`) {
+	if !envelopeHasKV(t, out, "dry_run", true) {
 		t.Fatalf("dry-run envelope missing dry_run flag: %s", out)
 	}
 }

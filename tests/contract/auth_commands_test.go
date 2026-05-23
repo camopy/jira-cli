@@ -59,7 +59,7 @@ func TestAuthLoginSwitchAndLogoutMetadataOnly(t *testing.T) {
 	if out, err = cmd.CombinedOutput(); err != nil {
 		t.Fatalf("auth switch error = %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), `"active": "work"`) {
+	if !envelopeHasKV(t, out, "active", "work") {
 		t.Fatalf("auth switch output = %s", out)
 	}
 
@@ -76,7 +76,7 @@ func TestAuthLoginSwitchAndLogoutMetadataOnly(t *testing.T) {
 	if out, err = cmd.CombinedOutput(); err != nil {
 		t.Fatalf("auth logout error = %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), `"profile": "work"`) {
+	if !envelopeHasKV(t, out, "profile", "work") {
 		t.Fatalf("auth logout output = %s", out)
 	}
 }
@@ -218,7 +218,7 @@ secret_backend = "keyring"
 	if err != nil {
 		t.Fatalf("auth refresh error = %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), `"profile": "play"`) {
+	if !envelopeHasKV(t, out, "profile", "play") {
 		t.Fatalf("auth refresh did not honor JIRA_DEFAULT_PROFILE:\n%s", out)
 	}
 }
