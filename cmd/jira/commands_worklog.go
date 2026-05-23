@@ -98,7 +98,7 @@ func worklogAddCommand() *cobra.Command {
 					return err
 				}
 				if ok {
-					worklog, resp, err := worklogService(client).Add(cmd.Context(), args[0], &jira.WorklogAddRequest{TimeSpentSeconds: seconds, Started: started, Comment: comment})
+					worklog, resp, err := cmdutil.WorklogService(client).Add(cmd.Context(), args[0], &jira.WorklogAddRequest{TimeSpentSeconds: seconds, Started: started, Comment: comment})
 					if err != nil {
 						return err
 					}
@@ -148,7 +148,7 @@ func worklogListCommand() *cobra.Command {
 				return err
 			}
 			if ok {
-				worklogs, resp, err := worklogService(client).List(cmd.Context(), args[0], &jira.ListOptions{MaxResults: 50})
+				worklogs, resp, err := cmdutil.WorklogService(client).List(cmd.Context(), args[0], &jira.ListOptions{MaxResults: 50})
 				if err != nil {
 					return err
 				}

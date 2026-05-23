@@ -82,7 +82,7 @@ func issueViewCommand() *cobra.Command {
 				return err
 			}
 			if ok {
-				issue, resp, err := issueService(client).Get(cmd.Context(), args[0], &jira.IssueGetOptions{Expand: []string{"renderedFields", "names", "schema", "transitions", "operations"}})
+				issue, resp, err := cmdutil.IssueService(client).Get(cmd.Context(), args[0], &jira.IssueGetOptions{Expand: []string{"renderedFields", "names", "schema", "transitions", "operations"}})
 				if err != nil {
 					return err
 				}
@@ -220,7 +220,7 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 	if !ok {
 		return cmdutil.WriteEnvelope(cmd, "issue.list", boardScopedListData(cmd, []map[string]any{}, opts.detail, query, scope, precedence))
 	}
-	service := issueService(client)
+	service := cmdutil.IssueService(client)
 	fields := jira.DefaultIssueListFields()
 	var expand []string
 	if opts.detail {
@@ -394,7 +394,7 @@ func issueCreateCommand() *cobra.Command {
 				// refuses the create itself, so resolving its screen is
 				// wasted work and would emit a stray read request.
 				pipeIn.SchemaFetcher = newScreenSchemaFetcher(
-					cmd.Context(), servicesForClient(client).Project(0),
+					cmd.Context(), cmdutil.ServicesForClient(client).Project(0),
 					cmdutil.ProfileForEnvelope(cmd), projectForSchema, issueTypeForSchema,
 				)
 			}
@@ -444,7 +444,7 @@ func issueCreateCommand() *cobra.Command {
 				Summary: cmdutil.StringFromAny(submitFields["summary"]),
 				Fields:  submitFields,
 			}
-			issue, resp, err := issueService(client).Create(cmd.Context(), req)
+			issue, resp, err := cmdutil.IssueService(client).Create(cmd.Context(), req)
 			if err != nil {
 				return err
 			}
@@ -681,7 +681,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 			}
 			if editClient != nil && !cmdutil.ReadOnlyEnabled(cmd) {
 				editIn.SchemaFetcher = newEditScreenSchemaFetcher(
-					cmd.Context(), servicesForClient(editClient).Project(0),
+					cmd.Context(), cmdutil.ServicesForClient(editClient).Project(0),
 					cmdutil.ProfileForEnvelope(cmd), args[0],
 				)
 			}
@@ -696,7 +696,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 				submitFields = map[string]any{}
 			}
 			if !dryRun {
-				issue, resp, err := issueService(editClient).Update(cmd.Context(), args[0], &jira.IssueUpdateRequest{Fields: submitFields})
+				issue, resp, err := cmdutil.IssueService(editClient).Update(cmd.Context(), args[0], &jira.IssueUpdateRequest{Fields: submitFields})
 				if err != nil {
 					return err
 				}
@@ -733,7 +733,7 @@ func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
 	if !ok {
 		return fmt.Errorf("jira base URL is required for issue.edit --edit")
 	}
-	issueService := issueService(client)
+	issueService := cmdutil.IssueService(client)
 	issue, _, err := issueService.Get(cmd.Context(), key, &jira.IssueGetOptions{})
 	if err != nil {
 		return err
@@ -838,7 +838,7 @@ func issueTransitionCommand() *cobra.Command {
 					return err
 				}
 				if ok {
-					transitions, resp, err := issueService(client).Transitions(cmd.Context(), args[0])
+					transitions, resp, err := cmdutil.IssueService(client).Transitions(cmd.Context(), args[0])
 					if err != nil {
 						return err
 					}
@@ -850,7 +850,7 @@ func issueTransitionCommand() *cobra.Command {
 				return err
 			}
 			if ok && transitionID != "" {
-				resp, err := issueService(client).Transition(cmd.Context(), args[0], &jira.TransitionRequest{ID: transitionID})
+				resp, err := cmdutil.IssueService(client).Transition(cmd.Context(), args[0], &jira.TransitionRequest{ID: transitionID})
 				if err != nil {
 					return err
 				}
@@ -913,7 +913,7 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 			}
 			if destructiveClient != nil && !cmdutil.ReadOnlyEnabled(cmd) {
 				destructiveIn.SchemaFetcher = newEditScreenSchemaFetcher(
-					cmd.Context(), servicesForClient(destructiveClient).Project(0),
+					cmd.Context(), cmdutil.ServicesForClient(destructiveClient).Project(0),
 					cmdutil.ProfileForEnvelope(cmd), args[0],
 				)
 			}
@@ -960,7 +960,7 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 				}
 			}
 			if ok && !dryRun {
-				service := issueService(client)
+				service := cmdutil.IssueService(client)
 				var resp *jira.Response
 				var issue *jira.Issue
 				switch name {
@@ -1060,7 +1060,7 @@ func issueWebLinkCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.weblink")
 			}
-			resp, err := issueService(client).AddRemoteLink(cmd.Context(), args[0], &jira.RemoteLinkRequest{
+			resp, err := cmdutil.IssueService(client).AddRemoteLink(cmd.Context(), args[0], &jira.RemoteLinkRequest{
 				URL: url, Title: title,
 			})
 			if err != nil {

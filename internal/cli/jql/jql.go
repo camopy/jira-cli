@@ -1,4 +1,4 @@
-package main
+package jql
 
 import (
 	"encoding/json"
@@ -12,7 +12,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func jqlCommand() *cobra.Command {
+// NewCommand returns the `jql` command group for building JQL queries.
+func NewCommand() *cobra.Command {
 	var builder jql.BuildOptions
 	cmd := cmdutil.GroupCommand("jql", "Build JQL queries", "resources")
 	build := &cobra.Command{
@@ -37,13 +38,15 @@ func jqlCommand() *cobra.Command {
 			return cmdutil.WriteEnvelope(cmd, "jql.build", data)
 		},
 	}
-	addJQLBuilderFlags(build, &builder)
+	AddJQLBuilderFlags(build, &builder)
 	boardscope.AddFlags(build)
 	cmd.AddCommand(build)
 	return cmd
 }
 
-func addJQLBuilderFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
+// AddJQLBuilderFlags attaches the standard JQL filter and sort flags to cmd,
+// writing results into builder.
+func AddJQLBuilderFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 	cmd.Flags().StringSliceVar(&builder.Projects, "project", nil, "Restrict to Jira project key")
 	cmd.Flags().StringSliceVar(&builder.Epics, "epic", nil, "Restrict to issues in epic keys")
 	cmd.Flags().StringVar(&builder.Assignee, "assignee", "", `Restrict by assignee; use "me" for currentUser()`)
@@ -66,10 +69,10 @@ func addJQLBuilderFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 	clib.Extend(cmd.Flags().Lookup("desc"), clib.FlagExtra{Group: "Sort"})
 }
 
-// readCacheJSON loads a cache resource into v for the given profile, ignoring
+// ReadCacheJSON loads a cache resource into v for the given profile, ignoring
 // TTL so completion stays fast even when the cache is stale. Returns false
 // silently on any error so completion never blocks the shell.
-func readCacheJSON(profile, resource string, v any) bool {
+func ReadCacheJSON(profile, resource string, v any) bool {
 	entry, ok, _, err := cache.Read(profile, resource, 24*time.Hour*365)
 	if err != nil || !ok {
 		return false

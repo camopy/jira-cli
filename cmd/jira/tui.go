@@ -54,10 +54,10 @@ func tuiOptionsForCommand(cmd *cobra.Command) tui.Options {
 			}
 		}
 		opts.IssueProvider = tui.IssueProviderFunc(func(ctx context.Context) ([]*jira.Issue, error) {
-			issues, _, err := issueService(client).List(ctx, &jira.IssueListOptions{ListOptions: jira.ListOptions{MaxResults: 50}})
+			issues, _, err := cmdutil.IssueService(client).List(ctx, &jira.IssueListOptions{ListOptions: jira.ListOptions{MaxResults: 50}})
 			return issues, err
 		})
-		opts.MutationService = tuiJiraMutations{issues: issueService(client), worklogs: worklogService(client)}
+		opts.MutationService = tuiJiraMutations{issues: cmdutil.IssueService(client), worklogs: cmdutil.WorklogService(client)}
 	}
 	return opts
 }

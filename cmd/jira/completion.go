@@ -10,6 +10,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cache"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/cli/jql"
 	"github.com/matcra587/jira-cli/internal/cli/startup"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -103,7 +104,7 @@ func completionCacheKey(globals startup.Globals) string {
 
 func emitCachedProjects(profile string) {
 	var projects []jira.ProjectSummary
-	if !readCacheJSON(profile, "projects", &projects) {
+	if !jql.ReadCacheJSON(profile, "projects", &projects) {
 		return
 	}
 	for _, p := range projects {
@@ -118,7 +119,7 @@ func emitCachedEpics(profile string) {
 		Summary string `json:"summary"`
 	}
 	var epics []epic
-	if !readCacheJSON(profile, "epics", &epics) {
+	if !jql.ReadCacheJSON(profile, "epics", &epics) {
 		return
 	}
 	for _, e := range epics {
@@ -129,7 +130,7 @@ func emitCachedEpics(profile string) {
 
 func emitCachedLabels(profile string) {
 	var labels []string
-	if !readCacheJSON(profile, "labels", &labels) {
+	if !jql.ReadCacheJSON(profile, "labels", &labels) {
 		return
 	}
 	for _, l := range labels {
@@ -142,7 +143,7 @@ func emitCachedIssueTypes(profile string) {
 		Name string `json:"name"`
 	}
 	var types []issuetype
-	if !readCacheJSON(profile, "issuetypes", &types) {
+	if !jql.ReadCacheJSON(profile, "issuetypes", &types) {
 		return
 	}
 	seen := make(map[string]struct{}, len(types))
@@ -225,7 +226,7 @@ func emitCachedLinkTypes(profile string) {
 		Outward string `json:"outward"`
 	}
 	var types []linkType
-	if !readCacheJSON(profile, "linktypes", &types) {
+	if !jql.ReadCacheJSON(profile, "linktypes", &types) {
 		return
 	}
 	for _, t := range types {
