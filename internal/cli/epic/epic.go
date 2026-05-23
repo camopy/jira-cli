@@ -1,4 +1,4 @@
-package main
+package epic
 
 import (
 	"fmt"
@@ -8,7 +8,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func epicCommand() *cobra.Command {
+// NewCommand returns the `epic` command group: list, board, add, and remove.
+func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("epic", "Work with Jira epics", "resources")
 	cmd.AddCommand(epicListCommand())
 	cmd.AddCommand(epicBoardCommand())
@@ -28,7 +29,7 @@ func epicListCommand() *cobra.Command {
 				return err
 			}
 			if ok {
-				epics, resp, err := epicService(client).List(cmd.Context(), &jira.ListOptions{MaxResults: 50})
+				epics, resp, err := jira.NewEpicService(client).List(cmd.Context(), &jira.ListOptions{MaxResults: 50})
 				if err != nil {
 					return err
 				}
@@ -59,7 +60,7 @@ func epicBoardCommand() *cobra.Command {
 					"totals": emptyEpicCounts(),
 				})
 			}
-			service := epicService(client)
+			service := jira.NewEpicService(client)
 			epics, _, err := service.List(cmd.Context(), &jira.ListOptions{MaxResults: 50})
 			if err != nil {
 				return err
@@ -121,7 +122,7 @@ func epicAddCommand() *cobra.Command {
 					return err
 				}
 				if ok {
-					resp, err := epicService(client).AddIssue(cmd.Context(), args[1], args[0])
+					resp, err := jira.NewEpicService(client).AddIssue(cmd.Context(), args[1], args[0])
 					if err != nil {
 						return err
 					}
@@ -155,7 +156,7 @@ func epicRemoveCommand() *cobra.Command {
 					return err
 				}
 				if ok {
-					resp, err := epicService(client).RemoveIssue(cmd.Context(), args[0])
+					resp, err := jira.NewEpicService(client).RemoveIssue(cmd.Context(), args[0])
 					if err != nil {
 						return err
 					}

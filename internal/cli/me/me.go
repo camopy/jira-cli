@@ -1,4 +1,4 @@
-package main
+package me
 
 import (
 	"fmt"
@@ -9,11 +9,11 @@ import (
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
-// meCommand is a short alias for the identity portion of `jira auth whoami`:
-// fetches /myself for the active profile and prints a compact identity
-// envelope. Distinct from `auth whoami` which also offers `--save` and is
-// intentionally namespaced under `auth`.
-func meCommand() *cobra.Command {
+// NewCommand returns the `me` command: a short alias for the identity
+// portion of `jira auth whoami`. It fetches /myself for the active profile
+// and prints a compact identity envelope. Distinct from `auth whoami`, which
+// also offers `--save` and is intentionally namespaced under `auth`.
+func NewCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:     "me",
 		Short:   "Show the active profile's Jira identity",

@@ -8,7 +8,6 @@ import (
 
 type jiraServiceFactory interface {
 	Issue() jira.IssueService
-	Epic() jira.EpicService
 	Search() jira.SearchService
 	Worklog() jira.WorklogService
 	Project(time.Duration) jira.ProjectService
@@ -26,10 +25,6 @@ func issueService(client *jira.Client) jira.IssueService {
 	return servicesForClient(client).Issue()
 }
 
-func epicService(client *jira.Client) jira.EpicService {
-	return servicesForClient(client).Epic()
-}
-
 func searchService(client *jira.Client) jira.SearchService {
 	return servicesForClient(client).Search()
 }
@@ -40,10 +35,6 @@ func worklogService(client *jira.Client) jira.WorklogService {
 
 func (f defaultJiraServiceFactory) Issue() jira.IssueService {
 	return jira.NewIssueService(f.client)
-}
-
-func (f defaultJiraServiceFactory) Epic() jira.EpicService {
-	return jira.NewEpicService(f.client)
 }
 
 func (f defaultJiraServiceFactory) Search() jira.SearchService {

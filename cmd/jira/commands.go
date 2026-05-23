@@ -4,8 +4,10 @@ import (
 	"os"
 
 	"github.com/matcra587/jira-cli/internal/cli"
-	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
-	"github.com/matcra587/jira-cli/internal/version"
+	"github.com/matcra587/jira-cli/internal/cli/config"
+	"github.com/matcra587/jira-cli/internal/cli/epic"
+	"github.com/matcra587/jira-cli/internal/cli/me"
+	"github.com/matcra587/jira-cli/internal/cli/version"
 	"github.com/spf13/cobra"
 )
 
@@ -14,37 +16,18 @@ func registerCommands(root *cobra.Command) {
 		tuiCommand(),
 		agentCommand(),
 		cacheCommand(),
-		meCommand(),
-		versionCommand(),
+		me.NewCommand(),
+		version.NewCommand(),
 		authCommand(),
 		issueCommand(),
 		boardsCommand(),
-		epicCommand(),
+		epic.NewCommand(),
 		jqlCommand(),
 		aliasCommand(),
 		searchCommand(),
 		worklogCommand(),
-		configCommand(),
+		config.NewCommand(),
 	)
-}
-
-func versionCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:     "version",
-		Short:   "Print version information",
-		GroupID: "agent",
-		Args:    cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return cmdutil.WriteEnvelope(cmd, "version", map[string]any{
-				"version":    version.Version,
-				"commit":     version.Commit,
-				"branch":     version.Branch,
-				"build_time": version.BuildTime,
-				"build_by":   version.BuildBy,
-				"summary":    version.String(),
-			})
-		},
-	}
 }
 
 func tuiCommand() *cobra.Command {

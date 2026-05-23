@@ -754,7 +754,7 @@ func authLogoutCommand() *cobra.Command {
 		Short:             "Remove stored credentials",
 		Args:              cobra.ExactArgs(1),
 		Annotations:       map[string]string{"clib": "dynamic-args='profile'"},
-		ValidArgsFunction: completeProfileNames,
+		ValidArgsFunction: cmdutil.CompleteProfileNames,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
@@ -790,7 +790,7 @@ func authSwitchCommand() *cobra.Command {
 		Short:             "Switch active profile",
 		Args:              cobra.ExactArgs(1),
 		Annotations:       map[string]string{"clib": "dynamic-args='profile'"},
-		ValidArgsFunction: completeProfileNames,
+		ValidArgsFunction: cmdutil.CompleteProfileNames,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {

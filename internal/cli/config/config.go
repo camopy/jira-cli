@@ -1,4 +1,6 @@
-package main
+// Package config implements the `jira config` cobra command tree, which
+// manages the local configuration file, profiles, and theme settings.
+package config
 
 import (
 	"fmt"
@@ -9,7 +11,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func configCommand() *cobra.Command {
+// NewCommand returns the `config` command group: init, profile, get, set, and
+// theme.
+func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("config", "Manage configuration", "configuration")
 	cmd.AddCommand(configInitCommand())
 	cmd.AddCommand(configProfileCommand())
@@ -188,19 +192,6 @@ func configSetCommand() *cobra.Command {
 			return cmdutil.WriteEnvelope(cmd, "config.set", map[string]any{"key": args[0], "value": args[1]})
 		},
 	}
-}
-
-// completeProfileNames completes the names of all profiles in the config.
-func completeProfileNames(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	out := make([]string, 0, len(cfg.Profiles))
-	for _, p := range cfg.Profiles {
-		out = append(out, p.Name)
-	}
-	return out, cobra.ShellCompDirectiveNoFileComp
 }
 
 // completeConfigKeys lists every valid config key (profile-scoped keys
