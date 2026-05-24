@@ -1,4 +1,4 @@
-package main
+package issue
 
 import (
 	"errors"
@@ -400,8 +400,8 @@ func accountIDFromIdentifier(ident string) (string, bool) {
 //   - 0 matches  → exit 2 with `errors[].type = not_found`, input echoed
 //   - 2+ matches → exit 3 with `errors[].type = validation` and a
 //     structured `errors[].candidates: [...]` per envelope-shapes.md.
-//     Returns envelopeWrittenError so writeCommandError doesn't overwrite
-//     the richer envelope we already emitted.
+//     Returns a cmdutil.EnvelopeWrittenError so the central error writer
+//     doesn't overwrite the richer envelope we already emitted.
 func handleResolveErr(cmd *cobra.Command, command string, err error) error {
 	var ambig *jira.AmbiguousUserError
 	if errors.As(err, &ambig) {
@@ -415,7 +415,7 @@ func handleResolveErr(cmd *cobra.Command, command string, err error) error {
 			env.Errors[0].Hint = "Re-run with --user accountId:<id>."
 		}
 		_ = cli.WriteEnvelope(cmd.OutOrStdout(), env)
-		return envelopeWrittenError{inner: fmt.Errorf("validation: %w", err)}
+		return cmdutil.EnvelopeWritten(fmt.Errorf("validation: %w", err))
 	}
 	if errors.Is(err, jira.ErrUserNotFound) {
 		return fmt.Errorf("not found: %w", err)

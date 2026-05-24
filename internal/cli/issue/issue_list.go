@@ -1,4 +1,4 @@
-package main
+package issue
 
 // issueListCommand lives in its own file so future per-verb evolutions
 // (e.g. board scoping in 003) collide with a small, focused unit
@@ -9,7 +9,7 @@ package main
 
 import (
 	"github.com/matcra587/jira-cli/internal/cli/boardscope"
-	"github.com/matcra587/jira-cli/internal/cli/jql"
+	clijql "github.com/matcra587/jira-cli/internal/cli/jql"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +26,7 @@ func issueListCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.detail, "detail", false, "Fetch full issue records")
 	cmd.Flags().StringVar(&opts.jqlQuery, "jql", "", "Run a custom JQL query for the issue list")
 	cmd.Flags().BoolVar(&opts.asJQL, "as-jql", false, "Print the built JQL query without calling Jira")
-	jql.AddJQLBuilderFlags(cmd, &opts.builder)
+	clijql.AddJQLBuilderFlags(cmd, &opts.builder)
 	boardscope.AddFlags(cmd)
 	return cmd
 }

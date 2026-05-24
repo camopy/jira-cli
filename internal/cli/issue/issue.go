@@ -1,4 +1,4 @@
-package main
+package issue
 
 import (
 	"context"
@@ -23,7 +23,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func issueCommand() *cobra.Command {
+// NewCommand returns the `issue` verb and all its sub-commands.
+func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("issue", "Work with Jira issues", "resources")
 	cmd.AddCommand(issueListCommand())
 	cmd.AddCommand(issueMineCommand())
@@ -240,10 +241,10 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 	return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.list", boardScopedListData(cmd, issueData, opts.detail, query, scope, precedence), resp)
 }
 
-// boardScopedListData extends issueListOutputData with the new envelope
+// boardScopedListData extends IssueListOutputData with the new envelope
 // fields per contracts/envelope-shapes.md > issue list --board.
 func boardScopedListData(cmd *cobra.Command, issues any, detail bool, query string, scope jira.BoardScope, precedence string) map[string]any {
-	data := issueListOutputData(cmd, issues, detail, query)
+	data := IssueListOutputData(cmd, issues, detail, query)
 	data["jql"] = query
 	data["precedence"] = precedence
 	data["board_scope"] = boardscope.EnvelopeData(scope)
@@ -252,7 +253,7 @@ func boardScopedListData(cmd *cobra.Command, issues any, detail bool, query stri
 
 // issueListCommand has been relocated to cmd/jira/issue_list.go per the
 // `issue_<verb>.go` convention. The runner (runIssueList) and helpers
-// (issueListBuilderWithProfileDefaults, issueListOutputData) remain in
+// (issueListBuilderWithProfileDefaults, IssueListOutputData) remain in
 // this file because they are shared with `issue mine`.
 
 func issueListBuilderWithProfileDefaults(builder jql.BuildOptions, profile config.Profile) jql.BuildOptions {
@@ -262,7 +263,7 @@ func issueListBuilderWithProfileDefaults(builder jql.BuildOptions, profile confi
 	return builder
 }
 
-func issueListOutputData(cmd *cobra.Command, issues any, detail bool, query string) map[string]any {
+func IssueListOutputData(cmd *cobra.Command, issues any, detail bool, query string) map[string]any {
 	data := map[string]any{"issues": issues, "detail": detail}
 	if debug, _ := cmd.Root().PersistentFlags().GetBool("debug"); debug {
 		data["jql"] = query

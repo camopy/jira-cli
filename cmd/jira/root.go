@@ -447,7 +447,7 @@ func writeCommandError(ctx context.Context, cmd *cobra.Command, err error) {
 	// Some RunEs (e.g. watcher add ambiguous-resolution) write a richer
 	// envelope to stdout themselves (with structured candidates etc.) and
 	// signal that with an envelopeWritten wrapper. Avoid double-writing.
-	var ew envelopeWrittenError
+	var ew cmdutil.EnvelopeWrittenError
 	if errors.As(err, &ew) {
 		return
 	}
@@ -462,15 +462,6 @@ func writeCommandError(ctx context.Context, cmd *cobra.Command, err error) {
 		_ = writeErrorEnvelopeToStdout(cmd, err)
 	}
 }
-
-// envelopeWrittenError is a wrapper a RunE can return to tell
-// writeCommandError "I already emitted a structured envelope to stdout —
-// don't overwrite it." outputErrorFor still unwraps to the inner error
-// for exit-code classification.
-type envelopeWrittenError struct{ inner error }
-
-func (e envelopeWrittenError) Error() string { return e.inner.Error() }
-func (e envelopeWrittenError) Unwrap() error { return e.inner }
 
 // jsonEnvelopeRequested returns true when the resolved output mode is a
 // machine mode (json or compact), so a command failure still emits a

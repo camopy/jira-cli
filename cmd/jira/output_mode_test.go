@@ -9,6 +9,7 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/cli/issue"
 	"github.com/spf13/cobra"
 )
 
@@ -138,7 +139,7 @@ func TestIssueListPlainOutputHidesJQLUnlessDebug(t *testing.T) {
 	if err := cmd.Root().PersistentFlags().Set("output", "human"); err != nil {
 		t.Fatalf("Set(output) error = %v", err)
 	}
-	data := issueListOutputData(cmd, []map[string]any{}, false, "assignee = currentUser() ORDER BY updated DESC")
+	data := issue.IssueListOutputData(cmd, []map[string]any{}, false, "assignee = currentUser() ORDER BY updated DESC")
 	if err := cmdutil.WriteEnvelope(cmd, "issue.list", data); err != nil {
 		t.Fatalf("cmdutil.WriteEnvelope() error = %v", err)
 	}
@@ -156,7 +157,7 @@ func TestIssueListPlainOutputHidesJQLUnlessDebug(t *testing.T) {
 	if err := cmd.Root().PersistentFlags().Set("debug", "true"); err != nil {
 		t.Fatalf("Set(debug) error = %v", err)
 	}
-	data = issueListOutputData(cmd, []map[string]any{}, false, "assignee = currentUser() ORDER BY updated DESC")
+	data = issue.IssueListOutputData(cmd, []map[string]any{}, false, "assignee = currentUser() ORDER BY updated DESC")
 	if err := cmdutil.WriteEnvelope(cmd, "issue.list", data); err != nil {
 		t.Fatalf("cmdutil.WriteEnvelope(debug) error = %v", err)
 	}

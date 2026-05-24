@@ -7,7 +7,7 @@
 //
 // Default action (no subcommand): `link KEY --to OTHER --type NAME`
 // retains today's create form for back-compat.
-package main
+package issue
 
 import (
 	"encoding/json"

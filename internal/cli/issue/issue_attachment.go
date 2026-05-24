@@ -1,4 +1,4 @@
-package main
+package issue
 
 // jira issue attachment {list,add,delete,download}.
 //
