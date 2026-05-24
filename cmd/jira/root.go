@@ -16,9 +16,11 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/alias"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/cli/completion"
 	"github.com/matcra587/jira-cli/internal/cli/runtime"
 	"github.com/matcra587/jira-cli/internal/cli/schema"
 	"github.com/matcra587/jira-cli/internal/cli/startup"
+	"github.com/matcra587/jira-cli/internal/cli/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -168,7 +170,7 @@ func rootRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 		return fmt.Errorf("tui requires an interactive terminal")
 	}
 	if interactive && det.Mode == cli.ModeTUI {
-		_, err := tuiRun(cmd)
+		_, err := tui.Run(cmd)
 		return err
 	}
 	// Bare `jira` behavior:
@@ -408,7 +410,7 @@ func handleCompletionPreflight(root *cobra.Command) (bool, error) {
 			globals.Profile = forwarded.Profile
 		}
 	}
-	handled, err := flags.Handle(gen, completionHandler(globals), complete.WithArgs(positional))
+	handled, err := flags.Handle(gen, completion.CompletionHandler(globals), complete.WithArgs(positional))
 	if err != nil {
 		return false, err
 	}

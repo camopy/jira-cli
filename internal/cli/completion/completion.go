@@ -1,4 +1,4 @@
-package main
+package completion
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
-// completionHandler dispatches dynamic completion requests routed through
+// CompletionHandler dispatches dynamic completion requests routed through
 // `--@complete=<kind>` (clib's predictor mechanism). The shell completion
 // script invokes `jira --@complete=foo -- arg1 arg2` for positional args;
 // this handler emits one candidate per line, optionally `value\tdesc`.
@@ -24,7 +24,7 @@ import (
 // Each predictor name corresponds either to a flag's
 // `clib.FlagExtra{Complete: "predictor=foo"}` or to an entry in a command's
 // `Annotations["clib"]` `dynamic-args='foo,bar'` list.
-func completionHandler(globals startup.Globals) complete.Handler {
+func CompletionHandler(globals startup.Globals) complete.Handler {
 	return func(shell, kind string, args []string) {
 		_ = shell
 		switch kind {

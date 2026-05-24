@@ -33,6 +33,16 @@ var commandPackageExemptDirs = map[string]bool{
 	// client/profile accessors, output-mode and gate helpers), not a
 	// command-domain package — it is a dependency boundary like runtime.
 	"cmdutil": true,
+	// completion emits the shell-completion protocol straight to the
+	// process stdout from the root completion preflight, which runs
+	// outside cobra's command dispatch — there is no command stream to
+	// render through, and the shell reads the process stdout directly.
+	"completion": true,
+	// tui launches the full-screen dashboard, which owns the real
+	// terminal rather than a capturable command stream; its only
+	// os.Stdout reference is the RequireTTY gate that checks the real
+	// descriptor before handing it to the dashboard.
+	"tui": true,
 }
 
 // cliGoFiles returns every non-test .go file under internal/cli, keyed

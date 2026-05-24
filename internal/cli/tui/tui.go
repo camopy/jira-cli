@@ -1,9 +1,11 @@
-package main
+package tui
 
 import (
 	"context"
+	"os"
 	"time"
 
+	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -11,7 +13,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func tuiRun(cmd *cobra.Command) (any, error) {
+// NewCommand constructs the tui subcommand.
+func NewCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:     "tui",
+		Short:   "Launch the persistent dashboard",
+		GroupID: "dashboard",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			_, err := cli.RequireTTY(os.Stdout)
+			if err != nil {
+				return err
+			}
+			_, err = Run(cmd)
+			return err
+		},
+	}
+}
+
+// Run launches the TUI dashboard for the given command context.
+func Run(cmd *cobra.Command) (any, error) {
 	return tui.RunWithOptions(cmd.Context(), tuiOptionsForCommand(cmd))
 }
 
