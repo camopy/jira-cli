@@ -33,9 +33,8 @@ var topLevelKeys = []KeyDesc{
 // Their full form is `profiles.<name>.<Name>` once a profile name is bound.
 var profileFieldKeys = []KeyDesc{
 	{"base_url", "Jira base URL", nil},
-	{"auth_type", "Auth type", []string{"token", "basic", "pat", "mtls"}},
+	{"auth_type", "Auth type", []string{"token"}},
 	{"email", "Atlassian Cloud account email", nil},
-	{"username", "Server/Data Center username", nil},
 	{"default_project", "Default project key", nil},
 	{"default_issue_type", "Default issue type", nil},
 	{"default_board", "Default board NAME applied when --board is not supplied", nil},
@@ -46,8 +45,6 @@ var profileFieldKeys = []KeyDesc{
 	{"onepassword_account", "1Password account name", nil},
 	{"vault", "1Password vault", nil},
 	{"item", "1Password item", nil},
-	{"mtls_cert_ref", "mTLS client certificate path", nil},
-	{"mtls_key_ref", "mTLS client key path", nil},
 	{"account_id", "Atlassian Cloud accountId for the current user", nil},
 	{"read_only", "Block all mutating commands for this profile", []string{"true", "false"}},
 	{"editor", "Per-profile editor override", nil},
@@ -137,8 +134,6 @@ func (c *Config) getProfileField(key string) (string, bool) {
 		return string(p.AuthType), true
 	case "email":
 		return p.Email, true
-	case "username":
-		return p.Username, true
 	case "default_project":
 		return p.DefaultProject, true
 	case "default_issue_type":
@@ -159,10 +154,6 @@ func (c *Config) getProfileField(key string) (string, bool) {
 		return p.Vault, true
 	case "item":
 		return p.Item, true
-	case "mtls_cert_ref":
-		return p.MTLSCertRef, true
-	case "mtls_key_ref":
-		return p.MTLSKeyRef, true
 	case "account_id":
 		return p.AccountID, true
 	case "read_only":
@@ -190,13 +181,11 @@ func (c *Config) setProfileField(key, value string) error {
 		p.BaseURL = NormalizeBaseURL(value)
 	case "auth_type":
 		if !supportedAuthType(AuthType(value)) {
-			return fmt.Errorf("invalid auth_type %q (valid: token, basic, pat, mtls)", value)
+			return fmt.Errorf("invalid auth_type %q (valid: token)", value)
 		}
 		p.AuthType = AuthType(value)
 	case "email":
 		p.Email = value
-	case "username":
-		p.Username = value
 	case "default_project":
 		p.DefaultProject = value
 	case "default_issue_type":
@@ -236,10 +225,6 @@ func (c *Config) setProfileField(key, value string) error {
 		p.Vault = value
 	case "item":
 		p.Item = value
-	case "mtls_cert_ref":
-		p.MTLSCertRef = value
-	case "mtls_key_ref":
-		p.MTLSKeyRef = value
 	case "account_id":
 		p.AccountID = value
 	case "read_only":

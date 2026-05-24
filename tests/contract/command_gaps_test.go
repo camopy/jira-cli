@@ -226,7 +226,6 @@ func initConfig(t *testing.T, path string) {
 		"--no-input",
 		"--profile", "default",
 		"--base-url", "https://company.atlassian.net",
-		"--auth-type", "token",
 		"--email", "dev@example.com",
 	)
 	if out, err := cmd.CombinedOutput(); err != nil {

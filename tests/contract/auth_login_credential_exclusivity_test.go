@@ -24,7 +24,6 @@ func TestAuthLoginRejectsConflictingCredentialSources(t *testing.T) {
 		"--no-input",
 		"--profile-name", "work",
 		"--base-url", "https://company.atlassian.net",
-		"--auth-type", "token",
 		"--email", "dev@example.com",
 		"--backend", "keyring",
 		"--secret-stdin",
@@ -49,8 +48,10 @@ func TestAuthLoginRejectsConflictingCredentialSources(t *testing.T) {
 	}
 }
 
-// A single credential source is still accepted: --secret-stdin alone works.
-func TestAuthLoginAcceptsSingleCredentialSource(t *testing.T) {
+// A metadata-only login (no credential source) is accepted: the profile is
+// persisted without a stored secret. Cloud token auth needs only the email
+// and base URL to record a profile; the API token can be supplied later.
+func TestAuthLoginAcceptsMetadataOnlyLogin(t *testing.T) {
 	bin := buildJiraBinary(t)
 	path := filepath.Join(t.TempDir(), "config.toml")
 	cmd := exec.Command(
@@ -60,11 +61,11 @@ func TestAuthLoginAcceptsSingleCredentialSource(t *testing.T) {
 		"--no-input",
 		"--profile-name", "work",
 		"--base-url", "https://company.atlassian.net",
-		"--auth-type", "mtls",
+		"--email", "dev@example.com",
 		"--backend", "keyring",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("auth login with no credential source error = %v\n%s", err, out)
+		t.Fatalf("metadata-only auth login error = %v\n%s", err, out)
 	}
 }

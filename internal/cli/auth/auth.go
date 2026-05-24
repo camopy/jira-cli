@@ -7,9 +7,11 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 	clib "github.com/gechr/clib/cli/cobra"
+	"github.com/gechr/clog"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
@@ -124,19 +126,44 @@ func authWhoamiCommand() *cobra.Command {
 }
 
 func authLoginCommand() *cobra.Command {
-	var profileName, baseURL, authType, email, username, backend, onePasswordAccount, vault, item, credential, credentialEnv, jsonInput string
-	var secretStdin bool
+	var profileName, baseURL, email, backend, onePasswordAccount, vault, item, credential, credentialEnv, jsonInput string
+	var secretStdin, skipVerify bool
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Configure authentication for a profile",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			noInput := cmdutil.NoInputRequested(cmd)
+			// --json-input carries headless profile metadata. Combined with an
+			// interactive login it would overwrite fields AFTER the user has
+			// reviewed and confirmed them in the form, so the credential could
+			// be verified and stored for metadata the user never saw. Reject
+			// the combination: --json-input is a headless feature.
+			if jsonInput != "" && !noInput {
+				return fmt.Errorf("validation: --json-input requires --no-input; interactive login prompts for these fields")
+			}
 			if !noInput {
 				if cmdutil.DetectorFromContext(cmd).Mode != cli.ModePlain && cmdutil.DetectorFromContext(cmd).Mode != cli.ModeTUI {
 					return fmt.Errorf("login requires --no-input in JSON, agent, or non-TTY mode")
 				}
-				if err := promptAuthLogin(cmd, &profileName, &baseURL, &authType, &email, &username, &backend, &onePasswordAccount, &vault, &item, &credential); err != nil {
+				// Pre-fill the form from the persisted profile so a re-login
+				// edits current values rather than blank fields. A flag the
+				// user passed explicitly still wins. The load is deliberately
+				// file-backed and non-creating: only preseed when a config
+				// already exists (so aborting at the confirm step leaves no
+				// file behind), and use LoadOrInit, which does NOT apply JIRA_*
+				// env overlays — a transient env override must never be baked
+				// into the saved profile. A load error just starts the form
+				// empty.
+				if _, statErr := os.Stat(cmdutil.ConfigPath(cmd)); statErr == nil {
+					if existing, loadErr := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd))); loadErr == nil {
+						applyLoginPreseed(
+							cmdutil.ExistingProfileOrDefault(existing, profileName), cmd.Flags().Changed,
+							&baseURL, &email, &backend, &onePasswordAccount, &vault, &item,
+						)
+					}
+				}
+				if err := promptAuthLogin(cmd, skipVerify, &profileName, &baseURL, &email, &backend, &onePasswordAccount, &vault, &item, &credential); err != nil {
 					return err
 				}
 			}
@@ -144,9 +171,7 @@ func authLoginCommand() *cobra.Command {
 				var input struct {
 					ProfileName        string `json:"profile_name"`
 					BaseURL            string `json:"base_url"`
-					AuthType           string `json:"auth_type"`
 					Email              string `json:"email"`
-					Username           string `json:"username"`
 					Backend            string `json:"backend"`
 					OnePasswordAccount string `json:"onepassword_account"`
 					Vault              string `json:"vault"`
@@ -161,14 +186,8 @@ func authLoginCommand() *cobra.Command {
 				if input.BaseURL != "" && !cmd.Flags().Changed("base-url") {
 					baseURL = input.BaseURL
 				}
-				if input.AuthType != "" && !cmd.Flags().Changed("auth-type") {
-					authType = input.AuthType
-				}
 				if input.Email != "" && !cmd.Flags().Changed("email") {
 					email = input.Email
-				}
-				if input.Username != "" && !cmd.Flags().Changed("username") {
-					username = input.Username
 				}
 				if input.Backend != "" && !cmd.Flags().Changed("backend") {
 					backend = input.Backend
@@ -193,18 +212,7 @@ func authLoginCommand() *cobra.Command {
 			if profileName == "" {
 				profileName = "default"
 			}
-			if authType == "" {
-				authType = string(config.AuthTypeToken)
-			}
-			if err := validateAuthLoginType(authType); err != nil {
-				return err
-			}
-			if !authLoginNeedsCredential(authType) {
-				credential = ""
-				secretStdin = false
-				credentialEnv = ""
-			}
-			targetBackend := config.SecretBackend(backend)
+			flagBackend := config.SecretBackend(backend)
 			if err := validateSecretBackend(backend); err != nil {
 				return err
 			}
@@ -243,21 +251,22 @@ func authLoginCommand() *cobra.Command {
 			if baseURL != "" {
 				profile.BaseURL = config.NormalizeBaseURL(baseURL)
 			}
-			if cmd.Flags().Changed("auth-type") {
-				profile.AuthType = config.AuthType(authType)
-			} else if profile.AuthType == "" {
-				profile.AuthType = config.AuthType(authType)
-			}
+			profile.AuthType = config.AuthTypeToken
 			if email != "" {
 				profile.Email = email
 			}
-			if username != "" {
-				profile.Username = username
-			}
 			if cmd.Flags().Changed("backend") {
-				profile.SecretBackend = targetBackend
+				profile.SecretBackend = flagBackend
 			} else if profile.SecretBackend == "" {
-				profile.SecretBackend = targetBackend
+				profile.SecretBackend = flagBackend
+			}
+			// An explicit --backend that differs from the profile's stored
+			// backend would silently relocate a live credential to a different
+			// store. Moving a secret between backends is `auth migrate`'s job —
+			// it stages the new write and cleans up the old one transactionally
+			// — so login refuses it rather than switching as a side-effect.
+			if cmd.Flags().Changed("backend") && previousProfile.SecretBackend != "" && flagBackend != previousProfile.SecretBackend {
+				return fmt.Errorf("validation: profile %q stores its credential in %s; run `jira auth migrate --backend %s` to move it", profile.Name, previousProfile.SecretBackend, flagBackend)
 			}
 			if onePasswordAccount != "" {
 				profile.OnePasswordAccount = onePasswordAccount
@@ -277,6 +286,73 @@ func authLoginCommand() *cobra.Command {
 			if profile.WorkdaySeconds == 0 {
 				profile.WorkdaySeconds = config.DefaultWorkdaySeconds
 			}
+			// A Jira Cloud API token is the basic-auth password, paired with
+			// the account email as the username. Storing a token without an
+			// email yields a credential that can never authenticate, so refuse
+			// it before any network call or storage — even under --skip-verify.
+			if credential != "" && strings.TrimSpace(profile.Email) == "" {
+				return fmt.Errorf("validation: an account email is required to store a Jira Cloud API token; pass --email")
+			}
+			// The token is about to be sent over the network (verification) and
+			// stored. Reject an unsafe base URL now — cfg.Validate runs only
+			// after verification, so without this check the headless path would
+			// dial a cleartext non-loopback host and leak the credential before
+			// the URL is rejected. The interactive form already validates this.
+			if credential != "" {
+				if err := config.ValidateBaseURL(profile.BaseURL); err != nil {
+					return fmt.Errorf("validation: jira base URL: %w", err)
+				}
+			}
+			// Confirm the token actually authenticates before persisting it, so
+			// a rejected token fails the login here instead of silently on first
+			// real use. The check runs against the in-memory credential, so it
+			// covers every backend (keyring, 1Password) identically. The
+			// resolved accountId is folded into the profile so `--assignee me`
+			// works immediately without a separate `auth whoami`. --skip-verify
+			// opts out for offline setup or an unreachable endpoint.
+			var verifiedUser *jira.CurrentUser
+			if credential != "" && !skipVerify {
+				// .Silent() runs the task and returns its error without logging
+				// a completion line — the failure is surfaced through the normal
+				// command error path instead of a duplicate spinner line.
+				verifyErr := clog.Spinner("Verifying Jira credentials").
+					NonTTYSilent(true).
+					Wait(cmd.Context(), func(ctx context.Context) error {
+						user, err := verifyCredential(ctx, profile.BaseURL, profile.Email, credential, time.Duration(profile.TimeoutSeconds)*time.Second)
+						if err != nil {
+							return err
+						}
+						verifiedUser = user
+						return nil
+					}).Silent()
+				if verifyErr != nil {
+					// Distinguish a rejected credential (the email/token pair is
+					// wrong) from a verification that could not complete (site
+					// down, network, 5xx). Jira's raw 401 text ("Client must be
+					// authenticated") reads cryptically, so name the real cause.
+					var apiErr *jira.APIError
+					if errors.As(verifyErr, &apiErr) && apiErr.Type == jira.ErrorTypeAuth {
+						return fmt.Errorf("invalid Atlassian account email or API token — Jira rejected the credential (HTTP %d); check the email and that the API token is current at id.atlassian.com, or pass --skip-verify to store it without checking", apiErr.StatusCode)
+					}
+					return fmt.Errorf("could not verify the credential against Jira (the site may be temporarily unavailable — retry, or pass --skip-verify to store it without checking): %w", verifyErr)
+				}
+			}
+			// Reconcile the profile's account_id with this login. A fresh
+			// accountId from verification wins. Otherwise — verification
+			// skipped, metadata-only, or a 2xx /myself that carried no
+			// accountId — drop a carried-over account_id when the account email
+			// changed: it belongs to the previous account and would mis-target
+			// `--assignee me`. `auth whoami --save` repopulates it.
+			freshAccountID := ""
+			if verifiedUser != nil {
+				freshAccountID = verifiedUser.AccountID
+			}
+			switch {
+			case freshAccountID != "":
+				profile.AccountID = freshAccountID
+			case profile.Email != previousProfile.Email:
+				profile.AccountID = ""
+			}
 			cmdutil.UpsertProfile(cfg, profile)
 			cfg.DefaultProfile = profileName
 			if err := cfg.Validate(); err != nil {
@@ -289,11 +365,11 @@ func authLoginCommand() *cobra.Command {
 			// secret in the keyring or 1Password.
 			saveConfig := func() error { return config.Save(cmdutil.ConfigPath(cmd), cfg) }
 			if credential != "" {
-				ref, refErr := cmdutil.SecretRefFor(profile, targetBackend)
+				ref, refErr := cmdutil.SecretRefFor(profile, profile.SecretBackend)
 				if refErr != nil {
 					return refErr
 				}
-				if err := config.StoreCredentialTransactionally(cmd.Context(), cmdutil.CredentialStoreFor(targetBackend), ref, credential, saveConfig); err != nil {
+				if err := config.StoreCredentialTransactionally(cmd.Context(), cmdutil.CredentialStoreFor(profile.SecretBackend), ref, credential, saveConfig); err != nil {
 					return err
 				}
 			} else if err := saveConfig(); err != nil {
@@ -309,25 +385,40 @@ func authLoginCommand() *cobra.Command {
 			if note := revokeOldCredentialOnRelogin(cmd, previousProfile, profile); note != "" {
 				cmdutil.RecordCredentialWarnings(cmd, []string{note})
 			}
-			return cmdutil.WriteEnvelope(cmd, "auth.login", map[string]any{
+			// On a human terminal, confirm who the verified token belongs to so
+			// the user sees the identity instead of a silent return. Machine
+			// modes consume the same identity from the envelope below.
+			if verifiedUser != nil {
+				if mode := cmdutil.DetectorFromContext(cmd).Mode; mode == cli.ModePlain || mode == cli.ModeTUI {
+					name := cmdutil.FirstNonEmpty(verifiedUser.DisplayName, verifiedUser.EmailAddress, profile.Email)
+					clog.Info().Parts(clog.PartMessage).Msg("✓ Logged in as " + name)
+				}
+			}
+			data := map[string]any{
 				"profile":             profileName,
-				"auth_type":           authType,
-				"secret_backend":      backend,
+				"auth_type":           string(config.AuthTypeToken),
+				"secret_backend":      string(profile.SecretBackend),
 				"onepassword_account": onePasswordAccount,
 				"stored_secret":       credential != "",
-			})
+				"verified":            verifiedUser != nil,
+				"skip_verify":         skipVerify,
+			}
+			if verifiedUser != nil {
+				data["account_id"] = verifiedUser.AccountID
+				data["display_name"] = verifiedUser.DisplayName
+			}
+			return cmdutil.WriteEnvelope(cmd, "auth.login", data)
 		},
 	}
 	cmd.Flags().StringVar(&profileName, "profile-name", "default", "Profile name to configure")
 	cmd.Flags().StringVar(&baseURL, "base-url", "", "Jira base URL")
-	cmd.Flags().StringVar(&authType, "auth-type", "token", "Auth type")
 	cmd.Flags().StringVar(&email, "email", "", "Jira Cloud account email")
-	cmd.Flags().StringVar(&username, "username", "", "Jira Server/Data Center username")
 	cmd.Flags().StringVar(&backend, "backend", string(config.SecretBackendKeyring), "Secret backend: keyring or 1password")
 	cmd.Flags().StringVar(&onePasswordAccount, "onepassword-account", "", "1Password desktop app account name")
 	cmd.Flags().StringVar(&vault, "vault", "", "1Password vault name")
 	cmd.Flags().StringVar(&item, "item", "", "1Password item name")
 	cmd.Flags().BoolVar(&secretStdin, "secret-stdin", false, "Read credential from stdin")
+	cmd.Flags().BoolVar(&skipVerify, "skip-verify", false, "Store the credential without verifying it against /myself first")
 	cmd.Flags().StringVar(&credentialEnv, "credential-env", "", "Read credential from environment variable")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read auth profile metadata from JSON file")
 	// --secret-stdin and --credential-env both supply the credential. Passing
@@ -337,7 +428,6 @@ func authLoginCommand() *cobra.Command {
 	// is not part of this group.
 	cmd.MarkFlagsMutuallyExclusive("secret-stdin", "credential-env")
 	clib.Extend(cmd.Flags().Lookup("profile-name"), clib.FlagExtra{Placeholder: "NAME", Complete: "predictor=profile"})
-	clib.Extend(cmd.Flags().Lookup("auth-type"), clib.FlagExtra{Placeholder: "TYPE", Enum: []string{"token", "basic", "pat", "mtls"}, EnumDefault: "token"})
 	clib.Extend(cmd.Flags().Lookup("backend"), clib.FlagExtra{Placeholder: "BACKEND", Enum: []string{"keyring", "1password"}, EnumDefault: "keyring"})
 	return cmd
 }
@@ -377,28 +467,15 @@ func authLoginQuestions() []authLoginQuestion {
 		{
 			ID:          "base_url",
 			Kind:        authLoginQuestionInput,
-			Title:       "Jira base URL",
-			Description: "Full Jira URL including https scheme, for example https://company.atlassian.net.",
+			Title:       "Jira site",
+			Description: `Your Atlassian site name, e.g. "acme" for acme.atlassian.net. A full https:// URL also works.`,
 			Required:    true,
-		},
-		{
-			ID:          "auth_type",
-			Kind:        authLoginQuestionSelect,
-			Title:       "Authentication method",
-			Description: "Select the credential type Jira expects for this profile.",
-			Required:    true,
-			Options: []authLoginOption{
-				{Label: "Jira Cloud API token", Value: string(config.AuthTypeToken), Description: "Email plus API token, sent as basic auth."},
-				{Label: "Basic auth", Value: string(config.AuthTypeBasic), Description: "Username plus password or token for Server/Data Center."},
-				{Label: "Personal access token", Value: string(config.AuthTypePAT), Description: "Bearer-style PAT for Jira Server/Data Center."},
-				{Label: "mTLS metadata", Value: string(config.AuthTypeMTLS), Description: "Client certificate/key metadata for Jira Server/Data Center."},
-			},
 		},
 		{
 			ID:          "account",
 			Kind:        authLoginQuestionInput,
-			Title:       "Account email or username",
-			Description: "Jira Cloud API tokens use the Atlassian account email; Server/Data Center profiles usually use a username.",
+			Title:       "Atlassian account email",
+			Description: "The Atlassian account email the API token belongs to; sent as the basic-auth username.",
 			Required:    true,
 		},
 		{
@@ -415,8 +492,8 @@ func authLoginQuestions() []authLoginQuestion {
 		{
 			ID:          "credential",
 			Kind:        authLoginQuestionInput,
-			Title:       "Credential",
-			Description: "API token, PAT, or password to store in the selected secret backend.",
+			Title:       "API token",
+			Description: "Atlassian API token to store in the selected secret backend.",
 			Required:    true,
 			Secret:      true,
 		},
@@ -441,9 +518,9 @@ func authLoginQuestions() []authLoginQuestion {
 	}
 }
 
-func promptAuthLogin(cmd *cobra.Command, profileName, baseURL, authType, email, username, backend, onePasswordAccount, vault, item, credential *string) error {
-	account := cmdutil.FirstNonEmpty(*email, *username)
-	form := authLoginForm(profileName, baseURL, authType, &account, backend, onePasswordAccount, vault, item, credential).
+func promptAuthLogin(cmd *cobra.Command, skipVerify bool, profileName, baseURL, email, backend, onePasswordAccount, vault, item, credential *string) error {
+	var confirmed bool
+	form := authLoginForm(skipVerify, profileName, baseURL, email, backend, onePasswordAccount, vault, item, credential, &confirmed).
 		WithInput(cmd.InOrStdin()).
 		WithOutput(cmd.ErrOrStderr())
 	if err := form.RunWithContext(cmd.Context()); err != nil {
@@ -460,19 +537,20 @@ func promptAuthLogin(cmd *cobra.Command, profileName, baseURL, authType, email, 
 			return err
 		}
 	}
-	switch config.AuthType(*authType) {
-	case config.AuthTypeBasic, config.AuthTypePAT, config.AuthTypeMTLS:
-		*username = strings.TrimSpace(account)
-		*email = ""
-	default:
-		*email = strings.TrimSpace(account)
-		*username = ""
+	// The form completed, but the user declined at the review step: treat a
+	// declined confirmation as an abort so nothing is stored.
+	if !confirmed {
+		return cli.NewPromptError(cli.PromptAborted, "auth login", errors.New("login not confirmed"))
 	}
-	trimAuthLoginValues(profileName, baseURL, authType, email, username, backend, onePasswordAccount, vault, item, credential)
+	trimAuthLoginValues(profileName, baseURL, email, backend, onePasswordAccount, vault, item, credential)
 	return nil
 }
 
-func authLoginForm(profileName, baseURL, authType, account, backend, onePasswordAccount, vault, item, credential *string) *huh.Form {
+func authLoginForm(skipVerify bool, profileName, baseURL, email, backend, onePasswordAccount, vault, item, credential *string, confirmed *bool) *huh.Form {
+	confirmDescription := "The token is verified against Jira before it is saved."
+	if skipVerify {
+		confirmDescription = "The credential is stored without verification (--skip-verify)."
+	}
 	return huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
@@ -481,8 +559,8 @@ func authLoginForm(profileName, baseURL, authType, account, backend, onePassword
 				Value(profileName).
 				Validate(requiredString("profile name is required")),
 			huh.NewInput().
-				Title("Jira base URL").
-				Description("Full URL or shorthand. \"company\" expands to https://company.atlassian.net; full URLs (https://...) are accepted as-is.").
+				Title("Jira site").
+				Description(`Your Atlassian site name, e.g. "acme" for acme.atlassian.net. A full https:// URL also works.`).
 				Value(baseURL).
 				Validate(func(value string) error {
 					value = strings.TrimSpace(value)
@@ -491,25 +569,11 @@ func authLoginForm(profileName, baseURL, authType, account, backend, onePassword
 					}
 					return config.ValidateBaseURL(config.NormalizeBaseURL(value))
 				}),
-			huh.NewSelect[string]().
-				Title("Authentication method").
-				Description("Select the credential type Jira expects for this profile.").
-				Options(authLoginHuhOptions(authLoginQuestionByID(authLoginQuestions(), "auth_type").Options)...).
-				Value(authType).
-				Validate(validateAuthLoginType),
 			huh.NewInput().
-				Title("Account email or username").
-				Description("Jira Cloud API tokens use the Atlassian account email; Server/Data Center profiles usually use a username.").
-				Value(account).
-				Validate(func(value string) error {
-					switch config.AuthType(*authType) {
-					case config.AuthTypeToken, config.AuthTypeBasic:
-						if strings.TrimSpace(value) == "" {
-							return errors.New("account email or username is required")
-						}
-					}
-					return nil
-				}),
+				Title("Atlassian account email").
+				Description("The Atlassian account email the API token belongs to; sent as the basic-auth username.").
+				Value(email).
+				Validate(requiredString("account email is required")),
 		).Title("Jira profile").Description("Configure the Jira instance and account identity."),
 		huh.NewGroup(
 			huh.NewSelect[string]().
@@ -519,14 +583,12 @@ func authLoginForm(profileName, baseURL, authType, account, backend, onePassword
 				Value(backend).
 				Validate(validateSecretBackend),
 			huh.NewInput().
-				Title("Credential").
-				Description("API token, PAT, or password to store in the selected secret backend.").
+				Title("API token").
+				Description("Atlassian API token to store in the selected secret backend.").
 				EchoMode(huh.EchoModePassword).
 				Value(credential).
-				Validate(requiredString("credential is required")),
-		).Title("Credential storage").Description("Secrets are written to the selected backend, not to config.toml.").WithHideFunc(func() bool {
-			return !authLoginNeedsCredential(*authType)
-		}),
+				Validate(requiredString("API token is required")),
+		).Title("Credential storage").Description("Secrets are written to the selected backend, not to config.toml."),
 		huh.NewGroup(
 			huh.NewInput().
 				Title("1Password account").
@@ -555,6 +617,22 @@ func authLoginForm(profileName, baseURL, authType, account, backend, onePassword
 		).Title("1Password").Description("Only used when the 1Password backend is selected.").WithHideFunc(func() bool {
 			return config.SecretBackend(*backend) != config.SecretBackendOnePassword
 		}),
+		huh.NewGroup(
+			// The review note recomputes from the live form values: binding it
+			// to the field pointers makes huh re-render the summary whenever any
+			// of them change, so the user confirms exactly what will be stored.
+			huh.NewNote().
+				Title("Review").
+				DescriptionFunc(func() string {
+					return loginReviewSummary(*profileName, *baseURL, *email, *backend, *onePasswordAccount, *vault, *item)
+				}, []*string{profileName, baseURL, email, backend, onePasswordAccount, vault, item}),
+			huh.NewConfirm().
+				Title("Store this credential?").
+				Description(confirmDescription).
+				Affirmative("Store").
+				Negative("Cancel").
+				Value(confirmed),
+		).Title("Confirm"),
 	)
 }
 
@@ -584,24 +662,6 @@ func requiredString(message string) func(string) error {
 	}
 }
 
-func validateAuthLoginType(value string) error {
-	switch config.AuthType(value) {
-	case config.AuthTypeToken, config.AuthTypeBasic, config.AuthTypePAT, config.AuthTypeMTLS:
-		return nil
-	default:
-		return fmt.Errorf("unsupported auth type %q", value)
-	}
-}
-
-func authLoginNeedsCredential(authType string) bool {
-	switch config.AuthType(authType) {
-	case config.AuthTypeToken, config.AuthTypeBasic, config.AuthTypePAT:
-		return true
-	default:
-		return false
-	}
-}
-
 func validateSecretBackend(value string) error {
 	switch config.SecretBackend(value) {
 	case config.SecretBackendKeyring, config.SecretBackendOnePassword:
@@ -615,6 +675,51 @@ func trimAuthLoginValues(values ...*string) {
 	for _, value := range values {
 		*value = strings.TrimSpace(*value)
 	}
+}
+
+// applyLoginPreseed pre-fills the interactive form fields from a persisted
+// profile so a re-login shows current values. A field whose flag the user
+// passed explicitly (reported by changed) is left untouched, and an empty
+// persisted value never overwrites a target. The API token is never
+// preseeded — it is not stored retrievably and must be re-entered.
+func applyLoginPreseed(profile config.Profile, changed func(string) bool, baseURL, email, backend, onePasswordAccount, vault, item *string) {
+	preseed := func(flag string, target *string, value string) {
+		if value != "" && !changed(flag) {
+			*target = value
+		}
+	}
+	preseed("base-url", baseURL, profile.BaseURL)
+	preseed("email", email, profile.Email)
+	preseed("backend", backend, string(profile.SecretBackend))
+	preseed("onepassword-account", onePasswordAccount, profile.OnePasswordAccount)
+	preseed("vault", vault, profile.Vault)
+	preseed("item", item, profile.Item)
+}
+
+// loginReviewSummary renders the profile metadata the login will store, for
+// the form's review step. It deliberately omits the API token: the summary
+// is shown on screen and the secret must never appear there.
+func loginReviewSummary(profileName, baseURL, email, backend, onePasswordAccount, vault, item string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Profile:  %s\n", profileName)
+	fmt.Fprintf(&b, "Site:     %s\n", baseURL)
+	fmt.Fprintf(&b, "Email:    %s\n", email)
+	fmt.Fprintf(&b, "Backend:  %s", backend)
+	if config.SecretBackend(backend) == config.SecretBackendOnePassword {
+		// Only render coordinates that are filled: mid-form the user may have
+		// selected 1Password before entering them, and blank "Vault:" / "Item:"
+		// labels in the confirmation screen are noise.
+		if onePasswordAccount != "" {
+			fmt.Fprintf(&b, "\nAccount:  %s", onePasswordAccount)
+		}
+		if vault != "" {
+			fmt.Fprintf(&b, "\nVault:    %s", vault)
+		}
+		if item != "" {
+			fmt.Fprintf(&b, "\nItem:     %s", item)
+		}
+	}
+	return b.String()
 }
 
 func authStatusCommand() *cobra.Command {

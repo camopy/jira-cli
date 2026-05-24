@@ -75,7 +75,7 @@ func configThemeCommand() *cobra.Command {
 }
 
 func configInitCommand() *cobra.Command {
-	var baseURL, authType, email string
+	var baseURL, email string
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Create initial configuration",
@@ -85,16 +85,13 @@ func configInitCommand() *cobra.Command {
 			if profile == "" {
 				profile = "default"
 			}
-			if authType == "" {
-				authType = string(config.AuthTypeToken)
-			}
 			baseURL = config.NormalizeBaseURL(baseURL)
 			cfg := config.Defaults()
 			cfg.DefaultProfile = profile
 			cfg.Profiles = []config.Profile{{
 				Name:            profile,
 				BaseURL:         baseURL,
-				AuthType:        config.AuthType(authType),
+				AuthType:        config.AuthTypeToken,
 				Email:           email,
 				SecretBackend:   config.SecretBackendKeyring,
 				RefreshInterval: config.DefaultRefreshIntervalSeconds,
@@ -110,15 +107,13 @@ func configInitCommand() *cobra.Command {
 			return cmdutil.WriteEnvelope(cmd, "config.init", map[string]any{
 				"profile":     profile,
 				"base_url":    baseURL,
-				"auth_type":   authType,
+				"auth_type":   string(config.AuthTypeToken),
 				"stored_auth": false,
 			})
 		},
 	}
 	cmd.Flags().StringVar(&baseURL, "base-url", "", "Jira base URL")
-	cmd.Flags().StringVar(&authType, "auth-type", "token", "Auth type")
 	cmd.Flags().StringVar(&email, "email", "", "Jira account email")
-	clib.Extend(cmd.Flags().Lookup("auth-type"), clib.FlagExtra{Placeholder: "TYPE", Enum: []string{"token", "basic", "pat", "mtls"}, EnumDefault: "token"})
 	return cmd
 }
 

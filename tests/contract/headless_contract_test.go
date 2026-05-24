@@ -58,7 +58,7 @@ func TestRemovedLegacyOutputFlagsAreUnknownFlags(t *testing.T) {
 func TestConfigCommandsEmitEnvelopeInHeadlessMode(t *testing.T) {
 	path := t.TempDir() + "/config.toml"
 	bin := buildJiraBinary(t)
-	cmd := exec.Command(bin, "--config", path, "--output=json", "config", "init", "--no-input", "--profile", "default", "--base-url", "https://company.atlassian.net", "--auth-type", "token", "--email", "dev@example.com")
+	cmd := exec.Command(bin, "--config", path, "--output=json", "config", "init", "--no-input", "--profile", "default", "--base-url", "https://company.atlassian.net", "--email", "dev@example.com")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("config init error = %v\n%s", err, out)
 	} else if env := decodeEnvelope(t, out); env.Meta.Command != "config.init" {

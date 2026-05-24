@@ -35,7 +35,6 @@ func TestAuthLoginSwitchAndLogoutMetadataOnly(t *testing.T) {
 		"--no-input",
 		"--profile-name", "work",
 		"--base-url", "https://company.atlassian.net",
-		"--auth-type", "token",
 		"--email", "dev@example.com",
 		"--backend", "1password",
 		"--vault", "Engineering",
@@ -90,7 +89,6 @@ func TestAuthLoginCanCollectMetadataWithoutPrompts(t *testing.T) {
 		"--no-input",
 		"--profile-name", "work",
 		"--base-url", "https://company.atlassian.net",
-		"--auth-type", "token",
 		"--email", "dev@example.com",
 		"--backend", "keyring",
 	)
@@ -109,34 +107,6 @@ func TestAuthLoginCanCollectMetadataWithoutPrompts(t *testing.T) {
 	}
 }
 
-func TestAuthLoginSupportsMTLSMetadataWithoutCredentialPrompt(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
-	cmd := exec.Command(
-		"go", "run", "../../cmd/jira",
-		"--config", path,
-		"auth", "login",
-		"--no-input",
-		"--profile-name", "dc",
-		"--base-url", "https://jira.example.com",
-		"--auth-type", "mtls",
-		"--backend", "keyring",
-	)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("mtls auth login error = %v\n%s", err, out)
-	}
-	content, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("ReadFile() error = %v", err)
-	}
-	if !strings.Contains(string(content), `auth_type = "mtls"`) {
-		t.Fatalf("mtls profile not saved:\n%s", content)
-	}
-	if strings.Contains(string(out), "Credential") || strings.Contains(string(out), "credential required") {
-		t.Fatalf("mtls auth login asked for credential:\n%s", out)
-	}
-}
-
 func TestAuthLoginNoInputAcceptsMetadataJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")
@@ -144,8 +114,6 @@ func TestAuthLoginNoInputAcceptsMetadataJSON(t *testing.T) {
 	if err := os.WriteFile(input, []byte(`{
   "profile_name": "json-work",
   "base_url": "https://company.atlassian.net",
-  "auth_type": "pat",
-  "username": "dev",
   "backend": "1password",
   "onepassword_account": "my.1password.com",
   "vault": "Engineering",
@@ -163,31 +131,10 @@ func TestAuthLoginNoInputAcceptsMetadataJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
-	for _, want := range []string{`name = "json-work"`, `auth_type = "pat"`, `secret_backend = "1password"`, `onepassword_account = "my.1password.com"`, `vault = "Engineering"`, `item = "jira-cli-json-work"`} {
+	for _, want := range []string{`name = "json-work"`, `auth_type = "token"`, `secret_backend = "1password"`, `onepassword_account = "my.1password.com"`, `vault = "Engineering"`, `item = "jira-cli-json-work"`} {
 		if !strings.Contains(string(content), want) {
 			t.Fatalf("auth json-input config missing %q:\n%s", want, content)
 		}
-	}
-}
-
-func TestAuthLoginRejectsOAuthAsUnsupported(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
-	cmd := exec.Command(
-		"go", "run", "../../cmd/jira",
-		"--config", path,
-		"auth", "login",
-		"--no-input",
-		"--profile-name", "work",
-		"--base-url", "https://company.atlassian.net",
-		"--auth-type", "oauth2",
-		"--backend", "keyring",
-	)
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("oauth auth login succeeded:\n%s", out)
-	}
-	if !strings.Contains(string(out), `unsupported auth type`) || !strings.Contains(string(out), `oauth2`) {
-		t.Fatalf("oauth auth login error did not explain unsupported auth type:\n%s", out)
 	}
 }
 

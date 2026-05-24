@@ -12,9 +12,10 @@ import (
 )
 
 func TestClientInjectsAuthBaseURLAndRateMetadata(t *testing.T) {
-	var auth string
+	var gotUser, gotPass string
+	var gotOK bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		auth = r.Header.Get("Authorization")
+		gotUser, gotPass, gotOK = r.BasicAuth()
 		w.Header().Set("X-RateLimit-Remaining", "4")
 		w.Header().Set("Retry-After", "2")
 		w.WriteHeader(http.StatusOK)
@@ -22,7 +23,7 @@ func TestClientInjectsAuthBaseURLAndRateMetadata(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := jira.NewClient(jira.WithBaseURL(srv.URL+"/"), jira.WithBearerToken("abc"))
+	c := jira.NewClient(jira.WithBaseURL(srv.URL+"/"), jira.WithBasicAuth("dev@example.com", "abc"))
 	req, err := c.NewRequest(context.Background(), http.MethodGet, "rest/api/3/myself", nil)
 	if err != nil {
 		t.Fatalf("NewRequest() error = %v", err)
@@ -32,14 +33,39 @@ func TestClientInjectsAuthBaseURLAndRateMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Do() error = %v", err)
 	}
-	if auth != "Bearer abc" {
-		t.Fatalf("Authorization = %q", auth)
+	if !gotOK || gotUser != "dev@example.com" || gotPass != "abc" {
+		t.Fatalf("basic auth = %q/%q ok=%v", gotUser, gotPass, gotOK)
 	}
 	if !out["ok"] {
 		t.Fatalf("decoded body = %+v", out)
 	}
 	if resp.Rate.Remaining != 4 || resp.Rate.RetryAfterSeconds != 2 {
 		t.Fatalf("rate metadata = %+v", resp.Rate)
+	}
+}
+
+// SignRequest must not attach a half-formed Basic-auth header: Jira Cloud
+// auth needs both the account email and the API token. An incomplete pair
+// is dropped so the request fails cleanly as unauthenticated rather than
+// sending base64(":token") or base64("email:").
+func TestSignRequestSkipsIncompleteBasicAuthPair(t *testing.T) {
+	for _, tc := range []struct {
+		name, email, token string
+	}{
+		{"empty email", "", "tok"},
+		{"empty token", "user@example.com", ""},
+		{"both empty", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := jira.NewClient(jira.WithBaseURL("https://x.atlassian.net/"), jira.WithBasicAuth(tc.email, tc.token))
+			req, err := c.NewRequest(context.Background(), http.MethodGet, "rest/api/3/myself", nil)
+			if err != nil {
+				t.Fatalf("NewRequest() error = %v", err)
+			}
+			if got := req.Header.Get("Authorization"); got != "" {
+				t.Fatalf("Authorization = %q, want empty for an incomplete credential pair", got)
+			}
+		})
 	}
 }
 

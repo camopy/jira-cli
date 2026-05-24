@@ -3,14 +3,12 @@ package jira
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -101,15 +99,14 @@ func parseErrorCollection(body []byte) errorCollection {
 }
 
 type Client struct {
-	client      *http.Client
-	baseURL     *url.URL
-	bearerToken string
-	basicEmail  string
-	basicToken  string
-	debug       bool
-	readOnly    bool
-	dryRun      bool
-	initErr     error
+	client     *http.Client
+	baseURL    *url.URL
+	basicEmail string
+	basicToken string
+	debug      bool
+	readOnly   bool
+	dryRun     bool
+	initErr    error
 }
 
 type Option func(*Client)
@@ -143,36 +140,6 @@ func (c *Client) setInitErr(err error) {
 	if err != nil && c.initErr == nil {
 		c.initErr = err
 	}
-}
-
-func MTLSHTTPClient(certFile, keyFile string, timeout time.Duration) (*http.Client, error) {
-	if err := validatePrivateKeyPermissions(keyFile); err != nil {
-		return nil, err
-	}
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, err
-	}
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig = &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS12,
-	}
-	return &http.Client{Transport: transport, Timeout: timeout}, nil
-}
-
-func validatePrivateKeyPermissions(path string) error {
-	info, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-	if runtime.GOOS == "windows" {
-		return nil
-	}
-	if info.Mode().Perm()&0o077 != 0 {
-		return fmt.Errorf("mTLS private key %q has permissions %04o; run chmod 600 %q", path, info.Mode().Perm(), path)
-	}
-	return nil
 }
 
 func WithHTTPClient(h *http.Client) Option {
@@ -232,12 +199,6 @@ func parseClientBaseURL(raw string) (*url.URL, error) {
 		u.Path += "/"
 	}
 	return u, nil
-}
-
-func WithBearerToken(token string) Option {
-	return func(c *Client) {
-		c.bearerToken = token
-	}
 }
 
 func WithBasicAuth(email, token string) Option {
@@ -373,16 +334,17 @@ func validateRequestPath(path string) (string, error) {
 	return trimmed, nil
 }
 
-// SignRequest applies the active profile's auth headers to req.
-// Services that build requests outside NewRequest (multipart upload,
-// raw-body posts, streaming download) MUST call this rather than
-// re-implementing the bearer/basic-auth selection inline so the auth
-// surface stays consistent if new modes (OAuth / PAT / session) land.
+// SignRequest applies the active profile's Jira Cloud auth to req: HTTP
+// Basic with the account email and API token. Services that build requests
+// outside NewRequest (multipart upload, raw-body posts, streaming download)
+// MUST call this rather than re-implementing the basic-auth selection inline
+// so the auth surface stays consistent.
 func (c *Client) SignRequest(req *http.Request) {
-	if c.bearerToken != "" {
-		req.Header.Set("Authorization", "Bearer "+c.bearerToken)
-	}
-	if c.basicEmail != "" || c.basicToken != "" {
+	// Only attach Basic auth when we have a complete Jira Cloud credential
+	// pair (account email + API token). Sending a half-pair produces a
+	// malformed header that Jira rejects with a confusing 401; skipping it
+	// surfaces a cleaner "no credential" failure instead.
+	if c.basicEmail != "" && c.basicToken != "" {
 		req.SetBasicAuth(c.basicEmail, c.basicToken)
 	}
 }

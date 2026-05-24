@@ -15,12 +15,7 @@ const (
 
 type AuthType string
 
-const (
-	AuthTypeToken AuthType = "token"
-	AuthTypeBasic AuthType = "basic"
-	AuthTypePAT   AuthType = "pat"
-	AuthTypeMTLS  AuthType = "mtls"
-)
+const AuthTypeToken AuthType = "token"
 
 type SecretBackend string
 
@@ -59,7 +54,6 @@ type Profile struct {
 	BaseURL          string   `koanf:"base_url" toml:"base_url"`
 	AuthType         AuthType `koanf:"auth_type" toml:"auth_type"`
 	Email            string   `koanf:"email" toml:"email"`
-	Username         string   `koanf:"username" toml:"username"`
 	DefaultProject   string   `koanf:"default_project" toml:"default_project"`
 	DefaultIssueType string   `koanf:"default_issue_type" toml:"default_issue_type"`
 	// DefaultBoard is the profile-scoped default board NAME. When set and
@@ -76,14 +70,12 @@ type Profile struct {
 	OnePasswordAccount string        `koanf:"onepassword_account" toml:"onepassword_account"`
 	Vault              string        `koanf:"vault" toml:"vault"`
 	Item               string        `koanf:"item" toml:"item"`
-	MTLSCertRef        string        `koanf:"mtls_cert_ref" toml:"mtls_cert_ref"`
-	MTLSKeyRef         string        `koanf:"mtls_key_ref" toml:"mtls_key_ref"`
 	// TeamAccountIDs lists the account IDs of teammates whose issues count
 	// as "my team" in TUI filtering. Optional.
 	TeamAccountIDs []string `koanf:"team_account_ids" toml:"team_account_ids"`
 	// AccountID is the user's own Jira Cloud accountId. Used by `--assignee me`
 	// (CLI) and the "A" key (TUI) so assignments target the canonical user
-	// identifier. Optional; falls back to email/username when blank.
+	// identifier. Optional; falls back to email when blank.
 	AccountID string `koanf:"account_id" toml:"account_id"`
 	// ReadOnly blocks every mutation command for this profile and returns a
 	// validation error (exit 3). Useful when handing credentials to an AI
@@ -174,12 +166,7 @@ func (c *Config) Validate() error {
 }
 
 func supportedAuthType(authType AuthType) bool {
-	switch authType {
-	case AuthTypeToken, AuthTypeBasic, AuthTypePAT, AuthTypeMTLS:
-		return true
-	default:
-		return false
-	}
+	return authType == AuthTypeToken
 }
 
 func supportedSecretBackend(backend SecretBackend) bool {
@@ -326,17 +313,8 @@ func (p Profile) Redacted() string {
 	if p.Email != "" {
 		parts = append(parts, p.Email)
 	}
-	if p.Username != "" {
-		parts = append(parts, p.Username)
-	}
 	if p.OnePasswordAccount != "" {
 		parts = append(parts, p.OnePasswordAccount)
-	}
-	if p.MTLSCertRef != "" {
-		parts = append(parts, "mtls_cert_ref")
-	}
-	if p.MTLSKeyRef != "" {
-		parts = append(parts, "mtls_key_ref")
 	}
 	return strings.Join(parts, " ")
 }

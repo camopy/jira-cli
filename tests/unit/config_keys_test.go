@@ -25,7 +25,7 @@ func fixtureConfig() *config.Config {
 		{
 			Name:            "work",
 			BaseURL:         "https://work.atlassian.net",
-			AuthType:        config.AuthTypePAT,
+			AuthType:        config.AuthTypeToken,
 			SecretBackend:   config.SecretBackendOnePassword,
 			RefreshInterval: 30,
 			TimeoutSeconds:  30,
@@ -73,7 +73,7 @@ func TestConfigGet_ProfileScoped(t *testing.T) {
 		"profiles.default.secret_backend":   "keyring",
 		"profiles.default.refresh_interval": "30",
 		"profiles.default.read_only":        "false",
-		"profiles.work.auth_type":           "pat",
+		"profiles.work.auth_type":           "token",
 		"profiles.work.secret_backend":      "1password",
 	}
 	for key, want := range cases {
@@ -195,7 +195,7 @@ func TestKeys_ExpandsAcrossProfiles(t *testing.T) {
 
 func TestKeyChoices_Enums(t *testing.T) {
 	cases := map[string][]string{
-		"profiles.default.auth_type":      {"token", "basic", "pat", "mtls"},
+		"profiles.default.auth_type":      {"token"},
 		"profiles.default.secret_backend": {"keyring", "1password"},
 		"profiles.default.read_only":      {"true", "false"},
 		"theme.name":                      config.ThemeNameValues,

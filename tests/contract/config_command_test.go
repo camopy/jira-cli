@@ -20,7 +20,6 @@ func TestConfigInitProfileGetSetMetadataOnly(t *testing.T) {
 		"--no-input",
 		"--profile", "default",
 		"--base-url", "https://company.atlassian.net",
-		"--auth-type", "token",
 		"--email", "dev@example.com",
 	)
 	out, err := cmd.CombinedOutput()

@@ -128,32 +128,18 @@ func JiraClientForProfile(cmd *cobra.Command, profile config.Profile) (*jira.Cli
 		jira.WithDryRun(dryRunRequested(cmd)),
 		jira.WithDebug(debug),
 	}
-	if profile.AuthType == config.AuthTypeMTLS {
-		if profile.MTLSCertRef == "" || profile.MTLSKeyRef == "" {
-			return nil, profile, false, fmt.Errorf("mTLS profile %q requires mtls_cert_ref and mtls_key_ref", profile.Name)
-		}
-		httpClient, err := jira.MTLSHTTPClient(profile.MTLSCertRef, profile.MTLSKeyRef, time.Duration(profile.TimeoutSeconds)*time.Second)
-		if err != nil {
-			return nil, profile, false, err
-		}
-		opts = append(opts, jira.WithHTTPClient(httpClient))
-	} else {
-		ref, refErr := SecretRefFor(profile, profile.SecretBackend)
-		if refErr != nil {
-			return nil, profile, false, refErr
-		}
-		secret, secretErr := config.ResolveCredential(cmd.Context(), CredentialStoreFor(profile.SecretBackend), ref)
-		if secretErr != nil && !isLocalBaseURL(profile.BaseURL) {
-			return nil, profile, false, fmt.Errorf("credential for profile %q is required: %w", profile.Name, secretErr)
-		}
-		if secret != "" {
-			switch profile.AuthType {
-			case config.AuthTypeBasic, config.AuthTypeToken:
-				opts = append(opts, jira.WithBasicAuth(FirstNonEmpty(profile.Email, profile.Username), secret))
-			case config.AuthTypePAT:
-				opts = append(opts, jira.WithBearerToken(secret))
-			}
-		}
+	ref, refErr := SecretRefFor(profile, profile.SecretBackend)
+	if refErr != nil {
+		return nil, profile, false, refErr
+	}
+	secret, secretErr := config.ResolveCredential(cmd.Context(), CredentialStoreFor(profile.SecretBackend), ref)
+	if secretErr != nil && !isLocalBaseURL(profile.BaseURL) {
+		return nil, profile, false, fmt.Errorf("credential for profile %q is required: %w", profile.Name, secretErr)
+	}
+	if secret != "" {
+		// Jira Cloud token auth is HTTP Basic: the account email as the
+		// username and the API token as the password.
+		opts = append(opts, jira.WithBasicAuth(profile.Email, secret))
 	}
 	client, err := jira.NewClientE(opts...)
 	if err != nil {

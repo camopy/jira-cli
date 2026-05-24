@@ -53,18 +53,25 @@ func TestProfileValidationRejectsDuplicateNames(t *testing.T) {
 	}
 }
 
+// Jira Cloud token auth is the only supported method. The previously
+// supported basic/pat/mtls types — and any other value — must now be
+// rejected by config validation.
 func TestProfileValidationRejectsUnsupportedAuthTypes(t *testing.T) {
-	cfg := config.Config{
-		DefaultProfile: "default",
-		Profiles: []config.Profile{{
-			Name:     "default",
-			BaseURL:  "https://company.atlassian.net",
-			AuthType: config.AuthType("oauth2"),
-		}},
-	}
-	err := cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), `unsupported auth_type "oauth2"`) {
-		t.Fatalf("Validate() error = %v, want unsupported oauth2 auth type", err)
+	for _, authType := range []string{"basic", "pat", "mtls", "oauth2"} {
+		t.Run(authType, func(t *testing.T) {
+			cfg := config.Config{
+				DefaultProfile: "default",
+				Profiles: []config.Profile{{
+					Name:     "default",
+					BaseURL:  "https://company.atlassian.net",
+					AuthType: config.AuthType(authType),
+				}},
+			}
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), `unsupported auth_type "`+authType+`"`) {
+				t.Fatalf("Validate() with auth_type %q error = %v, want unsupported", authType, err)
+			}
+		})
 	}
 }
 

@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli"
@@ -471,7 +471,7 @@ func issueCreateCommand() *cobra.Command {
 // resolveAssigneeField turns an --assignee flag value into the Jira `assignee`
 // field shape. Accepted values:
 //   - ""                         → no change (set ok=false)
-//   - "me" / "@me"               → profile.AccountID (Cloud) or profile.Username (Server/DC)
+//   - "me" / "@me"               → profile.AccountID
 //   - "none" / "unassigned"      → nil (clears assignee)
 //   - "<accountId>"              → {accountId: "..."}
 //
@@ -488,13 +488,10 @@ func resolveAssigneeField(input string, profile config.Profile) (any, bool, erro
 	case "none", "unassigned":
 		return nil, true, nil
 	case "me", "@me":
-		switch {
-		case profile.AccountID != "":
+		if profile.AccountID != "" {
 			return map[string]string{"accountId": profile.AccountID}, true, nil
-		case profile.Username != "":
-			return map[string]string{"name": profile.Username}, true, nil
 		}
-		return nil, false, fmt.Errorf("--assignee me requires profile.account_id (Cloud) or profile.username (Server/DC); run `jira auth whoami --save` to populate it")
+		return nil, false, fmt.Errorf("--assignee me requires profile.account_id; run `jira auth whoami --save` to populate it")
 	default:
 		return map[string]string{"accountId": v}, true, nil
 	}

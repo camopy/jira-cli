@@ -384,8 +384,6 @@ func setProfileEnv(cfg *Config, name, field, value string) {
 		p.AuthType = AuthType(value)
 	case "EMAIL":
 		p.Email = value
-	case "USERNAME":
-		p.Username = value
 	case "DEFAULT_PROJECT":
 		p.DefaultProject = value
 	case "DEFAULT_ISSUE_TYPE":
@@ -400,10 +398,6 @@ func setProfileEnv(cfg *Config, name, field, value string) {
 		p.Vault = value
 	case "ITEM":
 		p.Item = value
-	case "MTLS_CERT_REF":
-		p.MTLSCertRef = value
-	case "MTLS_KEY_REF":
-		p.MTLSKeyRef = value
 	case "REFRESH_INTERVAL":
 		if n, err := strconv.Atoi(value); err == nil {
 			p.RefreshInterval = n

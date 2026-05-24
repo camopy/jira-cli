@@ -14,10 +14,8 @@ import (
 func TestLoadAppliesEnvPrecedence(t *testing.T) {
 	t.Setenv("JIRA_DEFAULT_PROFILE", "env-profile")
 	t.Setenv("JIRA_PROFILE_ENV_PROFILE_BASE_URL", "https://env.example.atlassian.net")
-	t.Setenv("JIRA_PROFILE_ENV_PROFILE_AUTH_TYPE", "pat")
 	t.Setenv("JIRA_PROFILE_ENV_PROFILE_SECRET_BACKEND", "1password")
 	t.Setenv("JIRA_PROFILE_ENV_PROFILE_EMAIL", "dev@example.com")
-	t.Setenv("JIRA_PROFILE_ENV_PROFILE_USERNAME", "dev")
 	t.Setenv("JIRA_PROFILE_ENV_PROFILE_VAULT", "Engineering")
 	t.Setenv("JIRA_PROFILE_ENV_PROFILE_ITEM", "jira-cli-env")
 	t.Setenv("JIRA_PROFILE_ENV_PROFILE_REFRESH_INTERVAL", "45")
@@ -40,7 +38,7 @@ func TestLoadAppliesEnvPrecedence(t *testing.T) {
 	if got := profile.BaseURL; got != "https://env.example.atlassian.net" {
 		t.Fatalf("env profile base URL = %q", got)
 	}
-	if profile.AuthType != config.AuthTypePAT || profile.SecretBackend != config.SecretBackendOnePassword || profile.Email != "dev@example.com" || profile.Username != "dev" || profile.Vault != "Engineering" || profile.Item != "jira-cli-env" || profile.RefreshInterval != 45 || profile.TimeoutSeconds != 12 || profile.WorkdaySeconds != 36000 {
+	if profile.SecretBackend != config.SecretBackendOnePassword || profile.Email != "dev@example.com" || profile.Vault != "Engineering" || profile.Item != "jira-cli-env" || profile.RefreshInterval != 45 || profile.TimeoutSeconds != 12 || profile.WorkdaySeconds != 36000 {
 		t.Fatalf("env profile overrides not applied: %+v", profile)
 	}
 }

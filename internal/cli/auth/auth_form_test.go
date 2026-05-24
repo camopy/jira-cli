@@ -4,27 +4,97 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/matcra587/jira-cli/internal/config"
 )
+
+// On a re-login, the interactive form must pre-fill from the persisted
+// profile so the user edits current values instead of retyping everything.
+// A flag the user passed explicitly wins over the persisted value.
+func TestApplyLoginPreseedFillsFromExistingProfile(t *testing.T) {
+	profile := config.Profile{
+		BaseURL:            "https://old.atlassian.net",
+		Email:              "old@example.com",
+		SecretBackend:      config.SecretBackendOnePassword,
+		OnePasswordAccount: "my.1password.com",
+		Vault:              "Engineering",
+		Item:               "jira-cli-work",
+	}
+	// backend starts at its flag default ("keyring") but was not explicitly
+	// changed, so the persisted 1password backend must win.
+	baseURL, email, backend := "", "", "keyring"
+	opAccount, vault, item := "", "", ""
+
+	applyLoginPreseed(profile, func(string) bool { return false },
+		&baseURL, &email, &backend, &opAccount, &vault, &item)
+
+	for _, tc := range []struct{ got, want, field string }{
+		{baseURL, "https://old.atlassian.net", "base_url"},
+		{email, "old@example.com", "email"},
+		{backend, string(config.SecretBackendOnePassword), "backend"},
+		{opAccount, "my.1password.com", "onepassword_account"},
+		{vault, "Engineering", "vault"},
+		{item, "jira-cli-work", "item"},
+	} {
+		if tc.got != tc.want {
+			t.Errorf("preseed %s = %q, want %q", tc.field, tc.got, tc.want)
+		}
+	}
+}
+
+func TestApplyLoginPreseedRespectsExplicitFlags(t *testing.T) {
+	profile := config.Profile{BaseURL: "https://old.atlassian.net", Email: "old@example.com"}
+	baseURL, email := "https://new.atlassian.net", ""
+	backend, opAccount, vault, item := "keyring", "", "", ""
+
+	// base-url was passed explicitly; email was not.
+	applyLoginPreseed(profile, func(name string) bool { return name == "base-url" },
+		&baseURL, &email, &backend, &opAccount, &vault, &item)
+
+	if baseURL != "https://new.atlassian.net" {
+		t.Errorf("explicit base-url was overwritten by preseed: %q", baseURL)
+	}
+	if email != "old@example.com" {
+		t.Errorf("email was not preseeded from the existing profile: %q", email)
+	}
+}
+
+// The review step shows what will be stored. It must surface the profile
+// metadata but never the API token itself.
+func TestLoginReviewSummaryShowsMetadataNotSecret(t *testing.T) {
+	summary := loginReviewSummary("work", "https://company.atlassian.net", "dev@example.com", "keyring", "", "", "")
+	for _, want := range []string{"work", "https://company.atlassian.net", "dev@example.com", "keyring"} {
+		if !strings.Contains(summary, want) {
+			t.Errorf("review summary missing %q:\n%s", want, summary)
+		}
+	}
+	if strings.Contains(strings.ToLower(summary), "secret") {
+		t.Errorf("review summary should not reference the secret value:\n%s", summary)
+	}
+}
+
+func TestLoginReviewSummaryIncludes1PasswordCoordinates(t *testing.T) {
+	summary := loginReviewSummary("work", "https://company.atlassian.net", "dev@example.com", "1password", "my.1password.com", "Engineering", "jira-cli-work")
+	for _, want := range []string{"my.1password.com", "Engineering", "jira-cli-work"} {
+		if !strings.Contains(summary, want) {
+			t.Errorf("1password review summary missing %q:\n%s", want, summary)
+		}
+	}
+}
+
+// Mid-form, a 1Password backend may be selected before vault/item are filled.
+// The summary must not render blank field labels with trailing whitespace.
+func TestLoginReviewSummaryOmitsEmpty1PasswordLines(t *testing.T) {
+	summary := loginReviewSummary("work", "https://company.atlassian.net", "dev@example.com", "1password", "", "", "")
+	for _, absent := range []string{"Account:", "Vault:", "Item:"} {
+		if strings.Contains(summary, absent) {
+			t.Errorf("review summary rendered an empty %q label:\n%q", absent, summary)
+		}
+	}
+}
 
 func TestAuthLoginQuestionsUseStructuredSelectionsAndDescriptions(t *testing.T) {
 	questions := authLoginQuestions()
-
-	authType := mustAuthLoginQuestion(t, questions, "auth_type")
-	if authType.Kind != authLoginQuestionSelect {
-		t.Fatalf("auth_type kind = %q, want select", authType.Kind)
-	}
-	for _, want := range []string{"token", "basic", "pat", "mtls"} {
-		if !slices.ContainsFunc(authType.Options, func(option authLoginOption) bool {
-			return option.Value == want && option.Label != "" && option.Description != ""
-		}) {
-			t.Fatalf("auth_type options missing described value %q: %+v", want, authType.Options)
-		}
-	}
-	if slices.ContainsFunc(authType.Options, func(option authLoginOption) bool {
-		return option.Value == "oauth2"
-	}) {
-		t.Fatalf("auth login should not offer oauth2 until an OAuth flow is implemented: %+v", authType.Options)
-	}
 
 	backend := mustAuthLoginQuestion(t, questions, "secret_backend")
 	if backend.Kind != authLoginQuestionSelect {
@@ -49,33 +119,31 @@ func TestAuthLoginQuestionsUseStructuredSelectionsAndDescriptions(t *testing.T) 
 	}
 }
 
-func TestUnsupportedAuthTypesDoNotRequireCredentialStorage(t *testing.T) {
-	if err := validateAuthLoginType("oauth2"); err == nil {
-		t.Fatalf("oauth2 login should be unsupported")
-	}
-	if authLoginNeedsCredential("oauth2") {
-		t.Fatalf("oauth2 login should not ask for a raw credential")
-	}
-	for _, authType := range []string{"token", "basic", "pat"} {
-		if !authLoginNeedsCredential(authType) {
-			t.Fatalf("%s login should ask for credential storage", authType)
+// Jira Cloud is the only supported deployment, so the login flow must not
+// offer an authentication-method choice — token auth is implied — and the
+// account field must be email-focused.
+func TestAuthLoginIsCloudTokenOnly(t *testing.T) {
+	questions := authLoginQuestions()
+	for _, question := range questions {
+		if question.ID == "auth_type" {
+			t.Fatalf("auth login must not offer an auth_type selection (Cloud token only): %+v", question)
 		}
 	}
-	if err := validateAuthLoginType("mtls"); err != nil {
-		t.Fatalf("mtls login should be supported as metadata: %v", err)
+	account := mustAuthLoginQuestion(t, questions, "account")
+	if !strings.Contains(strings.ToLower(account.Title), "email") {
+		t.Fatalf("account question should be email-focused for Cloud token auth: %+v", account)
 	}
-	if authLoginNeedsCredential("mtls") {
-		t.Fatalf("mtls login should not ask for an API token/password credential")
-	}
+}
 
-	credential := mustAuthLoginQuestion(t, authLoginQuestions(), "credential")
-	if slices.ContainsFunc(credential.Options, func(option authLoginOption) bool {
-		return option.Value == "oauth2"
-	}) {
-		t.Fatalf("credential question should not be tied to oauth2 options: %+v", credential.Options)
+// Cloud sites are always <site>.atlassian.net, so the base-URL prompt should
+// lead with the bare site name rather than demanding a full https URL.
+func TestAuthLoginBaseURLPromptLeadsWithSiteName(t *testing.T) {
+	q := mustAuthLoginQuestion(t, authLoginQuestions(), "base_url")
+	if !strings.Contains(strings.ToLower(q.Title), "site") {
+		t.Fatalf("base URL prompt should be framed as the Jira site: %+v", q)
 	}
-	if strings.Contains(credential.Description, "OAuth refresh token") {
-		t.Fatalf("credential description should not suggest OAuth raw-token entry: %q", credential.Description)
+	if !strings.Contains(strings.ToLower(q.Description), "atlassian.net") {
+		t.Fatalf("base URL prompt should show the site shorthand: %+v", q)
 	}
 }
 
