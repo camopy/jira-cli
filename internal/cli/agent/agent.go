@@ -1,4 +1,4 @@
-package main
+package agent
 
 import (
 	_ "embed"
@@ -10,16 +10,17 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/cli/schema"
 	"github.com/matcra587/jira-cli/internal/jira/customfield"
 )
 
 //go:embed agent_guide.md
 var agentGuide string
 
-// agentCommand groups commands curated for AI coding assistants. The schema
+// NewCommand groups commands curated for AI coding assistants. The schema
 // and guide endpoints together give an agent everything needed to interact
 // with the CLI in two calls (tree + how-to).
-func agentCommand() *cobra.Command {
+func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("agent", "Agent tooling: schema and guide for AI coding assistants", "agent")
 	cmd.AddCommand(agentSchemaCommand())
 	cmd.AddCommand(agentGuideCommand())
@@ -37,7 +38,7 @@ func agentSchemaCommand() *cobra.Command {
 			"data payload without the envelope.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return writeSchema(cmd)
+			return schema.WriteSchema(cmd)
 		},
 	}
 	return cmd

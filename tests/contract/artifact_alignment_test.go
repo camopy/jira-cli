@@ -8,6 +8,10 @@ import (
 	"testing"
 )
 
+// agentGuidePath is the repo-relative location of the embedded agent guide,
+// shared by the checks below so a future move updates one place.
+const agentGuidePath = "../../internal/cli/agent/agent_guide.md"
+
 func TestArtifactsDocumentExplicitInteractiveDashboardLaunch(t *testing.T) {
 	for _, path := range []string{
 		"../../README.md",
@@ -103,7 +107,7 @@ func TestReadmeScopeDocsMatchCurrentCommands(t *testing.T) {
 }
 
 func TestAgentGuideRecipesMatchLiveCommandSurface(t *testing.T) {
-	guide, err := os.ReadFile("../../cmd/jira/agent_guide.md")
+	guide, err := os.ReadFile(agentGuidePath)
 	if err != nil {
 		t.Fatalf("ReadFile(agent_guide) error = %v", err)
 	}
@@ -209,7 +213,7 @@ func TestOnePasswordDocsExplainDesktopIntegrationPrerequisite(t *testing.T) {
 	for _, path := range []string{
 		"../../README.md",
 		"../../docs/auth.md",
-		"../../cmd/jira/agent_guide.md",
+		agentGuidePath,
 	} {
 		b, err := os.ReadFile(path)
 		if err != nil {

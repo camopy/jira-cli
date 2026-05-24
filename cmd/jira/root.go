@@ -17,6 +17,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli/alias"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/cli/runtime"
+	"github.com/matcra587/jira-cli/internal/cli/schema"
 	"github.com/matcra587/jira-cli/internal/cli/startup"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -180,7 +181,7 @@ func rootRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	if det.IsTTY && det.Mode == cli.ModePlain {
 		return cmd.Help()
 	}
-	return writeSchema(cmd)
+	return schema.WriteSchema(cmd)
 }
 
 // detectOutput resolves the output detection for the runtime's stdout

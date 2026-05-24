@@ -1,4 +1,4 @@
-package main
+package schema
 
 import (
 	"encoding/json"
@@ -43,9 +43,9 @@ type flagSchema struct {
 	Required    bool     `json:"required,omitempty"`
 }
 
-// writeSchema emits the CLI command schema. The envelope vs compact vs
+// WriteSchema emits the CLI command schema. The envelope vs compact vs
 // human output shape is decided by the resolved --output mode.
-func writeSchema(cmd *cobra.Command) error {
+func WriteSchema(cmd *cobra.Command) error {
 	root := cmd.Root()
 	outputs := outputSchemas()
 	inputs := inputSchemas()
