@@ -5,6 +5,7 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/alias"
+	"github.com/matcra587/jira-cli/internal/cli/auth"
 	"github.com/matcra587/jira-cli/internal/cli/boards"
 	"github.com/matcra587/jira-cli/internal/cli/cache"
 	"github.com/matcra587/jira-cli/internal/cli/config"
@@ -24,7 +25,7 @@ func registerCommands(root *cobra.Command) {
 		cache.NewCommand(),
 		me.NewCommand(),
 		version.NewCommand(),
-		authCommand(),
+		auth.NewCommand(),
 		issueCommand(),
 		boards.NewCommand(),
 		epic.NewCommand(),

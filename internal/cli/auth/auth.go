@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"context"
@@ -17,7 +17,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func authCommand() *cobra.Command {
+// NewCommand returns the `auth` command group for managing Jira authentication.
+func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("auth", "Manage Jira authentication", "configuration")
 	cmd.AddCommand(authLoginCommand())
 	cmd.AddCommand(authStatusCommand())
