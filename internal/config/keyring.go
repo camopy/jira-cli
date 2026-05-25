@@ -4,11 +4,35 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/zalando/go-keyring"
 )
 
-const keyringService = "jira-cli"
+const (
+	// defaultKeyringService is the secret-service "service" name jira-cli
+	// stores credentials under in normal use.
+	defaultKeyringService = "jira-cli"
+	// keyringServiceEnv overrides that service name. It exists so the
+	// end-to-end contract suite — which drives the real binary and therefore
+	// the real OS keyring — can confine its reads, writes, and deletes to a
+	// throwaway namespace instead of the developer's actual "jira-cli"
+	// credentials. Production never sets it. A blank or unset value uses
+	// defaultKeyringService; a wrong value fails safe — a lookup simply misses
+	// (ErrCredentialNotFound), it never surfaces another namespace's secret.
+	keyringServiceEnv = "JIRA_KEYRING_SERVICE"
+)
+
+// keyringServiceName resolves the secret-service service name, honoring the
+// keyringServiceEnv override (see its doc) and otherwise returning
+// defaultKeyringService.
+func keyringServiceName() string {
+	if s := strings.TrimSpace(os.Getenv(keyringServiceEnv)); s != "" {
+		return s
+	}
+	return defaultKeyringService
+}
 
 // KeyringStore stores credentials in the OS keyring under a readable
 // "<site-host>/<profile>" entry name. A credential belongs to a site and a
@@ -22,7 +46,7 @@ type KeyringStore struct{}
 // release under a bare profile name is not auto-resolved — the user logs in
 // once after upgrading.
 func (KeyringStore) Get(_ context.Context, ref SecretRef) (string, error) {
-	v, err := keyring.Get(keyringService, ref.KeyringName())
+	v, err := keyring.Get(keyringServiceName(), ref.KeyringName())
 	if err == nil {
 		return v, nil
 	}
@@ -34,7 +58,7 @@ func (KeyringStore) Get(_ context.Context, ref SecretRef) (string, error) {
 
 // Put writes the credential under the "<host>/<profile>" keyring entry.
 func (KeyringStore) Put(_ context.Context, ref SecretRef, secret string) error {
-	return keyring.Set(keyringService, ref.KeyringName(), secret)
+	return keyring.Set(keyringServiceName(), ref.KeyringName(), secret)
 }
 
 // Delete removes the credential's "<host>/<profile>" keyring entry — the entry
@@ -42,7 +66,7 @@ func (KeyringStore) Put(_ context.Context, ref SecretRef, secret string) error {
 // ErrCredentialNotFound rather than surfaced as a backend failure, so logout
 // is idempotent.
 func (KeyringStore) Delete(_ context.Context, ref SecretRef) error {
-	err := keyring.Delete(keyringService, ref.KeyringName())
+	err := keyring.Delete(keyringServiceName(), ref.KeyringName())
 	if err == nil {
 		return nil
 	}

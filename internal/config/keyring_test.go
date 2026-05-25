@@ -33,7 +33,7 @@ func TestKeyringPutGetRoundTrip(t *testing.T) {
 		t.Fatalf("Put() error = %v", err)
 	}
 	// The secret lives under the readable key — no digest.
-	if v, err := keyring.Get(keyringService, "company.atlassian.net/work"); err != nil || v != "the-token" {
+	if v, err := keyring.Get(defaultKeyringService, "company.atlassian.net/work"); err != nil || v != "the-token" {
 		t.Fatalf("keyring entry at company.atlassian.net/work = (%q,%v)", v, err)
 	}
 	got, err := (KeyringStore{}).Get(context.Background(), ref)
@@ -80,7 +80,7 @@ func TestKeyringGetHasNoLegacyFallback(t *testing.T) {
 	keyring.MockInit()
 	ref := keyringRef(t, "work", "https://company.atlassian.net")
 	// Seed a bare-profile-name entry, the old pre-namespacing layout.
-	if err := keyring.Set(keyringService, "work", "stale-legacy-token"); err != nil {
+	if err := keyring.Set(defaultKeyringService, "work", "stale-legacy-token"); err != nil {
 		t.Fatalf("seed bare entry error = %v", err)
 	}
 
