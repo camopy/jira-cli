@@ -45,6 +45,19 @@ var commandPackageExemptDirs = map[string]bool{
 	"tui": true,
 }
 
+// commandStreamExemptDirs are command-domain packages that legitimately
+// reference os.Stdout for process-level TTY/env detection (not
+// command-stream output) and so are exempt from the command-stream check
+// ONLY. They remain bound by the os.Exit and stored-context guards.
+var commandStreamExemptDirs = map[string]bool{
+	// root is the CLI assembly layer (Execute, New, ExitCode). Its only
+	// os.Stdout references are cli.Detect(os.Stdout) in detectOutput and
+	// jsonEnvelopeRequested — inspecting the real process descriptor to
+	// resolve output mode before cobra dispatch. It writes nothing to
+	// os.Stdout, stores no context.Context, and never calls os.Exit.
+	"root": true,
+}
+
 // cliGoFiles returns every non-test .go file under internal/cli, keyed
 // by the immediate sub-package directory name.
 func cliGoFiles(t *testing.T) map[string][]string {
@@ -117,8 +130,8 @@ func TestCommandPackagesAvoidProcessExit(t *testing.T) {
 // capture and cannot be redirected by a caller.
 func TestCommandPackagesUseCommandStreams(t *testing.T) {
 	for dir, paths := range cliGoFiles(t) {
-		if dir == "" || commandPackageExemptDirs[dir] {
-			continue // boundary packages, not command packages
+		if dir == "" || commandPackageExemptDirs[dir] || commandStreamExemptDirs[dir] {
+			continue // boundary packages and stream-only-exempt command packages
 		}
 		for _, path := range paths {
 			fset, file := parseGo(t, path)

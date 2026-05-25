@@ -10,7 +10,7 @@ import (
 )
 
 // MutationInput is the realistic, command-facing input shape for the
-// 5-stage pipeline. cmd/jira/commands.go assembles one of these from
+// 5-stage pipeline. internal/cli/root/commands.go assembles one of these from
 // flag values, --json-input, the resolved profile, and the active
 // schema; pipeline.RunMutation orchestrates stages 1–5.
 //
@@ -20,7 +20,7 @@ import (
 // skipped — stage 4 (customfield encoding) still runs and rejects
 // malformed values regardless of schema availability.
 //
-// CURRENT INTEGRATION DEPTH: cmd/jira/commands.go wires this struct
+// CURRENT INTEGRATION DEPTH: internal/cli/root/commands.go wires this struct
 // with Mode + Fields + DryRun + ADFDoc. Stage 2 (ADF validation) is
 // now load-bearing: ValidateDoc rejects unknown nodes, illegal marks,
 // and unknown mark types before submission.

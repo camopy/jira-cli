@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/matcra587/jira-cli/internal/cli/root"
 )
 
 func main() {
@@ -16,15 +18,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// main is the sole owner of process exit. Execute builds the runtime
-	// and root command, runs the requested command, and either returns
-	// nil, returns a command error, or returns errCompletionHandled when
-	// a shell-completion preflight request was fully serviced (no command
-	// runs). main translates each outcome into an exit code.
-	if err := Execute(ctx); err != nil {
-		if errors.Is(err, errCompletionHandled) {
+	// main is the sole owner of process exit. root.Execute builds the
+	// runtime and command tree, runs the requested command, and returns
+	// nil, a command error, or ErrCompletionHandled when a shell-completion
+	// preflight was fully serviced (no command runs).
+	if err := root.Execute(ctx); err != nil {
+		if errors.Is(err, root.ErrCompletionHandled) {
 			os.Exit(0)
 		}
-		os.Exit(exitCodeForError(err))
+		os.Exit(root.ExitCode(err))
 	}
 }

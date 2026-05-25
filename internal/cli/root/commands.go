@@ -1,4 +1,4 @@
-package main
+package root
 
 import (
 	"github.com/matcra587/jira-cli/internal/cli/agent"

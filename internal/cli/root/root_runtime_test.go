@@ -1,4 +1,4 @@
-package main
+package root
 
 import (
 	"go/ast"
@@ -126,14 +126,14 @@ func TestRootCommandPreservesRequiredHiddenAliases(t *testing.T) {
 }
 
 // TestNewRootCommandDoesNotCallOsExit is a static check: the library
-// command-construction path (NewRootCommand and the command factories it
-// calls) must never call os.Exit. Only main.go and the completion
-// preflight in main may terminate the process. A NewRootCommand that
-// calls os.Exit is untestable and unusable as a library.
+// command-construction path (New and the command factories it calls) must
+// never call os.Exit. Only main.go and the completion preflight in main
+// may terminate the process. A New that calls os.Exit is untestable and
+// unusable as a library.
 func TestNewRootCommandDoesNotCallOsExit(t *testing.T) {
 	entries, err := os.ReadDir(".")
 	if err != nil {
-		t.Fatalf("read cmd/jira: %v", err)
+		t.Fatalf("read internal/cli/root: %v", err)
 	}
 	// main.go legitimately owns the process exit. Every other file in
 	// package main is library construction code and must not exit.

@@ -4,7 +4,7 @@
 // (e.g. inlineCard, custom panel variants, extension nodes), the affected
 // constructs MUST be visible to callers so they can warn the user or
 // fall back to --raw. Today the detection logic was inline in
-// cmd/jira/commands.go's `issue view` description path; this file
+// internal/cli/root/commands.go's `issue view` description path; this file
 // extracts it as a shared helper used by `comment list` and reused from
 // `issue view`.
 //

@@ -1,4 +1,4 @@
-package main
+package root
 
 import (
 	"context"
@@ -25,17 +25,17 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// errCompletionHandled is returned by Execute when a shell-completion
+// ErrCompletionHandled is returned by Execute when a shell-completion
 // preflight request was fully serviced. main translates it into a
 // zero-exit termination; no command runs. Keeping this as a returned
 // sentinel — rather than an os.Exit deep in construction — leaves main
 // the sole owner of process exit.
-var errCompletionHandled = errors.New("completion request handled")
+var ErrCompletionHandled = errors.New("completion request handled")
 
 // newRootCommand builds the bare root *cobra.Command: its metadata,
 // persistent flags, groups, help renderer, and PersistentPreRunE/RunE.
 // It does NOT attach subcommands or the completion command — that is
-// NewRootCommand's job, so the bare root can also seed the completion
+// New's job, so the bare root can also seed the completion
 // generator before its own completion subcommand exists.
 //
 // Each call returns an independent command with its own persistent flag
@@ -206,11 +206,13 @@ func runtimeStdoutIsTTY(rt *runtime.Runtime) bool {
 	return ok && terminal.Is(f)
 }
 
-// NewRootCommand builds a fully assembled root command for the given
-// runtime: the bare root plus every command family and the shell
-// completion command. Each call yields an independent command tree with
-// its own flag set and IO wiring — no process-global command state.
-func NewRootCommand(rt *runtime.Runtime) *cobra.Command {
+// New builds a fully assembled root command for the given runtime — the
+// importable entry point used by both cmd/jira (to run) and cmd/gen-docs
+// (to generate reference docs). The bare root plus every command family
+// and the shell completion command. Each call yields an independent
+// command tree with its own flag set and IO wiring — no process-global
+// command state.
+func New(rt *runtime.Runtime) *cobra.Command {
 	root := newRootCommand(rt)
 	root.AddCommand(clib.CompletionCommand(root, func() *complete.Generator {
 		return completionGenerator(root)
@@ -322,25 +324,24 @@ func configureRootHelp(root *cobra.Command) {
 //
 // ctx is the root context main owns (signal-aware via signal.NotifyContext).
 // Execute never calls os.Exit: a completion preflight that was fully
-// handled is reported back to main as errCompletionHandled.
+// handled is reported back to main as ErrCompletionHandled.
 func Execute(ctx context.Context) error {
 	rt, err := runtime.New()
 	if err != nil {
 		return err
 	}
-	// NewRootCommand builds a static command tree; it deliberately takes
-	// no context. The per-command PersistentPreRunE derives its context
-	// from cmd.Context() at run time — cobra seeds that from the ctx
-	// passed to ExecuteContextC below. contextcheck cannot see that
-	// deferred handoff and flags the construction call as a missing
-	// context thread.
-	root := NewRootCommand(rt) //nolint:contextcheck // context flows via ExecuteContextC, not construction
+	// New builds a static command tree; it deliberately takes no context.
+	// The per-command PersistentPreRunE derives its context from
+	// cmd.Context() at run time — cobra seeds that from the ctx passed to
+	// ExecuteContextC below. contextcheck cannot see that deferred handoff
+	// and flags the construction call as a missing context thread.
+	root := New(rt) //nolint:contextcheck // context flows via ExecuteContextC, not construction
 
 	if handled, err := handleCompletionPreflight(root); err != nil {
 		writeCommandError(ctx, root, err)
 		return err
 	} else if handled {
-		return errCompletionHandled
+		return ErrCompletionHandled
 	}
 
 	args, err := alias.ExpandAliasArgs(root, os.Args[1:])
@@ -508,7 +509,10 @@ func writeErrorEnvelopeToStderr(cmd *cobra.Command, err error) error {
 	return cli.WriteEnvelope(cmd.ErrOrStderr(), env)
 }
 
-func exitCodeForError(err error) int {
+// ExitCode maps err to its process exit code. It delegates to the
+// central cli.ExitCode mapper so every error type (credential, Jira API,
+// rate-limit, validation, command-local) carries the correct stable code.
+func ExitCode(err error) int {
 	return cli.ExitCode(outputErrorFor(err))
 }
 

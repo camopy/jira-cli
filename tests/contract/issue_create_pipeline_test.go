@@ -13,7 +13,7 @@ import (
 // (a fields map, an ADF doc, a schema fetcher, a customfield registry).
 //
 // The lower-level pipeline.Run stays as the per-stage fatal-semantics
-// test seam; RunMutation is what cmd/jira/commands.go calls in
+// test seam; RunMutation is what internal/cli/root/commands.go calls in
 // production.
 func TestRunMutationStrictBlocksInvalidField(t *testing.T) {
 	in := pipeline.MutationInput{

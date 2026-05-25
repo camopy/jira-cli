@@ -8,7 +8,7 @@ package contract
 // across the issue lifecycle commands.
 //
 // All tests will fail until the lead's integration pass registers
-// IssueAttachmentCommand under issueCommand in cmd/jira/commands.go.
+// IssueAttachmentCommand under issueCommand in internal/cli/root/commands.go.
 
 import (
 	"bytes"

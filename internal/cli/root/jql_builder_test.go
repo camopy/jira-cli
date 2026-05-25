@@ -1,4 +1,4 @@
-package main
+package root
 
 import (
 	"encoding/json"
@@ -29,7 +29,7 @@ workday_seconds = 28800
 		t.Fatalf("WriteFile(config): %v", err)
 	}
 
-	cmd := exec.Command("go", "run", ".", "--config", cfg, "issue", "list", "--as-jql", "--output=json")
+	cmd := exec.Command("go", "run", "github.com/matcra587/jira-cli/cmd/jira", "--config", cfg, "issue", "list", "--as-jql", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue list --as-jql error = %v\n%s", err, out)
@@ -67,7 +67,7 @@ workday_seconds = 28800
 		t.Fatalf("WriteFile(config): %v", err)
 	}
 
-	cmd := exec.Command("go", "run", ".", "--config", cfg, "issue", "list", "--jql", "project = CUSTOM", "--as-jql", "--output=json")
+	cmd := exec.Command("go", "run", "github.com/matcra587/jira-cli/cmd/jira", "--config", cfg, "issue", "list", "--jql", "project = CUSTOM", "--as-jql", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue list --as-jql error = %v\n%s", err, out)
@@ -86,7 +86,7 @@ workday_seconds = 28800
 }
 
 func TestIssueListAsJQLPrintsBuiltQueryWithoutCallingJira(t *testing.T) {
-	cmd := exec.Command("go", "run", ".", "issue", "list", "--project", "PROJ", "--assignee", "me", "--status", "In Progress", "--as-jql", "--output=json")
+	cmd := exec.Command("go", "run", "github.com/matcra587/jira-cli/cmd/jira", "issue", "list", "--project", "PROJ", "--assignee", "me", "--status", "In Progress", "--as-jql", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue list --as-jql error = %v\n%s", err, out)

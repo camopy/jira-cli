@@ -1,4 +1,4 @@
-package main
+package root
 
 import (
 	"github.com/matcra587/jira-cli/internal/cli/runtime"
@@ -17,5 +17,5 @@ func NewRootCommandForTest(options ...runtime.Option) (*cobra.Command, *runtime.
 	if err != nil {
 		return nil, nil, err
 	}
-	return NewRootCommand(rt), rt, nil
+	return New(rt), rt, nil
 }
