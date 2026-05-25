@@ -42,7 +42,7 @@ func readAgentGuide(t *testing.T) string {
 func TestArtifactsDocumentExplicitInteractiveDashboardLaunch(t *testing.T) {
 	for _, path := range []string{
 		"../../README.md",
-		"../../docs/man/jira.1.md",
+		// man page removed in the docs overhaul; see docs/reference (generated)
 	} {
 		b, err := os.ReadFile(path)
 		if err != nil {
@@ -65,7 +65,7 @@ func TestArtifactsDocumentExplicitInteractiveDashboardLaunch(t *testing.T) {
 func TestArtifactsDoNotAdvertiseUnsupportedOAuth(t *testing.T) {
 	for _, path := range []string{
 		"../../README.md",
-		"../../docs/man/jira.1.md",
+		// man page removed in the docs overhaul; see docs/reference (generated)
 	} {
 		b, err := os.ReadFile(path)
 		if err != nil {
@@ -105,7 +105,7 @@ func TestHumanDocsUseCurrentOutputFlag(t *testing.T) {
 	}
 	for _, path := range []string{
 		"../../README.md",
-		"../../docs/man/jira.1.md",
+		// man page removed in the docs overhaul; see docs/reference (generated)
 	} {
 		b, err := os.ReadFile(path)
 		if err != nil {

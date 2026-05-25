@@ -37,6 +37,9 @@ out/
 # it is local-only and stays ignored.
 !docs/
 docs/superpowers/
+# The command reference is generated at site-build time (docs:gen runs before
+# docs:build/docs:serve) and published straight to Pages — never committed.
+docs/reference/
 
 # Local overrides
 *.local.*

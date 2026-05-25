@@ -115,6 +115,14 @@ linters:
         linters:
           - gosec
         text: "G304"
+      - path: '(^|.*/)internal/docs/markdown\.go$'
+        linters:
+          - gosec
+        text: "G304"
+      - path: '(^|.*/)cmd/gen-docs/main\.go$'
+        linters:
+          - gosec
+        text: "G304"
       - path: '(^|.*/)internal/(cli/alias/alias|config/loader|config/query)\.go$'
         linters:
           - gosec

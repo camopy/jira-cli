@@ -22,7 +22,13 @@ local linters = new Mapping<String, Step> {
     ["gofumpt"] = gofumpt
     ["go-vet"] = Builtins.go_vet
     ["golangci-lint"] = golangciLint
-    ["rumdl"] = Builtins.rumdl
+    ["rumdl"] = (Builtins.rumdl) {
+        // docs/reference/ is generated at build time and gitignored, but the hk
+        // rumdl builtin globs the working tree (not git), so exclude the raw
+        // gh-style pages (hard tabs, language-less fences) it would otherwise
+        // try to reformat.
+        exclude = "docs/reference/**"
+    }
     ["actionlint"] = Builtins.actionlint
     ["zizmor"] = Builtins.zizmor
 }
