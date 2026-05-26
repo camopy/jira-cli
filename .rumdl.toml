@@ -4,6 +4,18 @@
 # are excluded — wrapping example JSON, shell commands, and JQL queries
 # at 80 columns either changes their meaning (JSON parses differently)
 # or makes them harder to copy-paste.
+#
+# `internal/cli/agent/agent_guide.md` is excluded entirely: it's the
+# embedded LLM-facing runbook, structurally modelled after slack-cli's
+# `internal/agenthelp/guide.go` (a Go-string-embedded guide that
+# bypasses markdown lint by living inside a `.go` file). The format
+# uses `# subgroup` headings inside `**Decide**` blocks and dense
+# prose lines that intentionally clash with MD013 / MD024 — the
+# audience is an LLM reading raw markdown, not a human in an 80-col
+# terminal. Treat the slack-cli embedded guide as the precedent.
+
+[global]
+exclude = ["internal/cli/agent/agent_guide.md"]
 
 [MD013]
 line-length = 80
