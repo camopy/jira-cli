@@ -1,0 +1,42 @@
+## move_issue
+Goal: Swap an existing issue's `project` and/or `issuetype` in place, providing any new required fields the destination demands — without creating a new issue or changing the issue key history.
+
+**Decide**
+- Just project change? Override `project.key`.
+- Just type change? Override `issuetype.name` (or `.id`).
+- Both? Pass both in the same override.
+- Target project / type requires fields the source doesn't have? Include them in the same override (e.g. `customfield_10010`).
+- Want to confirm the override is well-formed before submitting? `--dry-run`.
+
+**Run**
+- Canonical: `jira issue move KAN-1 --force --json-input /tmp/move.json --output=json`
+- Preview: `jira issue move KAN-1 --force --json-input /tmp/move.json --dry-run --output=json`
+
+Minimum override shape:
+
+```json
+{"fields": {"project": {"key": "OTHER"}, "issuetype": {"name": "Story"}}}
+```
+
+**Save**
+> Requires `--output=json`.
+- `data.key` [string, required] — the issue key after move (may or may not change depending on instance config; capture and feed to follow-up workflows).
+
+**Preconditions**
+- `--json-input` is required — `move` has no field flags. The destination shape is the entire contract.
+- `--force` (or `--dry-run`) is required in agent context — see → `safe_mutation`.
+
+**Behavior**
+- No new issue is created; the original key (or its remapped successor on instances that renumber across projects) carries forward, along with comments, worklogs, and attachments.
+- Required-field changes between projects / issuetypes must appear in the override. If the target project mandates a field the source didn't have, the submit fails with `INVALID_INPUT (400)`.
+
+**Recover**
+| Symptom | Cause | Next |
+|---|---|---|
+| `INVALID_INPUT (400)` after `--dry-run` was clean | Target project requires a field not in the override | Add the missing field; → `cache_metadata` (`fields` cache) to discover its id. |
+| `validation_error` requesting `--force` | Agent / non-TTY without `--force` | Add `--force`. See → `safe_mutation`. |
+
+**Next**
+- Then: → `read_issue` to confirm the post-move shape, → `transition_issue` if the new project's workflow needs a status sync.
+- Composes: → `safe_mutation`.
+- Alternative: → `clone_issue` if you want a copy in the new project while leaving the original in place.

@@ -5,8 +5,9 @@
 # at 80 columns either changes their meaning (JSON parses differently)
 # or makes them harder to copy-paste.
 #
-# `internal/cli/agent/agent_guide.md` is excluded entirely: it's the
-# embedded LLM-facing runbook, structurally modelled after slack-cli's
+# `internal/cli/agent/guide/**` is excluded entirely: it's the
+# embedded LLM-facing runbook, split into one `<slug>.md` file per
+# workflow plus `_preamble.md`, structurally modelled after slack-cli's
 # `internal/agenthelp/guide.go` (a Go-string-embedded guide that
 # bypasses markdown lint by living inside a `.go` file). The format
 # uses `# subgroup` headings inside `**Decide**` blocks and dense
@@ -15,7 +16,7 @@
 # terminal. Treat the slack-cli embedded guide as the precedent.
 
 [global]
-exclude = ["internal/cli/agent/agent_guide.md"]
+exclude = ["internal/cli/agent/guide/**"]
 
 [MD013]
 line-length = 80

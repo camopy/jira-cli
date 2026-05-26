@@ -1,0 +1,138 @@
+## core_contract
+Goal: Apply the cross-cutting output-mode, envelope, exit-code, headless, pagination, read-only, and debug contract every other workflow inherits.
+
+**Decide**
+
+# output mode
+- TTY humans: `--output=human` (or omit; `auto` picks `human` on a TTY).
+- Automation: `--output=json` (full envelope) for parsing; `--output=compact` for the JSON `data` payload only, one line, jq-friendly.
+- Agent harnesses: `auto` resolves to `compact` when an agent env var is set.
+- There is no raw REST passthrough — `json` and `compact` cover every machine-consumption need.
+
+# headless writes (`--no-input`)
+- Set `--no-input` on every mutation when scripting. Under it the CLI never prompts, never reads stdin implicitly, and never silently no-ops.
+- Only `--json-input -` (command payload) and `--secret-stdin` (auth secret) may read stdin under `--no-input`.
+- Destructive ops (`delete` / `clone` / `move` / `comment delete` / `link delete` / `attachment delete`) still require `--force` on top of `--no-input` → see `safe_mutation`.
+
+# pagination
+- Single page (default page size): omit `--limit` / `--all`.
+- Custom page size: `--limit N`.
+- Walk every page until `is_last=true`: `--all` (`issue comment list`, `issue attachment list`).
+- Board cache drain: `jira boards list --unbounded` removes the default 100-page / 10 000-board safety bound.
+
+# read-only mode
+- Block every mutation at the HTTP layer for the invocation: `JIRA_READ_ONLY=true jira <anything>`.
+- Block per profile in `config.toml`:
+  ```toml
+  [[profiles]]
+    name = "agent-handoff"
+    read_only = true
+  ```
+- Env wins on the OFF→ON direction — once `JIRA_READ_ONLY` is set, every profile is read-only regardless of its own setting.
+
+# debug
+- HTTP request/response dumps to stderr with secrets redacted: `--debug` (or `-d`).
+
+**Run**
+- Canonical write: `jira <cmd> --no-input --json-input payload.json --output=json`
+- Pagination drain: `jira issue comment list KEY --all --output=json`
+- Per-call read-only: `JIRA_READ_ONLY=true jira issue edit KAN-1 --summary "x" --no-input --output=json`
+- Debug capture: `jira issue edit KAN-1 --json-input fields.json --no-input --debug 2>&1 | grep '^DBG'`
+
+**Save**
+> Requires `--output=json`.
+- `ok` [bool, required] — `true` on success, `false` on failure.
+- `meta.command` [string, required] — dotted command path (e.g. `issue.create`).
+- `meta.timestamp` [string, required] — ISO 8601 UTC.
+- `meta.request_id` [string, required] — request correlation id.
+- `meta.exit_code` [int, present on failure] — mirrors the process exit code; `data` is `null` when set.
+- `meta.pagination` [object, optional] — `startAt`, `maxResults`, `total`, `isLast`; walk until `isLast=true`.
+- `data` [object, required on success] — command-specific payload; `null` on failure.
+- `errors[]` [array, required] — each entry carries `type`, `code` (stable snake_case — branch on this, never on `message`), `message`, `hint`, `retryable`. Optional fields when relevant: `flag`, `field`, `http_status`, `retry_after_seconds`, `provider`, `upstream_code`, `upstream_status`. Jira API errors leave `upstream_code` empty — Jira exposes no stable machine error code.
+- `warnings[]` [array, required] — non-fatal diagnostics; never blank on a successful command that degraded.
+
+**Behavior**
+- Envelope shape (success):
+  ```json
+  {
+    "ok": true,
+    "meta": {
+      "command": "issue.create",
+      "timestamp": "2026-05-04T22:48:55Z",
+      "request_id": "...",
+      "pagination": { "startAt": 0, "maxResults": 50, "total": 12, "isLast": true }
+    },
+    "data":     { /* command-specific */ },
+    "errors":   [],
+    "warnings": []
+  }
+  ```
+- `--output=auto` resolution table:
+
+  | Context           | Resolved mode                                                |
+  |-------------------|--------------------------------------------------------------|
+  | TTY human         | `human`  (clog rich text)                                    |
+  | Non-TTY (pipe)    | `json`  (full envelope)                                      |
+  | Detected agent    | `compact`  (envelope `data` only, single line, jq-friendly)  |
+
+- Agent env detection (first match wins, fixed precedence amp → codex → gemini → copilot → opencode → cursor → claude): `AGENT=amp`, `CODEX_SANDBOX`, `CODEX_CI`, `CODEX_THREAD_ID`, `CODEX`, `OPENAI_CODEX`, `GEMINI_CLI`, `COPILOT_CLI`, `COPILOT`, `GITHUB_COPILOT`, `OPENCODE`, `CURSOR_TERMINAL`, `CURSOR_AGENT`, `CLAUDECODE`, `CLAUDE_CODE`. `AI_AGENT=<name>` is the explicit override.
+- `--output=compact` strips `meta` and `errors` on success. **Error paths still emit the full envelope** so failures stay parseable regardless of mode flags.
+- Machine envelopes never carry `meta.profile` — a command that reports a profile puts it in command-specific `data`.
+- `--output` value table:
+
+  | `--output` value | Effect                                                                         |
+  |------------------|--------------------------------------------------------------------------------|
+  | `auto`           | Detect: TTY → human, pipe → json, agent → compact                              |
+  | `human`          | Force human-friendly clog rich text                                            |
+  | `json`           | Force the full structured envelope on stdout                                   |
+  | `compact`        | Force the JSON `data` payload only — no `ok`/`meta`/`warnings`/`errors`        |
+
+- In `--output=human` mode, `warnings[]` mirrors to stderr as clog `WRN` lines so stdout stays clean for piping.
+- Warning `type` values you'll see:
+
+  | `type`                       | Meaning                                                                        |
+  |------------------------------|--------------------------------------------------------------------------------|
+  | `unknown_adf_node`           | ADF node outside the MVP set, preserved opaquely                               |
+  | `unknown_adf_mark`           | ADF mark outside the MVP set, preserved opaquely                               |
+  | `customfield_unknown_type`   | `customfield_NNNN` key forwarded with no registry schema (Jira handles type)   |
+  | `lossy_adf_conversion`       | markdown → ADF or roundtrip dropped detail                                     |
+  | `cache-truncated`            | Cache primer hit its page/row safety bound; data fields include `truncated`/`truncated_reason` |
+  | `adf-lossy-comment`          | A comment body contains constructs lost on render; entry names `comment_id` and `lossy_constructs[]` |
+
+- Exit codes (stable contract — never reused for new categories):
+
+  | Exit | Meaning                                          |
+  |------|--------------------------------------------------|
+  | 0    | Success                                          |
+  | 1    | Authentication failure                           |
+  | 2    | Not found                                        |
+  | 3    | Validation error / mutex flags / no-input gap    |
+  | 4    | Rate limited                                     |
+  | 5    | Server error                                     |
+
+- `--debug` redacts `Authorization`, `Cookie`, and `X-Atlassian-Token` headers to `REDACTED` in the dumped traffic. `Atl-Traceid` is preserved — quote it on Atlassian support tickets.
+- Bounded drains (boards cache, etc.) emit a `cache-truncated` warning naming the bound that fired, and surface `truncated` / `truncated_reason` in `data`.
+- Read-only blocks happen at the HTTP transport layer — there is no per-command boilerplate to forget.
+
+**Recover**
+| Symptom | Cause | Next |
+|---|---|---|
+| Exit 1 | Authentication failure | → `auth_setup` |
+| Exit 2 | Not found (issue key, attachment id, link id, profile, etc.) | Re-resolve the identifier; check `auth_setup` if the resource should exist |
+| Exit 3, `code=flag_unknown` | Unrecognized flag (often a removed legacy boolean like `--json`/`--compact`/`--plain`/`--raw`) | Drop the flag; use `--output=json|compact` |
+| Exit 3, `code=flag_value_missing` | A flag that needs a value was given none | Supply the value |
+| Exit 3, `code=flag_value_invalid` | Flag value failed type or range parsing | Match the documented value set |
+| Exit 3, `code=flag_syntax_invalid` | Malformed flag token | Re-quote / re-escape the argv |
+| Exit 3, `code=required_flag_missing` | A required flag was not set; `flag` names the first one | Supply that flag |
+| Exit 3, `code=arg_count_invalid` | Wrong number of positional arguments | Match the documented arity |
+| Exit 3, `code=command_unknown` | Unrecognized command; `hint` may carry `Did you mean <name>?` | Use the suggested name |
+| Exit 3, `read-only mode is active` | `JIRA_READ_ONLY=true` or profile `read_only = true` | Unset / flip the profile, or do the work elsewhere |
+| Exit 3 under `--no-input` with no field flags | Empty headless edit | Pass at least `--summary` / `--assignee` / `--json-input` → `edit_issue` |
+| Exit 4 | Rate limited; `errors[0].retry_after_seconds` set when known | Back off then retry |
+| Exit 5 | Server error (Jira 5xx or a 413 upload-size cap); `errors[0].message` carries the upstream text | Retry if transient; for 413 split or shrink the upload |
+
+**Next**
+- Then: → `identity_setup` (resolve `account_id` once per profile so `--assignee me` works)
+- Then: → `auth_setup` (when exit 1)
+- Then: → `inspect_schema` (when you need the machine-readable command tree, ADF matrix, or customfield registry)
+- Composes: → every other workflow inherits this contract.

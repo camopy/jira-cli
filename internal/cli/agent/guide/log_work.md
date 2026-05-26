@@ -1,0 +1,42 @@
+## log_work
+Goal: Record time spent against a Jira issue using durations that resolve via the profile's `workday_seconds`, and read the typed worklog list back.
+
+**Decide**
+
+# duration
+- `--time-spent <duration>` — accepts `1d 2h 30m`-style strings; `1d` resolves via the per-profile `workday_seconds` (default 28,800 = 8h).
+
+# optional metadata
+- `--started <RFC3339>` — backdate or pin a start time; otherwise Jira stamps "now".
+- `--comment-markdown "<text>"` — short worklog comment; markdown is lossy (see → `adf_reference`).
+- `--json-input <file>` — full payload, including ADF-bodied comment, for the lossless path.
+
+**Run**
+- Quick log: `jira worklog add KEY --time-spent 1h30m --output=json`
+- Backdated: `jira worklog add KEY --time-spent 2h --started 2026-05-04T09:00:00.000+0000 --output=json`
+- With markdown comment: `jira worklog add KEY --time-spent 45m --comment-markdown "fixed bug X" --output=json`
+- Full payload (ADF comment supported): `jira worklog add KEY --json-input wl.json --output=json`
+- Read back: `jira worklog list KEY --output=json`
+
+**Save**
+> Requires `--output=json`.
+- `worklog add` returns the persisted entry envelope; capture the entry id for follow-up edits.
+- `worklog list KEY` returns the worklog list as the typed envelope — iterate to compute totals or surface recent entries.
+
+**Preconditions**
+- `1d` resolution depends on the active profile's `workday_seconds`; a profile configured for 6h days will resolve `1d` to 21,600 seconds, not 28,800.
+- ADF worklog comments must satisfy → `adf_reference`.
+
+**Behavior**
+- Durations are concatenable (`1d 2h 30m`); whitespace is permitted between units.
+- `--comment-markdown` and the `comment` field inside `--json-input` are mutually exclusive on the same call — pick one body path.
+
+**Recover**
+| Symptom | Cause | Next |
+|---|---|---|
+| exit 3, `code: flag_value_invalid` on `--time-spent` | Duration string didn't parse (typo, unknown unit) | Re-run with a `d/h/m/s` combination |
+| Unexpected `1d` totals | Profile `workday_seconds` differs from 8h | Check active profile (see → `auth_setup`) and recompute |
+
+**Next**
+- Then: → `read_issue` (worklog totals influence the issue summary).
+- Composes: → `add_comment` when the worklog comment alone isn't enough context.

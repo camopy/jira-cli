@@ -1,7 +1,7 @@
 package agent
 
 import (
-	_ "embed"
+	"embed"
 	"fmt"
 	"strings"
 
@@ -14,8 +14,49 @@ import (
 	"github.com/matcra587/jira-cli/internal/jira/customfield"
 )
 
-//go:embed agent_guide.md
-var agentGuide string
+//go:embed guide
+var guideFS embed.FS
+
+// workflowGoals is populated by init from each guide/<slug>.md file's
+// `Goal: …` line. Used by `agent guide --help` so the Sections block
+// shows what every workflow is for rather than echoing the slug twice.
+var workflowGoals = map[string]string{}
+
+// workflowOrder is the canonical ordering used by the concatenated
+// guide output and the `agent guide --help` Sections block. Each entry
+// MUST have a matching guide/<slug>.md file; an init-time check fails
+// fast on drift between this list and the embedded directory so a typo
+// here or a stray file there is caught at binary startup, not at first
+// guide invocation.
+var workflowOrder = []string{
+	"core_contract",
+	"identity_setup",
+	"auth_setup",
+	"inspect_schema",
+	"configure_editor",
+	"safe_mutation",
+	"read_issue",
+	"list_issues",
+	"search_jql",
+	"discover_board",
+	"cache_metadata",
+	"create_issue",
+	"create_subtask",
+	"edit_issue",
+	"transition_issue",
+	"add_comment",
+	"list_comments",
+	"attach_file",
+	"manage_watchers",
+	"link_issues",
+	"add_weblink",
+	"log_work",
+	"clone_issue",
+	"move_issue",
+	"delete_issue",
+	"adf_reference",
+	"jql_reference",
+}
 
 // NewCommand groups commands curated for AI coding assistants. The schema
 // and guide endpoints together give an agent everything needed to interact
@@ -45,51 +86,53 @@ func agentSchemaCommand() *cobra.Command {
 }
 
 func agentGuideCommand() *cobra.Command {
-	sections := guideSections(agentGuide)
 	cmd := &cobra.Command{
 		Use:   "guide [section]",
 		Short: "Print the AI-agent steering guide for jira-cli",
 		Args:  cobra.MaximumNArgs(1),
-		// Tab-complete the section slug. Cobra calls this with the partial
-		// arg; we filter our pre-computed list and return matching slugs.
+		// Tab-complete the workflow slug. Cobra calls this with the
+		// partial arg; we filter the canonical order list and return
+		// matching slugs.
 		ValidArgsFunction: func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) > 0 {
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
 			toComplete = strings.ToLower(toComplete)
-			out := make([]string, 0, len(sections))
-			for _, s := range sections {
-				if toComplete == "" || strings.HasPrefix(s.slug, toComplete) {
-					out = append(out, s.slug+"\t"+s.title)
+			out := make([]string, 0, len(workflowOrder))
+			for _, slug := range workflowOrder {
+				if toComplete == "" || strings.HasPrefix(slug, toComplete) {
+					out = append(out, slug+"\t"+slug)
 				}
 			}
 			return out, cobra.ShellCompDirectiveNoFileComp
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			out := agentGuide
+			var out string
 			if len(args) == 1 {
-				section, ok := extractGuideSection(agentGuide, args[0])
+				section, ok := loadGuideSection(args[0])
 				if !ok {
 					// Heuristic classifier (root.outputErrorFor) picks
 					// up "not found" → ErrorTypeNotFound (exit 2).
 					return fmt.Errorf("guide section %q not found", args[0])
 				}
 				out = section
+			} else {
+				out = loadGuide()
 			}
 			_, err := cmd.OutOrStdout().Write([]byte(out))
 			return err
 		},
 	}
-	// Custom help func: render the standard clib sections (Usage, Options)
-	// then append a "Sections" block listing every parsed slug. Users see the
-	// available section names instead of being told to read the guide first
-	// to discover what sections it contains.
+	// Custom help func: render the standard clib sections (Usage,
+	// Options) then append a "Sections" block listing every workflow
+	// slug. Users see the available section names instead of being
+	// told to read the guide first to discover what sections exist.
 	cmd.SetHelpFunc(func(c *cobra.Command, _ []string) {
 		renderer := cmdutil.NewHelpRenderer()
 		standard := cmdutil.StandardHelpSections(c)
-		group := make(help.CommandGroup, 0, len(sections))
-		for _, s := range sections {
-			group = append(group, help.Command{Name: s.slug, Desc: s.title})
+		group := make(help.CommandGroup, 0, len(workflowOrder))
+		for _, slug := range workflowOrder {
+			group = append(group, help.Command{Name: slug, Desc: workflowGoals[slug]})
 		}
 		final := append(standard, help.Section{
 			Title:   "Sections",
@@ -146,80 +189,129 @@ func agentFieldTypesCommand() *cobra.Command {
 	return cmd
 }
 
-// guideSection is a single ## Heading entry with both the slug used for
-// matching and the title shown in help.
-type guideSection struct {
-	slug  string
-	title string
-}
-
-// guideSections walks the embedded guide once at command construction and
-// returns every `## Heading` as a (slug, title) pair. Slug is the
-// lowercased title with non-alphanumeric runs collapsed to single dashes
-// — what users type for `jira agent guide <slug>`.
-func guideSections(doc string) []guideSection {
-	var out []guideSection
-	for _, line := range strings.Split(doc, "\n") {
-		if !strings.HasPrefix(line, "## ") {
+// loadGuide assembles the preamble plus every workflow file in
+// workflowOrder, separated by a single blank line. The init() check
+// guarantees every workflowOrder slug has a corresponding file, so the
+// inner ReadFile is not expected to fail at runtime.
+func loadGuide() string {
+	var b strings.Builder
+	if data, err := guideFS.ReadFile("guide/_preamble.md"); err == nil {
+		b.Write(data)
+	}
+	for _, slug := range workflowOrder {
+		data, err := guideFS.ReadFile("guide/" + slug + ".md")
+		if err != nil {
 			continue
 		}
-		title := strings.TrimSpace(strings.TrimPrefix(line, "## "))
-		out = append(out, guideSection{slug: slugify(title), title: title})
+		b.WriteString("\n")
+		b.Write(data)
 	}
-	return out
+	return b.String()
 }
 
-func slugify(s string) string {
-	var b strings.Builder
-	prevDash := false
-	for _, r := range strings.ToLower(s) {
-		switch {
-		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
-			b.WriteRune(r)
-			prevDash = false
-		default:
-			if !prevDash && b.Len() > 0 {
-				b.WriteByte('-')
-				prevDash = true
+// loadGuideSection returns one workflow's runbook by slug. Lookup is
+// exact first (canonical underscore form, also accepts the dash form
+// the help block displays), then case-insensitive substring on the
+// slug list so `agent guide auth` resolves to `auth_setup`.
+func loadGuideSection(query string) (string, bool) {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return loadGuide(), true
+	}
+	qSlug := normalizeSlug(q)
+	for _, slug := range workflowOrder {
+		if slug == qSlug {
+			data, err := guideFS.ReadFile("guide/" + slug + ".md")
+			if err != nil {
+				return "", false
+			}
+			return string(data), true
+		}
+	}
+	qLower := strings.ToLower(q)
+	for _, slug := range workflowOrder {
+		if strings.Contains(slug, qLower) {
+			data, err := guideFS.ReadFile("guide/" + slug + ".md")
+			if err != nil {
+				return "", false
+			}
+			return string(data), true
+		}
+	}
+	return "", false
+}
+
+// extractGoal pulls the `Goal: …` (or `When to use this: …` on
+// reference sections) one-liner from a workflow file's header, so the
+// `agent guide --help` Sections block carries something more
+// informative than the slug itself.
+func extractGoal(slug string) string {
+	data, err := guideFS.ReadFile("guide/" + slug + ".md")
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.SplitN(string(data), "\n", 12) {
+		for _, prefix := range []string{"Goal:", "When to use this:"} {
+			if rest, ok := strings.CutPrefix(line, prefix); ok {
+				return strings.TrimSpace(rest)
 			}
 		}
 	}
-	return strings.TrimRight(b.String(), "-")
+	return ""
 }
 
-// extractGuideSection returns the contents of the first `## Heading` that
-// matches the query — either by exact slug (e.g. "identity-setup") or by
-// case-insensitive substring of the original title (e.g. "auth"). Returns
-// ok=false when no heading matches. Scoped through the next `## ` heading
-// or end of document.
-func extractGuideSection(doc, query string) (string, bool) {
-	q := strings.TrimSpace(query)
-	if q == "" {
-		return doc, true
+// normalizeSlug folds a user-typed query ("auth-setup", "Auth_Setup",
+// "AUTH SETUP") into the canonical underscore form used by file
+// names. Non-alphanumeric runs collapse to a single underscore.
+func normalizeSlug(s string) string {
+	var b strings.Builder
+	prevUnderscore := false
+	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+			prevUnderscore = false
+		default:
+			if !prevUnderscore && b.Len() > 0 {
+				b.WriteByte('_')
+				prevUnderscore = true
+			}
+		}
 	}
-	qLower := strings.ToLower(q)
-	qSlug := slugify(q)
-	lines := strings.Split(doc, "\n")
-	startIdx := -1
-	for i, line := range lines {
-		if !strings.HasPrefix(line, "## ") {
+	return strings.TrimRight(b.String(), "_")
+}
+
+// init fails fast if workflowOrder and guide/*.md drift apart. A
+// missing or extra file is a binary-startup error so misses are caught
+// in CI / on first build rather than at the first `agent guide` call.
+func init() {
+	entries, err := guideFS.ReadDir("guide")
+	if err != nil {
+		panic(fmt.Sprintf("agent: read guide dir: %v", err))
+	}
+	have := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasSuffix(name, ".md") {
 			continue
 		}
-		title := strings.TrimPrefix(line, "## ")
-		if slugify(title) == qSlug || strings.Contains(strings.ToLower(title), qLower) {
-			startIdx = i
-			break
+		slug := strings.TrimSuffix(name, ".md")
+		if slug == "_preamble" {
+			continue
+		}
+		have[slug] = true
+	}
+	want := make(map[string]bool, len(workflowOrder))
+	for _, slug := range workflowOrder {
+		want[slug] = true
+		if !have[slug] {
+			panic("agent: workflowOrder lists " + slug + " but guide/" + slug + ".md is missing")
+		}
+		workflowGoals[slug] = extractGoal(slug)
+	}
+	for slug := range have {
+		if !want[slug] {
+			panic("agent: guide/" + slug + ".md exists but " + slug + " is not in workflowOrder")
 		}
 	}
-	if startIdx < 0 {
-		return "", false
-	}
-	endIdx := len(lines)
-	for i := startIdx + 1; i < len(lines); i++ {
-		if strings.HasPrefix(lines[i], "## ") {
-			endIdx = i
-			break
-		}
-	}
-	return strings.Join(lines[startIdx:endIdx], "\n") + "\n", true
 }

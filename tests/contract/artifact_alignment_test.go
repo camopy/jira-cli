@@ -8,9 +8,36 @@ import (
 	"testing"
 )
 
-// agentGuidePath is the repo-relative location of the embedded agent guide,
-// shared by the checks below so a future move updates one place.
-const agentGuidePath = "../../internal/cli/agent/agent_guide.md"
+// agentGuideDir is the repo-relative directory of the embedded agent
+// guide. The guide is split into one `<slug>.md` file per workflow plus
+// `_preamble.md`; readAgentGuide concatenates them for content
+// assertions so a future restructure within the directory does not
+// require updating each test.
+const agentGuideDir = "../../internal/cli/agent/guide"
+
+// readAgentGuide reads and concatenates every markdown file under
+// agentGuideDir. Order is not significant — these checks only use
+// strings.Contains / does-not-contain.
+func readAgentGuide(t *testing.T) string {
+	t.Helper()
+	entries, err := os.ReadDir(agentGuideDir)
+	if err != nil {
+		t.Fatalf("ReadDir(%s): %v", agentGuideDir, err)
+	}
+	var b strings.Builder
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(agentGuideDir, e.Name()))
+		if err != nil {
+			t.Fatalf("ReadFile(%s): %v", e.Name(), err)
+		}
+		b.Write(data)
+		b.WriteString("\n")
+	}
+	return b.String()
+}
 
 func TestArtifactsDocumentExplicitInteractiveDashboardLaunch(t *testing.T) {
 	for _, path := range []string{
@@ -107,11 +134,7 @@ func TestReadmeScopeDocsMatchCurrentCommands(t *testing.T) {
 }
 
 func TestAgentGuideRecipesMatchLiveCommandSurface(t *testing.T) {
-	guide, err := os.ReadFile(agentGuidePath)
-	if err != nil {
-		t.Fatalf("ReadFile(agent_guide) error = %v", err)
-	}
-	got := string(guide)
+	got := readAgentGuide(t)
 	for _, want := range []string{
 		"jira issue link delete KEY 9001 --force --output=json",
 		"Configured backend lookup",
@@ -210,16 +233,25 @@ func TestDocsSiteArtifactsExist(t *testing.T) {
 }
 
 func TestOnePasswordDocsExplainDesktopIntegrationPrerequisite(t *testing.T) {
-	for _, path := range []string{
-		"../../README.md",
-		"../../docs/auth.md",
-		agentGuidePath,
-	} {
-		b, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("ReadFile(%s): %v", path, err)
-		}
-		got := string(b)
+	sources := map[string]func() string{
+		"../../README.md": func() string {
+			b, err := os.ReadFile("../../README.md")
+			if err != nil {
+				t.Fatalf("ReadFile(README.md): %v", err)
+			}
+			return string(b)
+		},
+		"../../docs/auth.md": func() string {
+			b, err := os.ReadFile("../../docs/auth.md")
+			if err != nil {
+				t.Fatalf("ReadFile(docs/auth.md): %v", err)
+			}
+			return string(b)
+		},
+		"agent guide": func() string { return readAgentGuide(t) },
+	}
+	for label, read := range sources {
+		got := read()
 		for _, want := range []string{
 			"Further reading",
 			"https://www.1password.dev/sdks#1password-desktop-app",
@@ -227,7 +259,7 @@ func TestOnePasswordDocsExplainDesktopIntegrationPrerequisite(t *testing.T) {
 			"Integrate with other apps",
 		} {
 			if !strings.Contains(got, want) {
-				t.Fatalf("%s missing 1Password desktop app prerequisite %q\n%s", path, want, got)
+				t.Fatalf("%s missing 1Password desktop app prerequisite %q", label, want)
 			}
 		}
 	}
