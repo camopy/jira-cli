@@ -27,18 +27,15 @@ func TestJSONInputNestedADF_IssueEditRejectsUnknownNode(t *testing.T) {
 		"issue", "edit", "KAN-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
-	stdout, _ := cmd.Output()
 
 	var env struct {
 		Errors []struct {
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(stdout, &env); err != nil {
-		t.Fatalf("output not JSON: %v\n%s", err, stdout)
-	}
+	_, stderr, _ := runCommandExpectErrorEnvelope(t, cmd, &env)
 	if len(env.Errors) == 0 {
-		t.Fatalf("issue edit must reject nested unknown ADF node; got zero errors\n%s", stdout)
+		t.Fatalf("issue edit must reject nested unknown ADF node; got zero errors\n%s", stderr)
 	}
 	if !containsAny(env.Errors[0].Message, "unknown_magic_node", "unsupported", "unknown") {
 		t.Errorf("error must name the unknown node; got: %s", env.Errors[0].Message)
@@ -60,18 +57,15 @@ func TestJSONInputNestedADF_IssueEditRejectsMissingAttr(t *testing.T) {
 		"issue", "edit", "KAN-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
-	stdout, _ := cmd.Output()
 
 	var env struct {
 		Errors []struct {
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(stdout, &env); err != nil {
-		t.Fatalf("output not JSON: %v\n%s", err, stdout)
-	}
+	_, stderr, _ := runCommandExpectErrorEnvelope(t, cmd, &env)
 	if len(env.Errors) == 0 {
-		t.Fatalf("issue edit must reject nested ADF heading missing level; got zero errors\n%s", stdout)
+		t.Fatalf("issue edit must reject nested ADF heading missing level; got zero errors\n%s", stderr)
 	}
 }
 
@@ -117,15 +111,12 @@ func TestJSONInputNestedADF_CommentRejectsMissingAttr(t *testing.T) {
 		"issue", "comment", "KAN-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
-	stdout, _ := cmd.Output()
 
 	var env struct {
 		Errors []map[string]any `json:"errors"`
 	}
-	if err := json.Unmarshal(stdout, &env); err != nil {
-		t.Fatalf("output not JSON: %v\n%s", err, stdout)
-	}
+	_, stderr, _ := runCommandExpectErrorEnvelope(t, cmd, &env)
 	if len(env.Errors) == 0 {
-		t.Fatalf("comment must reject nested ADF heading missing level; got zero errors\n%s", stdout)
+		t.Fatalf("comment must reject nested ADF heading missing level; got zero errors\n%s", stderr)
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -41,14 +40,12 @@ func TestAuthLoginRefusesPromptsInHeadlessJSONMode(t *testing.T) {
 	if !strings.Contains(stderrLow, "err") || !strings.Contains(stderrLow, "no-input") {
 		t.Fatalf("headless auth login did not emit clog diagnostic on stderr:\nstderr=%s", stderr.String())
 	}
-	// --json path must deliver a JSON envelope on stdout.
+	// --json path must deliver a JSON envelope on stderr.
 	var env map[string]any
-	if jsonErr := json.Unmarshal(stdout.Bytes(), &env); jsonErr != nil {
-		t.Fatalf("stdout is not valid JSON: %v\nstdout=%s", jsonErr, stdout.String())
-	}
+	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 	errs, _ := env["errors"].([]any)
 	if len(errs) == 0 {
-		t.Fatalf("envelope.errors is empty:\nstdout=%s", stdout.String())
+		t.Fatalf("envelope.errors is empty:\nstderr=%s", stderr.String())
 	}
 }
 

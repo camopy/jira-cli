@@ -24,18 +24,15 @@ func TestMarkdownStrictAbort_CreateRejectsLossyTable(t *testing.T) {
 		"issue", "create",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
-	stdout, _ := cmd.Output()
 
 	var env struct {
 		Errors []struct {
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(stdout, &env); err != nil {
-		t.Fatalf("output not JSON: %v\n%s", err, stdout)
-	}
+	_, stderr, _ := runCommandExpectErrorEnvelope(t, cmd, &env)
 	if len(env.Errors) == 0 {
-		t.Fatalf("strict mode must abort on lossy Markdown conversion; got zero errors\n%s", stdout)
+		t.Fatalf("strict mode must abort on lossy Markdown conversion; got zero errors\n%s", stderr)
 	}
 }
 

@@ -23,9 +23,11 @@ fallbacks.
 jira config init --no-input \
   --profile default \
   --base-url https://company.atlassian.net \
-  --auth-type token \
   --email dev@example.com
 ```
+
+`config init` requires both `--base-url` and `--email`; omitting either exits
+before writing the config file.
 
 ## Auth
 

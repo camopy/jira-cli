@@ -59,6 +59,54 @@ func TestApplyLoginPreseedRespectsExplicitFlags(t *testing.T) {
 	}
 }
 
+func TestAuthLoginPreseedProfileUsesConfiguredDefaultWhenProfileNameWasImplicit(t *testing.T) {
+	cfg := &config.Config{
+		DefaultProfile: "work",
+		Profiles: []config.Profile{
+			{
+				Name:          "work",
+				BaseURL:       "https://work.atlassian.net",
+				Email:         "work@example.com",
+				SecretBackend: config.SecretBackendOnePassword,
+				Vault:         "Engineering",
+				Item:          "jira-cli-work",
+			},
+			{
+				Name:          "default",
+				BaseURL:       "https://default.atlassian.net",
+				Email:         "default@example.com",
+				SecretBackend: config.SecretBackendKeyring,
+			},
+		},
+	}
+
+	profile := authLoginPreseedProfile(cfg, "", "default", false)
+	if profile.Name != "work" {
+		t.Fatalf("preseed profile = %q, want configured default profile %q", profile.Name, "work")
+	}
+	if profile.BaseURL != "https://work.atlassian.net" || profile.Email != "work@example.com" {
+		t.Fatalf("preseed profile did not carry work metadata: %+v", profile)
+	}
+}
+
+func TestAuthLoginPreseedProfileRespectsExplicitProfileName(t *testing.T) {
+	cfg := &config.Config{
+		DefaultProfile: "work",
+		Profiles: []config.Profile{
+			{Name: "work", BaseURL: "https://work.atlassian.net"},
+			{Name: "default", BaseURL: "https://default.atlassian.net"},
+		},
+	}
+
+	profile := authLoginPreseedProfile(cfg, "work", "default", true)
+	if profile.Name != "default" {
+		t.Fatalf("preseed profile = %q, want explicit --profile-name value", profile.Name)
+	}
+	if profile.BaseURL != "https://default.atlassian.net" {
+		t.Fatalf("preseed profile base_url = %q, want explicit profile metadata", profile.BaseURL)
+	}
+}
+
 // The review step shows what will be stored. It must surface the profile
 // metadata but never the API token itself.
 func TestLoginReviewSummaryShowsMetadataNotSecret(t *testing.T) {

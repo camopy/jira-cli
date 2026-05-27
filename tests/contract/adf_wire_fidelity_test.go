@@ -31,7 +31,6 @@ func TestI4WrongShapeADFRejectedByComment(t *testing.T) {
 		"issue", "comment", "KAN-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
-	stdout, _ := cmd.Output()
 
 	var env struct {
 		Errors []struct {
@@ -39,11 +38,9 @@ func TestI4WrongShapeADFRejectedByComment(t *testing.T) {
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(stdout, &env); err != nil {
-		t.Fatalf("output is not parseable JSON: %v\nstdout: %s", err, stdout)
-	}
+	_, stderr, _ := runCommandExpectErrorEnvelope(t, cmd, &env)
 	if len(env.Errors) == 0 {
-		t.Fatalf("expected validation error for wrong-shape ADF; got zero errors\nstdout: %s", stdout)
+		t.Fatalf("expected validation error for wrong-shape ADF; got zero errors\nstderr: %s", stderr)
 	}
 	msg := env.Errors[0].Message
 	if msg == "" {
@@ -75,7 +72,6 @@ func TestI4UnknownNodeStrictModeRejectedByComment(t *testing.T) {
 		"issue", "comment", "KAN-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
-	stdout, _ := cmd.Output()
 
 	var env struct {
 		Errors []struct {
@@ -83,11 +79,9 @@ func TestI4UnknownNodeStrictModeRejectedByComment(t *testing.T) {
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(stdout, &env); err != nil {
-		t.Fatalf("output is not parseable JSON: %v\nstdout: %s", err, stdout)
-	}
+	_, stderr, _ := runCommandExpectErrorEnvelope(t, cmd, &env)
 	if len(env.Errors) == 0 {
-		t.Fatalf("strict mode must reject unknown ADF node; got zero errors\nstdout: %s", stdout)
+		t.Fatalf("strict mode must reject unknown ADF node; got zero errors\nstderr: %s", stderr)
 	}
 	msg := env.Errors[0].Message
 	if !containsAny(msg, "unknown_magic_node", "unsupported", "unknown") {
@@ -165,7 +159,6 @@ func TestI4IllegalMarkOnBlockStrictModeErrors(t *testing.T) {
 		"issue", "comment", "KAN-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
-	stdout, _ := cmd.Output()
 
 	var env struct {
 		Errors []struct {
@@ -173,11 +166,9 @@ func TestI4IllegalMarkOnBlockStrictModeErrors(t *testing.T) {
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(stdout, &env); err != nil {
-		t.Fatalf("output is not parseable JSON: %v\nstdout: %s", err, stdout)
-	}
+	_, stderr, _ := runCommandExpectErrorEnvelope(t, cmd, &env)
 	if len(env.Errors) == 0 {
-		t.Fatalf("strict mode must reject illegal marks on block node; got zero errors\nstdout: %s", stdout)
+		t.Fatalf("strict mode must reject illegal marks on block node; got zero errors\nstderr: %s", stderr)
 	}
 }
 
@@ -199,7 +190,6 @@ func TestI4UnknownMarkRejectedByStrictMode(t *testing.T) {
 		"issue", "comment", "KAN-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
-	stdout, _ := cmd.Output()
 
 	var env struct {
 		Errors []struct {
@@ -207,11 +197,9 @@ func TestI4UnknownMarkRejectedByStrictMode(t *testing.T) {
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(stdout, &env); err != nil {
-		t.Fatalf("output is not parseable JSON: %v\nstdout: %s", err, stdout)
-	}
+	_, stderr, _ := runCommandExpectErrorEnvelope(t, cmd, &env)
 	if len(env.Errors) == 0 {
-		t.Fatalf("strict mode must reject unknown ADF mark; got zero errors\nstdout: %s", stdout)
+		t.Fatalf("strict mode must reject unknown ADF mark; got zero errors\nstderr: %s", stderr)
 	}
 	msg := env.Errors[0].Message
 	if !containsAny(msg, "unknown_mark", "unsupported", "unknown") {
@@ -248,7 +236,6 @@ func TestI4CreatePathRejectsUnknownAdfNode(t *testing.T) {
 		"issue", "create",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
-	stdout, _ := cmd.Output()
 
 	var env struct {
 		Errors []struct {
@@ -256,11 +243,9 @@ func TestI4CreatePathRejectsUnknownAdfNode(t *testing.T) {
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(stdout, &env); err != nil {
-		t.Fatalf("output is not parseable JSON: %v\nstdout: %s", err, stdout)
-	}
+	_, stderr, _ := runCommandExpectErrorEnvelope(t, cmd, &env)
 	if len(env.Errors) == 0 {
-		t.Fatalf("strict mode must reject unknown ADF node in description; got zero errors\nstdout: %s", stdout)
+		t.Fatalf("strict mode must reject unknown ADF node in description; got zero errors\nstderr: %s", stderr)
 	}
 	msg := env.Errors[0].Message
 	if !containsAny(msg, "unknown_magic_node", "unsupported", "unknown") {
@@ -283,7 +268,6 @@ func TestI4CreatePathRejectsWrongShapeAdf(t *testing.T) {
 		"issue", "create",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
-	stdout, _ := cmd.Output()
 
 	var env struct {
 		Errors []struct {
@@ -291,11 +275,9 @@ func TestI4CreatePathRejectsWrongShapeAdf(t *testing.T) {
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(stdout, &env); err != nil {
-		t.Fatalf("output is not parseable JSON: %v\nstdout: %s", err, stdout)
-	}
+	_, stderr, _ := runCommandExpectErrorEnvelope(t, cmd, &env)
 	if len(env.Errors) == 0 {
-		t.Fatalf("wrong-shape description must be rejected; got zero errors\nstdout: %s", stdout)
+		t.Fatalf("wrong-shape description must be rejected; got zero errors\nstderr: %s", stderr)
 	}
 	msg := env.Errors[0].Message
 	if !containsAny(msg, "doc", "type", "version") {

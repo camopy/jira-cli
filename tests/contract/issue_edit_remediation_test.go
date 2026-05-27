@@ -117,9 +117,7 @@ func TestIssueEditJSONInputWithoutFieldsEnvelopeNamesPayloadShape(t *testing.T) 
 			Hint    string `json:"hint"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(stdout.Bytes(), &env); err != nil {
-		t.Fatalf("issue edit error output is not JSON: %v\nstdout=%s\nstderr=%s", err, stdout.String(), stderr.String())
-	}
+	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 	if len(env.Errors) == 0 {
 		t.Fatalf("issue edit error envelope has no errors:\nstdout=%s\nstderr=%s", stdout.String(), stderr.String())
 	}

@@ -30,7 +30,7 @@ Goal: List, upload, download, or remove file attachments on a Jira issue with si
   "data": {
     "attachments": [
       {"id": "10042", "filename": "screenshot.png", "mime_type": "image/png", "size": 84211,
-       "author": {"account_id": "...", "display_name": "Matt Craven"},
+       "author": {"account_id": "...", "display_name": "Test User"},
        "created": "2026-05-04T18:30:00.000+0000"}
     ],
     "pagination": {"total": 1, "start_at": 0, "max_results": 50, "is_last": true, "next_page_token": null}

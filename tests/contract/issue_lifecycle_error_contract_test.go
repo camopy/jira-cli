@@ -15,7 +15,6 @@ package contract
 // error in our test harness.
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -108,15 +107,12 @@ func TestLifecycleCommandsErrorContract(t *testing.T) {
 					t.Fatalf("exit = %d; want %d (status %d)\nstdout=%s\nstderr=%s",
 						code, sc.exitCode, sc.status, stdout, stderr)
 				}
-				// Envelope is mandatory for every error path under --json.
+				// Envelope is mandatory on stderr for every error path under --json.
 				var env map[string]any
-				if err := json.Unmarshal(stdout, &env); err != nil {
-					t.Fatalf("envelope not JSON (status %d): %v\nstdout=%s\nstderr=%s",
-						sc.status, err, stdout, stderr)
-				}
+				decodeErrorEnvelopeFromStderr(t, stdout, stderr, args, &env)
 				errs, _ := env["errors"].([]any)
 				if len(errs) == 0 {
-					t.Fatalf("errors[] empty (status %d): %s", sc.status, stdout)
+					t.Fatalf("errors[] empty (status %d): %s", sc.status, stderr)
 				}
 				first, _ := errs[0].(map[string]any)
 				gotType, _ := first["type"].(string)

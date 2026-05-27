@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -65,6 +66,63 @@ func TestConfigInitProfileGetSetMetadataOnly(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "default") {
 		t.Fatalf("profile output = %q", out)
+	}
+}
+
+func TestConfigInitNoInputRequiresProfileFieldsAndDoesNotMutateConfig(t *testing.T) {
+	bin := buildJiraBinary(t)
+	path := filepath.Join(t.TempDir(), "config.toml")
+	before := []byte(`default_profile = "default"
+
+[[profiles]]
+name = "default"
+base_url = "https://work.atlassian.net"
+auth_type = "token"
+email = "dev@example.com"
+account_id = "account-123"
+secret_backend = "keyring"
+onepassword_account = "Team"
+vault = "Private"
+item = "jira-cli-work"
+refresh_interval = 30
+timeout = 30
+workday_seconds = 28800
+`)
+	if err := os.WriteFile(path, before, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	cmd := exec.Command(bin, "--config", path, "--output=json", "config", "init", "--no-input", "--profile", "default")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err == nil {
+		t.Fatalf("config init without profile fields succeeded:\nstdout=%s\nstderr=%s", stdout.String(), stderr.String())
+	}
+	assertValidationExitCode(t, err)
+	var env struct {
+		Errors []struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
+	if len(env.Errors) == 0 {
+		t.Fatalf("config init envelope carried no errors:\nstdout=%s\nstderr=%s", stdout.String(), stderr.String())
+	}
+	if env.Errors[0].Code != "required_flag_missing" {
+		t.Fatalf("config init error code = %q, want required_flag_missing\nstderr=%s", env.Errors[0].Code, stderr.String())
+	}
+	if !strings.Contains(env.Errors[0].Message, "--base-url") || !strings.Contains(env.Errors[0].Message, "--email") {
+		t.Fatalf("config init error should name both required profile fields, got %q", env.Errors[0].Message)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if !bytes.Equal(after, before) {
+		t.Fatalf("config init without required fields mutated config.toml\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 }
 

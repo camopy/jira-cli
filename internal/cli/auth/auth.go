@@ -157,8 +157,17 @@ func authLoginCommand() *cobra.Command {
 				// empty.
 				if _, statErr := os.Stat(cmdutil.ConfigPath(cmd)); statErr == nil {
 					if existing, loadErr := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd))); loadErr == nil {
+						preseedProfile := authLoginPreseedProfile(
+							existing,
+							cmdutil.RequestedProfile(cmd),
+							profileName,
+							cmd.Flags().Changed("profile-name"),
+						)
+						if !cmd.Flags().Changed("profile-name") && preseedProfile.Name != "" {
+							profileName = preseedProfile.Name
+						}
 						applyLoginPreseed(
-							cmdutil.ExistingProfileOrDefault(existing, profileName), cmd.Flags().Changed,
+							preseedProfile, cmd.Flags().Changed,
 							&baseURL, &email, &backend, &onePasswordAccount, &vault, &item,
 						)
 					}
@@ -687,6 +696,21 @@ func trimAuthLoginValues(values ...*string) {
 	for _, value := range values {
 		*value = strings.TrimSpace(*value)
 	}
+}
+
+func authLoginPreseedProfile(cfg *config.Config, requestedProfile, profileName string, profileNameChanged bool) config.Profile {
+	name := profileName
+	if !profileNameChanged {
+		switch {
+		case strings.TrimSpace(requestedProfile) != "":
+			name = strings.TrimSpace(requestedProfile)
+		case strings.TrimSpace(cfg.DefaultProfile) != "":
+			name = strings.TrimSpace(cfg.DefaultProfile)
+		case strings.TrimSpace(name) == "":
+			name = "default"
+		}
+	}
+	return cmdutil.ExistingProfileOrDefault(cfg, name)
 }
 
 // applyLoginPreseed pre-fills the interactive form fields from a persisted

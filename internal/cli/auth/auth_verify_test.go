@@ -18,19 +18,19 @@ func TestVerifyCredentialReturnsUserOnSuccess(t *testing.T) {
 		gotUser, gotPass, gotOK = r.BasicAuth()
 		gotPath = r.URL.Path
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"accountId":"5b10ac","displayName":"Matt Craven","emailAddress":"matt@example.com"}`))
+		_, _ = w.Write([]byte(`{"accountId":"5b10ac","displayName":"Test User","emailAddress":"user@example.com"}`))
 	}))
 	defer srv.Close()
 
-	user, err := verifyCredential(context.Background(), srv.URL, "matt@example.com", "tok123", 0)
+	user, err := verifyCredential(context.Background(), srv.URL, "user@example.com", "tok123", 0)
 	if err != nil {
 		t.Fatalf("verifyCredential() error = %v", err)
 	}
-	if user.AccountID != "5b10ac" || user.DisplayName != "Matt Craven" {
+	if user.AccountID != "5b10ac" || user.DisplayName != "Test User" {
 		t.Fatalf("verifyCredential() user = %+v", user)
 	}
-	if !gotOK || gotUser != "matt@example.com" || gotPass != "tok123" {
-		t.Fatalf("request basic auth = %q/%q ok=%v, want matt@example.com/tok123", gotUser, gotPass, gotOK)
+	if !gotOK || gotUser != "user@example.com" || gotPass != "tok123" {
+		t.Fatalf("request basic auth = %q/%q ok=%v, want user@example.com/tok123", gotUser, gotPass, gotOK)
 	}
 	if gotPath != "/rest/api/3/myself" {
 		t.Fatalf("request path = %q, want /rest/api/3/myself", gotPath)
@@ -46,7 +46,7 @@ func TestVerifyCredentialErrorsOnRejection(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if _, err := verifyCredential(context.Background(), srv.URL, "matt@example.com", "wrong", 0); err == nil {
+	if _, err := verifyCredential(context.Background(), srv.URL, "user@example.com", "wrong", 0); err == nil {
 		t.Fatal("verifyCredential() error = nil, want an auth error for a rejected token")
 	}
 }
@@ -66,7 +66,7 @@ func TestVerifyCredentialHonorsTimeout(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := verifyCredential(context.Background(), srv.URL, "matt@example.com", "tok123", 1*time.Second)
+		_, err := verifyCredential(context.Background(), srv.URL, "user@example.com", "tok123", 1*time.Second)
 		done <- err
 	}()
 	select {

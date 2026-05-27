@@ -454,21 +454,21 @@ func writeCommandError(ctx context.Context, cmd *cobra.Command, err error) {
 	if errors.As(err, &ew) {
 		return
 	}
-	// When --json (or --compact) was requested, stdout must also carry a
-	// parseable envelope so machine consumers don't see 0 bytes on the JSON
-	// path.  We write the envelope AFTER the stderr clog line so stderr
-	// consumers still see the human-readable message first.
+	// When --json (or --compact) was requested, stderr must also carry a
+	// parseable envelope while stdout stays reserved for successful output.
+	// We write the envelope AFTER the clog line so stderr consumers still
+	// see the human-readable message first.
 	if jsonEnvelopeRequested(cmd) {
 		// best-effort: the clog stderr line already carries the diagnostic; if
-		// the envelope write itself fails (broken stdout pipe), there's nothing
+		// the envelope write itself fails (broken stderr pipe), there's nothing
 		// useful we can do.
-		_ = writeErrorEnvelopeToStdout(cmd, err)
+		_ = writeErrorEnvelopeToStderr(cmd, err)
 	}
 }
 
 // jsonEnvelopeRequested returns true when the resolved output mode is a
 // machine mode (json or compact), so a command failure still emits a
-// parseable error envelope on stdout.
+// parseable error envelope on stderr.
 //
 // It inspects the --output flag and the env-detector directly so it works
 // even before PersistentPreRunE has run (e.g. when cobra fires a flag
@@ -488,15 +488,15 @@ func jsonEnvelopeRequested(cmd *cobra.Command) bool {
 	return resolved == cli.ModeJSON || resolved == cli.ModeCompact
 }
 
-// writeErrorEnvelopeToStdout emits a lean failure envelope carrying the
-// error in the errors[] array to cmd's stdout. Used only on the
+// writeErrorEnvelopeToStderr emits a lean failure envelope carrying the
+// error in the errors[] array to cmd's stderr. Used only on the
 // json/compact/agent-detected path so machine consumers always have
 // parseable output even when the command fails before or after RunE.
 //
 // This helper deliberately bypasses the compact branching used by the
 // success path: errors must stay a parseable JSON envelope regardless of
 // the output mode, so a failed command is never invisible to an agent.
-func writeErrorEnvelopeToStdout(cmd *cobra.Command, err error) error {
+func writeErrorEnvelopeToStderr(cmd *cobra.Command, err error) error {
 	// Use cobra's CommandPath() so nested sub-commands get the full dotted name
 	// (e.g. "issue.create") instead of the hand-walked single-level fallback.
 	command := strings.TrimPrefix(cmd.CommandPath(), "jira ")
@@ -505,7 +505,7 @@ func writeErrorEnvelopeToStdout(cmd *cobra.Command, err error) error {
 		command = "error"
 	}
 	env := cli.ErrorEnvelope(command, err)
-	return cli.WriteEnvelope(cmd.OutOrStdout(), env)
+	return cli.WriteEnvelope(cmd.ErrOrStderr(), env)
 }
 
 func exitCodeForError(err error) int {

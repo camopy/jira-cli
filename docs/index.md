@@ -19,15 +19,15 @@ Also available through `go install` and GitHub release archives. See
 jira config init --no-input \
   --profile default \
   --base-url https://company.atlassian.net \
-  --auth-type token \
   --email dev@example.com
 
 jira auth login
 jira auth status
 ```
 
-Credentials are stored outside the TOML config, either in the OS keyring,
-1Password, or an environment override.
+`config init` requires both `--base-url` and `--email`; omitting either exits
+before writing the config file. Credentials are stored outside the TOML config,
+either in the OS keyring, 1Password, or an environment override.
 
 ## Commands
 

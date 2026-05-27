@@ -84,10 +84,11 @@ Goal: Apply the cross-cutting output-mode, envelope, exit-code, headless, pagina
   |------------------|--------------------------------------------------------------------------------|
   | `auto`           | Detect: TTY → human, pipe → json, agent → compact                              |
   | `human`          | Force human-friendly clog rich text                                            |
-  | `json`           | Force the full structured envelope on stdout                                   |
+  | `json`           | Force the full structured envelope on stdout for success                       |
   | `compact`        | Force the JSON `data` payload only — no `ok`/`meta`/`warnings`/`errors`        |
 
 - In `--output=human` mode, `warnings[]` mirrors to stderr as clog `WRN` lines so stdout stays clean for piping.
+- In `--output=json` and `--output=compact`, failures write the full error envelope to stderr and leave stdout empty.
 - Warning `type` values you'll see:
 
   | `type`                       | Meaning                                                                        |

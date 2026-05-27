@@ -2,12 +2,12 @@ package contract
 
 // Envelope Invariants.
 //
-// Under any input, exit path, or error class, --json output on stdout must:
+// Under any input, exit path, or error class, --json output must:
 //   - be valid JSON (jq . succeeds)
 //   - contain meta, data, errors, warnings keys
 //
-// The envelope is required on every JSON-mode response.
-// Failures ALSO emit clog diagnostics on stderr (both can coexist).
+// Successful envelopes are written to stdout. Error envelopes are written to
+// stderr so stdout stays reserved for successful command output.
 //
 // These tests drive the fix that makes writeCommandError envelope-aware.
 
@@ -23,10 +23,34 @@ import (
 	"testing"
 )
 
+func TestErrorEnvelopeUsesStderrAndLeavesStdoutEmpty(t *testing.T) {
+	bin := buildJiraBinary(t)
+	cmd := exec.Command(bin, "completions", "fish")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err == nil {
+		t.Fatal("unknown command succeeded; want command_unknown failure")
+	}
+	assertValidationExitCode(t, err)
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty success channel on error", stdout.String())
+	}
+	if !bytes.Contains(stderr.Bytes(), []byte(`"ok":false`)) {
+		t.Fatalf("stderr does not contain a structured error envelope:\n%s", stderr.String())
+	}
+	if !bytes.Contains(stderr.Bytes(), []byte(`"code":"command_unknown"`)) {
+		t.Fatalf("stderr envelope does not carry command_unknown:\n%s", stderr.String())
+	}
+}
+
 // requireEnvelopeOnStdout runs bin with the given args, captures stdout
-// separately from stderr, and asserts the stdout is a valid JSON envelope
-// with meta/data/errors/warnings keys.  It returns the decoded envelope map
-// and the exit error (nil on success) so callers can make further assertions.
+// separately from stderr, and asserts a valid JSON envelope with
+// meta/data/errors/warnings keys. Successful runs emit the envelope on stdout;
+// failing runs emit it on stderr and leave stdout empty. It returns the decoded
+// envelope map and the exit error (nil on success) so callers can make further
+// assertions.
 func requireEnvelopeOnStdout(t *testing.T, bin string, args ...string) (map[string]any, error) {
 	t.Helper()
 	cmd := exec.Command(bin, args...)
@@ -35,22 +59,7 @@ func requireEnvelopeOnStdout(t *testing.T, bin string, args ...string) (map[stri
 	cmd.Stderr = &stderr
 	runErr := cmd.Run()
 
-	out := stdout.Bytes()
-	if len(out) == 0 {
-		t.Fatalf("stdout is empty (stderr: %s); want JSON envelope for args %v",
-			stderr.String(), args)
-	}
-	var env map[string]any
-	if err := json.Unmarshal(out, &env); err != nil {
-		t.Fatalf("stdout is not valid JSON: %v\nstdout=%s\nstderr=%s\nargs=%v",
-			err, out, stderr.Bytes(), args)
-	}
-	for _, key := range []string{"meta", "data", "errors", "warnings"} {
-		if _, ok := env[key]; !ok {
-			t.Fatalf("envelope missing %q key\nstdout=%s\nargs=%v", key, out, args)
-		}
-	}
-	return env, runErr
+	return requireEnvelopeFromRun(t, stdout.Bytes(), stderr.Bytes(), runErr, args, nil), runErr
 }
 
 // requireEnvelopeOnStdoutWithEnv runs bin with the given args and extra env vars,
@@ -64,22 +73,86 @@ func requireEnvelopeOnStdoutWithEnv(t *testing.T, bin string, extraEnv []string,
 	cmd.Stderr = &stderr
 	runErr := cmd.Run()
 
-	out := stdout.Bytes()
-	if len(out) == 0 {
-		t.Fatalf("stdout is empty (stderr: %s); want JSON envelope for args %v (env: %v)",
-			stderr.String(), args, extraEnv)
+	return requireEnvelopeFromRun(t, stdout.Bytes(), stderr.Bytes(), runErr, args, extraEnv), runErr
+}
+
+func requireEnvelopeFromRun(t *testing.T, stdout, stderr []byte, runErr error, args, extraEnv []string) map[string]any {
+	t.Helper()
+
+	streamName := "stdout"
+	stream := stdout
+	if runErr != nil {
+		if len(bytes.TrimSpace(stdout)) != 0 {
+			t.Fatalf("stdout is not empty on error\nstdout=%s\nstderr=%s\nargs=%v",
+				stdout, stderr, args)
+		}
+		streamName = "stderr"
+		stream = stderr
 	}
-	var env map[string]any
-	if err := json.Unmarshal(out, &env); err != nil {
-		t.Fatalf("stdout is not valid JSON: %v\nstdout=%s\nstderr=%s\nargs=%v",
-			err, out, stderr.Bytes(), args)
-	}
+
+	env := decodeJSONEnvelopeFromStream(t, stream, streamName, stdout, stderr, args, extraEnv)
 	for _, key := range []string{"meta", "data", "errors", "warnings"} {
 		if _, ok := env[key]; !ok {
-			t.Fatalf("envelope missing %q key\nstdout=%s\nargs=%v", key, out, args)
+			t.Fatalf("envelope missing %q key\n%s=%s\nargs=%v", key, streamName, stream, args)
 		}
 	}
-	return env, runErr
+	return env
+}
+
+func decodeJSONEnvelopeFromStream(t *testing.T, stream []byte, streamName string, stdout, stderr []byte, args, extraEnv []string) map[string]any {
+	t.Helper()
+
+	var env map[string]any
+	decodeJSONValueFromStream(t, stream, streamName, stdout, stderr, args, extraEnv, &env)
+	return env
+}
+
+func decodeErrorEnvelopeFromStderr(t *testing.T, stdout, stderr []byte, args []string, target any) {
+	t.Helper()
+	if len(bytes.TrimSpace(stdout)) != 0 {
+		t.Fatalf("stdout is not empty on error\nstdout=%s\nstderr=%s\nargs=%v", stdout, stderr, args)
+	}
+	decodeJSONValueFromStream(t, stderr, "stderr", stdout, stderr, args, nil, target)
+}
+
+func runCommandExpectErrorEnvelope(t *testing.T, cmd *exec.Cmd, target any) ([]byte, []byte, error) {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	runErr := cmd.Run()
+	if runErr == nil {
+		t.Fatalf("command succeeded; want error\nstdout=%s\nstderr=%s\nargs=%v",
+			stdout.Bytes(), stderr.Bytes(), cmd.Args)
+	}
+	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, target)
+	return stdout.Bytes(), stderr.Bytes(), runErr
+}
+
+func decodeJSONValueFromStream(t *testing.T, stream []byte, streamName string, stdout, stderr []byte, args, extraEnv []string, target any) {
+	t.Helper()
+
+	line := jsonEnvelopeLineFromStream(t, stream, streamName, stdout, stderr, args, extraEnv)
+	if err := json.Unmarshal(line, target); err != nil {
+		t.Fatalf("%s JSON envelope is invalid: %v\n%s=%s\nstdout=%s\nstderr=%s\nargs=%v\nenv=%v",
+			streamName, err, streamName, line, stdout, stderr, args, extraEnv)
+	}
+}
+
+func jsonEnvelopeLineFromStream(t *testing.T, stream []byte, streamName string, stdout, stderr []byte, args, extraEnv []string) []byte {
+	t.Helper()
+
+	lines := bytes.Split(bytes.TrimSpace(stream), []byte("\n"))
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := bytes.TrimSpace(lines[i])
+		if len(line) == 0 || line[0] != '{' {
+			continue
+		}
+		return line
+	}
+	t.Fatalf("%s has no JSON envelope\n%s=%s\nstdout=%s\nstderr=%s\nargs=%v\nenv=%v",
+		streamName, streamName, stream, stdout, stderr, args, extraEnv)
+	return nil
 }
 
 // htmlServer spins up an httptest server that returns an HTML body on every
@@ -170,7 +243,7 @@ func TestI1HugeJsonInputEnvelope(t *testing.T) {
 }
 
 // TestI1StdinAndJsonInputEnvelope — Attack 6: both stdin pipe and --json-input supplied.
-// --json-input wins (file takes precedence), but stdout must be a JSON envelope.
+// --json-input wins (file takes precedence), and stderr must carry an error envelope.
 // validation errors → exit 3.
 func TestI1StdinAndJsonInputEnvelope(t *testing.T) {
 	bin := buildJiraBinary(t)
@@ -187,17 +260,11 @@ func TestI1StdinAndJsonInputEnvelope(t *testing.T) {
 
 	assertValidationExitCode(t, runErr)
 
-	out := stdout.Bytes()
-	if len(out) == 0 {
-		t.Fatalf("stdout is empty (stderr: %s); want JSON envelope", stderr.String())
-	}
 	var env map[string]any
-	if err := json.Unmarshal(out, &env); err != nil {
-		t.Fatalf("stdout not valid JSON: %v\nstdout=%s", err, out)
-	}
+	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 	for _, key := range []string{"meta", "data", "errors", "warnings"} {
 		if _, ok := env[key]; !ok {
-			t.Fatalf("envelope missing %q\nstdout=%s", key, out)
+			t.Fatalf("envelope missing %q\nstderr=%s", key, stderr.String())
 		}
 	}
 }

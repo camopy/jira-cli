@@ -119,6 +119,9 @@ func TestPlainRawWarningsRouteToStderr(t *testing.T) {
 
 func TestCommandErrorsUseClogDiagnosticsOnStderr(t *testing.T) {
 	cmd, _, stderr := outputModeTestCommand(cli.ModePlain)
+	if err := cmd.Root().PersistentFlags().Set("output", "human"); err != nil {
+		t.Fatalf("Set(output) error = %v", err)
+	}
 
 	writeCommandError(cmd.Context(), cmd, errors.New("jira API failed"))
 	got := stderr.String()

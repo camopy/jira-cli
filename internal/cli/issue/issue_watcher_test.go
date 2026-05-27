@@ -70,7 +70,26 @@ workday_seconds = 28800
 	return root, stdout, stderr
 }
 
-const myselfFixture = `{"accountId":"712020:matt","emailAddress":"matt@example.com","displayName":"Matt Craven","active":true}`
+func decodeWatcherErrorEnvelope(t *testing.T, stdout, stderr *bytes.Buffer, target any) {
+	t.Helper()
+	if len(bytes.TrimSpace(stdout.Bytes())) != 0 {
+		t.Fatalf("stdout is not empty on error\nstdout=%s\nstderr=%s", stdout.String(), stderr.String())
+	}
+	lines := bytes.Split(bytes.TrimSpace(stderr.Bytes()), []byte("\n"))
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := bytes.TrimSpace(lines[i])
+		if len(line) == 0 || line[0] != '{' {
+			continue
+		}
+		if err := json.Unmarshal(line, target); err != nil {
+			t.Fatalf("stderr envelope is not JSON: %v\nstderr=%s", err, stderr.String())
+		}
+		return
+	}
+	t.Fatalf("stderr has no JSON envelope:\n%s", stderr.String())
+}
+
+const myselfFixture = `{"accountId":"712020:test-user","emailAddress":"user@example.com","displayName":"Test User","active":true}`
 
 func watcherListJSON(isWatching bool, count int, accounts ...[2]string) string {
 	users := make([]map[string]any, 0, len(accounts))
@@ -144,7 +163,7 @@ func TestWatchersAddPostsRawAccountIDStringAndReadsBack(t *testing.T) {
 			w.WriteHeader(http.StatusNoContent)
 		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
 			atomic.AddInt32(&getCount, 1)
-			_, _ = w.Write([]byte(watcherListJSON(true, 1, [2]string{"712020:matt", "Matt"})))
+			_, _ = w.Write([]byte(watcherListJSON(true, 1, [2]string{"712020:test-user", "Test"})))
 		default:
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
@@ -158,8 +177,8 @@ func TestWatchersAddPostsRawAccountIDStringAndReadsBack(t *testing.T) {
 	}
 
 	got, _ := postBody.Load().(string)
-	if got != `"712020:matt"` {
-		t.Fatalf("POST body = %q, want %q", got, `"712020:matt"`)
+	if got != `"712020:test-user"` {
+		t.Fatalf("POST body = %q, want %q", got, `"712020:test-user"`)
 	}
 	if atomic.LoadInt32(&postCount) != 1 {
 		t.Errorf("POST count = %d, want 1", atomic.LoadInt32(&postCount))
@@ -218,8 +237,8 @@ func TestWatchersAddNoReadbackBareShape(t *testing.T) {
 	if _, has := data["watchers"]; has {
 		t.Errorf("--no-readback returned readback shape: %s", stdout)
 	}
-	if data["account_id"] != "712020:matt" {
-		t.Errorf("data.account_id = %v, want 712020:matt", data["account_id"])
+	if data["account_id"] != "712020:test-user" {
+		t.Errorf("data.account_id = %v, want 712020:test-user", data["account_id"])
 	}
 	if data["attempted"] != true {
 		t.Errorf("data.attempted = %v, want true", data["attempted"])
@@ -243,19 +262,17 @@ func TestWatchersAddAmbiguousEmitsCandidatesEnvelope(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	root, stdout, _ := newWatcherTestRoot(t, srv.URL)
+	root, stdout, stderr := newWatcherTestRoot(t, srv.URL)
 	root.SetArgs([]string{"watchers", "add", "KAN-1", "--user", "alice"})
 	err := root.Execute()
 	if err == nil {
 		t.Fatalf("expected ambiguity error, got success:\n%s", stdout)
 	}
 	var env map[string]any
-	if jerr := json.Unmarshal(stdout.Bytes(), &env); jerr != nil {
-		t.Fatalf("output not JSON: %v\n%s", jerr, stdout)
-	}
+	decodeWatcherErrorEnvelope(t, stdout, stderr, &env)
 	errs, _ := env["errors"].([]any)
 	if len(errs) != 1 {
-		t.Fatalf("errors[] = %v, want 1: %s", errs, stdout)
+		t.Fatalf("errors[] = %v, want 1: %s", errs, stderr)
 	}
 	first, _ := errs[0].(map[string]any)
 	if first["type"] != "validation" {
@@ -264,17 +281,17 @@ func TestWatchersAddAmbiguousEmitsCandidatesEnvelope(t *testing.T) {
 	// The ambiguity error must carry a stable machine code so agents can
 	// branch on it without parsing the message.
 	if code, _ := first["code"].(string); code == "" {
-		t.Errorf("errors[0].code is empty, want a stable validation code: %s", stdout)
+		t.Errorf("errors[0].code is empty, want a stable validation code: %s", stderr)
 	}
 	// The failure envelope must report the exit code so a machine consumer
 	// sees the same exit value the process returns.
 	meta, _ := env["meta"].(map[string]any)
 	if ec, ok := meta["exit_code"].(float64); !ok || int(ec) != 3 {
-		t.Errorf("meta.exit_code = %v, want 3: %s", meta["exit_code"], stdout)
+		t.Errorf("meta.exit_code = %v, want 3: %s", meta["exit_code"], stderr)
 	}
 	cands, _ := first["candidates"].([]any)
 	if len(cands) != 2 {
-		t.Fatalf("candidates len = %d, want 2: %s", len(cands), stdout)
+		t.Fatalf("candidates len = %d, want 2: %s", len(cands), stderr)
 	}
 }
 
@@ -303,8 +320,8 @@ func TestWatchersRemoveDeletesByAccountIDAndReadsBack(t *testing.T) {
 	}
 	q, _ := deleteQuery.Load().(string)
 	values, _ := url.ParseQuery(q)
-	if values.Get("accountId") != "712020:matt" {
-		t.Fatalf("DELETE query accountId = %q, want 712020:matt", values.Get("accountId"))
+	if values.Get("accountId") != "712020:test-user" {
+		t.Fatalf("DELETE query accountId = %q, want 712020:test-user", values.Get("accountId"))
 	}
 	var env map[string]any
 	_ = json.Unmarshal(stdout.Bytes(), &env)
@@ -328,7 +345,7 @@ func TestWatchShortcutEquivalentToWatchersAddMe(t *testing.T) {
 				captures[slot].Store(buf.String())
 				w.WriteHeader(http.StatusNoContent)
 			case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
-				_, _ = w.Write([]byte(watcherListJSON(true, 1, [2]string{"712020:matt", "Matt"})))
+				_, _ = w.Write([]byte(watcherListJSON(true, 1, [2]string{"712020:test-user", "Test"})))
 			default:
 				t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 			}

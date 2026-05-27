@@ -15,12 +15,15 @@ import (
 // so the central mapper must still classify it as a validation error (exit 3)
 // — never let the substring classifier infer not_found/exit 2.
 func TestBoardValidationStdoutEnvelopeReportsValidationExitCode(t *testing.T) {
-	cmd, stdout, _ := outputModeTestCommand(cli.ModeJSON)
+	cmd, stdout, stderr := outputModeTestCommand(cli.ModeJSON)
 	bve := boardscope.ValidationError{
 		Msg: jira.DefaultBoardMissingMessage("default", "Engineering Sprint"),
 	}
-	if err := writeErrorEnvelopeToStdout(cmd, bve); err != nil {
-		t.Fatalf("writeErrorEnvelopeToStdout() error = %v", err)
+	if err := writeErrorEnvelopeToStderr(cmd, bve); err != nil {
+		t.Fatalf("writeErrorEnvelopeToStderr() error = %v", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty success channel on error", stdout.String())
 	}
 
 	var env struct {
@@ -32,8 +35,8 @@ func TestBoardValidationStdoutEnvelopeReportsValidationExitCode(t *testing.T) {
 			Code string `json:"code"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(stdout.Bytes(), &env); err != nil {
-		t.Fatalf("stdout is not a JSON envelope: %v\n%s", err, stdout)
+	if err := json.Unmarshal(stderr.Bytes(), &env); err != nil {
+		t.Fatalf("stderr is not a JSON envelope: %v\n%s", err, stderr)
 	}
 	if env.Meta.ExitCode == nil || *env.Meta.ExitCode != 3 {
 		t.Fatalf("meta.exit_code = %v, want 3", env.Meta.ExitCode)

@@ -2,7 +2,6 @@ package contract
 
 import (
 	"bytes"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -54,14 +53,12 @@ func TestAuthStatusFailsTopLevelWhenRemoteProbeFails(t *testing.T) {
 			Hint    string `json:"hint"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(stdout.Bytes(), &env); err != nil {
-		t.Fatalf("auth status stdout is not JSON: %v\nstdout=%s\nstderr=%s", err, stdout.String(), stderr.String())
-	}
+	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 	if env.OK {
-		t.Fatalf("top-level ok should be false for remote auth failure:\n%s", stdout.String())
+		t.Fatalf("top-level ok should be false for remote auth failure:\n%s", stderr.String())
 	}
 	if len(env.Errors) == 0 {
-		t.Fatalf("top-level errors should summarize unhealthy auth:\n%s", stdout.String())
+		t.Fatalf("top-level errors should summarize unhealthy auth:\n%s", stderr.String())
 	}
 	if len(env.Data.Profiles) != 1 || env.Data.Profiles[0].Valid {
 		t.Fatalf("profile validity should track failed remote probe:\n%+v", env.Data.Profiles)
@@ -97,14 +94,12 @@ func TestAuthStatusFailsTopLevelWhenCredentialMissing(t *testing.T) {
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(stdout.Bytes(), &env); err != nil {
-		t.Fatalf("auth status stdout is not JSON: %v\nstdout=%s\nstderr=%s", err, stdout.String(), stderr.String())
-	}
+	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 	if env.OK {
-		t.Fatalf("top-level ok should be false for missing credential:\n%s", stdout.String())
+		t.Fatalf("top-level ok should be false for missing credential:\n%s", stderr.String())
 	}
 	if len(env.Errors) == 0 {
-		t.Fatalf("top-level errors should summarize missing credential:\n%s", stdout.String())
+		t.Fatalf("top-level errors should summarize missing credential:\n%s", stderr.String())
 	}
 	if len(env.Data.Profiles) != 1 || env.Data.Profiles[0].Valid || env.Data.Profiles[0].Error == "" {
 		t.Fatalf("profile missing credential should be visible in data:\n%+v", env.Data.Profiles)

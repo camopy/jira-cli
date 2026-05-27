@@ -56,18 +56,12 @@ func TestADFInputShape_WorklogRejectsInvalidComment(t *testing.T) {
 	cmd := exec.Command("go", "run", "../../cmd/jira",
 		"--output=json", "worklog", "add", "PROJ-1",
 		"--json-input", path, "--dry-run", "--no-input")
-	out, runErr := cmd.Output()
-	if runErr == nil {
-		t.Fatalf("invalid ADF comment must fail; command succeeded\n%s", out)
-	}
 	var env struct {
 		Errors []map[string]any `json:"errors"`
 	}
-	if err := json.Unmarshal(out, &env); err != nil {
-		t.Fatalf("worklog add output not JSON: %v\n%s", err, out)
-	}
+	_, _, _ = runCommandExpectErrorEnvelope(t, cmd, &env)
 	if len(env.Errors) == 0 {
-		t.Fatalf("invalid ADF comment must be rejected; got zero errors\n%s", out)
+		t.Fatalf("invalid ADF comment must be rejected; got zero errors")
 	}
 }
 

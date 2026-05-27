@@ -268,12 +268,10 @@ func TestDefaultBoardAmbiguousReturnsCandidates(t *testing.T) {
 	_ = cmd.Run()
 
 	var env map[string]any
-	if err := json.Unmarshal(stdout.Bytes(), &env); err != nil {
-		t.Fatalf("envelope is not JSON: %v\nstdout:\n%s\nstderr:\n%s", err, stdout.String(), stderr.String())
-	}
+	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 	errs, _ := env["errors"].([]any)
 	if len(errs) == 0 {
-		t.Fatalf("envelope.errors empty; expected ambiguous-board error\nstdout:\n%s", stdout.String())
+		t.Fatalf("envelope.errors empty; expected ambiguous-board error\nstderr:\n%s", stderr.String())
 	}
 	first, _ := errs[0].(map[string]any)
 	cands, _ := first["candidates"].([]any)

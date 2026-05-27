@@ -94,15 +94,13 @@ func TestErrorDiagnosticUsesFailingCommandMessage(t *testing.T) {
 	if !strings.Contains(stderr.String(), "issue delete requires") {
 		t.Fatalf("stderr does not include failing command message:\nstderr=%s", stderr.String())
 	}
-	// --json was requested so stdout must carry a JSON envelope
+	// --json was requested so stderr must carry a JSON envelope
 	// with the error message in errors[].
 	var env map[string]any
-	if jsonErr := json.Unmarshal(stdout.Bytes(), &env); jsonErr != nil {
-		t.Fatalf("stdout is not valid JSON: %v\nstdout=%s", jsonErr, stdout.String())
-	}
+	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 	errs, _ := env["errors"].([]any)
 	if len(errs) == 0 {
-		t.Fatalf("envelope.errors is empty; want error entry containing command message:\nstdout=%s", stdout.String())
+		t.Fatalf("envelope.errors is empty; want error entry containing command message:\nstderr=%s", stderr.String())
 	}
 	first, _ := errs[0].(map[string]any)
 	msg, _ := first["message"].(string)

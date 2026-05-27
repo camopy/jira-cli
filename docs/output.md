@@ -15,11 +15,12 @@ jira issue list --output=compact
 |------|----------|
 | `auto` | TTY uses human output; non-TTY uses JSON; detected agents use compact JSON. |
 | `human` | Force `clog` rich text. |
-| `json` | Write the full envelope to stdout. |
+| `json` | On success, write the full envelope to stdout. |
 | `compact` | On success, write only the envelope `data` value. |
 
-Errors in `json` and `compact` modes still emit the full envelope so agents can
-parse `errors[]`, `warnings[]`, and `meta.exit_code`.
+Errors in `json` and `compact` modes write the full envelope to stderr and leave
+stdout empty, so agents can parse `errors[]`, `warnings[]`, and `meta.exit_code`
+without poisoning success pipelines.
 
 ## Envelope
 

@@ -20,7 +20,7 @@ func TestResolveUserMeUsesCachedMyself(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/myself":
-			_, _ = w.Write([]byte(`{"accountId":"712020:matt","emailAddress":"matt@example.com","displayName":"Matt Craven","active":true}`))
+			_, _ = w.Write([]byte(`{"accountId":"712020:test-user","emailAddress":"user@example.com","displayName":"Test User","active":true}`))
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/rest/api/3/user/search"):
 			sawSearch = true
 			_, _ = w.Write([]byte(`[]`))
@@ -37,8 +37,8 @@ func TestResolveUserMeUsesCachedMyself(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveUser(me) error = %v", err)
 	}
-	if id != "712020:matt" {
-		t.Fatalf("ResolveUser(me) = %q, want %q", id, "712020:matt")
+	if id != "712020:test-user" {
+		t.Fatalf("ResolveUser(me) = %q, want %q", id, "712020:test-user")
 	}
 	if sawSearch {
 		t.Fatal("ResolveUser(me) issued /user/search; expected /myself only")
@@ -222,7 +222,7 @@ func TestUserSearchReturnsCandidates(t *testing.T) {
 			t.Errorf("query = %q, want matt", got)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`[{"accountId":"m1","displayName":"Matt","active":true}]`))
+		_, _ = w.Write([]byte(`[{"accountId":"m1","displayName":"Test","active":true}]`))
 	}))
 	defer srv.Close()
 

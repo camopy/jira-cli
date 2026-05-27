@@ -23,6 +23,7 @@ Resolution order: the environment override is checked first; if unset, the profi
 
 # guard
 - Partial flags **merge** into the existing profile — fields not supplied retain their current values. To replace cleanly, pass every field.
+- Bare interactive `jira auth login` pre-fills from the active/configured profile; explicit flags still win.
 
 **Run**
 - Preflight: `jira auth status --output=json`
@@ -72,6 +73,7 @@ Further reading:
 
 **Behavior**
 - `auth login --no-input` with **partial flags merges** into the existing profile. This protects against mistyped one-flag updates wiping unrelated fields like `email` or `account_id`. To replace cleanly, pass every field.
+- `auth login` in a TTY pre-fills profile metadata from the active/configured profile, including `base_url`, `email`, and backend-specific 1Password fields.
 - Auth types accepted: `token`, `basic`, `pat`, `mtls`. Anything else returns exit 3.
 - Secret hygiene contract (HTTP-transport-level — enforced once, not per command):
   - Secrets are **never** stored in the TOML config — only metadata (backend selector, vault, item ref).

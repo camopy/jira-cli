@@ -2,7 +2,6 @@ package contract
 
 import (
 	"bytes"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,14 +39,12 @@ func TestNonDryRunMutationsRequireConfiguredJiraClient(t *testing.T) {
 			if !strings.Contains(strings.ToLower(stderr.String()), "err") || !strings.Contains(stderr.String(), "base URL") {
 				t.Fatalf("%s stderr missing base URL clog diagnostic:\nstderr=%s", tc.name, stderr.String())
 			}
-			// --json path must deliver a JSON envelope on stdout.
+			// --json path must deliver a JSON envelope on stderr.
 			var env map[string]any
-			if jsonErr := json.Unmarshal(stdout.Bytes(), &env); jsonErr != nil {
-				t.Fatalf("%s stdout is not valid JSON: %v\nstdout=%s", tc.name, jsonErr, stdout.String())
-			}
+			decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 			errs, _ := env["errors"].([]any)
 			if len(errs) == 0 {
-				t.Fatalf("%s envelope.errors is empty:\nstdout=%s", tc.name, stdout.String())
+				t.Fatalf("%s envelope.errors is empty:\nstderr=%s", tc.name, stderr.String())
 			}
 		})
 	}

@@ -41,7 +41,7 @@ func WriteEnvelopeWithErrors(cmd *cobra.Command, command string, data any, error
 		Errors:   errorsOut,
 		Warnings: []cli.Warning{},
 	}
-	return cli.WriteEnvelope(cmd.OutOrStdout(), env)
+	return cli.WriteEnvelope(cmd.ErrOrStderr(), env)
 }
 
 // WriteEnvelopeWithRawWarnings emits the standard envelope shape with a

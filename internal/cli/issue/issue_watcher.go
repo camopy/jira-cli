@@ -414,7 +414,7 @@ func handleResolveErr(cmd *cobra.Command, command string, err error) error {
 		if len(env.Errors) == 1 {
 			env.Errors[0].Hint = "Re-run with --user accountId:<id>."
 		}
-		_ = cli.WriteEnvelope(cmd.OutOrStdout(), env)
+		_ = cli.WriteEnvelope(cmd.ErrOrStderr(), env)
 		return cmdutil.EnvelopeWritten(fmt.Errorf("validation: %w", err))
 	}
 	if errors.Is(err, jira.ErrUserNotFound) {

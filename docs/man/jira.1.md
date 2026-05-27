@@ -35,5 +35,5 @@ structured JSON.
 `--output=auto|human|json|compact` is the single output selector. `human`
 forces `clog` rich text, `--output=json` writes the full envelope, and
 `compact` writes the command data on success. Errors are written as `clog`
-diagnostics to stderr; under `json` or `compact` an error envelope is also
-written to stdout so machine consumers can parse the failure.
+diagnostics to stderr; under `json` or `compact` a JSON error envelope is also
+written to stderr while stdout stays empty.

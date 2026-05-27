@@ -28,7 +28,7 @@ func envelopeFixtureServer(t *testing.T) *httptest.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/rest/api/3/myself", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"accountId":"712020:matt","emailAddress":"matt@example.com","displayName":"Matt","active":true}`))
+		_, _ = w.Write([]byte(`{"accountId":"712020:test-user","emailAddress":"user@example.com","displayName":"Test","active":true}`))
 	})
 	mux.HandleFunc("/rest/api/3/user/search", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -68,9 +68,9 @@ func envelopeFixtureServer(t *testing.T) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method {
 		case http.MethodPost, http.MethodDelete:
-			_, _ = w.Write([]byte(`{"isWatching":true,"watchCount":1,"watchers":[{"accountId":"712020:matt","displayName":"Matt","active":true}]}`))
+			_, _ = w.Write([]byte(`{"isWatching":true,"watchCount":1,"watchers":[{"accountId":"712020:test-user","displayName":"Test","active":true}]}`))
 		default:
-			_, _ = w.Write([]byte(`{"isWatching":true,"watchCount":1,"watchers":[{"accountId":"712020:matt","displayName":"Matt","active":true}]}`))
+			_, _ = w.Write([]byte(`{"isWatching":true,"watchCount":1,"watchers":[{"accountId":"712020:test-user","displayName":"Test","active":true}]}`))
 		}
 	})
 	mux.HandleFunc("/rest/api/3/issue/PROJ-1/", func(w http.ResponseWriter, _ *http.Request) {

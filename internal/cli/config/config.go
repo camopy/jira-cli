@@ -4,8 +4,10 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/spf13/cobra"
@@ -86,6 +88,10 @@ func configInitCommand() *cobra.Command {
 				profile = "default"
 			}
 			baseURL = config.NormalizeBaseURL(baseURL)
+			email = strings.TrimSpace(email)
+			if missing := missingConfigInitRequiredFlags(baseURL, email); len(missing) > 0 {
+				return configInitRequiredFlagError(missing)
+			}
 			cfg := config.Defaults()
 			cfg.DefaultProfile = profile
 			cfg.Profiles = []config.Profile{{
@@ -115,6 +121,30 @@ func configInitCommand() *cobra.Command {
 	cmd.Flags().StringVar(&baseURL, "base-url", "", "Jira base URL")
 	cmd.Flags().StringVar(&email, "email", "", "Jira account email")
 	return cmd
+}
+
+func missingConfigInitRequiredFlags(baseURL, email string) []string {
+	var missing []string
+	if strings.TrimSpace(baseURL) == "" {
+		missing = append(missing, "base-url")
+	}
+	if strings.TrimSpace(email) == "" {
+		missing = append(missing, "email")
+	}
+	return missing
+}
+
+func configInitRequiredFlagError(missing []string) error {
+	quoted := make([]string, len(missing))
+	for i, name := range missing {
+		quoted[i] = "--" + name
+	}
+	err := cli.NewCLIInputError(
+		cli.InputRequiredFlagMissing,
+		fmt.Sprintf("required flag(s) %s not set", strings.Join(quoted, ", ")),
+	)
+	err.Flag = missing[0]
+	return err
 }
 
 func configProfileCommand() *cobra.Command {

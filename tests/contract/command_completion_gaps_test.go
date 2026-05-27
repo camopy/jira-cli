@@ -113,15 +113,13 @@ func TestJSONErrorsUseClogDiagnosticsAndExitCodes(t *testing.T) {
 	if !strings.Contains(stderrLow, "err") || !strings.Contains(stderrLow, "invalid duration") {
 		t.Fatalf("stderr clog diagnostic missing:\nstderr=%s", stderr.String())
 	}
-	// --json path must deliver a JSON envelope on stdout with
+	// --json path must deliver a JSON envelope on stderr with
 	// the error in errors[].
 	var env map[string]any
-	if jsonErr := json.Unmarshal(stdout.Bytes(), &env); jsonErr != nil {
-		t.Fatalf("stdout is not valid JSON: %v\nstdout=%s", jsonErr, stdout.String())
-	}
+	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 	errs, _ := env["errors"].([]any)
 	if len(errs) == 0 {
-		t.Fatalf("envelope.errors is empty:\nstdout=%s", stdout.String())
+		t.Fatalf("envelope.errors is empty:\nstderr=%s", stderr.String())
 	}
 	first, _ := errs[0].(map[string]any)
 	if msg, _ := first["message"].(string); !strings.Contains(msg, "invalid duration") {

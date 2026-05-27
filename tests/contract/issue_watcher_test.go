@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"bytes"
 	"encoding/json"
 	stdlibErrors "errors"
 	"net/http"
@@ -15,7 +16,7 @@ import (
 // ----- shared fixtures ------------------------------------------------------
 
 const (
-	myselfBody = `{"accountId":"712020:matt","emailAddress":"matt@example.com","displayName":"Matt Craven","active":true}`
+	myselfBody = `{"accountId":"712020:test-user","emailAddress":"user@example.com","displayName":"Test User","active":true}`
 )
 
 // watchersBody is the GET /watchers response shape Atlassian returns.
@@ -45,10 +46,18 @@ func runJiraWatchers(t *testing.T, srvURL, profileEnv string, args ...string) ([
 	bin := buildJiraBinary(t)
 	cmd := exec.Command(bin, append([]string{"--config", cfg, "--output=json"}, args...)...)
 	cmd.Env = append(cmd.Environ(), profileEnv)
-	// Capture only stdout — clog writes a human-readable diagnostic to
-	// stderr alongside the JSON envelope on the failure path, and mixing
-	// the two breaks json.Unmarshal in the assertion helpers.
-	return cmd.Output()
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		if len(bytes.TrimSpace(stdout.Bytes())) != 0 {
+			t.Fatalf("watchers command wrote stdout on error\nstdout=%s\nstderr=%s\nargs=%v",
+				stdout.String(), stderr.String(), cmd.Args)
+		}
+		return jsonEnvelopeLineFromStream(t, stderr.Bytes(), "stderr", stdout.Bytes(), stderr.Bytes(), cmd.Args, nil), err
+	}
+	return stdout.Bytes(), nil
 }
 
 // ----- watchers list contract ----------
@@ -117,7 +126,7 @@ func TestWatchersAddPostsRawAccountIDStringAndReadsBack(t *testing.T) {
 			w.WriteHeader(http.StatusNoContent)
 		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
 			atomic.AddInt32(&getCount, 1)
-			body := watchersBody(false, 1, [2]string{"712020:matt", "Matt Craven"})
+			body := watchersBody(false, 1, [2]string{"712020:test-user", "Test User"})
 			_, _ = w.Write([]byte(body))
 		default:
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
@@ -134,8 +143,8 @@ func TestWatchersAddPostsRawAccountIDStringAndReadsBack(t *testing.T) {
 	}
 
 	got, _ := postBody.Load().(string)
-	if got != `"712020:matt"` {
-		t.Fatalf("POST body = %q, want %q (Atlassian raw-JSON-string quirk)", got, `"712020:matt"`)
+	if got != `"712020:test-user"` {
+		t.Fatalf("POST body = %q, want %q (Atlassian raw-JSON-string quirk)", got, `"712020:test-user"`)
 	}
 	if atomic.LoadInt32(&postCount) != 1 {
 		t.Errorf("POST /watchers hit %d times, want 1", atomic.LoadInt32(&postCount))
@@ -174,7 +183,7 @@ func TestWatchersAddIdempotentWhenAlreadyWatching(t *testing.T) {
 			w.WriteHeader(http.StatusNoContent)
 		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
 			// Return the same accountId we're trying to add → already watching.
-			body := watchersBody(true, 1, [2]string{"712020:matt", "Matt Craven"})
+			body := watchersBody(true, 1, [2]string{"712020:test-user", "Test User"})
 			_, _ = w.Write([]byte(body))
 		default:
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
@@ -242,8 +251,8 @@ func TestWatchersAddNoReadbackBareShape(t *testing.T) {
 	if _, has := data["watchers"]; has {
 		t.Errorf("--no-readback returned readback shape with data.watchers: %s", out)
 	}
-	if v, _ := data["account_id"].(string); v != "712020:matt" {
-		t.Errorf("data.account_id = %q, want 712020:matt", v)
+	if v, _ := data["account_id"].(string); v != "712020:test-user" {
+		t.Errorf("data.account_id = %q, want 712020:test-user", v)
 	}
 	if v, _ := data["attempted"].(bool); !v {
 		t.Errorf("data.attempted = false, want true")
@@ -285,8 +294,8 @@ func TestWatchersRemoveDeletesByAccountIDAndReadsBack(t *testing.T) {
 	}
 	q, _ := deleteQuery.Load().(string)
 	values, _ := url.ParseQuery(q)
-	if got := values.Get("accountId"); got != "712020:matt" {
-		t.Fatalf("DELETE query accountId = %q, want %q", got, "712020:matt")
+	if got := values.Get("accountId"); got != "712020:test-user" {
+		t.Fatalf("DELETE query accountId = %q, want %q", got, "712020:test-user")
 	}
 
 	var env map[string]any
@@ -318,7 +327,7 @@ func TestWatchersAddUserMeSkipsUserSearch(t *testing.T) {
 		case r.Method == http.MethodPost:
 			w.WriteHeader(http.StatusNoContent)
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/watchers"):
-			_, _ = w.Write([]byte(watchersBody(true, 1, [2]string{"712020:matt", "Matt"})))
+			_, _ = w.Write([]byte(watchersBody(true, 1, [2]string{"712020:test-user", "Test"})))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -498,7 +507,7 @@ func TestWatchShortcutEquivalentToWatchersAddMe(t *testing.T) {
 				target.Store(string(buf))
 				w.WriteHeader(http.StatusNoContent)
 			case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
-				_, _ = w.Write([]byte(watchersBody(true, 1, [2]string{"712020:matt", "Matt"})))
+				_, _ = w.Write([]byte(watchersBody(true, 1, [2]string{"712020:test-user", "Test"})))
 			default:
 				w.WriteHeader(http.StatusNotFound)
 			}

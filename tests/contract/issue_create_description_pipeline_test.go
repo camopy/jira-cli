@@ -100,7 +100,7 @@ func TestIssueCreateRawADFDescriptionStrictRejectsBeforeWire(t *testing.T) {
 	}
 
 	cfg := jiraConfig(t, srv.URL)
-	stdout, _, code := runJira(t, "--config", cfg,
+	stdout, stderr, code := runJira(t, "--config", cfg,
 		"issue", "create", "--no-input", "--json-input", path, "--output=json")
 	if code == 0 {
 		t.Fatalf("strict mode accepted an unknown ADF node in description; want abort\nstdout=%s", stdout)
@@ -113,11 +113,9 @@ func TestIssueCreateRawADFDescriptionStrictRejectsBeforeWire(t *testing.T) {
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(stdout, &env); err != nil {
-		t.Fatalf("output not JSON: %v\n%s", err, stdout)
-	}
+	decodeErrorEnvelopeFromStderr(t, stdout, stderr, []string{"jira", "--config", cfg, "issue", "create", "--no-input", "--json-input", path, "--output=json"}, &env)
 	if len(env.Errors) == 0 {
-		t.Fatalf("expected a validation error naming the unknown node: %s", stdout)
+		t.Fatalf("expected a validation error naming the unknown node: %s", stderr)
 	}
 }
 

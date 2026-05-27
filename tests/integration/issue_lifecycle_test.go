@@ -116,7 +116,7 @@ func TestIssueLifecycleEndToEnd(t *testing.T) {
 		switch r.Method {
 		case http.MethodGet:
 			_, _ = w.Write([]byte(`{"isWatching":true,"watchCount":1,"watchers":[
-				{"accountId":"712020:matt","displayName":"Matt","active":true}
+					{"accountId":"712020:test-user","displayName":"Test","active":true}
 			]}`))
 		case http.MethodPost, http.MethodDelete:
 			w.WriteHeader(http.StatusNoContent)
@@ -220,10 +220,10 @@ func TestIssueLifecycleEndToEnd(t *testing.T) {
 	if w == nil || w.WatchCount != 1 {
 		t.Fatalf("watchers.List = %+v; want WatchCount 1", w)
 	}
-	if _, err := ws.Add(ctx, "PROJ-1", "712020:matt"); err != nil {
+	if _, err := ws.Add(ctx, "PROJ-1", "712020:test-user"); err != nil {
 		t.Fatalf("watchers.Add: %v", err)
 	}
-	if _, err := ws.Remove(ctx, "PROJ-1", "712020:matt"); err != nil {
+	if _, err := ws.Remove(ctx, "PROJ-1", "712020:test-user"); err != nil {
 		t.Fatalf("watchers.Remove: %v", err)
 	}
 
