@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -84,5 +85,47 @@ func TestCacheClearRejectsUnknownExplicitProfile(t *testing.T) {
 	}
 	if _, err := os.Stat(seeded); err != nil {
 		t.Fatalf("cache clear with typoed profile deleted the work-profile cache: %v", err)
+	}
+}
+
+func TestCacheClearRejectsUnknownResource(t *testing.T) {
+	bin := buildJiraBinary(t)
+	cfg := writeCacheTestConfig(t, "https://example.atlassian.net")
+	env := []string{"XDG_CACHE_HOME=" + t.TempDir()}
+
+	envelope, runErr := requireEnvelopeOnStdoutWithEnv(
+		t,
+		bin,
+		env,
+		"--config", cfg,
+		"cache", "clear", "bogus",
+		"--output=json",
+	)
+	assertValidationExitCode(t, runErr)
+	if ok, _ := envelope["ok"].(bool); ok {
+		t.Fatalf("ok = true, want false: %#v", envelope)
+	}
+	errorsOut, ok := envelope["errors"].([]any)
+	if !ok || len(errorsOut) == 0 {
+		t.Fatalf("errors = %#v, want at least one validation error", envelope["errors"])
+	}
+	first, ok := errorsOut[0].(map[string]any)
+	if !ok {
+		t.Fatalf("first error = %#v, want object", errorsOut[0])
+	}
+	if first["type"] != "validation" {
+		t.Fatalf("error type = %#v, want validation", first["type"])
+	}
+	if first["code"] != "arg_value_invalid" {
+		t.Fatalf("error code = %#v, want arg_value_invalid", first["code"])
+	}
+	message, _ := first["message"].(string)
+	if !strings.Contains(message, `unknown cache resource "bogus"`) {
+		t.Fatalf("error message %q does not name the bad resource", message)
+	}
+	for _, resource := range []string{"labels", "projects", "epics", "fields", "issuetypes", "linktypes", "boards"} {
+		if !strings.Contains(message, resource) {
+			t.Fatalf("error message %q does not name valid resource %q", message, resource)
+		}
 	}
 }

@@ -25,6 +25,9 @@ Goal: Prime, refresh, or clear the per-profile local caches so repeated reads an
 - TTL gate (refetch if older than N minutes): `jira cache fields --ttl-minutes 5 --output=json`
 - Wipe one: `jira cache clear labels`
 - Wipe everything for the active profile: `jira cache clear`
+- Valid clear resources: `labels`, `projects`, `epics`, `fields`,
+  `issuetypes`, `linktypes`, `boards`. Unknown names fail before touching the cache
+  with `code=arg_value_invalid`.
 - Recommended once-per-session prime for agents:
   ```sh
   jira cache fields     --refresh --output=json   # so you can map customfield_NNNN → name

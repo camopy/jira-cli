@@ -15,7 +15,10 @@ jira cache linktypes --refresh --output=json
 jira cache boards --refresh --output=json
 ```
 
-Use `jira cache clear` to remove cached data for the active profile.
+Use `jira cache clear` to remove cached data for the active profile, or
+`jira cache clear <resource>` to remove one cache file. Valid resources are
+`labels`, `projects`, `epics`, `fields`, `issuetypes`, `linktypes`, and
+`boards`; unknown names fail with `code=arg_value_invalid`.
 
 ## Boards
 

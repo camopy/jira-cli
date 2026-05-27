@@ -15,6 +15,7 @@ var allCLIInputKinds = []CLIInputKind{
 	InputFlagSyntaxInvalid,
 	InputRequiredFlagMissing,
 	InputArgCountInvalid,
+	InputArgValueInvalid,
 	InputCommandUnknown,
 }
 
@@ -47,6 +48,7 @@ func TestCLIInputCodesAreStable(t *testing.T) {
 		InputFlagSyntaxInvalid:   "flag_syntax_invalid",
 		InputRequiredFlagMissing: "required_flag_missing",
 		InputArgCountInvalid:     "arg_count_invalid",
+		InputArgValueInvalid:     "arg_value_invalid",
 		InputCommandUnknown:      "command_unknown",
 	}
 	if len(want) != len(allCLIInputKinds) {

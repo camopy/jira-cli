@@ -4,15 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cache"
+	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
+
+var cacheClearResources = []string{"labels", "projects", "epics", "fields", "issuetypes", "linktypes", "boards"}
 
 // NewCommand groups per-resource cache primers + housekeeping. Each
 // subcommand fetches the resource, writes the JSON-encoded list under a
@@ -529,9 +534,15 @@ func cacheClearCommand() *cobra.Command {
 			if len(args) > 0 {
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
-			return []string{"labels", "projects", "epics", "fields", "issuetypes", "linktypes", "boards"}, cobra.ShellCompDirectiveNoFileComp
+			return cacheClearResources, cobra.ShellCompDirectiveNoFileComp
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) > 0 && !isCacheClearResource(args[0]) {
+				return cli.NewCLIInputError(
+					cli.InputArgValueInvalid,
+					fmt.Sprintf("unknown cache resource %q; valid resources: %s", args[0], strings.Join(cacheClearResources, ", ")),
+				)
+			}
 			cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
@@ -562,4 +573,8 @@ func cacheClearCommand() *cobra.Command {
 		},
 	}
 	return cmd
+}
+
+func isCacheClearResource(resource string) bool {
+	return slices.Contains(cacheClearResources, resource)
 }

@@ -25,6 +25,8 @@ const (
 	InputArgCountInvalid
 	// InputCommandUnknown is an unrecognized subcommand.
 	InputCommandUnknown
+	// InputArgValueInvalid is a positional argument value outside the accepted set.
+	InputArgValueInvalid
 )
 
 // CLIInputError is the typed error every command-line input failure is
@@ -68,6 +70,8 @@ func (e *CLIInputError) code() string {
 		return "required_flag_missing"
 	case InputArgCountInvalid:
 		return "arg_count_invalid"
+	case InputArgValueInvalid:
+		return "arg_value_invalid"
 	case InputCommandUnknown:
 		return "command_unknown"
 	default:
@@ -101,6 +105,8 @@ func (e *CLIInputError) baseHint() string {
 		return "Pass the required flag; run the command with --help to see which flags are mandatory."
 	case InputArgCountInvalid:
 		return "Pass the number of positional arguments the command expects; run the command with --help for its usage line."
+	case InputArgValueInvalid:
+		return "Pass one of the documented positional argument values; run the command with --help for valid choices."
 	case InputCommandUnknown:
 		return "Run `jira --help` to list the available commands."
 	default:

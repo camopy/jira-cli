@@ -125,6 +125,7 @@ Goal: Apply the cross-cutting output-mode, envelope, exit-code, headless, pagina
 | Exit 3, `code=flag_syntax_invalid` | Malformed flag token | Re-quote / re-escape the argv |
 | Exit 3, `code=required_flag_missing` | A required flag was not set; `flag` names the first one | Supply that flag |
 | Exit 3, `code=arg_count_invalid` | Wrong number of positional arguments | Match the documented arity |
+| Exit 3, `code=arg_value_invalid` | Positional argument value is outside the command's accepted set | Use one of the documented values |
 | Exit 3, `code=command_unknown` | Unrecognized command; `hint` may carry `Did you mean <name>?` | Use the suggested name |
 | Exit 3, `read-only mode is active` | `JIRA_READ_ONLY=true` or profile `read_only = true` | Unset / flip the profile, or do the work elsewhere |
 | Exit 3 under `--no-input` with no field flags | Empty headless edit | Pass at least `--summary` / `--assignee` / `--json-input` → `edit_issue` |
