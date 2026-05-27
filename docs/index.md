@@ -56,6 +56,23 @@ jira issue list --output=human
 `auto` renders human output on a TTY, JSON on non-TTY stdout, and compact JSON
 when a supported agent environment is detected.
 
+## Themes
+
+```sh
+jira config theme --name catppuccin-mocha
+jira config theme --path ~/my-theme.toml
+```
+
+Bundled names: `default`, `plain`, `catppuccin-{frappe,latte,macchiato,mocha}`,
+`dracula`, `gruvbox-{dark,light}`, `monochrome`, `monokai`, `nord`,
+`one-dark`, `synthwave`, `solarized`, `tokyo-night`.
+
+The bundled palettes are defined in
+[clib's theme presets](https://github.com/gechr/clib/blob/v0.4.6/theme/presets.go);
+the names exposed by `jira config theme --name` are mirrored in
+[jira's config enum](https://github.com/matcra587/jira-cli/blob/main/internal/config/theme.go).
+Override per process with `JIRA_THEME=<name>`.
+
 ## Further Reading
 
 - [Auth](auth.md)
