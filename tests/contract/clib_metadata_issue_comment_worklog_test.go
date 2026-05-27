@@ -63,11 +63,9 @@ func TestIssueCommentAndWorklogFlagsPublishClibMetadata(t *testing.T) {
 
 		{commandPath: "jira issue clone", flagName: "--dry-run", group: "Safety"},
 		{commandPath: "jira issue clone", flagName: "--force", group: "Safety"},
-		{commandPath: "jira issue clone", flagName: "--delete-subtasks", group: "Safety"},
 		{commandPath: "jira issue clone", flagName: "--json-input", group: "Input", placeholder: "FILE", valueHint: "file"},
 		{commandPath: "jira issue move", flagName: "--dry-run", group: "Safety"},
 		{commandPath: "jira issue move", flagName: "--force", group: "Safety"},
-		{commandPath: "jira issue move", flagName: "--delete-subtasks", group: "Safety"},
 		{commandPath: "jira issue move", flagName: "--json-input", group: "Input", placeholder: "FILE", valueHint: "file"},
 		{commandPath: "jira issue delete", flagName: "--dry-run", group: "Safety"},
 		{commandPath: "jira issue delete", flagName: "--force", group: "Safety"},

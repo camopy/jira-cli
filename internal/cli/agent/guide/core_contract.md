@@ -7,7 +7,7 @@ Goal: Apply the cross-cutting output-mode, envelope, exit-code, headless, pagina
 - TTY humans: `--output=human` (or omit; `auto` picks `human` on a TTY).
 - Automation: `--output=json` (full envelope) for parsing; `--output=compact` for the JSON `data` payload only, one line, jq-friendly.
 - Agent harnesses: `auto` resolves to `compact` when an agent env var is set.
-- There is no raw REST passthrough — `json` and `compact` cover every machine-consumption need.
+- There is no separate raw REST passthrough mode — `json` and `compact` cover every machine-consumption need. Some command payloads preserve Jira objects under command-specific keys, such as `data.issue` for `issue view`.
 
 # headless writes (`--no-input`)
 - Set `--no-input` on every mutation when scripting. Under it the CLI never prompts, never reads stdin implicitly, and never silently no-ops.

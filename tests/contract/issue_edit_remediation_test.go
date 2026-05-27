@@ -1,12 +1,14 @@
 package contract
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -55,11 +57,15 @@ func TestIssueEditNoInputJSONInputCallsJiraUpdateWithFieldsAndADF(t *testing.T) 
 			return
 		}
 		if r.Method != http.MethodPut || r.URL.Path != "/rest/api/3/issue/PROJ-1" {
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 		called = true
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-			t.Fatalf("decode request body: %v", err)
+			t.Errorf("decode request body: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"key":"PROJ-1"}`))
@@ -86,6 +92,57 @@ func TestIssueEditNoInputJSONInputCallsJiraUpdateWithFieldsAndADF(t *testing.T) 
 	description, ok := fields["description"].(map[string]any)
 	if !ok || description["type"] != "doc" {
 		t.Fatalf("issue edit request description is not ADF: %+v", fields["description"])
+	}
+}
+
+func TestIssueEditJSONInputWithoutFieldsEnvelopeNamesPayloadShape(t *testing.T) {
+	dir := t.TempDir()
+	input := filepath.Join(dir, "bad-edit.json")
+	if err := os.WriteFile(input, []byte(`{"priority":{"name":"High"}}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "edit", "PROJ-1", "--dry-run", "--no-input", "--json-input", input, "--output=json")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err == nil {
+		t.Fatalf("issue edit accepted json-input without fields envelope:\nstdout=%s\nstderr=%s", stdout.String(), stderr.String())
+	}
+
+	var env struct {
+		Errors []struct {
+			Message string `json:"message"`
+			Hint    string `json:"hint"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &env); err != nil {
+		t.Fatalf("issue edit error output is not JSON: %v\nstdout=%s\nstderr=%s", err, stdout.String(), stderr.String())
+	}
+	if len(env.Errors) == 0 {
+		t.Fatalf("issue edit error envelope has no errors:\nstdout=%s\nstderr=%s", stdout.String(), stderr.String())
+	}
+	msg := env.Errors[0].Message + " " + env.Errors[0].Hint
+	if !strings.Contains(msg, `top-level "fields" object`) {
+		t.Fatalf("error does not name fields-envelope requirement:\nstdout=%s\nstderr=%s", stdout.String(), stderr.String())
+	}
+	if strings.Contains(msg, "provide --json-input") {
+		t.Fatalf("error still tells the user to provide --json-input they already provided:\nstdout=%s\nstderr=%s", stdout.String(), stderr.String())
+	}
+}
+
+func TestIssueEditNoFieldInputKeepsDistinctMissingInputMessage(t *testing.T) {
+	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "edit", "PROJ-1", "--dry-run", "--no-input", "--output=json")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("issue edit accepted empty no-input edit:\n%s", out)
+	}
+	if !strings.Contains(string(out), "provide --summary, --assignee, or --json-input") {
+		t.Fatalf("empty-input remediation changed or disappeared:\n%s", out)
+	}
+	if strings.Contains(string(out), `top-level "fields" object`) {
+		t.Fatalf("empty-input path was conflated with malformed json-input:\n%s", out)
 	}
 }
 

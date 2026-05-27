@@ -332,9 +332,21 @@ func authLoginCommand() *cobra.Command {
 					// authenticated") reads cryptically, so name the real cause.
 					var apiErr *jira.APIError
 					if errors.As(verifyErr, &apiErr) && apiErr.Type == jira.ErrorTypeAuth {
-						return fmt.Errorf("invalid Atlassian account email or API token — Jira rejected the credential (HTTP %d); check the email and that the API token is current at id.atlassian.com, or pass --skip-verify to store it without checking", apiErr.StatusCode)
+						return &config.CredentialError{
+							Type:        config.ErrorTypeAuth,
+							ErrCode:     config.ErrorCode("auth_failed"),
+							Message:     fmt.Sprintf("invalid Atlassian account email or API token - Jira rejected the credential (HTTP %d)", apiErr.StatusCode),
+							HintMsg:     "check the email and that the API token is current at id.atlassian.com, or pass --skip-verify to store it without checking",
+							IsRetryable: false,
+						}
 					}
-					return fmt.Errorf("could not verify the credential against Jira (the site may be temporarily unavailable — retry, or pass --skip-verify to store it without checking): %w", verifyErr)
+					return &config.CredentialError{
+						Type:        config.ErrorTypeAuth,
+						ErrCode:     config.ErrorCodeCredentialBackendUnavailable,
+						Message:     "could not verify the credential against Jira",
+						HintMsg:     "the site may be temporarily unavailable - retry, or pass --skip-verify to store it without checking",
+						IsRetryable: true,
+					}
 				}
 			}
 			// Reconcile the profile's account_id with this login. A fresh
@@ -759,14 +771,26 @@ to skip remote calls and run only the local credential check.`,
 					entry["error"] = cred.Error
 				}
 				if !noProbe && cred.Valid && profile.BaseURL != "" {
-					entry["remote"] = probeRemoteAuth(cmd, profile, projectKey)
+					remote := probeRemoteAuth(cmd, profile, projectKey)
+					entry["remote"] = remote
+					if !remoteAuthValid(remote) {
+						entry["valid"] = false
+					}
 				}
 				profiles = append(profiles, entry)
 			}
-			return cmdutil.WriteEnvelope(cmd, "auth.status", map[string]any{
+			data := map[string]any{
 				"active_profile": cfg.DefaultProfile,
 				"profiles":       profiles,
-			})
+			}
+			statusErrors := authStatusErrors(profiles)
+			if len(statusErrors) > 0 {
+				if err := cmdutil.WriteEnvelopeWithErrors(cmd, "auth.status", data, statusErrors); err != nil {
+					return err
+				}
+				return cmdutil.EnvelopeWritten(fmt.Errorf("auth status found %d unhealthy profile(s)", len(statusErrors)))
+			}
+			return cmdutil.WriteEnvelope(cmd, "auth.status", data)
 		},
 	}
 	cmd.Flags().BoolVar(&noProbe, "no-probe", false, "Skip the remote /myself + /mypermissions check")
@@ -827,7 +851,6 @@ func probeRemoteAuth(cmd *cobra.Command, profile config.Profile, projectKey stri
 		permsOut["status"] = httpStatusOf(resp)
 		permsOut["error"] = err.Error()
 	} else {
-		permsOut["ok"] = true
 		grants := map[string]bool{}
 		anyGranted := false
 		for _, k := range keys {
@@ -837,6 +860,7 @@ func probeRemoteAuth(cmd *cobra.Command, profile config.Profile, projectKey stri
 				anyGranted = true
 			}
 		}
+		permsOut["ok"] = anyGranted
 		permsOut["grants"] = grants
 		if !anyGranted {
 			permsOut["hint"] = "token authenticates but has zero CLI-relevant permissions — check the Resources tab of your scoped token at id.atlassian.com (KAN/SAM1 etc. must be selected)"
@@ -845,6 +869,79 @@ func probeRemoteAuth(cmd *cobra.Command, profile config.Profile, projectKey stri
 	out["permissions"] = permsOut
 
 	return out
+}
+
+func remoteAuthValid(remote map[string]any) bool {
+	if remote == nil {
+		return true
+	}
+	if errText, _ := remote["error"].(string); strings.TrimSpace(errText) != "" {
+		return false
+	}
+	for _, key := range []string{"myself", "permissions"} {
+		if probe, _ := remote[key].(map[string]any); probe != nil {
+			if ok, _ := probe["ok"].(bool); !ok {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func authStatusErrors(profiles []map[string]any) []cli.Error {
+	out := make([]cli.Error, 0)
+	for _, profile := range profiles {
+		if valid, _ := profile["valid"].(bool); valid {
+			continue
+		}
+		name, _ := profile["profile"].(string)
+		errMsg, _ := profile["error"].(string)
+		errorMessages := make([]string, 0, 2)
+		if strings.TrimSpace(errMsg) != "" {
+			errorMessages = append(errorMessages, errMsg)
+		}
+		msg := "profile " + name + " is not authenticated"
+		hint := "run `jira auth login --profile-name " + name + "` with a current Jira API token"
+		if remote, _ := profile["remote"].(map[string]any); remote != nil {
+			if remoteErr, _ := remote["error"].(string); strings.TrimSpace(remoteErr) != "" {
+				if strings.TrimSpace(remoteErr) != strings.TrimSpace(errMsg) {
+					errorMessages = append(errorMessages, remoteErr)
+				}
+			}
+			myselfFailed := false
+			if probe, _ := remote["myself"].(map[string]any); probe != nil {
+				if ok, _ := probe["ok"].(bool); !ok {
+					msg = "profile " + name + " failed remote auth probe"
+					hint = authStatusHint(probe, hint)
+					myselfFailed = true
+				}
+			}
+			if probe, _ := remote["permissions"].(map[string]any); probe != nil {
+				if ok, _ := probe["ok"].(bool); !ok && !myselfFailed {
+					msg = "profile " + name + " has no CLI-relevant Jira permissions"
+					hint = authStatusHint(probe, hint)
+				}
+			}
+		}
+		if len(errorMessages) > 0 {
+			msg += ": " + strings.Join(errorMessages, "; ")
+		}
+		out = append(out, cli.Error{
+			Type:      string(cli.ErrorTypeAuth),
+			Code:      "auth_failed",
+			Message:   msg,
+			Hint:      hint,
+			Retryable: false,
+		})
+	}
+	return out
+}
+
+func authStatusHint(fields map[string]any, fallback string) string {
+	if hint, _ := fields["hint"].(string); strings.TrimSpace(hint) != "" {
+		return hint
+	}
+	return fallback
 }
 
 func httpStatusOf(resp *jira.Response) int {

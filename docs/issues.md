@@ -15,6 +15,10 @@ jira issue list --as-jql --output=json
 `issue list --detail` fetches full issue records. Without it, the list shape is
 the summary set: key, summary, status, assignee, priority, and updated.
 
+`issue view --output=json` preserves the Jira issue object under `data.issue`.
+Common values are nested under `data.issue.fields.*`; Jira custom fields keep
+their raw `customfield_NNNNN` IDs.
+
 ## Create And Edit
 
 ```sh

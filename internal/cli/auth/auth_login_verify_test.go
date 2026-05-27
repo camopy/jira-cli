@@ -172,6 +172,38 @@ func TestAuthLoginAbortsWhenVerificationFails(t *testing.T) {
 	}
 }
 
+func TestAuthLoginRejectedCredentialMapsRemediationToHint(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"errorMessages":["Client must be authenticated"]}`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("JIRA_TEST_TOKEN", "wrong-token")
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+
+	_, _, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+		"--base-url", srv.URL,
+		"--email", "ada@example.com",
+		"--backend", "keyring",
+		"--credential-env", "JIRA_TEST_TOKEN",
+	)
+	if err == nil {
+		t.Fatal("auth login succeeded with rejected credentials")
+	}
+
+	mapped := cli.MapError(err)
+	if mapped.Hint == "" {
+		t.Fatalf("mapped error hint is empty: %+v", mapped)
+	}
+	if strings.Contains(mapped.Message, "check the email") || strings.Contains(mapped.Message, "--skip-verify") {
+		t.Fatalf("message still contains remediation instead of only symptom: %+v", mapped)
+	}
+	if !strings.Contains(mapped.Hint, "check the email") || !strings.Contains(mapped.Hint, "--skip-verify") {
+		t.Fatalf("hint does not carry credential remediation: %+v", mapped)
+	}
+}
+
 // A transient/server failure during verification is NOT a bad credential: it
 // must not be reported as an invalid token, and it should point at
 // --skip-verify so the user can store the credential and verify later.
@@ -203,6 +235,38 @@ func TestAuthLoginVerificationServerErrorIsNotReportedAsBadCredential(t *testing
 	}
 	if _, getErr := keyringTokenFor(t, "default", srv.URL); !errors.Is(getErr, config.ErrCredentialNotFound) {
 		t.Fatalf("credential stored despite a failed verification: %v", getErr)
+	}
+}
+
+func TestAuthLoginVerificationServerErrorMapsRemediationToHint(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"errorMessage":"Site temporarily unavailable"}`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("JIRA_TEST_TOKEN", "good-token")
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+
+	_, _, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+		"--base-url", srv.URL,
+		"--email", "ada@example.com",
+		"--backend", "keyring",
+		"--credential-env", "JIRA_TEST_TOKEN",
+	)
+	if err == nil {
+		t.Fatal("auth login succeeded despite unreachable verification endpoint")
+	}
+
+	mapped := cli.MapError(err)
+	if mapped.Hint == "" {
+		t.Fatalf("mapped error hint is empty: %+v", mapped)
+	}
+	if strings.Contains(mapped.Message, "--skip-verify") || strings.Contains(mapped.Message, "retry") {
+		t.Fatalf("message still contains remediation instead of only symptom: %+v", mapped)
+	}
+	if !strings.Contains(mapped.Hint, "retry") || !strings.Contains(mapped.Hint, "--skip-verify") {
+		t.Fatalf("hint does not carry verification remediation: %+v", mapped)
 	}
 }
 

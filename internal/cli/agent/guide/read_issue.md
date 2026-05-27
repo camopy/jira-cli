@@ -1,5 +1,5 @@
 ## read_issue
-Goal: Fetch one issue's typed JSON envelope so downstream workflows have a stable shape to parse.
+Goal: Fetch one issue's JSON envelope so downstream workflows can inspect Jira's issue object without leaving the CLI contract.
 
 **Decide**
 - Single issue, known key: `jira issue view KEY`.
@@ -10,25 +10,28 @@ Goal: Fetch one issue's typed JSON envelope so downstream workflows have a stabl
 
 **Save**
 > Requires `--output=json`.
-- `data` [object, required] — the typed issue envelope (`key`, `summary`, `status`, `assignee`, `priority`, `updated`, plus other projected fields).
+- `data.issue` [object, required] — the Jira issue object returned by the API, preserved under the CLI envelope.
+- Common values are nested under `data.issue.fields.*`, for example `data.issue.fields.summary`, `data.issue.fields.status.name`, `data.issue.fields.assignee.accountId`, and `data.issue.fields.priority.name`.
+- Jira custom fields keep their raw IDs under `data.issue.fields.customfield_NNNNN`.
 
 **Behavior**
-- The typed projection covers the common fields. A few fields are not yet mapped into the envelope shape and there is no raw REST passthrough mode to recover them — closing the gap means extending the typed projection.
+- The CLI still emits its standard envelope (`ok`, `meta`, `data`, `errors`, `warnings`). Within `data.issue`, field names follow Jira's JSON shape, including camelCase keys such as `accountId`.
+- `issue view` does not have a separate raw REST passthrough mode; the command's normal JSON payload is already the Jira issue object wrapped by the CLI envelope.
 
 | Field                              | Typed JSON     |
 |------------------------------------|----------------|
-| `parent`                           | not projected  |
-| `subtasks`                         | not projected  |
-| `issuetype.name` on `issue view`   | may be `null`  |
+| `parent`                           | `data.issue.fields.parent` when Jira returns it |
+| `subtasks`                         | `data.issue.fields.subtasks` when Jira returns it |
+| `issuetype.name` on `issue view`   | `data.issue.fields.issuetype.name` when Jira returns it |
 
-- Because `subtasks` is not projected, there is no CLI-side verification of the subtask list after a → `create_subtask` call.
+- Because `issue view` preserves Jira's issue shape, absence of a key means Jira did not return it for the requested field set/token, not that the CLI projected it away.
 
 **Recover**
 | Symptom | Cause | Next |
 |---|---|---|
 | Exit `2` (`not_found`) | Wrong key, or the active profile cannot see this issue | Verify the key with → `search_jql` or → `list_issues` under the right project/profile |
-| `parent` / `subtasks` absent from JSON | Known typed-output gap (not an error) | Treat as unavailable from the CLI for now; do not assume "no subtasks" |
-| `issuetype.name` is `null` | Known typed-output gap on some issue types | Cross-check with → `list_issues` (richer projection per row) |
+| `parent` / `subtasks` absent from JSON | Jira did not include that field in the returned issue object | Cross-check field visibility/scopes or use → `search_jql` with explicit fields |
+| `issuetype.name` is `null` | Jira did not include or expose the issue type name | Cross-check with → `list_issues` or → `search_jql` |
 
 **Next**
 - Then: → `list_comments` to read the discussion thread on the same key.

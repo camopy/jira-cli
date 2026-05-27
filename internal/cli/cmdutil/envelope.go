@@ -17,6 +17,33 @@ func WriteEnvelope(cmd *cobra.Command, command string, data any) error {
 	return WriteEnvelopeWithWarnings(cmd, command, data, nil)
 }
 
+// WriteEnvelopeWithErrors emits an ok:false envelope while preserving a
+// command's data payload. Use this when the command successfully gathered
+// diagnostics but the diagnostics themselves mean the command is unhealthy
+// (for example auth.status with an invalid profile).
+func WriteEnvelopeWithErrors(cmd *cobra.Command, command string, data any, errorsOut []cli.Error) error {
+	if len(errorsOut) == 0 {
+		return WriteEnvelope(cmd, command, data)
+	}
+	if UsePlainOutput(cmd) {
+		return cli.WriteCommandPlain(cmd.OutOrStdout(), command, data, PlainOptionsForCommand(cmd)...)
+	}
+	exit := cli.ExitCode(errorsOut[0])
+	env := cli.Envelope{
+		OK: false,
+		Meta: cli.Meta{
+			Command:   command,
+			ExitCode:  &exit,
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			RequestID: cli.NewRequestID(),
+		},
+		Data:     data,
+		Errors:   errorsOut,
+		Warnings: []cli.Warning{},
+	}
+	return cli.WriteEnvelope(cmd.OutOrStdout(), env)
+}
+
 // WriteEnvelopeWithRawWarnings emits the standard envelope shape with a
 // caller-supplied list of free-form warning maps. Necessary for warnings
 // whose schema (cache-truncated, rate-limit-during-paginate) carries

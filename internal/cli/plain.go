@@ -105,6 +105,10 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 	switch command {
 	case "issue.list":
 		return writeIssueListPlain(logger, data, cfg)
+	case "issue.view":
+		return WriteIssueViewPlain(w, command, data, opts...)
+	case "issue.transitions":
+		return WriteIssueTransitionsPlain(w, command, data, opts...)
 	case "auth.status":
 		return writeAuthStatusPlain(logger, data, cfg)
 	case "issue.comment.list":
@@ -633,23 +637,50 @@ func formatHumanField(value any) string {
 }
 
 func plainFieldValue(value any) any {
-	switch v := value.(type) {
-	case nil:
+	if value == nil {
 		return ""
-	case string:
-		return v
-	case fmt.Stringer:
-		return v.String()
 	}
 	rv := reflect.ValueOf(value)
-	if rv.IsValid() && (rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array) && rv.Len() == 0 {
-		return "[]"
+	if rv.IsValid() && (rv.Kind() == reflect.Pointer || rv.Kind() == reflect.Interface) && rv.IsNil() {
+		return ""
 	}
-	b, err := json.Marshal(value)
-	if err == nil {
-		return string(b)
+	switch v := value.(type) {
+	case string:
+		return plainStringValue(v)
+	case fmt.Stringer:
+		return plainStringValue(v.String())
+	}
+	for rv.IsValid() && (rv.Kind() == reflect.Pointer || rv.Kind() == reflect.Interface) {
+		if rv.IsNil() {
+			return ""
+		}
+		rv = rv.Elem()
+	}
+	if rv.IsValid() && rv.CanInterface() {
+		value = rv.Interface()
+	}
+	switch {
+	case rv.IsValid() && (rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array):
+		if rv.Len() == 0 {
+			return "[]"
+		}
+		return "[" + plainPluralize(rv.Len(), "item", "items") + "]"
+	case rv.IsValid() && rv.Kind() == reflect.Map:
+		if rv.Len() == 0 {
+			return "{}"
+		}
+		return "{...}"
+	case rv.IsValid() && rv.Kind() == reflect.Struct:
+		return "{...}"
 	}
 	return fmt.Sprint(value)
+}
+
+func plainStringValue(value string) string {
+	if strings.ContainsAny(value, "\r\n\t") {
+		return normalizePlain(value)
+	}
+	return value
 }
 
 func adfDocumentFromMap(value map[string]any) (adf.Document, bool) {
@@ -688,7 +719,19 @@ func normalizeMapList(v any) []map[string]any {
 		}
 		return out
 	}
-	return nil
+	rv := reflect.ValueOf(v)
+	if !rv.IsValid() || (rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array) {
+		return nil
+	}
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	var out []map[string]any
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil
+	}
+	return out
 }
 
 // writeAuthStatusPlain renders the auth.status envelope as a per-profile

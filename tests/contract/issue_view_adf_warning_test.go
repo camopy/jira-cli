@@ -18,6 +18,7 @@ func issueViewADFServer(t *testing.T) *httptest.Server {
 		"id": "10001", "key": "PROJ-1",
 		"fields": {
 			"summary": "card issue",
+			"customfield_10000": {"value": "Raw option"},
 			"description": {
 				"type": "doc", "version": 1,
 				"content": [
@@ -34,7 +35,8 @@ func issueViewADFServer(t *testing.T) *httptest.Server {
 			_, _ = w.Write([]byte(issue))
 			return
 		}
-		t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusInternalServerError)
 	}))
 }
 
@@ -57,7 +59,14 @@ func TestIssueViewJSONDoesNotEmitFalseADFWarning(t *testing.T) {
 			Type string `json:"type"`
 		} `json:"warnings"`
 		Data struct {
-			Issue json.RawMessage `json:"issue"`
+			Issue struct {
+				Key    string `json:"key"`
+				Fields struct {
+					Summary     string          `json:"summary"`
+					CustomField json.RawMessage `json:"customfield_10000"`
+					Description json.RawMessage `json:"description"`
+				} `json:"fields"`
+			} `json:"issue"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(out, &env); err != nil {
@@ -69,8 +78,14 @@ func TestIssueViewJSONDoesNotEmitFalseADFWarning(t *testing.T) {
 		}
 	}
 	// The full ADF must still be present in the data payload.
-	if !strings.Contains(string(env.Data.Issue), "inlineCard") {
+	if !strings.Contains(string(env.Data.Issue.Fields.Description), "inlineCard") {
 		t.Fatalf("json issue view did not carry the full ADF: %s", out)
+	}
+	if env.Data.Issue.Key != "PROJ-1" || env.Data.Issue.Fields.Summary != "card issue" {
+		t.Fatalf("json issue view did not preserve common fields under data.issue.fields: %+v\n%s", env.Data.Issue, out)
+	}
+	if !strings.Contains(string(env.Data.Issue.Fields.CustomField), "Raw option") {
+		t.Fatalf("json issue view did not preserve raw custom field IDs under data.issue.fields: %+v\n%s", env.Data.Issue.Fields.CustomField, out)
 	}
 }
 

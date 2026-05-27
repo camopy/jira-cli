@@ -98,6 +98,58 @@ func TestRunMutationFlattensCustomFieldsBeforeScreenValidation(t *testing.T) {
 	}
 }
 
+func TestRunMutationExemptsSelectedFieldsFromScreenValidation(t *testing.T) {
+	out := pipeline.RunMutation(pipeline.MutationInput{
+		Mode: adfmode.ModeStrict,
+		Fields: map[string]any{
+			"project":   map[string]any{"key": "KAN"},
+			"issuetype": map[string]any{"name": "Task"},
+			"summary":   "move me",
+		},
+		ScreenValidationExemptFields: map[string]bool{
+			"project":   true,
+			"issuetype": true,
+		},
+		Schema: pipeline.ScreenSchema{
+			Project:     "JCT",
+			IssueType:   "Task",
+			ValidFields: map[string]bool{"summary": true},
+		},
+		DryRun: true,
+	})
+	if out.Aborted {
+		t.Fatalf("exempt project/issuetype fields should bypass screen validation, got %+v", out)
+	}
+	if out.SubmitFields["project"] == nil || out.SubmitFields["issuetype"] == nil || out.SubmitFields["summary"] != "move me" {
+		t.Fatalf("exempt and validated fields should all be submitted: %+v", out.SubmitFields)
+	}
+}
+
+func TestRunMutationDoesNotExemptCustomFieldsFromScreenValidation(t *testing.T) {
+	out := pipeline.RunMutation(pipeline.MutationInput{
+		Mode: adfmode.ModeStrict,
+		Fields: map[string]any{
+			"customfield_77777": "off screen",
+		},
+		ScreenValidationExemptFields: map[string]bool{
+			"customfield_77777": true,
+		},
+		Schema: pipeline.ScreenSchema{
+			Project:     "JCT",
+			IssueType:   "Task",
+			ValidFields: map[string]bool{"summary": true},
+		},
+		DryRun: true,
+	})
+	if !out.Aborted || out.AbortedAt != pipeline.StageFieldSchema {
+		t.Fatalf("customfield exemption should not bypass screen validation, got %+v", out)
+	}
+	var fve *pipeline.FieldValidationError
+	if !errors.As(out.Err, &fve) || fve.Field != "customfield_77777" {
+		t.Fatalf("expected customfield_77777 field validation error, got %T %[1]v", out.Err)
+	}
+}
+
 // When the screen schema declares a customfield's type, the encoder
 // validates and encodes the value per that type — not by guessing from
 // the registry's type-name keys. A select customfield typed by the

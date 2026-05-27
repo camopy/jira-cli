@@ -62,7 +62,7 @@ func TestReadOnlyModeAllowsReadsAndDryRuns(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"jira me (no client)", []string{"--output=json", "auth", "status"}},
+		{"auth status local check", []string{"--output=json", "auth", "status", "--no-probe"}},
 		{"issue create dry-run", []string{
 			"issue", "create", "--dry-run", "--no-input",
 			"--json-input", writeIssueCreatePayload(t), "--output=json",
@@ -70,7 +70,7 @@ func TestReadOnlyModeAllowsReadsAndDryRuns(t *testing.T) {
 	} {
 		args := append([]string{"run", "../../cmd/jira", "--config", cfg}, tc.args...)
 		cmd := exec.Command("go", args...)
-		cmd.Env = append(os.Environ(), "JIRA_READ_ONLY=1")
+		cmd.Env = append(os.Environ(), "JIRA_READ_ONLY=1", "JIRA_TOKEN_DEFAULT=test-token")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("%s failed under read-only mode:\n%s\nerr=%v", tc.name, out, err)

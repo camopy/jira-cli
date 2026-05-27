@@ -63,6 +63,11 @@ type MutationInput struct {
 	// SchemaFetcher (lazy with refresh-once + known-safe fallback).
 	Schema        ScreenSchema
 	SchemaFetcher SchemaFetcher
+	// ScreenValidationExemptFields skips stage 3 only for native fields
+	// that are already in Jira's API-ready shape. customfield_NNNNN keys
+	// still go through screen validation so their schema-backed encoding
+	// remains available in stage 4.
+	ScreenValidationExemptFields map[string]bool
 
 	// Stage 4 — customfield encoding. The Fields map is what the caller
 	// would post to Jira's REST API. Each customfield_xxxxx value is
@@ -184,16 +189,19 @@ func RunMutation(in MutationInput) MutationResult {
 		res.Err = flattenErr
 		return res
 	}
+	schemaFields, exemptFields := splitScreenValidationFields(flatFields, in.ScreenValidationExemptFields)
 
 	schema := in.Schema
 	var fields map[string]any
-	if in.SchemaFetcher != nil {
+	if len(schemaFields) == 0 {
+		fields = mergeScreenValidationExemptFields(map[string]any{}, exemptFields)
+	} else if in.SchemaFetcher != nil {
 		// Resolve via fetcher; refresh once on a transient unknown.
 		s, _, err := ResolveScreenSchemaStrict(in.SchemaFetcher)
 		switch {
 		case err == nil:
 			schema = s
-			validated, warnings, err := ValidateFields(flatFields, schema, in.Mode)
+			validated, warnings, err := ValidateFields(schemaFields, schema, in.Mode)
 			res.Warnings = append(res.Warnings, warnings...)
 			if err != nil {
 				res.Aborted = true
@@ -201,7 +209,7 @@ func RunMutation(in MutationInput) MutationResult {
 				res.Err = err
 				return res
 			}
-			fields = validated
+			fields = mergeScreenValidationExemptFields(validated, exemptFields)
 		case errors.Is(err, ErrSchemaNotFound):
 			// A 404 / unknown project or issue type. This is a definite
 			// user error, never transient — fatal in every mode. The
@@ -214,9 +222,9 @@ func RunMutation(in MutationInput) MutationResult {
 			// Best-effort + a transient miss: strip to the known-safe
 			// field set so an unresolved screen never lets an unverified
 			// field through.
-			f, warnings := ApplyKnownSafeFallback(flatFields)
+			f, warnings := ApplyKnownSafeFallback(schemaFields)
 			res.Warnings = append(res.Warnings, warnings...)
-			fields = f
+			fields = mergeScreenValidationExemptFields(f, exemptFields)
 		case errors.Is(err, ErrSchemaUnknown):
 			// Strict + a transient miss (no createmeta access, transport
 			// failure, timeout). The CLI cannot tell which custom fields
@@ -238,7 +246,7 @@ func RunMutation(in MutationInput) MutationResult {
 		// Preloaded schema (non-nil ValidFields means caller actually
 		// supplied one; empty map vs nil distinguishes "valid empty
 		// schema rejects everything" from "no schema, skip stage 3").
-		validated, warnings, err := ValidateFields(flatFields, schema, in.Mode)
+		validated, warnings, err := ValidateFields(schemaFields, schema, in.Mode)
 		res.Warnings = append(res.Warnings, warnings...)
 		if err != nil {
 			res.Aborted = true
@@ -246,7 +254,7 @@ func RunMutation(in MutationInput) MutationResult {
 			res.Err = err
 			return res
 		}
-		fields = validated
+		fields = mergeScreenValidationExemptFields(validated, exemptFields)
 	} else {
 		// No schema provided — caller intentionally bypassed stage 3.
 		// Stage 4 still runs; the customfield registry will reject any
@@ -272,6 +280,33 @@ func RunMutation(in MutationInput) MutationResult {
 	}
 	res.Submitted = true
 	return res
+}
+
+func splitScreenValidationFields(fields map[string]any, exempt map[string]bool) (map[string]any, map[string]any) {
+	if len(fields) == 0 {
+		return map[string]any{}, map[string]any{}
+	}
+	validated := make(map[string]any, len(fields))
+	skipped := map[string]any{}
+	for key, value := range fields {
+		if exempt[key] && !customfieldIDPattern.MatchString(key) {
+			skipped[key] = value
+			continue
+		}
+		validated[key] = value
+	}
+	return validated, skipped
+}
+
+func mergeScreenValidationExemptFields(fields, exempt map[string]any) map[string]any {
+	out := make(map[string]any, len(fields)+len(exempt))
+	for key, value := range fields {
+		out[key] = value
+	}
+	for key, value := range exempt {
+		out[key] = value
+	}
+	return out
 }
 
 // customfieldIDPattern matches Jira customfield ID keys (customfield_NNNN).

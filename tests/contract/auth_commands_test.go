@@ -11,7 +11,6 @@ import (
 
 func TestAuthCommandsAreWired(t *testing.T) {
 	for _, args := range [][]string{
-		{"auth", "status"},
 		{"auth", "refresh"},
 		{"auth", "token"},
 	} {
@@ -23,6 +22,17 @@ func TestAuthCommandsAreWired(t *testing.T) {
 		if strings.TrimSpace(string(out)) == "" {
 			t.Fatalf("%v produced no output", args)
 		}
+	}
+
+	cfg := jiraConfigWithProfile(t, "status-missing", "https://status-missing.invalid")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json", "auth", "status")
+	cmd.Env = append(os.Environ(), "JIRA_TOKEN_STATUS_MISSING=")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("[auth status] succeeded despite missing credential:\n%s", out)
+	}
+	if strings.TrimSpace(string(out)) == "" {
+		t.Fatal("[auth status] produced no output")
 	}
 }
 

@@ -497,6 +497,15 @@ func resolveAssigneeField(input string, profile config.Profile) (any, bool, erro
 	}
 }
 
+func issueEditPayloadHasTopLevelFieldCandidates(payload map[string]any) bool {
+	for key := range payload {
+		if key != "fields" {
+			return true
+		}
+	}
+	return false
+}
+
 // validateIssueCreateRequired enforces the spec rule "headless write commands
 // require complete input via --no-input + --json-input". It checks that
 // project_key, issue_type, and summary are derivable from the supplied JSON
@@ -612,7 +621,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 			}
 			fields, ok := payload["fields"].(map[string]any)
 			if !ok {
-				return fmt.Errorf("issue edit JSON input must contain a fields object")
+				return fmt.Errorf(`validation: --json-input payload must contain a top-level "fields" object, e.g. {"fields": {"summary": "New"}}`)
 			}
 			// --summary / --assignee shortcuts, applied on top of any --json-input.
 			// Resolve the profile only — building a client here would
@@ -637,6 +646,9 @@ In headless mode (--no-input), at least one field flag MUST be provided
 			// workflow that must NOT trip the refusal. det.Agent covers
 			// LLM-agent harnesses regardless of stdin shape.
 			if len(fields) == 0 {
+				if jsonInput != "" && issueEditPayloadHasTopLevelFieldCandidates(payload) {
+					return fmt.Errorf(`validation: --json-input payload has no recognized fields; wrap issue fields under a top-level "fields" object, e.g. {"fields": {"summary": "New"}}`)
+				}
 				if noInput {
 					return fmt.Errorf("validation: no fields specified for issue edit; provide --summary, --assignee, or --json-input")
 				}
@@ -909,6 +921,12 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 				Fields: pipeFields,
 				DryRun: dryRun,
 			}
+			if name == "move" {
+				destructiveIn.ScreenValidationExemptFields = map[string]bool{
+					"project":   true,
+					"issuetype": true,
+				}
+			}
 			if destructiveClient != nil && !cmdutil.ReadOnlyEnabled(cmd) {
 				destructiveIn.SchemaFetcher = newEditScreenSchemaFetcher(
 					cmd.Context(), cmdutil.ServicesForClient(destructiveClient).Project(0),
@@ -979,11 +997,13 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
 	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive mutation")
-	cmd.Flags().BoolVar(&deleteSubtasks, "delete-subtasks", false, "(delete only) also delete the issue's subtasks (Jira refuses delete otherwise when subtasks exist)")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read mutation payload from JSON file")
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	cmdutil.ExtendForceFlag(cmd.Flags())
-	cmdutil.ExtendFlag(cmd.Flags(), "delete-subtasks", clib.FlagExtra{Group: "Safety"})
+	if name == "delete" {
+		cmd.Flags().BoolVar(&deleteSubtasks, "delete-subtasks", false, "Also delete the issue's subtasks (Jira refuses delete otherwise when subtasks exist)")
+		cmdutil.ExtendFlag(cmd.Flags(), "delete-subtasks", clib.FlagExtra{Group: "Safety"})
+	}
 	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
 	return cmd
 }
