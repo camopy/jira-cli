@@ -50,18 +50,19 @@ func aliasSetCommand() *cobra.Command {
 		Long: `Create a shortcut for a jira command.
 
 The stored expansion is parsed back to an argv with POSIX shell grammar.
-` + "`jira alias set`" + ` quotes each argument when it writes the config,
-so a round-tripped alias is always faithful. A hand-edited config alias
-must follow the same grammar: an unquoted '#' starts a comment and
-everything after it is dropped. Quote a literal '#' (e.g. "'#tag'") to
-keep it.`,
+When EXPANSION reaches ` + "`jira alias set`" + ` as a single shell-quoted
+string, it is stored verbatim. When EXPANSION arrives as multiple argv
+tokens, each token is quoted before storage so the round trip remains
+faithful. A hand-edited config alias must follow the same grammar: an
+unquoted '#' starts a comment and everything after it is dropped. Quote a
+literal '#' (e.g. "'#tag'") to keep it.`,
 		Args: cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := strings.TrimSpace(args[0])
 			if err := validateAliasName(cmd.Root(), name); err != nil {
 				return err
 			}
-			expansion := quoteAliasExpansion(args[1:])
+			expansion := storeAliasExpansion(args[1:])
 			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
@@ -267,6 +268,13 @@ func sortedAliasNames(aliases map[string]string) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func storeAliasExpansion(args []string) string {
+	if len(args) == 1 {
+		return args[0]
+	}
+	return quoteAliasExpansion(args)
 }
 
 // quoteAliasExpansion joins argv into a single stored alias string with

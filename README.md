@@ -181,6 +181,7 @@ references.
 
 ```sh
 jira alias set mine -- issue list --assignee me
+jira alias set inbox "issue list --assignee me"
 jira alias list
 jira alias import aliases.yml
 jira alias delete mine

@@ -107,15 +107,15 @@ linters:
         linters:
           - gosec
         text: "G101|G204|G304|G306"
-      - path: '^internal/(cli/stdin/stdin|editor/roundtrip)\.go$'
+      - path: '(^|.*/)internal/(cli/stdin/stdin|editor/roundtrip)\.go$'
         linters:
           - gosec
         text: "G304"
-      - path: '^internal/cache/cache\.go$'
+      - path: '(^|.*/)internal/cache/cache\.go$'
         linters:
           - gosec
         text: "G304"
-      - path: '^(internal/cli/alias/alias|internal/config/(loader|query))\.go$'
+      - path: '(^|.*/)internal/(cli/alias/alias|config/loader|config/query)\.go$'
         linters:
           - gosec
         text: "G304"

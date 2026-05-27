@@ -66,6 +66,52 @@ func TestAliasSetListDeleteAndExpansion(t *testing.T) {
 	}
 }
 
+func TestAliasSetSingleStringExpansionStoresVerbatimAndDispatches(t *testing.T) {
+	var seenJQL string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/rest/api/3/search/jql" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		var body struct {
+			JQL string `json:"jql"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode search body: %v", err)
+		}
+		seenJQL = body.JQL
+		_, _ = w.Write([]byte(
+			`{"isLast":true,"issues":[{"key":"PROJ-1","fields":{"summary":"Alias hit"}}]}`,
+		))
+	}))
+	defer srv.Close()
+
+	cfg := jiraConfig(t, srv.URL)
+	expansion := " issue list --assignee me "
+	cmd := exec.Command(
+		"go", "run", "../../cmd/jira",
+		"--config", cfg,
+		"alias", "set", "inbox-test", expansion,
+		"--output=json",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("alias set error = %v\n%s", err, out)
+	}
+	if !envelopeHasKV(t, out, "expansion", expansion) {
+		t.Fatalf("alias set wrapped single-string expansion:\n%s", out)
+	}
+
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "inbox-test", "--output=json")
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("alias dispatch error = %v\n%s", err, out)
+	}
+	if seenJQL != "assignee = currentUser() ORDER BY updated DESC" ||
+		!envelopeHasKV(t, out, "key", "PROJ-1") {
+		t.Fatalf("alias dispatch seenJQL=%q output=%s", seenJQL, out)
+	}
+}
+
 func TestAliasImportFromYAML(t *testing.T) {
 	cfg := jiraConfig(t, "http://127.0.0.1:1")
 	path := filepath.Join(t.TempDir(), "aliases.yml")
