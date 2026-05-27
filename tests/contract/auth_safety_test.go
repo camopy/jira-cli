@@ -2,6 +2,9 @@ package contract
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -10,7 +13,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+
+	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/config"
 )
 
 func TestAuthLoginRefusesPromptsInHeadlessJSONMode(t *testing.T) {
@@ -53,6 +61,126 @@ func TestAuthLoginDoesNotExposeRawTokenFlag(t *testing.T) {
 	}
 	if strings.Contains(string(out), "--token") {
 		t.Fatalf("auth login exposes raw token flag:\n%s", out)
+	}
+}
+
+func TestAuthLoginFailedVerifyForNewProfileDoesNotMutateExistingProfile(t *testing.T) {
+	var verifyHits atomic.Int32
+	rejectingJira := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		verifyHits.Add(1)
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"errorMessages":["Client must be authenticated"]}`))
+	}))
+	t.Cleanup(rejectingJira.Close)
+
+	bin := buildJiraBinary(t)
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	serviceHash := sha256.Sum256([]byte(configPath))
+	// KeyringStore resolves JIRA_KEYRING_SERVICE on every Get/Put/Delete call.
+	// This per-test namespace keeps the seeded and cleanup refs away from both
+	// real credentials and other contract runs using the suite default service.
+	t.Setenv("JIRA_KEYRING_SERVICE", "jira-cli-contract-"+hex.EncodeToString(serviceHash[:8]))
+	probeProfile := "probe-" + hex.EncodeToString(serviceHash[8:12])
+	initial := `default_profile = "default"
+
+[[profiles]]
+name = "default"
+base_url = "https://work.atlassian.net"
+auth_type = "token"
+email = "user@example.com"
+account_id = "account-123"
+secret_backend = "keyring"
+onepassword_account = "Team"
+vault = "Private"
+item = "jira-cli-default"
+refresh_interval = 30
+timeout = 30
+workday_seconds = 28800
+`
+	if err := os.WriteFile(configPath, []byte(initial), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	store := cmdutil.CredentialStoreFor(config.SecretBackendKeyring)
+	// Use the same identity helper as the binary so the assertions target the
+	// exact keyring entries auth login would write or preserve.
+	mustRef := func(profile, baseURL string) config.SecretRef {
+		t.Helper()
+		ref, err := cmdutil.SecretRefFor(config.Profile{
+			Name:          profile,
+			BaseURL:       config.NormalizeBaseURL(baseURL),
+			SecretBackend: config.SecretBackendKeyring,
+		}, config.SecretBackendKeyring)
+		if err != nil {
+			t.Fatalf("SecretRefFor(%q, %q) error = %v", profile, baseURL, err)
+		}
+		return ref
+	}
+	defaultRef := mustRef("default", "https://work.atlassian.net")
+	probeRef := mustRef(probeProfile, rejectingJira.URL)
+	t.Cleanup(func() {
+		_ = store.Delete(context.Background(), defaultRef)
+		_ = store.Delete(context.Background(), probeRef)
+	})
+
+	cmd := exec.Command(bin, "--config", configPath, "--output=json", "auth", "login",
+		"--profile-name", "default",
+		"--base-url", "https://work.atlassian.net",
+		"--email", "user@example.com",
+		"--backend", "keyring",
+		"--credential-env", "JIRA_EXISTING_TOKEN",
+		"--skip-verify",
+		"--no-input",
+	)
+	const existingCredential = "existing-token-1234"
+	cmd.Env = append(os.Environ(), "JIRA_EXISTING_TOKEN="+existingCredential)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("seed auth login error = %v\n%s", err, out)
+	}
+	before, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("ReadFile() before failed login error = %v", err)
+	}
+	beforeHash := sha256.Sum256(before)
+
+	cmd = exec.Command(bin, "--config", configPath, "--output=json", "auth", "login",
+		"--profile-name", probeProfile,
+		"--base-url", rejectingJira.URL,
+		"--email", "john.doe@example.com",
+		"--backend", "keyring",
+		"--credential-env", "JIRA_BAD_TOKEN",
+		"--no-input",
+	)
+	cmd.Env = append(os.Environ(), "JIRA_BAD_TOKEN=wrong-token-9999")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("auth login with rejected new-profile credential succeeded:\n%s", out)
+	}
+	authFailureExitCode := cli.ExitCode(cli.NewError(cli.ErrorTypeAuth, "auth verification failed"))
+	assertExitCode(t, err, authFailureExitCode, "auth verification failures -> exit 1")
+	if got := verifyHits.Load(); got == 0 {
+		t.Fatalf("auth login failed before reaching credential verification:\n%s", out)
+	}
+
+	// auth login verifies the in-memory credential before UpsertProfile,
+	// config.Save, or StoreCredentialTransactionally. A failed verify must
+	// therefore leave the file and all existing secret refs untouched.
+	after, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("ReadFile() after failed login error = %v", err)
+	}
+	if afterHash := sha256.Sum256(after); afterHash != beforeHash {
+		t.Fatalf("failed new-profile login mutated config.toml\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+
+	stored, err := config.StoredCredential(context.Background(), store, defaultRef)
+	if err != nil {
+		t.Fatalf("default profile credential missing after failed login: %v", err)
+	}
+	if stored != existingCredential {
+		t.Fatalf("default profile credential = %q, want %q", stored, existingCredential)
+	}
+	if _, err := config.StoredCredential(context.Background(), store, probeRef); !errors.Is(err, config.ErrCredentialNotFound) {
+		t.Fatalf("failed new-profile login stored a credential for %s: %v", probeProfile, err)
 	}
 }
 
