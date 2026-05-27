@@ -1,5 +1,6 @@
 ## add_weblink
 Goal: Attach a remote URL (with display title) to a Jira issue via the remote-link endpoint, rejecting non-web schemes client-side.
+When: external context (a PR, design doc, dashboard) belongs on the issue without uploading the file itself.
 
 **Decide**
 

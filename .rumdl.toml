@@ -1,25 +1,85 @@
-# Markdown lint config for jira-cli.
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rvben/rumdl/main/rumdl.schema.json
+# rumdl configuration for jira-cli.
 #
-# MD013 (line length) is enforced for prose, but code blocks and tables
-# are excluded — wrapping example JSON, shell commands, and JQL queries
-# at 80 columns either changes their meaning (JSON parses differently)
-# or makes them harder to copy-paste.
+# Mirrors slack-cli's config: same content-tab fence patterns, same Google
+# Markdown style guide base, same project-specific exclusions.
+# https://google.github.io/styleguide/docguide/style.html
 #
-# `internal/cli/agent/guide/**` is excluded entirely: it's the
-# embedded LLM-facing runbook, split into one `<slug>.md` file per
-# workflow plus `_preamble.md`, structurally modelled after slack-cli's
-# `internal/agenthelp/guide.go` (a Go-string-embedded guide that
-# bypasses markdown lint by living inside a `.go` file). The format
-# uses `# subgroup` headings inside `**Decide**` blocks and dense
-# prose lines that intentionally clash with MD013 / MD024 — the
-# audience is an LLM reading raw markdown, not a human in an 80-col
-# terminal. Treat the slack-cli embedded guide as the precedent.
+# `internal/cli/agent/guide/**` is excluded entirely: it's the embedded
+# LLM-facing runbook, split into one `<slug>.md` file per workflow plus
+# `_preamble.md`, structurally modelled after slack-cli's
+# `internal/agenthelp/guide.go` (a Go-string-embedded guide that bypasses
+# markdown lint by living inside a `.go` file). The format uses `# subgroup`
+# headings inside `**Decide**` blocks and dense prose lines that intentionally
+# clash with several rules — the audience is an LLM reading raw markdown, not
+# a human in an 80-col terminal.
 
 [global]
-exclude = ["internal/cli/agent/guide/**"]
+flavor = "gfm"
+respect_gitignore = true
 
-[MD013]
-line-length = 80
-code-blocks = false
-tables = false
-headings = true
+exclude = [
+    ".git",
+    ".agents",
+    ".claude",
+    ".github",
+    "build",
+    "dist",
+    "node_modules",
+    "vendor",
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "LICENSE.md",
+    "testdata/**",
+    "internal/cli/agent/guide/**",
+]
+
+disable = [
+    "MD013",  # Line length - fights one-sentence-per-line style
+    "MD014",  # Commands must show output - too prescriptive
+    "MD024",  # Duplicate headings - legitimate in structured docs
+    "MD025",  # Single top-level heading - too rigid for frontmatter files
+    "MD026",  # Trailing punctuation in heading - "What is X?" is fine
+    "MD033",  # Inline HTML - GFM supports it, needed for details/br/badges
+    "MD034",  # Bare URLs - GFM auto-links them
+    "MD036",  # Emphasis as heading - high false-positive rate
+    "MD041",  # First line must be heading - breaks frontmatter
+    "MD043",  # Required heading structure - too prescriptive
+    "MD044",  # Proper name capitalisation - not worth maintaining a list
+    "MD046",  # Code block style - content-tab fences are 4-space indented and read as indented blocks
+    "MD054",  # Link style consistency - mixed inline/reference is legitimate
+    "MD059",  # Descriptive link text - too many false positives
+    "MD060",  # Table column alignment - creates diff noise
+    "MD063",  # Heading capitalisation - fights sentence-case style
+    "MD064",  # Multiple consecutive spaces - catches table alignment
+    "MD066",  # Footnote validation - not using footnotes
+    "MD067",  # Footnote ordering - not using footnotes
+    "MD068",  # Empty footnotes - not using footnotes
+    "MD069",  # Duplicate list markers - not useful
+    "MD072",  # Frontmatter key sort - key order should be semantic
+    "MD073",  # TOC validation - not using TOCs
+    "MD074",  # MkDocs nav validation - not using MkDocs
+    "MD076",  # List item spacing - personal preference
+    "MD077",  # List continuation indent - too strict
+]
+
+# Headings
+[MD003]
+style = "atx"
+
+# Lists
+[MD004]
+style = "asterisk"
+
+[MD007]
+indent = 4
+
+[MD029]
+style = "one_or_ordered"
+
+[MD030]
+ul_single = 3
+ul_multi = 3
+ol_single = 2
+ol_multi = 2

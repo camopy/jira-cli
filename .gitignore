@@ -53,3 +53,6 @@ docs/reference/
 .claude/skills/*
 !.claude/skills/jira-cli/
 !.claude/skills/jira-cli/**
+
+# Zensical site build output (uvx --from zensical zensical build)
+site/

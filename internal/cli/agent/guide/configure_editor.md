@@ -1,5 +1,6 @@
 ## configure_editor
 Goal: Pin the editor used by the kubectl-style `jira issue edit KEY` flow so TTY edits land in a tool that blocks until you save, instead of forking and losing your change.
+When: a human user reports that `jira issue edit KEY` either backgrounds or loses changes on save — agents themselves should use `edit_issue` and never trigger this flow.
 
 **Decide**
 - Used only for the bare `jira issue edit KEY` form (no field flags). Agents must pass `--summary`, `--assignee`, or `--json-input` instead → see `edit_issue`.

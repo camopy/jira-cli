@@ -65,5 +65,14 @@ For the full ADF specification, see Atlassian's
 jira agent adf-matrix --output=json
 ```
 
-`agent adf-matrix` emits the live support set as JSON — one entry per node
+`agent adf-matrix` emits the live support set as JSON, one entry per node
 and mark, with its capabilities and the Atlassian documentation link.
+
+## Further reading
+
+*   [Atlassian ADF node reference](https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/):
+    the canonical structure spec for every node and mark.
+*   [ADF JSON Schema](https://go.atlassian.com/adf-json-schema):
+    the machine-readable schema Atlassian publishes for validation.
+*   [`agent adf-matrix`](agent.md): the CLI's live coverage matrix.
+*   [`custom-fields`](custom-fields.md): rich-text custom fields that accept ADF.

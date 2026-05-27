@@ -1,5 +1,6 @@
 ## create_subtask
 Goal: Create a subtask under an existing parent issue and capture the new child key.
+When: an existing parent issue needs a child task and the destination project supports a Subtask-typed child.
 
 **Decide**
 

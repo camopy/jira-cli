@@ -1,5 +1,6 @@
 ## read_issue
 Goal: Fetch one issue's JSON envelope so downstream workflows can inspect Jira's issue object without leaving the CLI contract.
+When: a single issue's full payload is the input to downstream reasoning — transitions, comment review, customfield extraction — and the issue key is already known.
 
 **Decide**
 - Single issue, known key: `jira issue view KEY`.

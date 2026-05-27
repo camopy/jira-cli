@@ -1,5 +1,6 @@
 ## identity_setup
 Goal: Resolve identity once per profile and switch profile per call so `--assignee me`, the TUI `A` key, and "in my epics" JQL all work without further setup.
+When: `--assignee me` returns nothing, the TUI "A" key fails, or "in my epics" JQL is empty for the active profile — typically right after a fresh profile or a credential rotation.
 
 **Decide**
 - First time on a profile or after a credential rotation: persist `account_id` with `jira auth whoami --save`.

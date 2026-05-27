@@ -1,5 +1,6 @@
 ## search_jql
 Goal: Run a JQL query — hand-authored, flag-built, or saved on disk — and capture matching issue keys.
+When: a query goes beyond what `issue list` flags can express, a stored query has to be replayed by name, or a flag set needs to be previewed as JQL via `jira jql build`.
 
 **Decide**
 

@@ -1,5 +1,6 @@
 ## clone_issue
 Goal: Duplicate an existing issue (same project or different) by reading its fields, sanitizing lifecycle/timing noise, and POSTing a fresh issue — optionally with caller-supplied overrides.
+When: an existing issue is the closest template for a new one and copy-with-tweaks is cheaper than authoring `create_issue` from scratch.
 
 **Decide**
 - Same project, no field changes? Straight clone — `--force` only.

@@ -1,5 +1,6 @@
 ## safe_mutation
 Goal: Wrap every destructive or state-changing Jira call with the right confirmation + preview discipline so an agent never blows away data it can't recover.
+When: any state-changing call is about to run — the `--dry-run` / `--force` / `--no-input` triad and the preview-then-write loop in this guide apply before invoking any mutating workflow.
 
 This is not a command — it's the cross-cutting contract that `clone_issue`, `move_issue`, `delete_issue`, `edit_issue`, `add_comment`, `link_issues`, `add_weblink`, `attach_file`, `manage_watchers`, and `log_work` all defer to. The Decide block below is the canonical confirmation matrix; the Run block is the canonical preview-then-write loop.
 

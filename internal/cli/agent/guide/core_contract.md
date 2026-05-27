@@ -1,5 +1,6 @@
 ## core_contract
 Goal: Apply the cross-cutting output-mode, envelope, exit-code, headless, pagination, read-only, and debug contract every other workflow inherits.
+When: anything about output mode, exit codes, pagination, read-only mode, or headless behaviour needs to be confirmed before another workflow can rely on it.
 
 **Decide**
 

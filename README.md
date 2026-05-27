@@ -52,7 +52,7 @@ biometric approval, also enable the OS unlock option under Settings > Security.
 
 Further reading:
 
-- [1Password SDK desktop app integration](https://www.1password.dev/sdks#1password-desktop-app)
+*   [1Password SDK desktop app integration](https://www.1password.dev/sdks#1password-desktop-app)
 
 ```toml
 [[profiles]]
@@ -68,56 +68,55 @@ item = "jira-cli-work"
 
 ### Required scopes
 
-Cloud API tokens and scoped API tokens need permission to call the Jira REST
-endpoints the CLI uses. Jira Server/Data Center PATs inherit the user's
-permissions and don't use scopes.
+jira talks to **Jira Cloud only**; API tokens need permission to call the Jira
+REST endpoints the CLI uses. Server/Data Center are not a supported target.
 
 Classic Atlassian scopes (3 total — simplest path):
 
-- `read:jira-user` — `jira me`, auth verification
-- `read:jira-work` — issue view/list, JQL search, transitions list, worklog
+*   `read:jira-user` — `jira me`, auth verification
+*   `read:jira-work` — issue view/list, JQL search, transitions list, worklog
   list, project/label/field/issuetype caches, createmeta
-- `write:jira-work` — create/edit/delete issues, execute transitions,
+*   `write:jira-work` — create/edit/delete issues, execute transitions,
   comments, issue links, web (remote) links, worklog add
 
 Granular scopes (Cloud scoped API tokens):
 
 Read:
 
-- `read:user:jira`, `read:application-role:jira`, `read:group:jira`,
+*   `read:user:jira`, `read:application-role:jira`, `read:group:jira`,
   `read:avatar:jira` — all four are required by `/rest/api/3/myself` and
   enforced as a union; missing any one returns 401
-- `read:attachment:jira` — `issue attachment list/download`
-- `read:comment:jira` — `issue comment list` and read pair for
+*   `read:attachment:jira` — `issue attachment list/download`
+*   `read:comment:jira` — `issue comment list` and read pair for
   `write:comment:jira`
-- `read:field:jira` — field cache (customfield_NNNN map)
-- `read:issue:jira` — issue view, list, JQL search
-- `read:issue-link-type:jira` — `issue link types`, `cache linktypes`
-- `read:issue-meta:jira` — createmeta
-- `read:issue-type:jira` — issuetype cache
-- `read:issue.transition:jira` — list available transitions
-- `read:issue.watcher:jira` — `issue watchers list`
-- `read:issue-worklog:jira` — worklog list
-- `read:label:jira` — label cache
-- `read:project:jira` — project cache, `boards list` per-board project lookup
-- `read:project-role:jira` — comment visibility role context
-- `read:board-scope:jira` — `boards list`, `cache boards`, `--board NAME` /
+*   `read:field:jira` — field cache (customfield_NNNN map)
+*   `read:issue:jira` — issue view, list, JQL search
+*   `read:issue-link-type:jira` — `issue link types`, `cache linktypes`
+*   `read:issue-meta:jira` — createmeta
+*   `read:issue-type:jira` — issuetype cache
+*   `read:issue.transition:jira` — list available transitions
+*   `read:issue.watcher:jira` — `issue watchers list`
+*   `read:issue-worklog:jira` — worklog list
+*   `read:label:jira` — label cache
+*   `read:project:jira` — project cache, `boards list` per-board project lookup
+*   `read:project-role:jira` — comment visibility role context
+*   `read:board-scope:jira` — `boards list`, `cache boards`, `--board NAME` /
   `--board-id N` resolution on `issue list` and `jql build`
 
 Write / delete:
 
-- `delete:attachment:jira` — `issue attachment delete`
-- `delete:comment:jira` — `issue comment delete`
-- `delete:issue:jira` — issue delete (incl. `--delete-subtasks`)
-- `delete:issue-link:jira` — `issue link delete`
-- `delete:issue.watcher:jira` — `issue watchers remove`, `unwatch`
-- `write:attachment:jira` — `issue attachment add`
-- `write:comment:jira` — `issue comment add/edit`
-- `write:issue:jira` — create, edit, transition execute
-- `write:issue.remote-link:jira` — `issue weblink`
-- `write:issue.watcher:jira` — `issue watchers add`, `watch`
-- `write:issue-link:jira` — `issue link`
-- `write:issue-worklog:jira` — `worklog add`
+*   `delete:attachment:jira` — `issue attachment delete`
+*   `delete:comment:jira` — `issue comment delete`
+*   `delete:issue:jira` — issue delete (incl. `--delete-subtasks`)
+*   `delete:issue-link:jira` — `issue link delete`
+*   `delete:issue.watcher:jira` — `issue watchers remove`, `unwatch`
+*   `write:attachment:jira` — `issue attachment add`
+*   `write:comment:jira` — `issue comment add/edit`
+*   `write:issue:jira` — create, edit, transition execute
+*   `write:issue.remote-link:jira` — `issue weblink`
+*   `write:issue.watcher:jira` — `issue watchers add`, `watch`
+*   `write:issue-link:jira` — `issue link`
+*   `write:issue-worklog:jira` — `worklog add`
 
 Atlassian's OpenAPI spec lists additional granular scopes per endpoint
 that may be enforced when the corresponding request features are used.

@@ -1,5 +1,6 @@
 ## discover_board
 Goal: Enumerate the agile boards visible to the active profile so `--board` filters in → `list_issues` and `jira jql build` resolve to a known id.
+When: a `--board <name>` filter is needed and the board's numeric id is unknown, or the board cache returned no matches for a name the user expects to exist.
 
 **Decide**
 - First time on this profile (cache empty): prime it with `jira cache boards`. `boards list` also primes transparently on the first run when the cache is empty.

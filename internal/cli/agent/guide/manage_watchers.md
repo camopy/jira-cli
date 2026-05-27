@@ -1,5 +1,6 @@
 ## manage_watchers
 Goal: Resolve, add, remove, or audit watchers on a Jira issue while handling ambiguous user input via structured `candidates[]`.
+When: notifications for an issue must reach an extra account, or the current watcher set needs to be audited or pruned.
 
 **Decide**
 

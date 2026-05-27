@@ -1,5 +1,6 @@
 ## list_comments
 Goal: Walk an issue's comment thread oldest-first, paginating through every page, and detect lossy-ADF surfaces before quoting comment bodies.
+When: the comment thread on an issue must be reviewed end-to-end before quoting or editing any single comment, or when summarising activity on an issue.
 
 **Decide**
 

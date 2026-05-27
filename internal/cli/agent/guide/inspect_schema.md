@@ -1,5 +1,6 @@
 ## inspect_schema
 Goal: Introspect the CLI's command tree, JSON output schemas, ADF support set, and customfield encoders without reading prose, so payload authoring is grounded in the binary's own contract.
+When: payload shape, available subcommands, ADF node support, or customfield encoders need to be confirmed from the binary itself rather than docs.
 
 **Decide**
 - Need the full command tree + flag signatures + per-command JSON output schemas: `jira agent schema`.

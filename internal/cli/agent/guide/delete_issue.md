@@ -1,5 +1,6 @@
 ## delete_issue
 Goal: Permanently remove an issue (and optionally its subtasks) from Jira after confirming nothing downstream depends on it.
+When: a duplicate, mis-filed, or test issue must be removed and the team accepts that the key is gone forever — for project/issue-type fixes that preserve the key, see → `move_issue`.
 
 **Decide**
 - Issue has subtasks? You MUST pass `--delete-subtasks` — Jira refuses to delete a parent otherwise. The flag drains parent + every subtask atomically.

@@ -1,5 +1,6 @@
 ## move_issue
 Goal: Swap an existing issue's `project` and/or `issuetype` in place, providing any new required fields the destination demands — without creating a new issue or changing the issue key history.
+When: the project or issue type on an existing issue is wrong and the team needs to preserve the key, history, comments, and link graph.
 
 **Decide**
 - Just project change? Override `project.key`.

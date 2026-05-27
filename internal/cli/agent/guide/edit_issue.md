@@ -1,5 +1,6 @@
 ## edit_issue
 Goal: Update one or more fields on an existing issue without opening an editor.
+When: one or more fields on an existing issue need new values; the bare-form `jira issue edit KEY` editor flow is not safe under an agent and is refused (exit 3).
 
 **Decide**
 

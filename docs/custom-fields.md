@@ -37,7 +37,7 @@ is always passed through unchanged.
 | `versionpicker` / `multiversionpicker` | version name(s) | `{"name":...}` / array |
 | `projectpicker` | project key | `{"key":"<project>"}` |
 | `parent` | `"PROJ-123"` | parent issue link |
-| `cascadingselect` | — | `{"value":"<top>","child":{"value":"<sub>"}}` |
+| `cascadingselect` |, | `{"value":"<top>","child":{"value":"<sub>"}}` |
 
 ```sh
 jira agent fieldtypes --output=json

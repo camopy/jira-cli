@@ -1,5 +1,6 @@
 ## create_issue
 Goal: Create a Jira issue from a structured payload and capture the new key for follow-up mutations.
+When: a brand-new issue is needed and the project key and issue type are known; for subtasks of an existing parent see → `create_subtask` instead.
 
 **Decide**
 
@@ -80,6 +81,7 @@ Richer payload (every key past the aliases is forwarded verbatim into Jira's `fi
 **Recover**
 | Symptom | Cause | Next |
 |---|---|---|
+| `screen schema could not be resolved in strict mode: pipeline: project/issue-type schema unknown` | Sent the wire-envelope shape (`{"fields": {"project": {"key": "..."}, "issuetype": {"name": "..."}, ...}}`) — that is the edit_issue shape, not create_issue | Rewrite with flat top-level alias keys: `project_key`, `issue_type`, `summary`, `description`. No `fields` wrapper |
 | `Operation value must be an Atlassian Document` on `environment` | Passed `environment` as a plain string; on most modern Jira instances it is an ADF field | Re-run with a full ADF doc value for `environment` (same shape as `description`) |
 | `Operation value must be an Atlassian Document` on `description` | Plain string for `description` | Wrap in `{type: "doc", version: 1, content: [...]}` or use `description_markdown` |
 | `unknown_adf_node` / `unknown_adf_mark` warning | Best-effort run kept an unsupported node | Re-run with `--adf-strict` to surface and fix, or accept the degradation |

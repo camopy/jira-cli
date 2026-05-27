@@ -1,57 +1,242 @@
 # Search
 
-Use `issue list` for the common issue-list workflow, `search jql` for raw JQL,
-and `search saved` for queries stored on disk.
+Three ways to find issues, in order of how much JQL you want to write:
 
-## Issue List
+| Command | When to use |
+|---------|-------------|
+| [`issue list`](issues.md#list) | Common case. Build the query from filter flags. |
+| [`search jql`](#search-jql) | Hand-written JQL, one-off. |
+| [`search saved`](#search-saved) | A query you reach for repeatedly, stored on disk. |
 
-```sh
-jira issue list --output=json
-jira issue list --project PROJ --assignee me --status "In Progress"
-jira issue list --as-jql --project PROJ --assignee me --output=json
-```
+To preview the JQL a set of `issue list` filters would resolve to
+without running the search, see [`jira jql build`](jql.md#build).
 
-With no filters, `issue list` uses:
+## search jql
 
-```jql
-updated >= -365d ORDER BY updated DESC
-```
+Execute a JQL query passed inline. `--fields` narrows the per-issue
+projection to a comma-separated list; `--full` requests Jira's complete
+issue payload (`fields=*all`). The two are mutually exclusive.
 
-## Raw JQL
-
-```sh
-jira search jql 'project = PROJ AND status = "In Progress"' --output=json
-jira search jql 'project = PROJ' --fields key,summary,customfield_10010
-jira search jql 'project = PROJ' --full
-```
-
-`--fields` and `--full` are mutually exclusive.
-
-## JQL Builder
+!!! warning "Common mistake"
+    `--full` on a broad JQL is expensive. It fetches every customfield,
+    every comment, and the full description ADF for each match — bytes
+    on the wire, tokens in your agent context. Pin the result set first
+    (`project = X AND updated >= -1d`), then opt in to `--full` only if
+    a downstream consumer needs the complete envelope.
 
 ```sh
-jira jql build --project PROJ --assignee me --status "In Progress"
-jira jql build --project PROJ --desc=false
+jira search jql 'project = JCT AND status = "To Do"'
+jira search jql 'project = JCT' --fields key,summary,status
+jira search jql 'key = JCT-32' --full
 ```
 
-The builder defaults to `ORDER BY updated DESC`. Use `--desc=false` for
-ascending order.
+=== "Human"
 
-## Saved Queries
+    Human output for `search jql` currently emits the issues array as
+    an escape-encoded JSON string on one `INF ℹ️` line. Use
+    `--output=json` for any consumer that needs structure; for table
+    formatting, [`issue list`](issues.md#list) renders the same JQL
+    result as a clean table.
 
-Saved queries live under `~/.config/jira-cli/queries/<name>.jql`:
+    ```text
+    INF ℹ️ searched issues issues="[17 items]" jql="..." source=inline
+    ```
 
-```text
+=== "JSON"
+
+    The default projection is the flat per-issue summary: `key`,
+    `summary`, `status`, `priority`, `assignee`, `updated`.
+
+    ```json
+    {
+      "ok": true,
+      "meta": {
+        "command": "search.jql",
+        "timestamp": "…",
+        "request_id": "…",
+        "pagination": { "startAt": 0, "maxResults": 50, "total": 0, "isLast": true }
+      },
+      "data": {
+        "issues": [
+          {
+            "key": "JCT-32",
+            "summary": "Example issue summary",
+            "status": "To Do",
+            "priority": "Medium",
+            "assignee": null,
+            "updated": "2026-05-27T07:12:38.839-0400"
+          }
+        ]
+      },
+      "errors": [],
+      "warnings": []
+    }
+    ```
+
+### `--fields` projection
+
+With `--fields key,summary,status` the issues array switches to the
+raw Jira REST shape (each issue carries `id`, `key`, `self`, plus a
+nested `fields` object containing only the requested keys):
+
+```json
+{
+  "data": {
+    "issues": [
+      {
+        "id": "10401",
+        "key": "JCT-32",
+        "self": "https://example.atlassian.net/rest/api/3/issue/10401",
+        "fields": {
+          "status": { "name": "To Do" },
+          "summary": "Example issue summary"
+        }
+      }
+    ]
+  }
+}
+```
+
+### `--full` projection
+
+`--full` asks Jira for `*all` and returns every field on each
+issue: status, priority, reporter, description (as ADF), the
+comment block, the worklog, and every `customfield_*` configured
+on the project. Use it when a downstream consumer needs the
+complete field set rather than the default flat summary or a
+hand-picked `--fields` projection.
+
+This is **not** the same as [`issue view`](issues.md#view), which
+has no projection flag and returns a curated subset
+(`status`, `priority`, `summary`, `description`, `reporter`,
+`comment`, `worklog`, and a handful of customfields) regardless of
+how many fields the project defines.
+
+### Bad JQL
+
+A query Jira can't parse exits 3 with a `jira_bad_request` error.
+The original Jira message lands in `errors[0].upstream_messages` so a
+script doesn't have to parse the formatted `message`:
+
+```json
+{
+  "ok": false,
+  "meta": { "command": "search.jql", "exit_code": 3, "timestamp": "…", "request_id": "…" },
+  "data": null,
+  "errors": [
+    {
+      "type": "validation",
+      "code": "jira_bad_request",
+      "message": "{\"errorMessages\":[\"Error in the JQL Query: Expecting 'IN' but got 'valid'. (line 1, character 16)\"],\"errors\":{}}",
+      "hint": "Jira rejected the request, check the upstream_messages and upstream_field_errors fields for the specifics, then correct the input before resubmitting.",
+      "retryable": false,
+      "http_status": 400,
+      "rate_limit_remaining": 199,
+      "provider": "jira",
+      "upstream_messages": [
+        "Error in the JQL Query: Expecting 'IN' but got 'valid'. (line 1, character 16)"
+      ]
+    }
+  ],
+  "warnings": []
+}
+```
+
+## search saved
+
+Run a query stored on disk by name. Saved queries live under
+`~/.config/jira-cli/queries/<name>.jql` (override the directory via
+`queries_path` in the profile config). The file format is one JQL
+statement with optional YAML or TOML frontmatter for metadata.
+
+```sh
+jira search saved my-open-bugs
+jira search saved my-open-bugs --fields key,summary,priority
+jira search saved my-open-bugs --full
+```
+
+### File format
+
+YAML frontmatter (delimited by `---`), TOML frontmatter (delimited by
+`+++`), or no frontmatter at all. The JQL body follows. Fields:
+
+```yaml
 ---
-name: my-open-bugs
-description: Bugs assigned to me, not done
+name: my-open-bugs                # optional; defaults to the filename
+description: Bugs assigned to me  # optional; echoed in the envelope
+project: JCT                      # optional; informational
 ---
-project = PROJ AND assignee = currentUser() AND statusCategory != Done
+project = JCT AND assignee = currentUser() AND statusCategory != Done
 ORDER BY priority DESC, updated DESC
 ```
 
-Run with:
+The filename (minus `.jql`) is the lookup key; `name` in the
+frontmatter is purely informational.
 
-```sh
-jira search saved my-open-bugs --output=json
+=== "Human"
+
+    Same `INF ℹ️` log-line shape as `search jql`; the saved-query
+    metadata appears as `key=<name>`, `name=<name>`, `project=<key>`,
+    `source=saved`, and the body as `jql="…"`.
+
+    ```text
+    INF ℹ️ searched issues description="Bugs assigned to me" issues="[17 items]" jql="project = JCT AND assignee = currentUser() …" key=my-open-bugs name=my-open-bugs project=JCT source=saved
+    ```
+
+=== "JSON"
+
+    The envelope adds a top-level `description` to the data block
+    (echoing the frontmatter). The `issues` array follows the same
+    projection rules as `search jql` (default summary, or raw Jira
+    shape under `--fields` / `--full`).
+
+    ```json
+    {
+      "ok": true,
+      "meta": { "command": "search.saved", "timestamp": "…", "request_id": "…" },
+      "data": {
+        "description": "Bugs assigned to me",
+        "issues": [
+          {
+            "key": "JCT-32",
+            "summary": "…",
+            "status": "To Do",
+            "priority": "Medium",
+            "assignee": null,
+            "updated": "…"
+          }
+        ]
+      },
+      "errors": [],
+      "warnings": []
+    }
+    ```
+
+### Query not found
+
+```json
+{
+  "ok": false,
+  "meta": { "command": "search.saved", "exit_code": 2, "timestamp": "…", "request_id": "…" },
+  "data": null,
+  "errors": [
+    {
+      "type": "not_found",
+      "code": "not_found",
+      "message": "saved query \"no-such-query\" not found",
+      "hint": "",
+      "retryable": false
+    }
+  ],
+  "warnings": []
+}
 ```
+
+## See also
+
+*   [`issue list`](issues.md#list): same filter surface, but
+    executes the query instead of just printing it.
+*   [`jira jql build`](jql.md#build): preview the JQL a set of
+    `issue list` filters would resolve to without calling Jira.
+*   [JQL reference](jql.md): the field, operator, and function
+    set available in queries.

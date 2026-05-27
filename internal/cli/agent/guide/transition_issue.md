@@ -1,5 +1,6 @@
 ## transition_issue
 Goal: Move an issue to a new workflow state by picking an available transition ID for that issue.
+When: an issue must move to a new workflow state (e.g. To Do → In Progress → Done); the available transition ids depend on the issue's current state and may not be known up front.
 
 **Decide**
 

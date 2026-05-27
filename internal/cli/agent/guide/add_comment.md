@@ -1,5 +1,6 @@
 ## add_comment
 Goal: Post a comment on a Jira issue, capturing the persisted comment shape (id, authors, timestamps, visibility) for follow-up edits.
+When: an issue needs a status update, decision note, or human-readable annotation that doesn't change workflow state or fields.
 
 **Decide**
 

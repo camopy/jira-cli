@@ -1,5 +1,6 @@
 ## auth_setup
 Goal: Wire a Jira profile to a valid credential — backend chosen, profile populated, secret never on disk in plaintext — before any other workflow can call Jira.
+When: a fresh profile, a missing keyring entry, or a rotated token blocks any other call from succeeding (`auth_failed`, `credential not found`).
 
 **Decide**
 

@@ -1,5 +1,6 @@
 ## log_work
 Goal: Record time spent against a Jira issue using durations that resolve via the profile's `workday_seconds`, and read the typed worklog list back.
+When: time spent on an issue must be recorded against its worklog for sprint reporting, billing, or capacity tracking.
 
 **Decide**
 

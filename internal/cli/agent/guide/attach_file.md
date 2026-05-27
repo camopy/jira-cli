@@ -1,5 +1,6 @@
 ## attach_file
 Goal: List, upload, download, or remove file attachments on a Jira issue with size-cap and clobber/force guards honored.
+When: a binary or non-Jira artifact (log, screenshot, exported report) must travel with the issue, or an existing attachment needs to be pulled down or removed.
 
 **Decide**
 

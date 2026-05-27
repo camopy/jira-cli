@@ -16,6 +16,7 @@ apply to TTY humans, the output rendering differs.
 Each workflow below is a goal-oriented runbook. The layout is consistent:
 
 - **Goal** — one sentence on the outcome.
+- **When** — the trigger that should make an agent load this runbook (reference sections use **When to use this** instead).
 - **Decide** — which flags / inputs to pick.
 - **Run** — canonical command shapes.
 - **Save** — the JSON fields you carry forward (requires `--output=json`).

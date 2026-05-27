@@ -195,7 +195,7 @@ func TestDocsSiteArtifactsExist(t *testing.T) {
 		"../../docs/search.md",
 		"../../docs/cache.md",
 		"../../docs/agent.md",
-		"../../docs/stylesheets/github.css",
+		"../../docs/stylesheets/catppuccin.css",
 	} {
 		if _, err := os.ReadFile(path); err != nil {
 			t.Fatalf("docs site artifact %s missing: %v", path, err)

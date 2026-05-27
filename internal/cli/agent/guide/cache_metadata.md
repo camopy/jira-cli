@@ -1,5 +1,6 @@
 ## cache_metadata
 Goal: Prime, refresh, or clear the per-profile local caches so repeated reads and client-side validation don't hit Jira every call.
+When: a `--project` / `--type` / `--board` / `--label` filter resolves to an unexpected value, or the first run on a fresh profile keeps hitting Jira for lookup data.
 
 **Decide**
 

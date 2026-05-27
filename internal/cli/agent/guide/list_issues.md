@@ -1,5 +1,6 @@
 ## list_issues
 Goal: Page through issues for the active profile — by JQL, by board, or by the default project — capturing keys for downstream per-issue work.
+When: a batch of issue keys is needed for downstream per-issue work and the filter set fits the flag surface; for hand-written JQL or stored queries, see → `search_jql`.
 
 **Decide**
 

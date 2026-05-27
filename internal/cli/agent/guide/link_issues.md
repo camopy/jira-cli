@@ -1,5 +1,6 @@
 ## link_issues
 Goal: Create, audit, list, or delete typed issue-to-issue links, respecting Jira's inward/outward semantics and the bulk-edit exclusion.
+When: two issues need a typed relationship (blocks, relates, is-blocked-by, etc.) or the existing link set on an issue needs to be reviewed or pruned.
 
 **Decide**
 
