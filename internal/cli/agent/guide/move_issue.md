@@ -10,13 +10,13 @@ When: the project or issue type on an existing issue is wrong and the team needs
 - Want to confirm the override is well-formed before submitting? `--dry-run`.
 
 **Run**
-- Canonical: `jira issue move KAN-1 --force --json-input /tmp/move.json --output=json`
-- Preview: `jira issue move KAN-1 --force --json-input /tmp/move.json --dry-run --output=json`
+- Canonical: `jira issue move <ISSUE_KEY> --force --json-input /tmp/move.json --output=json`
+- Preview: `jira issue move <ISSUE_KEY> --force --json-input /tmp/move.json --dry-run --output=json`
 
 Minimum override shape:
 
 ```json
-{"fields": {"project": {"key": "OTHER"}, "issuetype": {"name": "Story"}}}
+{"fields": {"project": {"key": "<TARGET_PROJECT_KEY>"}, "issuetype": {"name": "Story"}}}
 ```
 
 **Save**

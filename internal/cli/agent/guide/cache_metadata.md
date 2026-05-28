@@ -9,13 +9,14 @@ When: a `--project` / `--type` / `--board` / `--label` filter resolves to an une
 - `projects` — validate `project_key` in payloads; list project options without GET-ing every issue.
 - `epics` — set `parent.key` to an epic without listing issues to find one.
 - `fields` — **required** before authoring custom-field values; this is how you discover `customfield_10010` is "Story Points" and what type it expects.
-- `issuetypes` — validate `issue_type` in payloads; tells you which types are subtasks.
+- `issuetypes` — visible instance-level issue types and subtask markers. It is not scoped to a project's create screen.
 - `linktypes` — drives `--type` completion on `jira issue link` and pins the canonical names per instance.
 - `boards` — drives `--board` completion; resolves names to project lists for the `project in (...)` JQL clause (see → `discover_board`).
 
 # when to use cache vs live API
 - Multiple writes / repeated reads in the same session → cache.
 - One-shot read, or you specifically need fresh-from-server data (you just created a label and want to see it) → skip the cache, hit live.
+- Create-screen discovery is not exposed here yet. `jira cache issuetypes` has no `--project` filter and cannot tell whether `Story` is valid for project `<PROJECT_KEY>`; use Jira's create dialog or the live create response until a createmeta surface exists.
 
 # refresh signal
 - Cache is **never auto-refreshed**. Force with `--refresh`, age-gate with `--ttl-minutes N`, or wipe with `jira cache clear`.
@@ -33,7 +34,7 @@ When: a `--project` / `--type` / `--board` / `--label` filter resolves to an une
   ```sh
   jira cache fields     --refresh --output=json   # so you can map customfield_NNNN → name
   jira cache projects   --refresh --output=json   # so you can validate project keys
-  jira cache issuetypes --refresh --output=json   # so you can validate issue_type
+  jira cache issuetypes --refresh --output=json   # global type names only, not project create screens
   ```
 - Re-use without spending tokens on Jira:
   ```sh
@@ -94,12 +95,12 @@ Envelope shape (using `linktypes` as an example):
 **Recover**
 | Symptom | Cause | Next |
 |---|---|---|
-| `not found` on a label / project / type you know exists | Cache is stale | Re-run the relevant `jira cache <resource> --refresh` |
+| `not found` on a label / project / type you know exists | Cache is stale, or an issue type exists globally but is not on a project's create screen | Re-run the relevant `jira cache <resource> --refresh`; for create-screen pairing, check Jira's create dialog or the live create response |
 | `data.cache_empty=true` after a fresh prime | The instance genuinely has none of that resource for this profile | Verify with a different profile or via the Jira UI |
 | `cache-truncated` warning on `boards` | Default 100-page / 10 000-board bound fired | See → `discover_board` (re-run with `--unbounded`) |
 | Custom-field author errors referencing unknown `customfield_NNNN` | `fields` cache never primed this session | `jira cache fields --refresh --output=json`, then re-author |
 
 **Next**
 - Then: → `list_issues` and → `discover_board` consume the `boards` cache for `--board` filtering.
-- Then: → `create_issue` and → `edit_issue` consume the `fields` / `projects` / `issuetypes` caches for client-side validation.
+- Then: → `create_issue` and → `edit_issue` consume cached metadata for client-side validation where the CLI has a matching surface. Project create-screen pairing is still a live Jira/create-screen concern.
 - Composes: → `core_contract` (cache envelopes follow the same `ok`/`meta`/`data` shape).

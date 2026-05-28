@@ -22,7 +22,7 @@ When: a batch of issue keys is needed for downstream per-issue work and the filt
 
 **Run**
 - Default: `jira issue list --output=json`
-- With JQL: `jira issue list --jql 'project = KAN AND statusCategory != Done' --output=json`
+- With JQL: `jira issue list --jql 'project = <PROJECT_KEY> AND statusCategory != Done' --output=json`
 - Preview JQL only: `jira issue list --as-jql --output=json`
 - Full field records: `jira issue list --detail --output=json`
 - Board filter (name): `jira issue list --board "Engineering Sprint" --output=json`

@@ -23,19 +23,19 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 - Saved query: `jira search saved my-open-bugs --output=json`
 - Build then run:
   ```sh
-  JQL=$(jira jql build --project KAN --assignee me --output=json | jq -r '.data.jql')
+  JQL=$(jira jql build --project <PROJECT_KEY> --assignee me --output=json | jq -r '.data.jql')
   jira search jql "$JQL" --output=json
   ```
 - Builder examples:
   ```sh
-  jira jql build --project KAN --status Done --assignee me --output=json
-  # → {"jql": "project = KAN AND assignee = currentUser() AND status = Done ORDER BY updated DESC"}
+  jira jql build --project <PROJECT_KEY> --status Done --assignee me --output=json
+  # → {"jql": "project = <PROJECT_KEY> AND assignee = currentUser() AND status = Done ORDER BY updated DESC"}
 
-  jira jql build --project KAN --label regression --label hotfix --type Bug --type Task --output=json
-  # → {"jql": "project = KAN AND labels in (regression, hotfix) AND issuetype in (Bug, Task) ORDER BY updated DESC"}
+  jira jql build --project <PROJECT_KEY> --label regression --label hotfix --type Bug --type Task --output=json
+  # → {"jql": "project = <PROJECT_KEY> AND labels in (regression, hotfix) AND issuetype in (Bug, Task) ORDER BY updated DESC"}
 
-  jira jql build --project KAN --order-by updated --desc --output=json
-  # → {"jql": "project = KAN ORDER BY updated DESC"}
+  jira jql build --project <PROJECT_KEY> --order-by updated --desc --output=json
+  # → {"jql": "project = <PROJECT_KEY> ORDER BY updated DESC"}
   ```
 
 **Save**
@@ -63,9 +63,9 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
   ---
   name: my-open-bugs
   description: Bugs assigned to me, not done
-  project: KAN
+  project: <PROJECT_KEY>
   ---
-  project = KAN AND issuetype = Bug AND assignee = currentUser() AND statusCategory != Done
+  project = <PROJECT_KEY> AND issuetype = Bug AND assignee = currentUser() AND statusCategory != Done
   ORDER BY priority DESC, updated DESC
   ```
 

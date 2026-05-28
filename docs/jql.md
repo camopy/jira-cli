@@ -19,7 +19,7 @@ Pass `--assignee me` to scope that default to issues assigned to you, or
 hand-write the full query via `--jql`:
 
 ```sh
-jira issue list --jql 'project = JCT AND status = "In Progress"'
+jira issue list --jql 'project = <PROJECT_KEY> AND status = "In Progress"'
 ```
 
 ## build
@@ -31,15 +31,15 @@ block for a saved query. See [Builder coverage](#builder-coverage)
 for the full flag set and current limits.
 
 ```sh
-jira jql build --project JCT --assignee me --priority Medium
-jira jql build --project JCT --desc=false
+jira jql build --project <PROJECT_KEY> --assignee me --priority Medium
+jira jql build --project <PROJECT_KEY> --desc=false
 jira jql build                                        # no filters: defaults
 ```
 
 === "Human"
 
     ```text
-    INF ℹ️ board_scope.applied=false jql="project = JCT AND assignee = currentUser() AND priority = Medium ORDER BY updated DESC" precedence=none
+    INF ℹ️ board_scope.applied=false jql="project = <PROJECT_KEY> AND assignee = currentUser() AND priority = Medium ORDER BY updated DESC" precedence=none
     ```
 
 === "JSON"
@@ -50,7 +50,7 @@ jira jql build                                        # no filters: defaults
       "meta": { "command": "jql.build", "timestamp": "…", "request_id": "…" },
       "data": {
         "board_scope": { "applied": false },
-        "jql": "project = JCT AND assignee = currentUser() AND priority = Medium ORDER BY updated DESC",
+        "jql": "project = <PROJECT_KEY> AND assignee = currentUser() AND priority = Medium ORDER BY updated DESC",
         "precedence": "none"
       },
       "errors": [],

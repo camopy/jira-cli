@@ -9,9 +9,9 @@ When: a duplicate, mis-filed, or test issue must be removed and the team accepts
 - Operating in agent / `--no-input` mode? `--force` is mandatory — see → `safe_mutation`.
 
 **Run**
-- Canonical (agent): `jira issue delete KAN-1 --force --output=json`
-- With subtasks: `jira issue delete KAN-1 --force --delete-subtasks --output=json`
-- Preview (no Jira mutation): `jira issue delete KAN-1 --force --dry-run --output=json`
+- Canonical (agent): `jira issue delete <ISSUE_KEY> --force --output=json`
+- With subtasks: `jira issue delete <ISSUE_KEY> --force --delete-subtasks --output=json`
+- Preview (no Jira mutation): `jira issue delete <ISSUE_KEY> --force --dry-run --output=json`
 
 **Save**
 > Requires `--output=json`.

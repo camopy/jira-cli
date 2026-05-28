@@ -71,7 +71,7 @@ jira cache projects --refresh --output=json
         "from_cache": true,
         "profile": "default",
         "projects": [
-          { "id": "10034", "key": "JCT", "name": "Example Project", "project_type": "software" }
+          { "id": "10034", "key": "<PROJECT_KEY>", "name": "Example Project", "project_type": "software" }
         ]
       },
       "errors": [],
@@ -218,7 +218,7 @@ issue create flow to map `--epic <key>` to a parent link.
         "from_cache": true,
         "profile": "default",
         "epics": [
-          { "key": "JCT-1", "summary": "Example epic", "status": "To Do" }
+          { "key": "<PROJECT_KEY>-1", "summary": "Example epic", "status": "To Do" }
         ]
       },
       "errors": [],
@@ -328,9 +328,9 @@ jira boards list --unbounded --output=json
 
     ```text
     Boards  (3 boards, source: cache, fetched_at: …)
-          1  Example board A           simple  JCT
-          2  Example board B           simple  KAN
-         35  Example board C           simple  SAM1
+          1  Example board A           simple  <PROJECT_KEY>
+          2  Example board B           simple  <OTHER_PROJECT_KEY>
+         35  Example board C           simple  <ANOTHER_PROJECT_KEY>
     ```
 
 === "JSON"
@@ -341,7 +341,7 @@ jira boards list --unbounded --output=json
       "meta": { "command": "boards.list", "timestamp": "…", "request_id": "…" },
       "data": {
         "boards": [
-          { "id": 1, "name": "Example board", "project_keys": ["JCT"], "type": "simple" }
+          { "id": 1, "name": "Example board", "project_keys": ["<PROJECT_KEY>"], "type": "simple" }
         ],
         "cache_empty": false,
         "cache_state": "fresh",

@@ -56,7 +56,7 @@ When: notifications for an issue must reach an extra account, or the current wat
 `watchers add --dry-run` (locally resolvable input):
 
 ```json
-{"data": {"key": "KAN-1", "user": "accountId:712020:abc", "account_id_resolved": "712020:abc", "user_resolved": true, "dry_run": true}}
+{"data": {"key": "<ISSUE_KEY>", "user": "accountId:712020:abc", "account_id_resolved": "712020:abc", "user_resolved": true, "dry_run": true}}
 ```
 
 - `data.watchers[].account_id` [string, required] — stable identity; pass back as `accountId:<id>` to subsequent calls.

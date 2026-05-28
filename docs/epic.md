@@ -40,7 +40,7 @@ jira epic list --detail
         "epics": [
           {
             "id": "10000",
-            "key": "SAM1-1",
+            "key": "<EPIC_KEY>",
             "self": "https://example.atlassian.net/rest/api/3/issue/10000",
             "fields": {
               "status": { "name": "To Do" },
@@ -65,8 +65,8 @@ Attach an issue to a parent epic. The first positional argument is the
 child issue, the second is the parent epic.
 
 ```sh
-jira epic add SAM1-10 SAM1-1
-jira epic add SAM1-10 SAM1-1 --dry-run
+jira epic add <ISSUE_KEY> <EPIC_KEY>
+jira epic add <ISSUE_KEY> <EPIC_KEY> --dry-run
 ```
 
 `--dry-run` skips the Jira call and echoes the resolved pair so you can
@@ -78,7 +78,7 @@ same project as the parent."`.
 === "Human"
 
     ```text
-    INF ℹ️ added=true dry_run=false epic=SAM1-1 issue=SAM1-10
+    INF ℹ️ added=true dry_run=false epic=<EPIC_KEY> issue=<ISSUE_KEY>
     ```
 
 === "JSON"
@@ -95,8 +95,8 @@ same project as the parent."`.
       "data": {
         "added": true,
         "dry_run": false,
-        "epic": "SAM1-1",
-        "issue": "SAM1-10"
+        "epic": "<EPIC_KEY>",
+        "issue": "<ISSUE_KEY>"
       },
       "errors": [],
       "warnings": []
@@ -109,8 +109,8 @@ Detach an issue from its current epic. The issue stays in place; only
 the epic link is cleared.
 
 ```sh
-jira epic remove SAM1-10
-jira epic remove SAM1-10 --dry-run
+jira epic remove <ISSUE_KEY>
+jira epic remove <ISSUE_KEY> --dry-run
 ```
 
 The call is idempotent — running `epic remove` against an issue that
@@ -119,7 +119,7 @@ isn't attached to any epic still returns `removed: true`.
 === "Human"
 
     ```text
-    INF ℹ️ dry_run=false issue=SAM1-10 removed=true
+    INF ℹ️ dry_run=false issue=<ISSUE_KEY> removed=true
     ```
 
 === "JSON"
@@ -136,7 +136,7 @@ isn't attached to any epic still returns `removed: true`.
       "data": {
         "removed": true,
         "dry_run": false,
-        "issue": "SAM1-10"
+        "issue": "<ISSUE_KEY>"
       },
       "errors": [],
       "warnings": []
@@ -149,7 +149,7 @@ Open the agile board scoped to a specific epic in the system browser.
 Interactive only — there's no JSON output.
 
 ```sh
-jira epic board SAM1-1
+jira epic board <EPIC_KEY>
 ```
 
 ## See also

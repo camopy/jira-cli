@@ -37,8 +37,8 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 **Run**
 - Canonical write: `jira <cmd> --no-input --json-input payload.json --output=json`
 - Pagination drain: `jira issue comment list KEY --all --output=json`
-- Per-call read-only: `JIRA_READ_ONLY=true jira issue edit KAN-1 --summary "x" --no-input --output=json`
-- Debug capture: `jira issue edit KAN-1 --json-input fields.json --no-input --debug 2>&1 | grep '^DBG'`
+- Per-call read-only: `JIRA_READ_ONLY=true jira issue edit <ISSUE_KEY> --summary "x" --no-input --output=json`
+- Debug capture: `jira issue edit <ISSUE_KEY> --json-input fields.json --no-input --debug 2>&1 | grep '^DBG'`
 
 **Save**
 > Requires `--output=json`.

@@ -10,20 +10,20 @@ When: an existing issue is the closest template for a new one and copy-with-twea
 - Need a preview that runs the full validation pipeline but never POSTs? `--dry-run` (still requires `--force` in agent context — see → `safe_mutation`).
 
 **Run**
-- Canonical: `jira issue clone KAN-1 --force --output=json`
-- With overrides: `jira issue clone KAN-1 --force --json-input /tmp/over.json --output=json`
-- Preview (full validation, no POST): `jira issue clone KAN-1 --force --dry-run --output=json`
+- Canonical: `jira issue clone <SOURCE_ISSUE_KEY> --force --output=json`
+- With overrides: `jira issue clone <SOURCE_ISSUE_KEY> --force --json-input /tmp/over.json --output=json`
+- Preview (full validation, no POST): `jira issue clone <SOURCE_ISSUE_KEY> --force --dry-run --output=json`
 
 Override file shape (override fields merge on top of carried source fields):
 
 ```json
-{"fields": {"summary": "Triage copy of KAN-1", "assignee": {"accountId": "<your-id>"}}}
+{"fields": {"summary": "Triage copy of <SOURCE_ISSUE_KEY>", "assignee": {"accountId": "<your-id>"}}}
 ```
 
 Different-project clone:
 
 ```json
-{"fields": {"project": {"key": "OTHER"}, "summary": "Ported from KAN-1"}}
+{"fields": {"project": {"key": "<TARGET_PROJECT_KEY>"}, "summary": "Ported from <SOURCE_ISSUE_KEY>"}}
 ```
 
 **Save**

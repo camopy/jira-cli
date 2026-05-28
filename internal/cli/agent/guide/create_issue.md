@@ -7,20 +7,22 @@ When: a brand-new issue is needed and the project key and issue type are known; 
 # target
 - Project: `project_key` (alias) or `project.key` — required unless the profile carries a default.
 - Type: `issue_type` (alias) or `issuetype.name` — required unless the profile carries a default.
+- There are no `--project`, `--project-key`, or `--issue-type` flags on `issue create`. For any non-default project or issue type, use `--json-input`.
+- If you do not know the available type names (`Bug`, `Epic`, `Task`, etc.), run `jira cache issuetypes --output=json`.
 
 # body
 - Recommended: `--json-input payload.json` with native ADF for `description` (round-trips losslessly).
-- Convenience one-shots: `--summary "..."` (optionally `--assignee me|none|<accountId>`) — bypasses `--json-input`.
+- Default-backed one-shots: `--summary "..."` (optionally `--assignee me|none|<accountId>`) — only when the active profile already supplies the project and issue type.
 - Lossy human shortcut: `description_markdown` in the payload (converted to ADF; GFM features beyond the supported set degrade).
 
 # guard
-- `--dry-run` runs every validation stage (parse → ADF compat → field schema → customfield encoding) but stops before the API call.
+- `--dry-run` validates parsing, ADF compatibility, field schema/customfield encoding when schema is available, then stops before submission. It is not proof that Jira's create screen accepts a project/issue-type pairing.
 - `--adf-strict` rejects any lossy step with exit 3; `--adf-best-effort` degrades silently with warnings.
 
 **Run**
 - Canonical: `jira issue create --no-input --json-input payload.json --output=json`
 - Stdin variant: `cat payload.json | jira issue create --no-input --json-input - --output=json`
-- Quick one-shot: `jira issue create --no-input --summary "Refactor auth middleware" --assignee me --output=json`
+- Default-backed one-shot: `jira issue create --no-input --summary "Refactor auth middleware" --assignee me --output=json`
 - Preview only: `jira issue create --dry-run --no-input --json-input payload.json --output=json`
 
 Minimal payload:
@@ -29,7 +31,7 @@ Minimal payload:
 {
   "summary": "Refactor auth middleware",
   "issue_type": "Task",
-  "project_key": "KAN",
+  "project_key": "<PROJECT_KEY>",
   "description": {
     "type": "doc", "version": 1, "content": [
       {"type": "paragraph", "content": [{"type": "text", "text": "Description body."}]}
@@ -55,7 +57,7 @@ Richer payload (every key past the aliases is forwarded verbatim into Jira's `fi
 
 **Save**
 > Requires `--output=json`.
-- `data.key` [string, required] — the new issue key (e.g. `KAN-104`); feed into `→ ` `read_issue`, `→ ` `edit_issue`, `→ ` `add_comment`, `→ ` `transition_issue`.
+- `data.key` [string, required] — the new issue key (e.g. `<ISSUE_KEY>`); feed into `→ ` `read_issue`, `→ ` `edit_issue`, `→ ` `add_comment`, `→ ` `transition_issue`.
 - `data.self` [string, optional] — REST URL of the new issue.
 - `meta.command` [string] — `issue.create`; on `--dry-run` the payload is validated and no Jira call is made.
 
@@ -72,6 +74,7 @@ Richer payload (every key past the aliases is forwarded verbatim into Jira's `fi
 
 - Headless minimum under `--no-input`: `summary` + `project_key` + `issue_type` (or defaults from the profile).
 - Prime custom-field metadata before authoring values: → `cache_metadata` (`cache fields`, `cache projects`, `cache issuetypes`).
+- `jira cache issuetypes` discovers visible type names and IDs, but it is instance/visibility scoped, not project-create-screen scoped. It cannot answer whether `Story` is available on project `<PROJECT_KEY>`'s create screen; there is no `cache issuetypes --project` or standalone createmeta command yet.
 
 **Behavior**
 - Detection of ADF in the payload is **by value shape, not key suffix** — the CLI walks the payload, finds any value whose root matches `{type: "doc", version: N, content: [...]}`, and validates it. Strict mode rejects with the offending node/mark name; best-effort preserves and emits `unknown_adf_node` / `unknown_adf_mark` warnings.
@@ -82,6 +85,7 @@ Richer payload (every key past the aliases is forwarded verbatim into Jira's `fi
 | Symptom | Cause | Next |
 |---|---|---|
 | `screen schema could not be resolved in strict mode: pipeline: project/issue-type schema unknown` | Sent the wire-envelope shape (`{"fields": {"project": {"key": "..."}, "issuetype": {"name": "..."}, ...}}`) — that is the edit_issue shape, not create_issue | Rewrite with flat top-level alias keys: `project_key`, `issue_type`, `summary`, `description`. No `fields` wrapper |
+| `screen schema unavailable: project or issue type not found: pipeline: project/issue-type schema not found`, or a live 404 like `issue type Story not found on the create screen for project <PROJECT_KEY>` | The issue type may exist globally but is not on that project's create screen, or Jira createmeta could not resolve the pairing | Pick a type from Jira's create dialog for that project. `cache issuetypes` cannot prove this pairing yet |
 | `Operation value must be an Atlassian Document` on `environment` | Passed `environment` as a plain string; on most modern Jira instances it is an ADF field | Re-run with a full ADF doc value for `environment` (same shape as `description`) |
 | `Operation value must be an Atlassian Document` on `description` | Plain string for `description` | Wrap in `{type: "doc", version: 1, content: [...]}` or use `description_markdown` |
 | `unknown_adf_node` / `unknown_adf_mark` warning | Best-effort run kept an unsupported node | Re-run with `--adf-strict` to surface and fix, or accept the degradation |

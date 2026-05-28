@@ -14,7 +14,7 @@ When: a human user reports that `jira issue edit KEY` either backgrounds or lose
 - Editors that fork-and-return (e.g. `code` without `--wait`) are refused at spawn time with a one-line fix — silent strikethrough-and-data-loss is gone.
 
 **Run**
-- Per-invocation override: `JIRA_EDITOR='code --wait' jira issue edit KAN-1`
+- Per-invocation override: `JIRA_EDITOR='code --wait' jira issue edit <ISSUE_KEY>`
 - Global default in `~/.config/jira-cli/config.toml`:
   ```toml
   editor = "code -w"

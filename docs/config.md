@@ -352,7 +352,7 @@ Write a single value by dotted key. The file is rewritten in place;
 TOML formatting and comments outside the touched key are preserved.
 
 ```sh
-jira config set profiles.default.default_project JCT
+jira config set profiles.default.default_project <PROJECT_KEY>
 jira config set profiles.default.default_board "Example board"
 jira config set default_profile personal
 ```
@@ -371,7 +371,7 @@ jira config set default_profile personal
       "meta": { "command": "config.set", "timestamp": "…", "request_id": "…" },
       "data": {
         "key": "profiles.default.default_project",
-        "value": "JCT"
+        "value": "<PROJECT_KEY>"
       },
       "errors": [],
       "warnings": []

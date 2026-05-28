@@ -77,7 +77,7 @@ Every ADF doc starts with the root:
 {"type": "status", "attrs": {"text": "READY", "color": "green"}}
 
 // inlineCard — smart link
-{"type": "inlineCard", "attrs": {"url": "https://example.atlassian.net/browse/KAN-1"}}
+{"type": "inlineCard", "attrs": {"url": "https://example.atlassian.net/browse/<ISSUE_KEY>"}}
 ```
 
 ### Marks (annotate text nodes)
@@ -195,7 +195,7 @@ they own). The `text` is the display label and can be anything.
 
 ```json
 {"type": "paragraph", "content": [
-  {"type": "inlineCard", "attrs": {"url": "https://example.atlassian.net/browse/KAN-72"}}
+  {"type": "inlineCard", "attrs": {"url": "https://example.atlassian.net/browse/<ISSUE_KEY>"}}
 ]}
 ```
 

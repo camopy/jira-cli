@@ -15,13 +15,13 @@ link / watcher / attachment counts. To find the key first, use
 [`list`](#list) or [`mine`](#mine).
 
 ```sh
-jira issue view JCT-32
+jira issue view <ISSUE_KEY>
 ```
 
 === "Human"
 
     ```text
-    JCT-32  Example issue summary
+    <ISSUE_KEY>  Example issue summary
       status: To Do  priority: Medium  assignee: unassigned
       Example description body, rendered from ADF.
     ```
@@ -35,7 +35,7 @@ jira issue view JCT-32
       "data": {
         "issue": {
           "id": "10401",
-          "key": "JCT-32",
+          "key": "<ISSUE_KEY>",
           "self": "https://example.atlassian.net/rest/api/3/issue/10401",
           "fields": {
             "summary": "…",
@@ -88,9 +88,9 @@ The default projection is a summary table, one row per issue. Pass
     payload, and pair it with a tight `--project` / `--jql`.
 
 ```sh
-jira issue list --project JCT --status "To Do" --order-by updated --desc
-jira issue list --project JCT --as-jql              # show the JQL only
-jira issue list --jql 'project = JCT ORDER BY updated DESC'
+jira issue list --project <PROJECT_KEY> --status "To Do" --order-by updated --desc
+jira issue list --project <PROJECT_KEY> --as-jql              # show the JQL only
+jira issue list --jql 'project = <PROJECT_KEY> ORDER BY updated DESC'
 jira issue list --board "Engineering" --detail
 ```
 
@@ -99,9 +99,9 @@ jira issue list --board "Engineering" --detail
     ```text
     INF ℹ️ listed issues count=3 detail=false jql="..."
     KEY     SUMMARY                                                     STATUS  ASSIGNEE    PRIORITY
-    JCT-34  auth status: top-level ok:true and errors:[] despite …      To Do   unassigned  Medium
-    JCT-33  issue view --output json: raw Jira passthrough …            To Do   unassigned  Medium
-    JCT-32  auth login: hint field empty on 401; remediation …          To Do   unassigned  Medium
+    <ISSUE_KEY_3>  auth status: top-level ok:true and errors:[] despite …      To Do   unassigned  Medium
+    <OTHER_ISSUE_KEY>  issue view --output json: raw Jira passthrough …            To Do   unassigned  Medium
+    <ISSUE_KEY>  auth login: hint field empty on 401; remediation …          To Do   unassigned  Medium
     ```
 
 === "JSON"
@@ -123,7 +123,7 @@ jira issue list --board "Engineering" --detail
         "detail": false,
         "issues": [
           {
-            "key": "JCT-34",
+            "key": "<ISSUE_KEY_3>",
             "summary": "Example issue summary",
             "status": "To Do",
             "priority": "Medium",
@@ -173,7 +173,7 @@ Minimal payload (snake_case keys; `description` is an ADF document):
 
 ```json
 {
-  "project_key": "JCT",
+  "project_key": "<PROJECT_KEY>",
   "issue_type": "Task",
   "summary": "issue summary",
   "description": {
@@ -221,7 +221,7 @@ Minimal payload (snake_case keys; `description` is an ADF document):
         "dry_run": false,
         "issue": {
           "id": "10404",
-          "key": "JCT-35",
+          "key": "<CREATED_ISSUE_KEY>",
           "self": "https://example.atlassian.net/rest/api/3/issue/10404"
         }
       },
@@ -246,16 +246,16 @@ works for humans; under `--no-input` the CLI refuses it so agents
 don't hang on a TTY prompt.
 
 ```sh
-jira issue edit JCT-32 --summary "new title"
-jira issue edit JCT-32 --assignee me
-jira issue edit JCT-32 --no-input --json-input fields.json
-jira issue edit JCT-32 --no-input --summary "preview only" --dry-run
+jira issue edit <ISSUE_KEY> --summary "new title"
+jira issue edit <ISSUE_KEY> --assignee me
+jira issue edit <ISSUE_KEY> --no-input --json-input fields.json
+jira issue edit <ISSUE_KEY> --no-input --summary "preview only" --dry-run
 ```
 
 === "Human"
 
     ```text
-    INF ℹ️ edited issue dry_run=false fields.summary="new title" issue=JCT-32 result={}
+    INF ℹ️ edited issue dry_run=false fields.summary="new title" issue=<ISSUE_KEY> result={}
     ```
 
 === "JSON"
@@ -267,7 +267,7 @@ jira issue edit JCT-32 --no-input --summary "preview only" --dry-run
       "data": {
         "dry_run": false,
         "fields": { "summary": "new title" },
-        "issue": "JCT-32",
+        "issue": "<ISSUE_KEY>",
         "result": {}
       },
       "errors": [],
@@ -289,11 +289,11 @@ the way out) or `--json-input` carrying native ADF. ADF is the wire
 format; markdown is the convenience wrapper.
 
 ```sh
-jira issue comment add JCT-32 --body-markdown "looks good"
-jira issue comment add JCT-32 --no-input --json-input adf.json
-jira issue comment list JCT-32 --all
-jira issue comment edit JCT-32 10244 --body-markdown "edited"
-jira issue comment delete JCT-32 10244 --force
+jira issue comment add <ISSUE_KEY> --body-markdown "looks good"
+jira issue comment add <ISSUE_KEY> --no-input --json-input adf.json
+jira issue comment list <ISSUE_KEY> --all
+jira issue comment edit <ISSUE_KEY> 10244 --body-markdown "edited"
+jira issue comment delete <ISSUE_KEY> 10244 --force
 ```
 
 ### comment add
@@ -310,7 +310,7 @@ jira issue comment delete JCT-32 10244 --force
         comment.update_author.…
         comment.updated=2026-05-27T07:13:03.338-0400
         dry_run=false
-        issue=JCT-32
+        issue=<ISSUE_KEY>
     ```
 
 === "JSON"
@@ -321,7 +321,7 @@ jira issue comment delete JCT-32 10244 --force
       "meta": { "command": "issue.comment.add", "timestamp": "…", "request_id": "…" },
       "data": {
         "dry_run": false,
-        "issue": "JCT-32",
+        "issue": "<ISSUE_KEY>",
         "comment": {
           "id": "10244",
           "body": "looks good\n",
@@ -397,11 +397,11 @@ current set plus an `is_watching` flag, so a script can ask "am I on
 this one?" without comparing account IDs by hand.
 
 ```sh
-jira issue watch JCT-32              # add yourself
-jira issue unwatch JCT-32            # remove yourself
-jira issue watchers list JCT-32
-jira issue watchers add JCT-32 --user <accountId>
-jira issue watchers remove JCT-32 --user <accountId>
+jira issue watch <ISSUE_KEY>              # add yourself
+jira issue unwatch <ISSUE_KEY>            # remove yourself
+jira issue watchers list <ISSUE_KEY>
+jira issue watchers add <ISSUE_KEY> --user <accountId>
+jira issue watchers remove <ISSUE_KEY> --user <accountId>
 ```
 
 ### watchers list
@@ -501,9 +501,9 @@ are explicit. `types` reads from the local cache and is effectively
 free once you've run [`cache prime`](cache.md).
 
 ```sh
-jira issue link JCT-32 --to JCT-33 --type Blocks
-jira issue link list JCT-32
-jira issue link delete JCT-32 10173 --force
+jira issue link <ISSUE_KEY> --to <OTHER_ISSUE_KEY> --type Blocks
+jira issue link list <ISSUE_KEY>
+jira issue link delete <ISSUE_KEY> 10173 --force
 jira issue link types
 ```
 
@@ -512,7 +512,7 @@ jira issue link types
 === "Human"
 
     ```text
-    INF ℹ️ dry_run=false inward_issue=JCT-32 outward_issue=JCT-33 type=Blocks
+    INF ℹ️ dry_run=false inward_issue=<ISSUE_KEY> outward_issue=<OTHER_ISSUE_KEY> type=Blocks
     ```
 
 === "JSON"
@@ -523,8 +523,8 @@ jira issue link types
       "meta": { "command": "issue.link", "timestamp": "…", "request_id": "…" },
       "data": {
         "dry_run": false,
-        "inward_issue": "JCT-32",
-        "outward_issue": "JCT-33",
+        "inward_issue": "<ISSUE_KEY>",
+        "outward_issue": "<OTHER_ISSUE_KEY>",
         "type": "Blocks"
       }
     }
@@ -545,7 +545,7 @@ status.
     key, and its summary. When no links exist:
 
     ```text
-    Links on JCT-32
+    Links on <ISSUE_KEY>
       (no links)
     ```
 
@@ -557,7 +557,7 @@ status.
       "meta": { "command": "issue.link.list", "timestamp": "…", "request_id": "…" },
       "data": {
         "count": 1,
-        "key": "JCT-32",
+        "key": "<ISSUE_KEY>",
         "links": [
           {
             "id": "10173",
@@ -571,7 +571,7 @@ status.
             },
             "direction": "outward",
             "other_issue": {
-              "key": "JCT-33",
+              "key": "<OTHER_ISSUE_KEY>",
               "summary": "…",
               "status": "To Do"
             }
@@ -625,7 +625,7 @@ refreshed from Jira on this call.
 === "Human"
 
     ```text
-    INF ℹ️ deleted=true dry_run=false key=JCT-32 link_id=10173
+    INF ℹ️ deleted=true dry_run=false key=<ISSUE_KEY> link_id=10173
     ```
 
 === "JSON"
@@ -637,7 +637,7 @@ refreshed from Jira on this call.
       "data": {
         "deleted": true,
         "dry_run": false,
-        "key": "JCT-32",
+        "key": "<ISSUE_KEY>",
         "link_id": "10173"
       }
     }
@@ -653,14 +653,14 @@ The CLI only exposes `add`. List, edit, or delete existing weblinks
 through the Jira web UI.
 
 ```sh
-jira issue weblink JCT-32 --url https://example.com/spec --title "Spec"
-jira issue weblink JCT-32 --url https://example.com/spec --dry-run
+jira issue weblink <ISSUE_KEY> --url https://example.com/spec --title "Spec"
+jira issue weblink <ISSUE_KEY> --url https://example.com/spec --dry-run
 ```
 
 === "Human"
 
     ```text
-    INF ℹ️ dry_run=false issue=JCT-32 title="Spec" url=https://example.com/spec
+    INF ℹ️ dry_run=false issue=<ISSUE_KEY> title="Spec" url=https://example.com/spec
     ```
 
 === "JSON"
@@ -671,7 +671,7 @@ jira issue weblink JCT-32 --url https://example.com/spec --dry-run
       "meta": { "command": "issue.weblink", "timestamp": "…", "request_id": "…" },
       "data": {
         "dry_run": false,
-        "issue": "JCT-32",
+        "issue": "<ISSUE_KEY>",
         "title": "Spec",
         "url": "https://example.com/spec"
       }
@@ -694,11 +694,11 @@ Use this for logs, screenshots, exports, and other binary evidence
 that doesn't belong in the comment thread.
 
 ```sh
-jira issue attachment add JCT-32 ./screenshot.png
-jira issue attachment add JCT-32 --file ./a.log --file ./b.log
-jira issue attachment list JCT-32
-jira issue attachment download JCT-32 10135 --to ./downloads/
-jira issue attachment delete JCT-32 10135 --force
+jira issue attachment add <ISSUE_KEY> ./screenshot.png
+jira issue attachment add <ISSUE_KEY> --file ./a.log --file ./b.log
+jira issue attachment list <ISSUE_KEY>
+jira issue attachment download <ISSUE_KEY> 10135 --to ./downloads/
+jira issue attachment delete <ISSUE_KEY> 10135 --force
 ```
 
 ### attachment add
@@ -706,7 +706,7 @@ jira issue attachment delete JCT-32 10135 --force
 === "Human"
 
     ```text
-    INF ℹ️ attachments="[{…}]" dry_run=false key=JCT-32
+    INF ℹ️ attachments="[{…}]" dry_run=false key=<ISSUE_KEY>
     ```
 
 === "JSON"
@@ -717,7 +717,7 @@ jira issue attachment delete JCT-32 10135 --force
       "meta": { "command": "issue.attachment.add", "timestamp": "…", "request_id": "…" },
       "data": {
         "dry_run": false,
-        "key": "JCT-32",
+        "key": "<ISSUE_KEY>",
         "attachments": [
           {
             "id": "10135",
@@ -822,9 +822,9 @@ permissions, so the valid set changes from issue to issue. Listing
 first avoids guessing.
 
 ```sh
-jira issue transition JCT-32                    # list available transitions
-jira issue transition JCT-32 --transition 21    # execute (e.g. to In Progress)
-jira issue transition JCT-32 --transition 21 --dry-run
+jira issue transition <ISSUE_KEY>                    # list available transitions
+jira issue transition <ISSUE_KEY> --transition 21    # execute (e.g. to In Progress)
+jira issue transition <ISSUE_KEY> --transition 21 --dry-run
 ```
 
 ### List available transitions
@@ -835,7 +835,7 @@ The no-flag form lists the transitions allowed from the current status.
 === "Human"
 
     ```text
-    INF ℹ️ issue=JCT-32 transitions="[3 items]"
+    INF ℹ️ issue=<ISSUE_KEY> transitions="[3 items]"
     ```
 
 === "JSON"
@@ -845,7 +845,7 @@ The no-flag form lists the transitions allowed from the current status.
       "ok": true,
       "meta": { "command": "issue.transitions", "timestamp": "…", "request_id": "…" },
       "data": {
-        "issue": "JCT-32",
+        "issue": "<ISSUE_KEY>",
         "transitions": [
           { "id": "11", "name": "To Do" },
           { "id": "21", "name": "In Progress" },
@@ -862,7 +862,7 @@ The no-flag form lists the transitions allowed from the current status.
 === "Human"
 
     ```text
-    INF ℹ️ transitioned issue dry_run=false issue=JCT-32 transition=21
+    INF ℹ️ transitioned issue dry_run=false issue=<ISSUE_KEY> transition=21
     ```
 
 === "JSON"
@@ -873,7 +873,7 @@ The no-flag form lists the transitions allowed from the current status.
       "meta": { "command": "issue.transition", "timestamp": "…", "request_id": "…" },
       "data": {
         "dry_run": false,
-        "issue": "JCT-32",
+        "issue": "<ISSUE_KEY>",
         "transition": "21"
       }
     }
@@ -900,8 +900,8 @@ existing one; use [`move`](#move) when you want to relocate the
 original instead.
 
 ```sh
-jira issue clone JCT-32 --no-input --force
-jira issue clone JCT-32 --no-input --dry-run    # preview, no --force needed
+jira issue clone <ISSUE_KEY> --no-input --force
+jira issue clone <ISSUE_KEY> --no-input --dry-run    # preview, no --force needed
 ```
 
 === "Human"
@@ -910,7 +910,7 @@ jira issue clone JCT-32 --no-input --dry-run    # preview, no --force needed
     **new** clone.
 
     ```text
-    INF ℹ️ cloned issue dry_run=false issue=JCT-32 result="{...}"
+    INF ℹ️ cloned issue dry_run=false issue=<ISSUE_KEY> result="{...}"
     ```
 
 === "JSON"
@@ -921,10 +921,10 @@ jira issue clone JCT-32 --no-input --dry-run    # preview, no --force needed
       "meta": { "command": "issue.clone", "timestamp": "…", "request_id": "…" },
       "data": {
         "dry_run": false,
-        "issue": "JCT-32",
+        "issue": "<ISSUE_KEY>",
         "result": {
           "id": "10407",
-          "key": "JCT-38",
+          "key": "<CLONED_ISSUE_KEY>",
           "self": "https://example.atlassian.net/rest/api/3/issue/10407"
         }
       }
@@ -945,20 +945,20 @@ source didn't carry, declare them in the same `--json-input` payload
 alongside the project / type swap.
 
 ```sh
-jira issue move JCT-32 --no-input --json-input move.json --force
-jira issue move JCT-32 --no-input --json-input move.json --dry-run
+jira issue move <ISSUE_KEY> --no-input --json-input move.json --force
+jira issue move <ISSUE_KEY> --no-input --json-input move.json --dry-run
 ```
 
 Canonical override shape:
 
 ```json
-{ "fields": { "project": { "key": "OTHER" }, "issuetype": { "name": "Task" } } }
+{ "fields": { "project": { "key": "<TARGET_PROJECT_KEY>" }, "issuetype": { "name": "Task" } } }
 ```
 
 === "Human"
 
     ```text
-    INF ℹ️ moved issue dry_run=true issue=JCT-32 payload.fields.issuetype.name=Task payload.fields.project.key=OTHER
+    INF ℹ️ moved issue dry_run=true issue=<ISSUE_KEY> payload.fields.issuetype.name=Task payload.fields.project.key=<TARGET_PROJECT_KEY>
     ```
 
     Real submits emit the same line with `dry_run=false`.
@@ -975,11 +975,11 @@ Canonical override shape:
       "meta": { "command": "issue.move", "timestamp": "…", "request_id": "…" },
       "data": {
         "dry_run": true,
-        "issue": "JCT-32",
+        "issue": "<ISSUE_KEY>",
         "payload": {
           "fields": {
             "issuetype": { "name": "Task" },
-            "project":   { "key": "OTHER" }
+            "project":   { "key": "<TARGET_PROJECT_KEY>" }
           }
         }
       },
@@ -1000,15 +1000,15 @@ record preserved, use [`transition`](#transition) to a terminal
 status (`Done`, `Cancelled`) instead.
 
 ```sh
-jira issue delete JCT-32 --no-input --force
-jira issue delete JCT-32 --no-input --dry-run
-jira issue delete JCT-32 --no-input --force --delete-subtasks   # cascade
+jira issue delete <ISSUE_KEY> --no-input --force
+jira issue delete <ISSUE_KEY> --no-input --dry-run
+jira issue delete <ISSUE_KEY> --no-input --force --delete-subtasks   # cascade
 ```
 
 === "Human"
 
     ```text
-    INF ℹ️ deleted issue dry_run=false issue=JCT-32 result=null
+    INF ℹ️ deleted issue dry_run=false issue=<ISSUE_KEY> result=null
     ```
 
 === "JSON"
@@ -1019,7 +1019,7 @@ jira issue delete JCT-32 --no-input --force --delete-subtasks   # cascade
       "meta": { "command": "issue.delete", "timestamp": "…", "request_id": "…" },
       "data": {
         "dry_run": false,
-        "issue": "JCT-32",
+        "issue": "<ISSUE_KEY>",
         "result": null
       }
     }

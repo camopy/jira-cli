@@ -5,7 +5,7 @@ When: one or more fields on an existing issue need new values; the bare-form `ji
 **Decide**
 
 # target
-- Issue key positional argument (e.g. `KAN-104`).
+- Issue key positional argument (e.g. `<ISSUE_KEY>`).
 
 # scope
 - Single field, fast path: a field flag (`--summary`, `--assignee`, etc.).

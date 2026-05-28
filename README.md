@@ -13,6 +13,30 @@ Homebrew and GoReleaser release archives include release version metadata.
 and may report `dev` or git-derived metadata in `jira version`.
 Release archives currently target macOS and Linux.
 
+See [docs/installation.md](docs/installation.md) for release archives, the
+one-line installer, source builds, and uninstall steps. The examples below
+assume `jira` is on `PATH`.
+
+## Quick start
+
+```sh
+# 1. Create profile metadata
+jira config init --no-input \
+  --base-url https://company.atlassian.net \
+  --email dev@example.com
+
+# 2. Store an API token and verify Jira accepts it
+jira auth login
+jira auth status
+
+# 3. List your issues
+jira issue list
+```
+
+For issue creation, editing, comments, and ADF payloads, start with
+[docs/issues.md](docs/issues.md). For classic API tokens, auth backends, and
+1Password, use [docs/auth.md](docs/auth.md).
+
 ## Configuration
 
 Configuration lives in `~/.config/jira-cli/config.toml`. Use metadata-only
@@ -69,80 +93,34 @@ vault = "Engineering"
 item = "jira-cli-work"
 ```
 
-### Required scopes
+### Token support
 
-jira talks to **Jira Cloud only**; API tokens need permission to call the Jira
-REST endpoints the CLI uses. Server/Data Center are not a supported target.
-
-Classic Atlassian scopes (3 total — simplest path):
-
-*   `read:jira-user` — `jira me`, auth verification
-*   `read:jira-work` — issue view/list, JQL search, transitions list, worklog
-  list, project/label/field/issuetype caches, createmeta
-*   `write:jira-work` — create/edit/delete issues, execute transitions,
-  comments, issue links, web (remote) links, worklog add
-
-Granular scopes (Cloud scoped API tokens):
-
-Read:
-
-*   `read:user:jira`, `read:application-role:jira`, `read:group:jira`,
-  `read:avatar:jira` — all four are required by `/rest/api/3/myself` and
-  enforced as a union; missing any one returns 401
-*   `read:attachment:jira` — `issue attachment list/download`
-*   `read:comment:jira` — `issue comment list` and read pair for
-  `write:comment:jira`
-*   `read:field:jira` — field cache (customfield_NNNN map)
-*   `read:issue:jira` — issue view, list, JQL search
-*   `read:issue-link-type:jira` — `issue link types`, `cache linktypes`
-*   `read:issue-meta:jira` — createmeta
-*   `read:issue-type:jira` — issuetype cache
-*   `read:issue.transition:jira` — list available transitions
-*   `read:issue.watcher:jira` — `issue watchers list`
-*   `read:issue-worklog:jira` — worklog list
-*   `read:label:jira` — label cache
-*   `read:project:jira` — project cache, `boards list` per-board project lookup
-*   `read:project-role:jira` — comment visibility role context
-*   `read:board-scope:jira` — `boards list`, `cache boards`, `--board NAME` /
-  `--board-id N` resolution on `issue list` and `jql build`
-
-Write / delete:
-
-*   `delete:attachment:jira` — `issue attachment delete`
-*   `delete:comment:jira` — `issue comment delete`
-*   `delete:issue:jira` — issue delete (incl. `--delete-subtasks`)
-*   `delete:issue-link:jira` — `issue link delete`
-*   `delete:issue.watcher:jira` — `issue watchers remove`, `unwatch`
-*   `write:attachment:jira` — `issue attachment add`
-*   `write:comment:jira` — `issue comment add/edit`
-*   `write:issue:jira` — create, edit, transition execute
-*   `write:issue.remote-link:jira` — `issue weblink`
-*   `write:issue.watcher:jira` — `issue watchers add`, `watch`
-*   `write:issue-link:jira` — `issue link`
-*   `write:issue-worklog:jira` — `worklog add`
-
-Atlassian's OpenAPI spec lists additional granular scopes per endpoint
-that may be enforced when the corresponding request features are used.
-The set above is the empirically minimal one for the surface this CLI
-exercises. The CLI does not touch project-admin or global-configuration
-endpoints, so `manage:jira-project` and `manage:jira-configuration`
-are not needed.
+jira talks to **Jira Cloud only**; Server/Data Center are not supported. Today
+the CLI supports classic Atlassian API tokens. Scoped API tokens are planned for
+a future auth update because they require Atlassian's gateway URL
+(`https://api.atlassian.com/ex/jira/<cloudId>/...`) instead of the normal
+`https://your-site.atlassian.net/...` REST base URL.
 
 ## TUI
 
 Run `jira -i` or `jira tui` in a terminal. The dashboard uses vim-style navigation
 and keeps running until `q`.
 
+The TUI is still in active development. Use it for interactive daily navigation;
+prefer regular CLI commands for scripts and agent workflows.
+
 Core keys: `j/k`, `/`, `Enter`, `e`, `m`, `c`, `w`, `n`, `r`, `P`, `?`, `q`.
 
-## Headless JSON
+## Output
 
-Non-TTY and agent environments emit JSON without prompts.
+Non-TTY and agent environments emit JSON without prompts. Pick a mode
+explicitly with `--output`; valid values are `auto`, `human`, `json`, and
+`compact`.
 
 ```sh
 jira issue list --output=json
 jira issue create --json-input payload.json --no-input --dry-run --output=json
-jira agent schema
+jira agent schema --output=compact
 ```
 
 Where `payload.json` is at minimum:
@@ -155,6 +133,16 @@ Where `payload.json` is at minimum:
 embedded agent guide (`jira agent guide`) for richer payload shapes
 including ADF descriptions and customfields.
 
+For agent-facing contracts, use the embedded references instead of copying
+recipes from the README:
+
+```sh
+jira agent guide
+jira agent schema --output=compact
+jira agent adf-matrix --output=json
+jira agent fieldtypes --output=json
+```
+
 TTY commands render successful results through `clog` rich output:
 
 ```text
@@ -163,6 +151,19 @@ INF ℹ️ listed issues count=0 detail=false
 
 Use `--output=compact` for jq-friendly data-only JSON and
 `--output=human` to force `clog` rich text.
+
+## Commands
+
+| Command | Docs |
+|---------|------|
+| `auth`, `config` | [auth.md](docs/auth.md), [config.md](docs/config.md) |
+| `issue`, `epic` | [issues.md](docs/issues.md), [epic.md](docs/epic.md) |
+| `jql`, `search` | [jql.md](docs/jql.md), [search.md](docs/search.md) |
+| `worklog` | [worklog.md](docs/worklog.md) |
+| `cache` | [cache.md](docs/cache.md) |
+| `alias` | [alias.md](docs/alias.md) |
+| `agent` | [agent.md](docs/agent.md) |
+| `output`, `troubleshooting` | [output.md](docs/output.md), [troubleshooting.md](docs/troubleshooting.md) |
 
 ## JQL
 

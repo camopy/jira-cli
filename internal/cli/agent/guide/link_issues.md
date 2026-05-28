@@ -5,9 +5,9 @@ When: two issues need a typed relationship (blocks, relates, is-blocked-by, etc.
 **Decide**
 
 # direction & semantics
-- `KEY` is the inward side, `--to` the outward. "KAN-72 blocks KAN-73" means `KEY=KAN-73 --to KAN-72 --type Blocks`.
+- `KEY` is the inward side, `--to` the outward. "<BLOCKER_ISSUE_KEY> blocks <BLOCKED_ISSUE_KEY>" means `KEY=<BLOCKED_ISSUE_KEY> --to <BLOCKER_ISSUE_KEY> --type Blocks`.
 - A blocks B (B is blocked by A): `jira issue link <BLOCKED> --to <BLOCKER> --type Blocks`.
-- A and B related (no direction): `jira issue link KAN-73 --to KAN-72 --type Relates`.
+- A and B related (no direction): `jira issue link <BLOCKED_ISSUE_KEY> --to <BLOCKER_ISSUE_KEY> --type Relates`.
 - A is a duplicate of canonical B: `jira issue link <DUP> --to <CANONICAL> --type Duplicate`.
 - A is a clone of B: `jira issue link <CLONE> --to <ORIGINAL> --type Cloners`.
 
@@ -22,9 +22,9 @@ When: two issues need a typed relationship (blocks, relates, is-blocked-by, etc.
 - `--dry-run` previews creation without contacting Jira.
 
 **Run**
-- Create blocker: `jira issue link KAN-73 --to KAN-72 --type Blocks --output=json`
-- Create undirected: `jira issue link KAN-73 --to KAN-72 --type Relates --output=json`
-- Preview: `jira issue link KAN-73 --to KAN-72 --type Blocks --dry-run --output=json`
+- Create blocker: `jira issue link <BLOCKED_ISSUE_KEY> --to <BLOCKER_ISSUE_KEY> --type Blocks --output=json`
+- Create undirected: `jira issue link <BLOCKED_ISSUE_KEY> --to <BLOCKER_ISSUE_KEY> --type Relates --output=json`
+- Preview: `jira issue link <BLOCKED_ISSUE_KEY> --to <BLOCKER_ISSUE_KEY> --type Blocks --dry-run --output=json`
 - List on issue: `jira issue link list KEY --output=json`
 - Delete: `jira issue link delete KEY 9001 --force --output=json`
 - Available link types: `jira issue link types --output=json | jq -r '.data.link_types[].name' | sort -u`
@@ -42,11 +42,11 @@ When: two issues need a typed relationship (blocks, relates, is-blocked-by, etc.
       {"id": "9001",
        "type": {"id": "10000", "name": "Blocks", "inward": "is blocked by", "outward": "blocks"},
        "direction": "outward",
-       "other_issue": {"key": "KAN-200", "summary": "downstream service work", "status": "In Progress"}},
+       "other_issue": {"key": "<DOWNSTREAM_ISSUE_KEY>", "summary": "downstream service work", "status": "In Progress"}},
       {"id": "9002",
        "type": {"id": "10000", "name": "Blocks", "inward": "is blocked by", "outward": "blocks"},
        "direction": "inward",
-       "other_issue": {"key": "KAN-100", "summary": "upstream API contract", "status": "Done"}}
+       "other_issue": {"key": "<UPSTREAM_ISSUE_KEY>", "summary": "upstream API contract", "status": "Done"}}
     ]
   }
 }

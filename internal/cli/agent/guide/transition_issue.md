@@ -5,7 +5,7 @@ When: an issue must move to a new workflow state (e.g. To Do → In Progress →
 **Decide**
 
 # step 1 — list
-- Always list first. Transition IDs are **workflow-specific** — they vary per project and per workflow, so the IDs you saw on `KAN-104` are not necessarily valid on `OTHER-1`.
+- Always list first. Transition IDs are **workflow-specific** — they vary per project and per workflow, so the IDs you saw on `<ISSUE_KEY>` are not necessarily valid on `<OTHER_ISSUE_KEY>`.
 
 # step 2 — execute
 - Pick an `id` from the listed transitions and pass it to `--transition`.

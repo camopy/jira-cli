@@ -8,6 +8,8 @@ When: a single issue's full payload is the input to downstream reasoning — tra
 
 **Run**
 - Canonical: `jira issue view KEY --output=json`
+- Existing issue type when `view` omits it: `jira search jql 'key = KEY' --fields key,issuetype --output=json`
+- Full Jira payload fallback: `jira search jql 'key = KEY' --full --output=json`
 
 **Save**
 > Requires `--output=json`.
@@ -18,12 +20,14 @@ When: a single issue's full payload is the input to downstream reasoning — tra
 **Behavior**
 - The CLI still emits its standard envelope (`ok`, `meta`, `data`, `errors`, `warnings`). Within `data.issue`, field names follow Jira's JSON shape, including camelCase keys such as `accountId`.
 - `issue view` does not have a separate raw REST passthrough mode; the command's normal JSON payload is already the Jira issue object wrapped by the CLI envelope.
+- `issue view` and `issue list` do not have a `--fields` flag. Their default field sets can omit `issuetype`; absence means the field was not returned, not that the issue has no type.
+- For the type catalog (`Bug`, `Epic`, `Task`, etc.), use → `cache_metadata` (`jira cache issuetypes`). Use `search jql --fields issuetype` only when you need the actual type of one existing issue.
 
 | Field                              | Typed JSON     |
 |------------------------------------|----------------|
 | `parent`                           | `data.issue.fields.parent` when Jira returns it |
 | `subtasks`                         | `data.issue.fields.subtasks` when Jira returns it |
-| `issuetype.name` on `issue view`   | `data.issue.fields.issuetype.name` when Jira returns it |
+| `issuetype.name` from `search jql --fields issuetype` | `data.issues[].fields.issuetype.name` when Jira returns it |
 
 - Because `issue view` preserves Jira's issue shape, absence of a key means Jira did not return it for the requested field set/token, not that the CLI projected it away.
 
@@ -32,7 +36,7 @@ When: a single issue's full payload is the input to downstream reasoning — tra
 |---|---|---|
 | Exit `2` (`not_found`) | Wrong key, or the active profile cannot see this issue | Verify the key with → `search_jql` or → `list_issues` under the right project/profile |
 | `parent` / `subtasks` absent from JSON | Jira did not include that field in the returned issue object | Cross-check field visibility/scopes or use → `search_jql` with explicit fields |
-| `issuetype.name` is `null` | Jira did not include or expose the issue type name | Cross-check with → `list_issues` or → `search_jql` |
+| `issuetype.name` absent/null | The default `issue view` / `issue list` field set did not include it, or Jira did not expose it | Re-run with → `search_jql`: `jira search jql 'key = KEY' --fields key,issuetype --output=json` |
 
 **Next**
 - Then: → `list_comments` to read the discussion thread on the same key.

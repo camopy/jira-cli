@@ -52,22 +52,22 @@ issuesWithText("phrase")
 jira search jql 'assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC' --output=json
 
 # In-flight issues in a specific project
-jira search jql 'project = KAN AND status = "In Progress"' --output=json
+jira search jql 'project = <PROJECT_KEY> AND status = "In Progress"' --output=json
 
 # Bugs reported in the last sprint
-jira search jql 'project = KAN AND issuetype = Bug AND created > startOfMonth()' --output=json
+jira search jql 'project = <PROJECT_KEY> AND issuetype = Bug AND created > startOfMonth()' --output=json
 
 # Issues in any of my epics
-jira search jql 'project = KAN AND parent in (linkedIssues(currentUser()))' --output=json
+jira search jql 'project = <PROJECT_KEY> AND parent in (linkedIssues(currentUser()))' --output=json
 
 # Recently updated, with a specific label
-jira search jql 'project = KAN AND labels = "regression" AND updated > -7d' --output=json
+jira search jql 'project = <PROJECT_KEY> AND labels = "regression" AND updated > -7d' --output=json
 
 # Issues blocked by a specific issue
-jira search jql 'issue in linkedIssues("KAN-72", "is blocked by")' --output=json
+jira search jql 'issue in linkedIssues("<ISSUE_KEY>", "is blocked by")' --output=json
 
 # Subtasks of a parent
-jira search jql 'parent = KAN-69' --output=json
+jira search jql 'parent = <PARENT_ISSUE_KEY>' --output=json
 
 # Status-history check (was = 'In Progress' some time recently)
 jira search jql 'status was "In Progress" during ("2026-04-01", "2026-05-01")' --output=json

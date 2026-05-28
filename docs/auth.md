@@ -16,7 +16,8 @@ Before `auth login`, gather:
 
 *   An <abbr title="A subdomain of atlassian.net, e.g. https://example.atlassian.net">Atlassian Cloud site</abbr> (jira targets Cloud only).
 *   The account email tied to that site.
-*   An [API token](https://id.atlassian.com/manage-profile/security/api-tokens)
+*   A classic
+    [API token](https://id.atlassian.com/manage-profile/security/api-tokens)
     tied to that account.
 *   A <abbr title="Short local name jira uses to look up the credential, defaults to 'default'. Multiple profiles let you point at different Atlassian tenants.">profile name</abbr>.
 *   A <abbr title="Interactive prompt, --secret-stdin, --credential-env, or the per-profile JIRA_TOKEN_{PROFILE} environment variable.">token source</abbr>.
@@ -237,7 +238,7 @@ persistent flag that disables prompting across the whole CLI.
 The **access diagnostic**. Probes `/myself` and `/mypermissions` against each
 configured profile and reports whether the stored credential currently works.
 A 401 means the token is bad, a 403 means the token is fine but lacks
-permission for the project or scope you probed.
+permission for the project or field you probed.
 
 ```sh
 jira auth status
@@ -574,7 +575,7 @@ above) wraps everything in the standard error envelope with
 ## auth refresh
 
 Re-resolve the active profile's credential and trigger a backend-specific
-refresh flow. Today, jira-cli only supports static API tokens, so this is a
+refresh flow. Today, jira-cli only supports classic API tokens, so this is a
 **no-op** that reports why nothing happened, it exists as a future hook for
 OAuth-style flows.
 
@@ -726,9 +727,9 @@ the human message, codes are stable, messages may change.
     *   `errors[0].type = "auth_failure"`
     *   `meta.exit_code = 1`
 
-    The token authenticates fine but lacks project, scope, or
-    field-level permission for the requested action. Auth itself is
-    healthy; only the *capability* is missing.
+    The token authenticates fine but lacks project or field-level permission for
+    the requested action. Auth itself is healthy; only the *capability* is
+    missing.
 
     **Next:**
 
@@ -736,9 +737,9 @@ the human message, codes are stable, messages may change.
     jira auth status --project KEY --output=json   # probe permissions for one project
     ```
 
-    If `--project` reports the user is missing a permission, the resolution
-    is on the Jira side (admin grants role, scoped token gets the missing
-    `write:jira-work` scope, etc.), not in jira itself.
+    If `--project` reports the user is missing a permission, the resolution is
+    on the Jira side (admin grants role, project permission changes, etc.), not
+    in jira itself.
 
 === "429"
 
@@ -773,10 +774,17 @@ CLI-side validation errors stay separate from API errors:
     they distinguish "no token resolved", "stale token", and "Jira-side
     permission" failures.
 
-## Scopes
+## Token support
 
-Profiles authenticate with a scoped Atlassian API token. The repo README
-enumerates the current scopes needed by the command surface.
+jira talks to **Jira Cloud only**; Server/Data Center are not supported. Today
+the CLI supports classic Atlassian API tokens.
+
+Scoped API tokens are not supported yet. They require routing REST API v3 calls
+through Atlassian's gateway URL
+(`https://api.atlassian.com/ex/jira/<cloudId>/...`) instead of the normal
+`https://your-site.atlassian.net/...` REST base URL. Support for scoped tokens
+is planned for a future auth update that changes how the CLI stores and
+resolves Jira API base URLs.
 
 ## Further reading
 

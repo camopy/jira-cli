@@ -5,7 +5,7 @@ When: an existing parent issue needs a child task and the destination project su
 **Decide**
 
 # parent
-- Parent issue key (e.g. `KAN-104`) — must already exist; the CLI does not verify it client-side.
+- Parent issue key (e.g. `<PARENT_ISSUE_KEY>`) — must already exist; the CLI does not verify it client-side.
 
 # body
 - Same shape and options as → `create_issue` — same `--json-input`, same ADF rules, same alias table, same convenience flags.
@@ -21,10 +21,10 @@ Subtask payload (note `issue_type: "Subtask"` and `parent.key`):
 
 ```json
 {
-  "summary": "REL: Subtask 1 of KAN-104",
+  "summary": "REL: Subtask 1 of <PARENT_ISSUE_KEY>",
   "issue_type": "Subtask",
-  "project_key": "KAN",
-  "parent": {"key": "KAN-104"},
+  "project_key": "<PROJECT_KEY>",
+  "parent": {"key": "<PARENT_ISSUE_KEY>"},
   "description": {"type": "doc", "version": 1, "content": [
     {"type": "paragraph", "content": [{"type": "text", "text": "Detail of subtask 1."}]}
   ]}

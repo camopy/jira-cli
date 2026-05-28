@@ -25,9 +25,9 @@ issue payload (`fields=*all`). The two are mutually exclusive.
     a downstream consumer needs the complete envelope.
 
 ```sh
-jira search jql 'project = JCT AND status = "To Do"'
-jira search jql 'project = JCT' --fields key,summary,status
-jira search jql 'key = JCT-32' --full
+jira search jql 'project = <PROJECT_KEY> AND status = "To Do"'
+jira search jql 'project = <PROJECT_KEY>' --fields key,summary,status
+jira search jql 'key = <ISSUE_KEY>' --full
 ```
 
 === "Human"
@@ -59,7 +59,7 @@ jira search jql 'key = JCT-32' --full
       "data": {
         "issues": [
           {
-            "key": "JCT-32",
+            "key": "<ISSUE_KEY>",
             "summary": "Example issue summary",
             "status": "To Do",
             "priority": "Medium",
@@ -85,7 +85,7 @@ nested `fields` object containing only the requested keys):
     "issues": [
       {
         "id": "10401",
-        "key": "JCT-32",
+        "key": "<ISSUE_KEY>",
         "self": "https://example.atlassian.net/rest/api/3/issue/10401",
         "fields": {
           "status": { "name": "To Do" },
@@ -164,9 +164,9 @@ YAML frontmatter (delimited by `---`), TOML frontmatter (delimited by
 ---
 name: my-open-bugs                # optional; defaults to the filename
 description: Bugs assigned to me  # optional; echoed in the envelope
-project: JCT                      # optional; informational
+project: <PROJECT_KEY>                      # optional; informational
 ---
-project = JCT AND assignee = currentUser() AND statusCategory != Done
+project = <PROJECT_KEY> AND assignee = currentUser() AND statusCategory != Done
 ORDER BY priority DESC, updated DESC
 ```
 
@@ -180,7 +180,7 @@ frontmatter is purely informational.
     `source=saved`, and the body as `jql="…"`.
 
     ```text
-    INF ℹ️ searched issues description="Bugs assigned to me" issues="[17 items]" jql="project = JCT AND assignee = currentUser() …" key=my-open-bugs name=my-open-bugs project=JCT source=saved
+    INF ℹ️ searched issues description="Bugs assigned to me" issues="[17 items]" jql="project = <PROJECT_KEY> AND assignee = currentUser() …" key=my-open-bugs name=my-open-bugs project=<PROJECT_KEY> source=saved
     ```
 
 === "JSON"
@@ -198,7 +198,7 @@ frontmatter is purely informational.
         "description": "Bugs assigned to me",
         "issues": [
           {
-            "key": "JCT-32",
+            "key": "<ISSUE_KEY>",
             "summary": "…",
             "status": "To Do",
             "priority": "Medium",

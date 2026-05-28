@@ -80,7 +80,7 @@ Or nuke and re-prime:
 
 ```sh
 jira cache clear --output=json
-jira issue list --project JCT --output=json   # any read repopulates what's needed
+jira issue list --project <PROJECT_KEY> --output=json   # any read repopulates what's needed
 ```
 
 See [Cache](cache.md) for the full resource list.

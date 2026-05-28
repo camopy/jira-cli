@@ -17,7 +17,7 @@ them through verbatim.
 
 ```sh
 jira alias set inbox "issue list --assignee me --status 'To Do,In Progress'"
-jira alias set my-bugs "search jql 'project = JCT AND type = Bug AND assignee = currentUser()'"
+jira alias set my-bugs "search jql 'project = <PROJECT_KEY> AND type = Bug AND assignee = currentUser()'"
 ```
 
 === "Human"
@@ -69,7 +69,7 @@ jira alias list
       "meta": { "command": "alias.list", "timestamp": "…", "request_id": "…" },
       "data": {
         "inbox": "issue list --assignee me --status 'To Do,In Progress'",
-        "my-bugs": "search jql 'project = JCT AND type = Bug AND assignee = currentUser()'"
+        "my-bugs": "search jql 'project = <PROJECT_KEY> AND type = Bug AND assignee = currentUser()'"
       },
       "errors": [],
       "warnings": []
@@ -113,7 +113,7 @@ the value is the expansion string.
 ```yaml
 # aliases.yaml
 inbox: issue list --assignee me --status 'To Do,In Progress'
-my-bugs: search jql 'project = JCT AND type = Bug AND assignee = currentUser()'
+my-bugs: search jql 'project = <PROJECT_KEY> AND type = Bug AND assignee = currentUser()'
 standup: search saved standup-jql
 ```
 
