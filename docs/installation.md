@@ -199,7 +199,7 @@ To install a **specific version**, pass the release tag positionally:
     | Variable | Effect |
     |---|---|
     | `JIRA_CLI_VERSION` | Pin a release tag (same effect as the positional argument). The positional argument wins when both are set. |
-    | `JIRA_CLI_INSTALL_DIR` | Install directory. Default: `$HOME/.local/bin`. Use `/usr/local/bin` with `curl … \| sudo sh` for a system-wide install. |
+    | `JIRA_CLI_INSTALL_DIR` | Install directory. Default: `$HOME/.local/bin`. Use `/usr/local/bin` for a system-wide install; see the example below. |
     | `JIRA_CLI_NO_VERIFY` | Set to `1` to skip cosign verification when cosign is unavailable. SHA-256 still runs. |
 
     Example, system-wide install:
@@ -321,7 +321,7 @@ reference.
 | Install path | Upgrade |
 |---|---|
 | Homebrew | `brew upgrade jira` |
-| One-line installer | Re-run `curl -fsSL https://matcra587.github.io/jira-cli/install.sh \| sh` |
+| One-line installer | Re-run the installer command from [One-line install](#one-line-install). |
 | go install | `go install github.com/matcra587/jira-cli/cmd/jira@latest` |
 | Pre-built | Re-download from [releases](https://github.com/matcra587/jira-cli/releases) |
 
