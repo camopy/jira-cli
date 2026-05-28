@@ -53,6 +53,33 @@ func TestFromMarkdownLossy_PlainParagraphNoWarnings(t *testing.T) {
 	}
 }
 
+// Reference link definitions are parser metadata once goldmark resolves
+// them onto the link node; dropping the definition line must not become
+// a lossy conversion warning.
+func TestFromMarkdownLossy_ReferenceLinkDefinitionDoesNotWarn(t *testing.T) {
+	md := "[example][ref]\n\n[ref]: https://example.com \"title\"\n"
+	doc, warnings, err := adf.FromMarkdownLossy(md)
+	if err != nil {
+		t.Fatalf("FromMarkdownLossy: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("reference link definition must not warn; got %+v", warnings)
+	}
+	if len(doc.Content) != 1 || len(doc.Content[0].Content) != 1 {
+		t.Fatalf("expected one paragraph with one text node; got %+v", doc.Content)
+	}
+	node := doc.Content[0].Content[0]
+	if node.Text != "example" {
+		t.Fatalf("text = %q, want %q", node.Text, "example")
+	}
+	if len(node.Marks) != 1 || node.Marks[0].Type != "link" {
+		t.Fatalf("expected one link mark; got %+v", node.Marks)
+	}
+	if got := node.Marks[0].Attrs["href"]; got != "https://example.com" {
+		t.Fatalf("href = %v, want %q", got, "https://example.com")
+	}
+}
+
 // Headings, lists, code fences, and emphasis are all supported — no
 // warnings for a document built only from those.
 func TestFromMarkdownLossy_SupportedConstructsNoWarnings(t *testing.T) {

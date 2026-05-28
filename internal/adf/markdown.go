@@ -91,6 +91,10 @@ func (c *mdConverter) block(n ast.Node) (Node, bool) {
 	case ast.KindHTMLBlock:
 		c.warn("raw HTML block", "")
 		return Node{}, false
+	case ast.KindLinkReferenceDefinition:
+		// Goldmark v1.8 surfaces reference definitions as block nodes.
+		// They are parser metadata; resolved links already carry the href.
+		return Node{}, false
 	case extast.KindTable:
 		c.warn("table", "GFM table dropped")
 		return Node{}, false
