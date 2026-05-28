@@ -73,3 +73,34 @@ func TestJQLBuildBoardScopeWorksWithoutCredentials(t *testing.T) {
 		t.Fatalf("jql build envelope missing board clause; got:\n%s", out)
 	}
 }
+
+func TestIssueKeyRangesWorkWithoutCredentials(t *testing.T) {
+	bin := buildJiraBinary(t)
+	cfg := emptyBaseURLConfig(t)
+
+	c := exec.Command(
+		bin,
+		"--config", cfg,
+		"issue", "list",
+		"--as-jql",
+		"--key", "ABC-1:3,XYZ-1:2",
+		"--key", "ABC-10",
+		"--output=json",
+	)
+	out, err := c.CombinedOutput()
+	if err != nil {
+		t.Fatalf("issue list --as-jql --key: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "key in (ABC-1, ABC-2, ABC-3, XYZ-1, XYZ-2, ABC-10)") {
+		t.Fatalf("issue list envelope missing expanded key clause; got:\n%s", out)
+	}
+
+	c = exec.Command(bin, "--config", cfg, "jql", "build", "--key", "ABC-1:XYZ-100", "--output=json")
+	out, err = c.CombinedOutput()
+	if err == nil {
+		t.Fatalf("jql build accepted cross-project range endpoint:\n%s", out)
+	}
+	if !strings.Contains(string(out), "same project") {
+		t.Fatalf("jql build cross-project range error missing same-project message; got:\n%s", out)
+	}
+}

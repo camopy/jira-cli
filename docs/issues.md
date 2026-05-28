@@ -68,8 +68,9 @@ jira issue view <ISSUE_KEY>
 
 ## list
 
-Filter issues by project, assignee, status, priority, label, type,
-epic, or board. The binary translates the flags into JQL and runs it.
+Filter issues by project, issue key, assignee, status, priority,
+label, type, epic, or board. The binary translates the flags into JQL
+and runs it.
 Add or drop flags until the result is what you want, then save the
 resolved query as `--jql` for the next run. `--as-jql` prints the
 query without calling Jira, useful when a flag like `--label foo`
@@ -89,6 +90,7 @@ The default projection is a summary table, one row per issue. Pass
 
 ```sh
 jira issue list --project <PROJECT_KEY> --status "To Do" --order-by updated --desc
+jira issue list --key <PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12 --as-jql
 jira issue list --project <PROJECT_KEY> --as-jql              # show the JQL only
 jira issue list --jql 'project = <PROJECT_KEY> ORDER BY updated DESC'
 jira issue list --board "Engineering" --detail
@@ -141,6 +143,17 @@ jira issue list --board "Engineering" --detail
 `meta.command` flips to `issue.list.jql` and `data.issues` is always
 `[]`. Useful for confirming the filter flags resolve to the query you
 expect before running a heavy `--detail` pull.
+
+`--key` narrows the generated JQL to known issue keys. It accepts a
+single key (`<ISSUE_KEY>`), comma lists
+(`<ISSUE_KEY>,<OTHER_ISSUE_KEY>`), repeated flags, and inclusive
+ranges (`<PROJECT_KEY>-1:10`, `<PROJECT_KEY>-1..10`). Comma members
+are expanded independently, so
+`<PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12` is valid. A single range
+must stay within one project prefix:
+`<PROJECT_KEY>-1:<OTHER_PROJECT_KEY>-100` exits with a flag error
+instead of crossing projects. Do not put spaces inside a `--key`
+value.
 
 ## mine
 

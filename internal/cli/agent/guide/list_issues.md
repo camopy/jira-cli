@@ -1,5 +1,5 @@
 ## list_issues
-Goal: Page through issues for the active profile — by JQL, by board, or by the default project — capturing keys for downstream per-issue work.
+Goal: Page through issues for the active profile — by key set, JQL, board, or the default project — capturing keys for downstream per-issue work.
 When: a batch of issue keys is needed for downstream per-issue work and the filter set fits the flag surface; for hand-written JQL or stored queries, see → `search_jql`.
 
 **Decide**
@@ -7,14 +7,14 @@ When: a batch of issue keys is needed for downstream per-issue work and the filt
 # target
 - Default profile filter (whatever `default_project` / `default_board` resolves to): `jira issue list`.
 - Ad-hoc JQL: `--jql 'JQL'`.
+- Known key set: `--key <ISSUE_KEY>,<OTHER_ISSUE_KEY>` or `--key <PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12`.
 - Show the JQL that WOULD run without calling Jira: `--as-jql` (local-only preview, no API call).
 - Restrict to one agile board: `--board <NAME>` (exact case-insensitive) or `--board-id <id>` (numeric escape when names collide).
 
 # field set
 - Default summary set per row: `key, summary, status, assignee, priority, updated`.
 - Full field records for every row in the page: `--detail` (this flag is `issue list` only — `search jql` / `search saved` don't accept it).
-- Wire-shape `fields:["*all"]`: `--full`.
-- Explicit selector: `--fields key,summary,customfield_10010`.
+- Explicit field selector or wire-shape `fields:["*all"]`: use → `search_jql`; `issue list` does not accept `--fields` or `--full`.
 
 # guard
 - `--board` and `--board-id` are mutually exclusive — passing both exits 3.
@@ -23,6 +23,7 @@ When: a batch of issue keys is needed for downstream per-issue work and the filt
 **Run**
 - Default: `jira issue list --output=json`
 - With JQL: `jira issue list --jql 'project = <PROJECT_KEY> AND statusCategory != Done' --output=json`
+- With issue-key ranges: `jira issue list --key <PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12 --output=json`
 - Preview JQL only: `jira issue list --as-jql --output=json`
 - Full field records: `jira issue list --detail --output=json`
 - Board filter (name): `jira issue list --board "Engineering Sprint" --output=json`
@@ -40,6 +41,7 @@ When: a batch of issue keys is needed for downstream per-issue work and the filt
 
 **Behavior**
 - Board filtering emits `project in (P1, P2, …)` JQL built from the board's cached project keys — the board is not a server-side filter, it expands locally to a project list.
+- `--key` emits `key = KEY` or `key in (...)`. Single keys, comma lists, repeated flags, and ranges (`<PROJECT_KEY>-1:10`, `<PROJECT_KEY>-1..10`) are accepted. Lists may mix projects (`<ISSUE_KEY>,<OTHER_ISSUE_KEY>`) and separate ranges may mix projects (`<PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12`), but one range may not cross projects (`<PROJECT_KEY>-1:<OTHER_PROJECT_KEY>-100` exits 3). Do not put spaces inside a `--key` value.
 - `default_board` (profile config, see below) applies implicitly to `issue list` whenever `--board`/`--board-id` is omitted. The flag wins over the default; the default wins exclusively over `default_project` on commands that consume `--board` (no intersection, no union).
 - `default_board` is validated **at use-time only** — `config set` accepts any string without checking the cache (which may not exist yet). When the configured `default_board` doesn't resolve, you get `default_board "X" not found in boards cache — run "jira cache boards --refresh" or unset with "jira config set profiles.<profile>.default_board ''"`.
 
@@ -53,6 +55,7 @@ When: a batch of issue keys is needed for downstream per-issue work and the filt
 |---|---|---|
 | Exit `3`, `boards cache is empty` | First-time board use without a primed cache | → `cache_metadata` (run `jira cache boards`) then retry |
 | Exit `3`, `candidates[]` of board matches | Ambiguous `--board NAME` across projects | Re-run with `--board-id <id>` from the candidates list |
+| Exit `3`, `same project` on `--key` | One range crosses projects, e.g. `<PROJECT_KEY>-1:<OTHER_PROJECT_KEY>-100` | Split it into separate same-project ranges, e.g. `<PROJECT_KEY>-1:100,<OTHER_PROJECT_KEY>-1:100` |
 | Exit `3`, both `--board` and `--board-id` set | Mutex violation | Pass exactly one |
 | Exit `3`, `default_board "X" not found in boards cache` | Stale or missing cache vs configured default | `jira cache boards --refresh`, or unset the default |
 

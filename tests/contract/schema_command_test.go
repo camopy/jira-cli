@@ -87,7 +87,7 @@ func TestAgentSchemaPublishesLiveLeafPathsAndFlagGroups(t *testing.T) {
 	if issueList == nil {
 		t.Fatalf("agent schema missing leaf command_path %q", "jira issue list")
 	}
-	for _, want := range []string{"--board", "--board-id"} {
+	for _, want := range []string{"--board", "--board-id", "--key"} {
 		if !hasAgentSchemaFlag(issueList.Flags, want) {
 			t.Fatalf("jira issue list schema missing local flag %s: %+v", want, issueList.Flags)
 		}
@@ -97,6 +97,14 @@ func TestAgentSchemaPublishesLiveLeafPathsAndFlagGroups(t *testing.T) {
 	}
 	if !hasFlagGroup(issueList.MutuallyExclusiveFlags, "--board", "--board-id") {
 		t.Fatalf("jira issue list missing board mutex group: %+v", issueList.MutuallyExclusiveFlags)
+	}
+
+	jqlBuild := findAgentSchemaCommand(env.Data.Commands, "jira jql build")
+	if jqlBuild == nil {
+		t.Fatalf("agent schema missing leaf command_path %q", "jira jql build")
+	}
+	if !hasAgentSchemaFlag(jqlBuild.Flags, "--key") {
+		t.Fatalf("jira jql build schema missing local flag --key: %+v", jqlBuild.Flags)
 	}
 
 	issueLink := findAgentSchemaCommand(env.Data.Commands, "jira issue link")

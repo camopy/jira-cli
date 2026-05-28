@@ -34,6 +34,9 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
   jira jql build --project <PROJECT_KEY> --label regression --label hotfix --type Bug --type Task --output=json
   # → {"jql": "project = <PROJECT_KEY> AND labels in (regression, hotfix) AND issuetype in (Bug, Task) ORDER BY updated DESC"}
 
+  jira jql build --key <PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12 --output=json
+  # → {"jql": "key in (<PROJECT_KEY>-1, ..., <PROJECT_KEY>-10, <OTHER_PROJECT_KEY>-1, ..., <OTHER_PROJECT_KEY>-12) ORDER BY updated DESC"}
+
   jira jql build --project <PROJECT_KEY> --order-by updated --desc --output=json
   # → {"jql": "project = <PROJECT_KEY> ORDER BY updated DESC"}
   ```
@@ -51,6 +54,8 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 |-----------------------------|----------------------------------------|
 | `--assignee me`             | `assignee = currentUser()`             |
 | `--reporter me`             | `reporter = currentUser()`             |
+| `--key <ISSUE_KEY>`         | `key = <ISSUE_KEY>`                    |
+| `--key <PROJECT_KEY>-1:3,<OTHER_PROJECT_KEY>-1:2` | `key in (<PROJECT_KEY>-1, <PROJECT_KEY>-2, <PROJECT_KEY>-3, <OTHER_PROJECT_KEY>-1, <OTHER_PROJECT_KEY>-2)` |
 | Repeated `--label X`        | `labels in (X, Y, Z)`                  |
 | Repeated `--type X`         | `issuetype in (X, Y, Z)`               |
 | Repeated `--status X`       | `status in (X, Y, Z)`                  |
@@ -68,12 +73,14 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
   project = <PROJECT_KEY> AND issuetype = Bug AND assignee = currentUser() AND statusCategory != Done
   ORDER BY priority DESC, updated DESC
   ```
+- `--key` values accept single keys, comma lists, repeated flags, and ranges using `:` or `..`. Each comma member expands independently, so `<PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12` is valid. One range cannot cross projects: `<PROJECT_KEY>-1:<OTHER_PROJECT_KEY>-100` exits 3. Whitespace inside a `--key` value is rejected.
 
 **Recover**
 | Symptom | Cause | Next |
 |---|---|---|
 | Exit `3`, `invalid order-by field` | `--order-by` value not on the allow-list (or contains shell metachars like `'updated; DROP TABLE x'`) | Use a vetted field name; see → `jql_reference` |
 | Exit `3` at flag-parse on `--label`/`--type`/`--status` | Unbalanced quotes in the value | Strip the bad quote before re-running |
+| Exit `3`, `same project` on `--key` | One key range crosses projects, e.g. `<PROJECT_KEY>-1:<OTHER_PROJECT_KEY>-100` | Split it into separate ranges: `<PROJECT_KEY>-1:100,<OTHER_PROJECT_KEY>-1:100` |
 | Exit `3`, Jira `400` on unknown function/field | Hand-authored JQL references a field/function this instance does not expose | Cross-check operators, keywords, functions in → `jql_reference` |
 | Zero `data.issues[]` | Query is well-formed but matches nothing | Loosen the JQL; reconfirm `project`/`assignee` values |
 

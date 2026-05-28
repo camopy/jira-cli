@@ -48,6 +48,7 @@ func NewCommand() *cobra.Command {
 // writing results into builder.
 func AddJQLBuilderFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 	cmd.Flags().StringSliceVar(&builder.Projects, "project", nil, "Restrict to Jira project key")
+	cmd.Flags().StringSliceVar(&builder.Keys, "key", nil, "Restrict to issue key, comma list, or range")
 	cmd.Flags().StringSliceVar(&builder.Epics, "epic", nil, "Restrict to issues in epic keys")
 	cmd.Flags().StringVar(&builder.Assignee, "assignee", "", `Restrict by assignee; use "me" for currentUser()`)
 	cmd.Flags().StringVar(&builder.Reporter, "reporter", "", `Restrict by reporter; use "me" for currentUser()`)
@@ -57,15 +58,45 @@ func AddJQLBuilderFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 	cmd.Flags().StringSliceVar(&builder.IssueTypes, "type", nil, "Restrict by issue type")
 	cmd.Flags().StringVar(&builder.OrderBy, "order-by", "updated", "Sort field")
 	cmd.Flags().BoolVar(&builder.Descending, "desc", true, "Sort descending")
-	clib.Extend(cmd.Flags().Lookup("project"), clib.FlagExtra{Group: "Filters", Placeholder: "KEY", Complete: "predictor=cacheproject,comma"})
-	clib.Extend(cmd.Flags().Lookup("epic"), clib.FlagExtra{Group: "Filters", Placeholder: "KEY", Complete: "predictor=cacheepic,comma"})
-	clib.Extend(cmd.Flags().Lookup("label"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Complete: "predictor=cachelabel,comma"})
-	clib.Extend(cmd.Flags().Lookup("type"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Complete: "predictor=cacheissuetype,comma"})
-	clib.Extend(cmd.Flags().Lookup("assignee"), clib.FlagExtra{Group: "Filters", Placeholder: "USER", Enum: []string{"me", "none"}})
-	clib.Extend(cmd.Flags().Lookup("reporter"), clib.FlagExtra{Group: "Filters", Placeholder: "USER", Enum: []string{"me"}})
+	clib.Extend(
+		cmd.Flags().Lookup("project"),
+		clib.FlagExtra{Group: "Filters", Placeholder: "KEY", Complete: "predictor=cacheproject,comma"},
+	)
+	clib.Extend(
+		cmd.Flags().Lookup("key"),
+		clib.FlagExtra{Group: "Filters", Placeholder: "KEY", Complete: "predictor=issuekey,comma"},
+	)
+	clib.Extend(
+		cmd.Flags().Lookup("epic"),
+		clib.FlagExtra{Group: "Filters", Placeholder: "KEY", Complete: "predictor=cacheepic,comma"},
+	)
+	clib.Extend(
+		cmd.Flags().Lookup("label"),
+		clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Complete: "predictor=cachelabel,comma"},
+	)
+	clib.Extend(
+		cmd.Flags().Lookup("type"),
+		clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Complete: "predictor=cacheissuetype,comma"},
+	)
+	clib.Extend(
+		cmd.Flags().Lookup("assignee"),
+		clib.FlagExtra{Group: "Filters", Placeholder: "USER", Enum: []string{"me", "none"}},
+	)
+	clib.Extend(
+		cmd.Flags().Lookup("reporter"),
+		clib.FlagExtra{Group: "Filters", Placeholder: "USER", Enum: []string{"me"}},
+	)
 	clib.Extend(cmd.Flags().Lookup("status"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME"})
 	clib.Extend(cmd.Flags().Lookup("priority"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME"})
-	clib.Extend(cmd.Flags().Lookup("order-by"), clib.FlagExtra{Group: "Sort", Placeholder: "FIELD", Enum: []string{"updated", "created", "priority", "status", "key", "summary"}, EnumDefault: "updated"})
+	clib.Extend(
+		cmd.Flags().Lookup("order-by"),
+		clib.FlagExtra{
+			Group:       "Sort",
+			Placeholder: "FIELD",
+			Enum:        []string{"updated", "created", "priority", "status", "key", "summary"},
+			EnumDefault: "updated",
+		},
+	)
 	clib.Extend(cmd.Flags().Lookup("desc"), clib.FlagExtra{Group: "Sort"})
 }
 

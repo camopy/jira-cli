@@ -1,0 +1,152 @@
+package issuekey
+
+import (
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+	"unicode"
+)
+
+const DefaultMaxExpansion = 1000
+
+var keyPattern = regexp.MustCompile(`^([A-Z][A-Z0-9_]+)-([0-9]+)$`)
+
+type Options struct {
+	MaxExpansion int
+}
+
+// ParseExpressions expands issue-key expressions into canonical Jira keys.
+// Supported forms are single keys, comma lists, and inclusive ranges using
+// ":" or ".." with either a numeric end or a full issue key end.
+func ParseExpressions(inputs []string, opts Options) ([]string, error) {
+	maxExpansion := opts.MaxExpansion
+	if maxExpansion <= 0 {
+		maxExpansion = DefaultMaxExpansion
+	}
+	out := make([]string, 0, len(inputs))
+	seen := map[string]bool{}
+	for _, input := range inputs {
+		parts := strings.Split(input, ",")
+		for _, part := range parts {
+			remaining := maxExpansion - len(out)
+			if remaining <= 0 {
+				return nil, fmt.Errorf("issue key expansion exceeds maximum of %d keys", maxExpansion)
+			}
+			if part == "" {
+				return nil, fmt.Errorf("issue key expression contains an empty list member")
+			}
+			if strings.ContainsFunc(part, unicode.IsSpace) {
+				return nil, fmt.Errorf(
+					"issue key expression %q must not contain whitespace; "+
+						"use repeated --key flags or comma-separated keys without spaces",
+					part,
+				)
+			}
+			keys, err := parsePart(part, remaining, maxExpansion)
+			if err != nil {
+				return nil, err
+			}
+			for _, key := range keys {
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				out = append(out, key)
+			}
+		}
+	}
+	return out, nil
+}
+
+func parsePart(part string, remaining, maxExpansion int) ([]string, error) {
+	if left, right, ok := strings.Cut(part, ".."); ok {
+		return parseRange(left, right, remaining, maxExpansion)
+	}
+	if left, right, ok := strings.Cut(part, ":"); ok {
+		return parseRange(left, right, remaining, maxExpansion)
+	}
+	key, err := parseKey(part)
+	if err != nil {
+		return nil, err
+	}
+	return []string{key.String()}, nil
+}
+
+func parseRange(left, right string, remaining, maxExpansion int) ([]string, error) {
+	start, err := parseKey(left)
+	if err != nil {
+		return nil, fmt.Errorf("issue key range start: %w", err)
+	}
+	end, err := parseRangeEnd(right, start.Project)
+	if err != nil {
+		return nil, fmt.Errorf("issue key range end: %w", err)
+	}
+	if end.Project != start.Project {
+		return nil, fmt.Errorf("issue key range endpoints must use the same project: %s and %s", start.Project, end.Project)
+	}
+	if end.Number < start.Number {
+		return nil, fmt.Errorf(
+			"descending issue key ranges are not supported: %s to %s",
+			start.String(),
+			end.String(),
+		)
+	}
+	count := end.Number - start.Number + 1
+	if count > remaining {
+		return nil, fmt.Errorf("issue key expansion exceeds maximum of %d keys", maxExpansion)
+	}
+	keys := make([]string, 0, count)
+	for n := start.Number; n <= end.Number; n++ {
+		keys = append(keys, issueKey{Project: start.Project, Number: n}.String())
+	}
+	return keys, nil
+}
+
+func parseRangeEnd(value, project string) (issueKey, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return issueKey{}, fmt.Errorf("range end is required")
+	}
+	if strings.Contains(value, "-") {
+		return parseKey(value)
+	}
+	n, err := parsePositiveNumber(value)
+	if err != nil {
+		return issueKey{}, err
+	}
+	return issueKey{Project: project, Number: n}, nil
+}
+
+type issueKey struct {
+	Project string
+	Number  int
+}
+
+func (k issueKey) String() string {
+	return fmt.Sprintf("%s-%d", k.Project, k.Number)
+}
+
+func parseKey(value string) (issueKey, error) {
+	value = strings.TrimSpace(value)
+	matches := keyPattern.FindStringSubmatch(value)
+	if matches == nil {
+		return issueKey{}, fmt.Errorf("invalid issue key %q", value)
+	}
+	n, err := parsePositiveNumber(matches[2])
+	if err != nil {
+		return issueKey{}, err
+	}
+	return issueKey{Project: matches[1], Number: n}, nil
+}
+
+func parsePositiveNumber(value string) (int, error) {
+	n, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return 0, fmt.Errorf("issue number %q must be numeric", value)
+	}
+	if n <= 0 {
+		return 0, fmt.Errorf("issue number must be positive")
+	}
+	return n, nil
+}

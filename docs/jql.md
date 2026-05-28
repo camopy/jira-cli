@@ -32,6 +32,7 @@ for the full flag set and current limits.
 
 ```sh
 jira jql build --project <PROJECT_KEY> --assignee me --priority Medium
+jira jql build --key <PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12
 jira jql build --project <PROJECT_KEY> --desc=false
 jira jql build                                        # no filters: defaults
 ```
@@ -79,13 +80,32 @@ jira jql build                                        # no filters: defaults
 Builder flags map to documented Jira JQL concepts:
 
 *   Fields: `--project`, `--epic`, `--assignee`, `--reporter`,
-    `--status`, `--priority`, `--label`, `--type`, `--board`,
-    `--board-id`
+    `--key`, `--status`, `--priority`, `--label`, `--type`,
+    `--board`, `--board-id`
 *   Sort: `--order-by <field>`, `--desc=false` for ascending order
 *   Operators applied: `=`, `IN (...)` (for repeated flag values),
     `is EMPTY`
 *   Keywords/functions: `AND`, `ORDER BY`, `currentUser()` (via
     `--assignee me` or `--reporter me`)
+
+### Issue key ranges
+
+`--key` accepts single issue keys, comma lists, repeated flags, and
+inclusive ranges:
+
+```sh
+jira jql build --key <ISSUE_KEY>
+jira jql build --key <ISSUE_KEY>,<OTHER_ISSUE_KEY>
+jira jql build --key <PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12
+jira jql build --key <PROJECT_KEY>-1..10 --key <OTHER_PROJECT_KEY>-1..12
+```
+
+Each comma member is parsed independently. Lists and repeated flags
+may mix projects, but one range may not span projects:
+`<PROJECT_KEY>-1:<OTHER_PROJECT_KEY>-100` is rejected instead of
+crossing project prefixes. Keep comma lists tight
+(`<ISSUE_KEY>,<OTHER_ISSUE_KEY>`); whitespace inside a `--key`
+expression is not accepted.
 
 ## See also
 

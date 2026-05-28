@@ -48,6 +48,9 @@ issuesWithText("phrase")
 ### High-yield recipes
 
 ```sh
+# Build a key filter from mixed projects without hand-writing IN clauses
+jira jql build --key <PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12 --output=json
+
 # Everything assigned to me, not done
 jira search jql 'assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC' --output=json
 

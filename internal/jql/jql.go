@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+
+	"github.com/matcra587/jira-cli/internal/issuekey"
 )
 
 // DefaultIssueListJQL is the bounded default query used when an issue list is
@@ -18,6 +20,7 @@ const DefaultIssueListJQL = "updated >= -365d ORDER BY updated DESC"
 // BuildOptions captures the structured filters that compose into a JQL query.
 type BuildOptions struct {
 	Projects   []string
+	Keys       []string
 	Epics      []string
 	Assignee   string
 	Reporter   string
@@ -32,7 +35,10 @@ type BuildOptions struct {
 // Build renders the options into a complete JQL query (with ORDER BY). With
 // no filters and no explicit sort it returns the default bounded issue list.
 func (o BuildOptions) Build() (string, error) {
-	clauses := o.filterClauses()
+	clauses, err := o.filterClauses()
+	if err != nil {
+		return "", err
+	}
 
 	if len(clauses) == 0 && strings.TrimSpace(o.OrderBy) == "" && !o.Descending {
 		return DefaultIssueListJQL, nil
@@ -59,7 +65,7 @@ func (o BuildOptions) Build() (string, error) {
 	return query, nil
 }
 
-func (o BuildOptions) filterClauses() []string {
+func (o BuildOptions) filterClauses() ([]string, error) {
 	clauses := make([]string, 0, 8)
 	appendInClause := func(field string, values []string) {
 		values = CompactStrings(values)
@@ -74,6 +80,11 @@ func (o BuildOptions) filterClauses() []string {
 	}
 
 	appendInClause("project", o.Projects)
+	keys, err := issuekey.ParseExpressions(o.Keys, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+	if err != nil {
+		return nil, err
+	}
+	appendInClause("key", keys)
 	if clause := userClause("assignee", o.Assignee); clause != "" {
 		clauses = append(clauses, clause)
 	}
@@ -85,7 +96,7 @@ func (o BuildOptions) filterClauses() []string {
 	appendInClause("priority", o.Priorities)
 	appendInClause("labels", o.Labels)
 	appendInClause("issuetype", o.IssueTypes)
-	return clauses
+	return clauses, nil
 }
 
 // IssueList combines a raw JQL string with the builder's structured filters.
@@ -94,7 +105,10 @@ func (o BuildOptions) filterClauses() []string {
 // Build.
 func IssueList(raw string, builder BuildOptions) (string, error) {
 	if raw := strings.TrimSpace(raw); raw != "" {
-		clauses := builder.filterClauses()
+		clauses, err := builder.filterClauses()
+		if err != nil {
+			return "", err
+		}
 		if len(clauses) == 0 {
 			return raw, nil
 		}

@@ -10,6 +10,7 @@ import (
 func TestJQLBuilderBuildsCommonDeveloperFilters(t *testing.T) {
 	query, err := jql.BuildOptions{
 		Projects:   []string{"PROJ"},
+		Keys:       []string{"PROJ-1", "PROJ-2"},
 		Assignee:   "me",
 		Epics:      []string{"EPIC-1"},
 		Statuses:   []string{"In Progress", "To Do"},
@@ -21,9 +22,37 @@ func TestJQLBuilderBuildsCommonDeveloperFilters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
-	want := `project = PROJ AND assignee = currentUser() AND parent = EPIC-1 AND status in ("In Progress", "To Do") AND priority = High AND labels = backend ORDER BY updated DESC`
+	want := `project = PROJ AND key in (PROJ-1, PROJ-2) AND assignee = currentUser()` +
+		` AND parent = EPIC-1 AND status in ("In Progress", "To Do")` +
+		` AND priority = High AND labels = backend ORDER BY updated DESC`
 	if query != want {
 		t.Fatalf("Build() = %q, want %q", query, want)
+	}
+}
+
+func TestJQLBuilderExpandsIssueKeyRanges(t *testing.T) {
+	query, err := (jql.BuildOptions{
+		Keys:       []string{"ABC-1..3", "ABC-5:ABC-6", "XYZ-1:2"},
+		Descending: true,
+	}).Build()
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	want := "key in (ABC-1, ABC-2, ABC-3, ABC-5, ABC-6, XYZ-1, XYZ-2) ORDER BY updated DESC"
+	if query != want {
+		t.Fatalf("Build() = %q, want %q", query, want)
+	}
+}
+
+func TestJQLBuilderRejectsInvalidIssueKeyRanges(t *testing.T) {
+	tests := []string{"ABC-3..1", "ABC-1:XYZ-100"}
+	for _, key := range tests {
+		t.Run(key, func(t *testing.T) {
+			_, err := (jql.BuildOptions{Keys: []string{key}}).Build()
+			if err == nil {
+				t.Fatalf("Build() accepted invalid issue key range %q", key)
+			}
+		})
 	}
 }
 
