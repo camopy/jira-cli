@@ -24,8 +24,33 @@ func UseCompactOutput(cmd *cobra.Command) bool {
 // UsePlainOutput reports whether the command runs in a plain (human) or TUI
 // output mode.
 func UsePlainOutput(cmd *cobra.Command) bool {
+	if IsStructuredAgentCommand(cmd) {
+		return false
+	}
 	mode := resolvedOutputMode(cmd)
 	return mode == cli.ModePlain || mode == cli.ModeTUI
+}
+
+// UseHumanJSONOutput reports whether the command runs in human mode but
+// should still render a JSON document through clog's pretty JSON printer.
+func UseHumanJSONOutput(cmd *cobra.Command) bool {
+	if !IsStructuredAgentCommand(cmd) {
+		return false
+	}
+	mode := resolvedOutputMode(cmd)
+	return mode == cli.ModePlain || mode == cli.ModeTUI
+}
+
+// IsStructuredAgentCommand reports whether a command is an agent-facing
+// structured metadata endpoint. These commands always print JSON documents;
+// even --output=human uses clog's JSON printer rather than key-value logs.
+func IsStructuredAgentCommand(cmd *cobra.Command) bool {
+	switch cmd.CommandPath() {
+	case "jira agent schema", "jira agent adf-matrix", "jira agent fieldtypes":
+		return true
+	default:
+		return false
+	}
 }
 
 // PlainOptionsForCommand builds the plain-renderer option set for a command,

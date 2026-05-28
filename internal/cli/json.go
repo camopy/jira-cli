@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/gechr/clog"
@@ -133,17 +134,29 @@ func WarningFrom(src WarningSource) Warning {
 // WriteEnvelope serializes a full JSON envelope to w. A clog encode or
 // write failure is surfaced to the caller rather than silently dropped.
 func WriteEnvelope(w io.Writer, env Envelope) error {
-	ew := &errWriter{w: w}
-	clog.New(clog.NewOutput(ew, clog.ColorNever)).Print().Mode(clog.JSONFlat).JSON(env)
-	return ew.err
+	return writeJSON(w, env, clog.JSONFlat, clog.ColorNever)
 }
 
 // WriteCompact serializes the JSON data payload to w without the
 // envelope wrapper. A clog encode or write failure is surfaced to the
 // caller rather than silently dropped.
 func WriteCompact(w io.Writer, data any) error {
+	return writeJSON(w, data, clog.JSONFlat, clog.ColorNever)
+}
+
+// WriteHumanJSON serializes JSON through clog's pretty printer for
+// endpoints whose human mode still has a structured JSON contract.
+func WriteHumanJSON(w io.Writer, data any) error {
+	return writeJSON(w, data, clog.JSONPretty, clog.ColorAuto)
+}
+
+func writeJSON(w io.Writer, data any, mode clog.JSONPrintMode, color clog.ColorMode) error {
 	ew := &errWriter{w: w}
-	clog.New(clog.NewOutput(ew, clog.ColorNever)).Print().Mode(clog.JSONFlat).JSON(data)
+	out := io.Writer(ew)
+	if _, ok := w.(interface{ Fd() uintptr }); ok {
+		out = fdErrFile{errWriter: ew}
+	}
+	clog.New(clog.NewOutput(out, color)).Print().Mode(mode).JSON(data)
 	return ew.err
 }
 
@@ -164,6 +177,25 @@ func (e *errWriter) Write(p []byte) (int, error) {
 		e.err = err
 	}
 	return n, err
+}
+
+type fdErrFile struct {
+	*errWriter
+}
+
+func (e fdErrFile) Fd() uintptr {
+	return e.w.(interface{ Fd() uintptr }).Fd()
+}
+
+func (e fdErrFile) Read(p []byte) (int, error) {
+	if r, ok := e.w.(io.Reader); ok {
+		return r.Read(p)
+	}
+	return 0, os.ErrInvalid
+}
+
+func (e fdErrFile) Close() error {
+	return nil
 }
 
 // NewRequestID returns a 32-character hex request id. crypto/rand is the

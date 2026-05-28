@@ -41,7 +41,7 @@ func WriteEnvelopeWithErrors(cmd *cobra.Command, command string, data any, error
 		Errors:   errorsOut,
 		Warnings: []cli.Warning{},
 	}
-	return cli.WriteEnvelope(cmd.ErrOrStderr(), env)
+	return writeEnvelopeJSON(cmd, cmd.ErrOrStderr(), env)
 }
 
 // WriteEnvelopeWithRawWarnings emits the standard envelope shape with a
@@ -80,6 +80,9 @@ func WriteEnvelopeWithRawWarnings(cmd *cobra.Command, command string, data any, 
 		"data":     data,
 		"errors":   []any{},
 		"warnings": rawWarningsOrEmpty(warnings),
+	}
+	if UseHumanJSONOutput(cmd) {
+		return cli.WriteHumanJSON(cmd.OutOrStdout(), body)
 	}
 	enc := json.NewEncoder(cmd.OutOrStdout())
 	return enc.Encode(body)
@@ -187,7 +190,7 @@ func WriteEnvelopeWithWarnings(cmd *cobra.Command, command string, data any, war
 	if env.Warnings == nil {
 		env.Warnings = []cli.Warning{}
 	}
-	return cli.WriteEnvelope(cmd.OutOrStdout(), env)
+	return writeEnvelopeJSON(cmd, cmd.OutOrStdout(), env)
 }
 
 // WriteEnvelopeWithResponse emits the standard envelope shape with
@@ -242,7 +245,14 @@ func WriteEnvelopeWithResponseAndWarnings(cmd *cobra.Command, command string, da
 	if env.Warnings == nil {
 		env.Warnings = []cli.Warning{}
 	}
-	return cli.WriteEnvelope(cmd.OutOrStdout(), env)
+	return writeEnvelopeJSON(cmd, cmd.OutOrStdout(), env)
+}
+
+func writeEnvelopeJSON(cmd *cobra.Command, w io.Writer, env cli.Envelope) error {
+	if UseHumanJSONOutput(cmd) {
+		return cli.WriteHumanJSON(w, env)
+	}
+	return cli.WriteEnvelope(w, env)
 }
 
 // MirrorADFWarningsToStderr is a thin wrapper around cli.RouteWarnings

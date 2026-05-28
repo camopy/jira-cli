@@ -58,9 +58,6 @@ func WriteSchema(cmd *cobra.Command) error {
 	if cmdutil.UseCompactOutput(cmd) {
 		return cli.WriteCompact(cmd.OutOrStdout(), data)
 	}
-	if cmdutil.UsePlainOutput(cmd) {
-		return cli.WritePlain(cmd.OutOrStdout(), data)
-	}
 	env := cli.Envelope{
 		OK: true,
 		Meta: cli.Meta{
@@ -71,6 +68,12 @@ func WriteSchema(cmd *cobra.Command) error {
 		Data:     data,
 		Errors:   []cli.Error{},
 		Warnings: []cli.Warning{},
+	}
+	if cmdutil.UseHumanJSONOutput(cmd) {
+		return cli.WriteHumanJSON(cmd.OutOrStdout(), env)
+	}
+	if cmdutil.UsePlainOutput(cmd) {
+		return cli.WritePlain(cmd.OutOrStdout(), data)
 	}
 	return cli.WriteEnvelope(cmd.OutOrStdout(), env)
 }

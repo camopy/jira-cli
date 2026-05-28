@@ -70,6 +70,39 @@ func TestOutputModesApplyToGenericCommands(t *testing.T) {
 	}
 }
 
+func TestAgentStructuredCommandsRenderJSONInHumanMode(t *testing.T) {
+	bin := buildJiraBinary(t)
+	for _, tc := range []struct {
+		name string
+		args []string
+	}{
+		{name: "schema", args: []string{"agent", "schema"}},
+		{name: "adf-matrix", args: []string{"agent", "adf-matrix"}},
+		{name: "fieldtypes", args: []string{"agent", "fieldtypes"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			args := append([]string{"--output=human"}, tc.args...)
+			out, err := exec.Command(bin, args...).CombinedOutput()
+			if err != nil {
+				t.Fatalf("jira %v error = %v\n%s", args, err, out)
+			}
+			if strings.Contains(string(out), "INF") {
+				t.Fatalf("agent command used clog key-value output instead of JSON:\n%s", out)
+			}
+			if !strings.Contains(string(out), "\n  \"") {
+				t.Fatalf("agent command human JSON was not pretty-printed:\n%s", out)
+			}
+			var env map[string]any
+			if err := json.Unmarshal(out, &env); err != nil {
+				t.Fatalf("agent command human output is not JSON: %v\n%s", err, out)
+			}
+			if env["meta"] == nil || env["data"] == nil || env["errors"] == nil {
+				t.Fatalf("agent command human JSON is not an envelope: %+v", env)
+			}
+		})
+	}
+}
+
 func TestAgentDetectionDefaultsToCompactJSON(t *testing.T) {
 	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", emptyBaseURLConfig(t), "search", "jql", "project = PROJ")
 	cmd.Env = append(cmd.Environ(), "CLAUDE_CODE=1")
