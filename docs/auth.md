@@ -60,6 +60,13 @@ depend on that choice:
 
     *Credential lives in a 1Password vault, read via the Go SDK.*
 
+    Desktop-app SDK authorization is per account and per process. Because each
+    `jira` invocation starts a new process, commands that read this backend can
+    prompt again even when the 1Password app is unlocked. Approval can use
+    biometrics or system unlock; it is not a reusable silent session. For
+    prompt-free day-to-day commands, use the system keychain backend after
+    bootstrap.
+
     4.  **1Password account**, desktop-app account name for SDK auth.
         Leave blank to use the `OP_SERVICE_ACCOUNT_TOKEN` env var instead
         (headless / CI).
@@ -616,7 +623,9 @@ credential.
     enable **Integrate with other apps** under Settings → Developer. For
     biometric approval, enable the OS unlock option under Settings →
     Security. Without the desktop app integration setting, the SDK-backed
-    backend cannot read the item. See the
+    backend cannot read the item. Desktop-app authorization is per account and
+    per process, expires after ten minutes of inactivity, and is revoked when
+    the account locks. See the
     [1Password SDK desktop app integration](https://www.1password.dev/sdks#1password-desktop-app)
     docs.
 
@@ -650,7 +659,8 @@ backend reference; the secret lives outside it.
 :   An item in the 1Password vault you specified at `auth login`. The SDK
     reads it via the desktop app integration, sign-in to the account that
     owns the item must be live, and **Integrate with other apps** must be
-    enabled under Settings → Developer.
+    enabled under Settings → Developer. Desktop-app authorization is per
+    process, so separate `jira` invocations may prompt separately.
 
 `JIRA_TOKEN_<PROFILE>`
 

@@ -257,6 +257,7 @@ func TestOnePasswordDocsExplainDesktopIntegrationPrerequisite(t *testing.T) {
 			"https://www.1password.dev/sdks#1password-desktop-app",
 			"1Password SDK desktop app integration",
 			"Integrate with other apps",
+			"per account and per process",
 		} {
 			if !strings.Contains(got, want) {
 				t.Fatalf("%s missing 1Password desktop app prerequisite %q", label, want)

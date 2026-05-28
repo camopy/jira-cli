@@ -66,6 +66,7 @@ Resolution order: the environment override is checked first; if unset, the profi
 **Preconditions**
 - The TOML config never holds the secret — only metadata (backend selector, vault, item ref). Anything that calls Jira goes through the same HTTP redactor.
 - For 1Password desktop-app auth: 1Password must be installed, signed in to the account that owns the item, and configured to allow SDK integrations. In the 1Password app, open Settings > Developer and enable **Integrate with other apps**. For biometric approval, also enable the OS unlock option under Settings > Security.
+- Desktop-app SDK authorization is per account and per process. Separate `jira` invocations may prompt separately even when the app is unlocked; use the system keychain backend for prompt-free day-to-day commands.
 - For 1Password desktop-app integration, see Further reading below.
 
 Further reading:

@@ -49,6 +49,9 @@ For desktop-app auth, 1Password must be signed in and allowed to serve SDK
 requests before `jira` can read items. In the 1Password app, open
 Settings > Developer and enable Integrate with other apps. If you want
 biometric approval, also enable the OS unlock option under Settings > Security.
+Desktop-app SDK authorization is per account and per process, so separate
+`jira` invocations may prompt separately even when the app is unlocked. Use the
+system keychain backend for prompt-free day-to-day commands.
 
 Further reading:
 
