@@ -59,10 +59,6 @@ jobs:
             echo "exists=false" >>"${GITHUB_OUTPUT}"
           fi
 
-      - name: Release preflight
-        if: steps.release-state.outputs.exists != 'true'
-        run: mise run release:preflight
-
       - name: Run GoReleaser
         if: steps.release-state.outputs.exists != 'true'
         uses: goreleaser/goreleaser-action@1a80836c5c9d9e5755a25cb59ec6f45a3b5f41a8 # v7.2.1
@@ -106,7 +102,7 @@ jobs:
           permission-contents: write
 
       - name: Publish Homebrew formula
-        uses: matcra587/github-actions/packages/homebrew-publish-formula@6e3053f35d4ec31adc4f82c04a2c43209f3b36e6 # v0.1.0
+        uses: matcra587/github-actions/packages/homebrew-publish-formula@6e3053f35d4ec31adc4f82c04a2c43209f3b36e6 # homebrew/v0.1.0
         with:
           token: ${{ steps.app-token.outputs.token }}
           tap: matcra587/homebrew-tap
