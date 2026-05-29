@@ -24,7 +24,7 @@ Use it through JSON payloads:
 
 ```sh
 jira issue create --no-input --json-input payload.json --output=json
-jira issue comment add PROJ-1 --json-input adf.json --no-input --output=json
+jira issue comment add <ISSUE_KEY> --json-input adf.json --no-input --output=json
 ```
 
 ## Validation Modes

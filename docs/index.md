@@ -32,7 +32,7 @@ flow (CI / scripted bootstrap), see [`auth login`](auth.md#auth-login).
 | I want to… | Command |
 |---|---|
 | Authenticate against a Jira tenant | [`jira auth login`](auth.md#auth-login) |
-| Switch between configured profiles | [`jira auth switch`](auth.md#auth-switch) or `--profile/-p` |
+| Switch between configured profiles | [`jira auth switch`](auth.md#auth-switch) or `--profile/-P` |
 | Find issues by filter flags | [`jira issue list`](issues.md#list) |
 | Find issues with raw JQL | [`jira search jql`](search.md#search-jql) |
 | Save and re-run a JQL query | [`jira search saved`](search.md#search-saved) |

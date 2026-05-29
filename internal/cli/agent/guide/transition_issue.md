@@ -6,24 +6,29 @@ When: an issue must move to a new workflow state (e.g. To Do → In Progress →
 
 # step 1 — list
 - Always list first. Transition IDs are **workflow-specific** — they vary per project and per workflow, so the IDs you saw on `<ISSUE_KEY>` are not necessarily valid on `<OTHER_ISSUE_KEY>`.
+- List several issues/ranges with `jira issue transition KEY... -p N`; multi-key output uses `data.results[]`.
 
 # step 2 — execute
 - Pick an `id` from the listed transitions and pass it to `--transition`.
+- Multi-key execution applies the same transition id to each issue and reports per-key failures when one issue cannot take that transition.
 
 # guard
 - `--dry-run` validates the request (issue exists, transition ID present on this issue) without changing state.
 
 **Run**
 - List available transitions for an issue: `jira issue transition KEY --output=json`
+- Multi-key list: `jira issue transition <PROJECT_KEY>-1..10 -p 4 --output=json`
 - Execute the chosen transition: `jira issue transition KEY --transition <id> --output=json`
+- Bulk execute: `jira issue transition <PROJECT_KEY>-1..10 -p 4 --transition <id> --output=json`
 - Preview only: `jira issue transition KEY --transition <id> --dry-run --output=json`
 
 **Save**
 > Requires `--output=json`.
 - `data.transitions[].id` [string, required] — pass to `--transition` to execute.
 - `data.transitions[].name` [string, required] — human label (e.g. `"In Progress"`, `"Done"`).
-- `data.transitions[].to.name` [string, optional] — target status the transition lands in.
-- `meta.command` [string] — `issue.transition` on execute; the list call returns the same envelope shape with `data.transitions[]` populated.
+- `data.transitions[].to.name` [string, optional] — target status when Jira includes it; some tenants only return `id` and `name`.
+- `meta.command` [string] — `issue.transitions` on list; `issue.transition` on execute.
+- Multi-key list/execute: `data.results[]` [array, required] — ordered by requested key; each successful entry has command-specific `data`.
 
 **Preconditions**
 - Headless minimum under `--no-input`: `--transition <id>` is required to execute.
@@ -32,6 +37,7 @@ When: an issue must move to a new workflow state (e.g. To Do → In Progress →
 **Behavior**
 - Listing and executing are the same subcommand (`jira issue transition KEY`); the presence of `--transition <id>` switches modes.
 - `--dry-run` runs validation but never sends the state-change request.
+- `-p` / `--parallelism` is bounded to 1..16 and affects multi-key transition listing and execution.
 
 **Recover**
 | Symptom | Cause | Next |

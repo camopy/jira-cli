@@ -66,8 +66,15 @@ child issue, the second is the parent epic.
 
 ```sh
 jira epic add <ISSUE_KEY> <EPIC_KEY>
+jira epic add <PROJECT_KEY>-1..10 <EPIC_KEY> -p 4
 jira epic add <ISSUE_KEY> <EPIC_KEY> --dry-run
+jira epic remove <PROJECT_KEY>-1..10 -p 4
 ```
+
+`epic add` accepts one target epic and one or more issue keys/ranges.
+`epic remove` accepts one or more issue keys/ranges. Add `-p N` /
+`--parallelism N` to run up to `N` membership updates concurrently;
+multi-key output uses ordered `data.results[]` entries.
 
 `--dry-run` skips the Jira call and echoes the resolved pair so you can
 verify the wiring before committing. Child and parent must live in the

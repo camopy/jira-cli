@@ -670,8 +670,8 @@ backend reference; the secret lives outside it.
 
 !!! tip "Custom keyring service name"
     Override the keyring service name by setting `JIRA_KEYRING_SERVICE`
-    before any jira invocation. Used by the test suite to keep CI off the
-    real user keyring; useful in custom multi-tenant setups too.
+    before any jira invocation. This is test-only; leave it unset for normal
+    use.
 
 ## Credential precedence
 

@@ -44,8 +44,8 @@ Cross-cutting:
 
 Read:
 
-- `read_issue` — `jira issue view KEY`.
-- `list_issues` — `jira issue list`, board filtering, `--detail` vs `--full`.
+- `read_issue` — `jira issue view KEY...`, including bounded multi-key reads.
+- `list_issues` — `jira issue list`, key ranges, board filtering, `--detail` vs `--full`.
 - `search_jql` — `jira search jql`, `jira search saved`, `jira jql build`.
 
 Discover:

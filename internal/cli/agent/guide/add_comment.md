@@ -17,6 +17,7 @@ When: an issue needs a status update, decision note, or human-readable annotatio
 - ADF (file): `jira issue comment KEY --json-input adf.json --no-input --output=json`
 - ADF (stdin): `cat adf.json | jira issue comment KEY --json-input - --no-input --output=json`
 - Markdown: `jira issue comment KEY --body-markdown "**heads up**" --no-input --output=json`
+- Bulk markdown: `jira issue comment add <PROJECT_KEY>-1..10 -p 4 --body-markdown "**heads up**" --no-input --output=json`
 
 `adf.json` shape — either the full body wrapped in `{"body": {...}}` or just the ADF doc itself:
 
@@ -37,7 +38,7 @@ When: an issue needs a status update, decision note, or human-readable annotatio
 **Save**
 > Requires `--output=json`.
 
-`comment add KEY` (and `comment edit KEY ID`) return the persisted comment shape:
+`comment add KEY` (and `comment edit KEY ID`) return the persisted comment shape. Multi-key `comment add KEY... -p N` returns ordered `data.results[]`; each successful entry carries the same persisted comment shape under `data`.
 
 ```json
 {
@@ -68,6 +69,7 @@ When: an issue needs a status update, decision note, or human-readable annotatio
 **Behavior**
 - The two body flags are mutually exclusive — passing both fails locally with exit 3 before any Jira call.
 - ADF payloads round-trip without loss; markdown payloads are best-effort.
+- `-p` / `--parallelism` is bounded to 1..16 and applies to multi-key comment add. `comment edit/delete` stay single-key because they also require one comment id.
 
 **Recover**
 | Symptom | Cause | Next |

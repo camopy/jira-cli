@@ -6,8 +6,9 @@ When: notifications for an issue must reach an extra account, or the current wat
 
 # direction
 - List: `jira issue watchers list KEY`.
-- Add: `jira issue watchers add KEY --user <user>` (alias `jira issue watch KEY`).
-- Remove: `jira issue watchers remove KEY --user <user>` (alias `jira issue unwatch KEY`).
+- List several issues/ranges: `jira issue watchers list KEY... -p N`; multi-key output uses `data.results[]`.
+- Add: `jira issue watchers add KEY... --user <user>` (alias `jira issue watch KEY...`).
+- Remove: `jira issue watchers remove KEY... --user <user>` (alias `jira issue unwatch KEY...`).
 
 # user spec
 - Account id (always locally resolvable): `--user accountId:<id>`.
@@ -20,8 +21,11 @@ When: notifications for an issue must reach an extra account, or the current wat
 
 **Run**
 - List: `jira issue watchers list KEY --output=json`
+- Multi-key list: `jira issue watchers list <PROJECT_KEY>-1..10 -p 4 --output=json`
 - Add: `jira issue watchers add KEY --user me --output=json`
-- Remove (alias): `jira issue unwatch KEY --user accountId:712020:abc --output=json`
+- Bulk add: `jira issue watchers add <PROJECT_KEY>-1..10 -p 4 --user me --output=json`
+- Remove named user: `jira issue watchers remove KEY --user accountId:<id> --output=json`
+- Remove yourself (alias): `jira issue unwatch KEY --output=json`
 - Dry-run preview: `jira issue watchers add KEY --user me --dry-run --output=json`
 - Dry-run + remote resolve: `jira issue watchers add KEY --user alice --dry-run --validate-remote --output=json`
 
@@ -64,6 +68,7 @@ When: notifications for an issue must reach an extra account, or the current wat
 - `data.watchers[].active` [bool, required] — Jira account active flag.
 - `data.is_watching` [bool, required] — whether the calling identity is in the list.
 - `data.watch_count` [int, required] — total watcher count (may exceed `len(data.watchers)` when truncated).
+- Multi-key list/add/remove/watch/unwatch: `data.results[]` [array, required] — ordered by requested key; each successful entry has command-specific `data`.
 - `data.was_already_watching` [bool, required on add] — `true` makes the call effectively a no-op.
 - `data.user_resolved` [bool, required on dry-run] — `false` when the input needs a remote lookup that dry-run skipped.
 - `data.account_id_resolved` [string, optional on dry-run] — only present when local resolution succeeded.
@@ -74,8 +79,9 @@ When: notifications for an issue must reach an extra account, or the current wat
 - `--user me` resolves locally only when the active profile carries an account id (see → `auth_setup` and → `identity_setup`).
 
 **Behavior**
-- `watchers add` and `watchers remove` perform the mutation and then read back the watcher list (so `data.watchers[]` reflects post-state).
+- `watchers add` and `watchers remove` perform the mutation and then read back the watcher list unless `--no-readback` is set.
 - Aliases `watch` / `unwatch` are sugar — identical envelopes, identical exit codes.
+- For multi-key watcher mutations, the user identifier is resolved once, then the per-issue mutation/readback runs with bounded `-p` / `--parallelism` concurrency.
 - Every error entry carries `type`, `code` (stable snake_case — branch on this, never on `message`), `message`, `hint`, and `retryable`. Optional fields appear when relevant: `flag`, `field`, `http_status`, `retry_after_seconds`, `provider`, `upstream_code`, `upstream_status`. For Jira API errors `upstream_code` is empty — Jira exposes no stable machine error code.
 
 **Recover**

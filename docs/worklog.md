@@ -14,6 +14,7 @@ in the config if your team's workday differs.
 
 ```sh
 jira worklog add <ISSUE_KEY> --time-spent "1h30m" --comment-markdown "Investigating regression"
+jira worklog add <PROJECT_KEY>-1..10 -p 4 --time-spent "15m" --comment-markdown "Bulk triage"
 jira worklog add <ISSUE_KEY> --time-spent "2h" --started "2026-05-27T09:00:00.000-0400"
 jira worklog add <ISSUE_KEY> --json-input worklog.json
 ```
@@ -120,7 +121,14 @@ time has been logged.
 
 ```sh
 jira worklog list <ISSUE_KEY>
+jira worklog list <PROJECT_KEY>-1..10 -p 4
 ```
+
+`worklog add` and `worklog list` accept issue-key lists and ranges, and
+`-p N` / `--parallelism N` runs up to `N` per-issue Jira calls
+concurrently. Single-key output keeps the existing `data.issue` shape.
+Multi-key output returns ordered `data.results[]` entries with `key`,
+`ok`, and either per-key `data` or `error`.
 
 === "Human"
 

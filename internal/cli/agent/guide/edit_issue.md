@@ -5,7 +5,7 @@ When: one or more fields on an existing issue need new values; the bare-form `ji
 **Decide**
 
 # target
-- Issue key positional argument (e.g. `<ISSUE_KEY>`).
+- Issue key positional argument, list, or range (e.g. `<ISSUE_KEY>` or `<PROJECT_KEY>-1..10`).
 
 # scope
 - Single field, fast path: a field flag (`--summary`, `--assignee`, etc.).
@@ -19,6 +19,7 @@ When: one or more fields on an existing issue need new values; the bare-form `ji
 **Run**
 - Canonical (bulk JSON): `jira issue edit KEY --no-input --json-input fields.json --output=json`
 - Single field: `jira issue edit KEY --no-input --summary "New title" --output=json`
+- Multi-key single field: `jira issue edit <PROJECT_KEY>-1..10 -p 4 --no-input --summary "New title" --output=json`
 - Reassign: `jira issue edit KEY --no-input --assignee me --output=json` (also accepts `none` or a bare `accountId`)
 - Stdin variant: `cat fields.json | jira issue edit KEY --no-input --json-input - --output=json`
 
@@ -38,7 +39,8 @@ Bulk edit payload shape:
 
 **Save**
 > Requires `--output=json`.
-- `data.key` [string, required] — echo of the edited issue key.
+- `data.issue` [string, required] — echo of the edited issue key.
+- Multi-key edits return ordered `data.results[]`; each successful entry has `data.issue`, `data.fields`, `data.dry_run`, and live submits include `data.result`.
 - `meta.command` [string] — `issue.edit`.
 - Field values after the edit are NOT projected in the envelope; → `read_issue` to confirm rendered state.
 
@@ -61,7 +63,9 @@ Bulk edit payload shape:
 
 **Behavior**
 - For interactive humans only: the bare form opens `$EDITOR` on the description. Editors that fork-and-return (e.g. `code` without `--wait`) are refused at spawn time with a one-line fix (`set EDITOR='code --wait'`) — silent strikethrough-and-data-loss is gone. See → `configure_editor` for the full editor resolution chain.
+- Multi-key edit requires explicit field flags or `--json-input`; the editor flow is always single-key.
 - Custom-field encoding follows the same cached-schema path as create; prime → `cache_metadata` if values aren't sticking.
+- `-p` / `--parallelism` is bounded to 1..16 and applies to multi-key explicit edits.
 
 **Recover**
 | Symptom | Cause | Next |

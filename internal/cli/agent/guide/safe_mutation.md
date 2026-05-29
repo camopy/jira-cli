@@ -25,8 +25,8 @@ This is not a command — it's the cross-cutting contract that `clone_issue`, `m
 - Post-write: capture the returned key + envelope as evidence.
 
 # which dry-run semantics apply to my command?
-- Full validation pipeline (parse → ADF compat → field schema → customfield encoding, stops before the API call): `issue create`, `issue edit`, `issue clone`, `issue move`, `issue comment`. These dry-runs catch payload shape, ADF strict errors, missing required customfields, and unknown field names.
-- Local-only preview (does not contact Jira): `watchers add --dry-run` when `--user` is locally derivable (`accountId:<id>`, or `me` on a profile that carries an account id), `issue link --dry-run`, `worklog add --dry-run`.
+- Full validation pipeline (parse → ADF compat → field schema → customfield encoding, stops before the API call): `issue create`, `issue edit`, `issue clone`, `issue move`, and `issue comment add`. These dry-runs catch payload shape, ADF strict errors, missing required customfields, and unknown field names.
+- Local-only preview (does not contact Jira): `watchers add --dry-run` when `--user` is locally derivable (`accountId:<id>`, or `me` on a profile that carries an account id), `issue link --dry-run`, `issue weblink --dry-run`, `worklog add --dry-run`, and `issue delete --dry-run`.
 - Hybrid (local preview by default, opts into a read-only resolve when asked): `watchers add --dry-run --validate-remote` does a read-only `/user/search` to resolve a bare name or email but still issues no watcher POST/DELETE.
 
 **Run** (sequence, per mutation)
@@ -34,10 +34,13 @@ This is not a command — it's the cross-cutting contract that `clone_issue`, `m
 2. Real write: drop `--dry-run`, keep `--output=json`, add the target's confirmation flag (`--force` for `clone_issue` / `move_issue` / `delete_issue` / attachment delete / link delete; `--no-input` + field flags or `--json-input` for `edit_issue` and `add_comment`).
 3. Record the returned issue key, comment id, link id, worklog id, or attachment id from `data.*` as the evidence trail.
 
+For bulk-safe issue-key mutations, pass key lists/ranges as `KEY...` and add `-p N` / `--parallelism N` for bounded fan-out. Multi-key results use ordered `data.results[]` entries with per-key `ok`/`error` values; do not assume one failed key means the successful keys were rolled back. Commands keyed by a secondary object id remain single-target: `comment edit/delete`, `attachment download/delete`, and `link delete`.
+
 **Preconditions**
 - Always pass `--output=json` for automation — never parse `--output=human` (it's display-only).
 - `edit_issue` in agent context refuses the bare `jira issue edit KEY` form (exit `3`) because the editor flow needs a TTY; pass `--summary`, `--assignee`, or `--json-input`.
 - `--no-input` requires at least one field on `edit_issue` — empty edits exit `3`.
+- Live multi-key `delete_issue` always requires `--force`, even in an interactive TTY. This avoids a long prompt loop and keeps bulk deletion explicit.
 
 **Behavior**
 - `--dry-run` on full-pipeline commands runs every local validation stage but stops before the network call; a clean dry-run means the payload is shaped correctly, not that Jira will accept it (server-side rules like project-required customfields still apply on submit).

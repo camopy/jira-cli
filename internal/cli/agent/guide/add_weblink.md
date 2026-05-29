@@ -13,10 +13,12 @@ When: external context (a PR, design doc, dashboard) belongs on the issue withou
 
 **Run**
 - `jira issue weblink KEY --url "https://example.com/spec" --title "Spec doc" --output=json`
+- Bulk: `jira issue weblink <PROJECT_KEY>-1..10 -p 4 --url "https://example.com/spec" --title "Spec doc" --output=json`
 
 **Save**
 > Requires `--output=json`.
 - Standard envelope; `data` carries the persisted remote-link record. Use the response only to confirm the call succeeded — agents typically don't need to dereference the remote-link id.
+- Multi-key web links return ordered `data.results[]`; each successful entry carries the issue key, URL, title, and `dry_run` state under `data`.
 
 **Preconditions**
 - Calls `POST /rest/api/3/issue/{KEY}/remotelink` — a different endpoint from → `link_issues`. Do not confuse with issue-to-issue links.
@@ -25,6 +27,7 @@ When: external context (a PR, design doc, dashboard) belongs on the issue withou
 **Behavior**
 - The CLI rejects any non-`http(s)` scheme client-side before reaching Jira. Disallowed schemes include: `javascript:`, `file:`, `ftp:`, `data:`, `mailto:` (and any other non-web scheme).
 - If you need a non-web link target, use a regular issue comment instead (see → `add_comment`).
+- `-p` / `--parallelism` is bounded to 1..16 and applies to multi-key web-link creation.
 
 **Recover**
 | Symptom | Cause | Next |

@@ -4,29 +4,30 @@ When: a duplicate, mis-filed, or test issue must be removed and the team accepts
 
 **Decide**
 - Issue has subtasks? You MUST pass `--delete-subtasks` — Jira refuses to delete a parent otherwise. The flag drains parent + every subtask atomically.
-- Want to confirm the call is shaped right without hitting Jira? `--dry-run` (still requires `--force` in agent context).
+- Want to confirm the call is shaped right without hitting Jira? `--dry-run` (no `--force` needed).
 - Operating in a TTY without `--force`? Expect a `huh` prompt that requires typing `Yes, delete` verbatim.
 - Operating in agent / `--no-input` mode? `--force` is mandatory — see → `safe_mutation`.
 
 **Run**
 - Canonical (agent): `jira issue delete <ISSUE_KEY> --force --output=json`
+- Bulk delete (agent): `jira issue delete <PROJECT_KEY>-1..10 -p 4 --force --output=json`
 - With subtasks: `jira issue delete <ISSUE_KEY> --force --delete-subtasks --output=json`
-- Preview (no Jira mutation): `jira issue delete <ISSUE_KEY> --force --dry-run --output=json`
+- Preview (no Jira mutation): `jira issue delete <ISSUE_KEY> --dry-run --output=json`
 
 **Save**
 > Requires `--output=json`.
-- `data.key` [string, required] — echo of the deleted key (use as evidence).
-- `data.deleted` [bool, required] — `true` once the delete returned 204.
-- `data.deleted_subtasks` [array of strings] — keys removed alongside the parent when `--delete-subtasks` is set.
+- Single-key output echoes the deleted issue under `data.issue`; multi-key delete returns ordered `data.results[]`.
 
 **Preconditions**
-- `--force` is mandatory in agent / non-TTY / `--no-input` mode. Omitting it exits `3` with `validation_error`.
+- `--force` is mandatory for live deletes in agent / non-TTY / `--no-input` mode. Omitting it exits `3` with `validation_error`.
+- Live multi-key delete always requires `--force`, including in an interactive TTY. Multi-key `--dry-run` previews are allowed without `--force`.
 - The caller must have permission to delete in the project; otherwise Jira returns `FORBIDDEN (403)`.
 
 **Behavior**
 - Deletion is irreversible. There is no undo.
 - ⚠ **Subtasks block deletion** — Jira refuses to delete a parent with subtasks unless `--delete-subtasks` is set. Without it, the call fails server-side; with it, the parent + every subtask are removed atomically.
 - `--dry-run` is always allowed (TTY or not) and never touches Jira.
+- `-p` / `--parallelism` is bounded to 1..16 and applies to multi-key delete.
 
 **Recover**
 | Symptom | Cause | Next |

@@ -36,7 +36,7 @@ is always passed through unchanged.
 | `version` / `fixversions` | version name(s) | version array |
 | `versionpicker` / `multiversionpicker` | version name(s) | `{"name":...}` / array |
 | `projectpicker` | project key | `{"key":"<project>"}` |
-| `parent` | `"PROJ-123"` | parent issue link |
+| `parent` | `"<PARENT_ISSUE_KEY>"` | parent issue link |
 | `cascadingselect` |, | `{"value":"<top>","child":{"value":"<sub>"}}` |
 
 ```sh
@@ -58,7 +58,7 @@ notes above, so an agent can resolve a field shape without parsing prose.
 ```
 
 ```sh
-jira issue edit PROJ-1 --json-input fields.json --output=json
+jira issue edit <ISSUE_KEY> --json-input fields.json --output=json
 ```
 
 Unknown customfield types are forwarded and reported with structured warnings

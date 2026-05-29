@@ -10,6 +10,7 @@ When: a batch of issue keys is needed for downstream per-issue work and the filt
 - Known key set: `--key <ISSUE_KEY>,<OTHER_ISSUE_KEY>` or `--key <PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12`.
 - Show the JQL that WOULD run without calling Jira: `--as-jql` (local-only preview, no API call).
 - Restrict to one agile board: `--board <NAME>` (exact case-insensitive) or `--board-id <id>` (numeric escape when names collide).
+- Active tickets on one or more boards: discover board project keys first, then query those projects with `statusCategory != Done`. Use key expansion only after discovery, when you already have a known key set or a deliberate sparse-range probe.
 
 # field set
 - Default summary set per row: `key, summary, status, assignee, priority, updated`.
@@ -23,7 +24,13 @@ When: a batch of issue keys is needed for downstream per-issue work and the filt
 **Run**
 - Default: `jira issue list --output=json`
 - With JQL: `jira issue list --jql 'project = <PROJECT_KEY> AND statusCategory != Done' --output=json`
+- Active tickets for several board-backed projects:
+  ```sh
+  jira boards list --output=json
+  jira issue list --jql 'project in (<PROJECT_KEY>, <OTHER_PROJECT_KEY>) AND statusCategory != Done ORDER BY updated DESC' --output=json
+  ```
 - With issue-key ranges: `jira issue list --key <PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12 --output=json`
+- With large sparse issue-key ranges: `jira issue list --key <PROJECT_KEY>-1:100,<OTHER_PROJECT_KEY>-1:200 -p 15 --output=json`
 - Preview JQL only: `jira issue list --as-jql --output=json`
 - Full field records: `jira issue list --detail --output=json`
 - Board filter (name): `jira issue list --board "Engineering Sprint" --output=json`
@@ -33,7 +40,7 @@ When: a batch of issue keys is needed for downstream per-issue work and the filt
 > Requires `--output=json`.
 - `data.issues[].key` [string, required] — feed to → `read_issue`, → `edit_issue`, → `transition_issue`, → `add_comment`, etc.
 - `data.issues[]` [object array] — summary set fields by default; full records under `--detail`.
-- `meta.pagination.startAt` / `.maxResults` / `.total` / `.isLast` [int / int / int / bool] — paginate until `isLast=true`.
+- `meta.pagination.startAt` / `.maxResults` / `.total` / `.isLast` [int / int / int / bool] — paginate until `isLast=true`. Treat `isLast` as authoritative; some Jira search responses report `total=0` or omit a reliable total even when rows are present.
 
 **Preconditions**
 - `--board NAME` requires a primed boards cache. Empty cache → exit 3 with `boards cache is empty — run "jira cache boards"`. See → `cache_metadata` for the prime command and → `discover_board` for resolution semantics.
@@ -41,7 +48,10 @@ When: a batch of issue keys is needed for downstream per-issue work and the filt
 
 **Behavior**
 - Board filtering emits `project in (P1, P2, …)` JQL built from the board's cached project keys — the board is not a server-side filter, it expands locally to a project list.
-- `--key` emits `key = KEY` or `key in (...)`. Single keys, comma lists, repeated flags, and ranges (`<PROJECT_KEY>-1:10`, `<PROJECT_KEY>-1..10`) are accepted. Lists may mix projects (`<ISSUE_KEY>,<OTHER_ISSUE_KEY>`) and separate ranges may mix projects (`<PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12`), but one range may not cross projects (`<PROJECT_KEY>-1:<OTHER_PROJECT_KEY>-100` exits 3). Do not put spaces inside a `--key` value.
+- To find active tickets across multiple boards, use → `discover_board` / `jira boards list` to map board names or ids to project keys, then run JQL with `project in (...) AND statusCategory != Done`. A single `--board` flag scopes one board; it is not the right primitive for combining several boards with an active-status predicate.
+- `--key` emits `key = KEY` or `key in (...)`. Single keys, comma lists, repeated flags, and ranges (`<PROJECT_KEY>-1:10`, `<PROJECT_KEY>-1..10`) are accepted. Lists may mix projects (`<ISSUE_KEY>,<OTHER_ISSUE_KEY>`) and separate ranges may mix projects (`<PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12`), but one range may not cross projects (`<PROJECT_KEY>-1:<OTHER_PROJECT_KEY>-100` exits 3). Do not put spaces inside a `--key` value. Expanded key sets are capped at 1000 keys and exit `3` before any Jira request when exceeded.
+- `-p N` / `--parallelism N` applies to `--key` lists and ranges. Large key sets are split into bounded search chunks and up to `N` chunks run concurrently. `issue list` returns visible existing issues from sparse ranges in requested-key order; use → `read_issue` (`issue view KEY... -p N`) when every missing key must appear as a per-key error.
+- If one `--key` search chunk fails, successful chunks are retained in the error envelope, `data.failed_key_chunks[]` describes failed chunks, and the command exits non-zero.
 - `default_board` (profile config, see below) applies implicitly to `issue list` whenever `--board`/`--board-id` is omitted. The flag wins over the default; the default wins exclusively over `default_project` on commands that consume `--board` (no intersection, no union).
 - `default_board` is validated **at use-time only** — `config set` accepts any string without checking the cache (which may not exist yet). When the configured `default_board` doesn't resolve, you get `default_board "X" not found in boards cache — run "jira cache boards --refresh" or unset with "jira config set profiles.<profile>.default_board ''"`.
 
@@ -56,6 +66,8 @@ When: a batch of issue keys is needed for downstream per-issue work and the filt
 | Exit `3`, `boards cache is empty` | First-time board use without a primed cache | → `cache_metadata` (run `jira cache boards`) then retry |
 | Exit `3`, `candidates[]` of board matches | Ambiguous `--board NAME` across projects | Re-run with `--board-id <id>` from the candidates list |
 | Exit `3`, `same project` on `--key` | One range crosses projects, e.g. `<PROJECT_KEY>-1:<OTHER_PROJECT_KEY>-100` | Split it into separate same-project ranges, e.g. `<PROJECT_KEY>-1:100,<OTHER_PROJECT_KEY>-1:100` |
+| Exit `3`, `issue key expansion exceeds maximum of 1000 keys` | `--key` expanded past the local safety cap | Split into smaller same-project ranges, or use project/JQL filters instead of probing a huge sparse range |
+| Exit `3`, `parallelism must be between 1 and 16` | `-p` / `--parallelism` was outside the supported bound | Re-run with `-p 1` through `-p 16` |
 | Exit `3`, both `--board` and `--board-id` set | Mutex violation | Pass exactly one |
 | Exit `3`, `default_board "X" not found in boards cache` | Stale or missing cache vs configured default | `jira cache boards --refresh`, or unset the default |
 

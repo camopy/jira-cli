@@ -11,6 +11,7 @@ When: the project or issue type on an existing issue is wrong and the team needs
 
 **Run**
 - Canonical: `jira issue move <ISSUE_KEY> --force --json-input /tmp/move.json --output=json`
+- Bulk move: `jira issue move <PROJECT_KEY>-1..10 -p 4 --force --json-input /tmp/move.json --output=json`
 - Preview: `jira issue move <ISSUE_KEY> --force --json-input /tmp/move.json --dry-run --output=json`
 
 Minimum override shape:
@@ -21,7 +22,7 @@ Minimum override shape:
 
 **Save**
 > Requires `--output=json`.
-- `data.key` [string, required] — the issue key after move (may or may not change depending on instance config; capture and feed to follow-up workflows).
+- Single-key live submit returns the moved issue under `data.result`; multi-key move returns ordered `data.results[]`, with each successful entry carrying `data.result`.
 
 **Preconditions**
 - `--json-input` is required — `move` has no field flags. The destination shape is the entire contract.
@@ -30,6 +31,7 @@ Minimum override shape:
 **Behavior**
 - No new issue is created; the original key (or its remapped successor on instances that renumber across projects) carries forward, along with comments, worklogs, and attachments.
 - Required-field changes between projects / issuetypes must appear in the override. If the target project mandates a field the source didn't have, the submit fails with `INVALID_INPUT (400)`.
+- `-p` / `--parallelism` is bounded to 1..16 and applies to multi-key move. Multi-key live move requires `--force`.
 
 **Recover**
 | Symptom | Cause | Next |

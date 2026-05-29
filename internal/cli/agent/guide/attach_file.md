@@ -6,7 +6,8 @@ When: a binary or non-Jira artifact (log, screenshot, exported report) must trav
 
 # direction
 - List: `jira issue attachment list KEY` — oldest-first.
-- Add: `jira issue attachment add KEY --file <path>` — multipart upload.
+- List several issues/ranges: `jira issue attachment list KEY... -p N`; multi-key output uses `data.results[]`.
+- Add: `jira issue attachment add KEY... --file <path>` — multipart upload.
 - Download: `jira issue attachment download KEY <id> --to <path>` — writes to disk, never stdout.
 - Delete: `jira issue attachment delete KEY <id> --force` — force-gated under `--no-input`.
 
@@ -16,7 +17,9 @@ When: a binary or non-Jira artifact (log, screenshot, exported report) must trav
 
 **Run**
 - List: `jira issue attachment list KEY --output=json`
+- Multi-key list: `jira issue attachment list <PROJECT_KEY>-1..10 -p 4 --output=json`
 - Add: `jira issue attachment add KEY --file ./trace.log --output=json`
+- Bulk add: `jira issue attachment add <PROJECT_KEY>-1..10 -p 4 --file ./trace.log --output=json`
 - Download (named target): `jira issue attachment download KEY 10042 --to ./local.pdf --output=json`
 - Download (current dir): `jira issue attachment download KEY 10042 --output=json`
 - Delete: `jira issue attachment delete KEY 10043 --force --output=json`
@@ -68,6 +71,7 @@ When: a binary or non-Jira artifact (log, screenshot, exported report) must trav
 - `data.attachments[].filename` / `.mime_type` / `.size` [string / string / int, required] — server-side metadata.
 - `data.attachments[].author` [object, required] — uploader.
 - `data.pagination.is_last` / `data.pagination.next_page_token` [bool / string] — paginate `attachment list` until `is_last=true`.
+- Multi-key add/list: `data.results[]` [array, required] — ordered by requested key; each successful entry has command-specific `data`.
 - `data.attachment_id` [string, required on download/delete] — echo of the target id.
 - `data.written_to` [string, required on download] — actual disk path written.
 - `data.bytes` [int, required on download] — file size on disk after write.
@@ -81,6 +85,8 @@ When: a binary or non-Jira artifact (log, screenshot, exported report) must trav
 **Behavior**
 - Download is clobber-protected — an existing file at the target path is not overwritten silently.
 - Each project can pin its own upload size cap; the per-project cap is enforced by Jira, not the CLI.
+- `-p` / `--parallelism` is bounded to 1..16 and affects multi-key attachment add/list.
+- For multi-key uploads, prefer `--file` for each path so positional filenames are not confused with issue-key expressions.
 
 **Recover**
 | Symptom | Cause | Next |

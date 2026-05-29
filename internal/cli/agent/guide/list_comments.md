@@ -6,6 +6,7 @@ When: the comment thread on an issue must be reviewed end-to-end before quoting 
 
 # scope
 - One page (default `max_results`): `comment list KEY`.
+- Several issues or a range: `comment list KEY... -p N`; multi-key output uses `data.results[]`.
 - Specific page size: `--limit N`.
 - All pages drained in one call: `--all`.
 
@@ -14,6 +15,7 @@ When: the comment thread on an issue must be reviewed end-to-end before quoting 
 
 **Run**
 - Single page: `jira issue comment list KEY --output=json`
+- Multi-key page: `jira issue comment list <PROJECT_KEY>-1..10 -p 4 --output=json`
 - Sized page: `jira issue comment list KEY --limit 50 --output=json`
 - Drain all: `jira issue comment list KEY --all --output=json`
 - Delete: `jira issue comment delete KEY 10042 --force --no-input --output=json`
@@ -49,6 +51,7 @@ When: the comment thread on an issue must be reviewed end-to-end before quoting 
 - `data.pagination.is_last` [bool, required] — stop when `true`.
 - `data.pagination.next_page_token` [string, optional] — feed back as paging cursor until `is_last=true`.
 - `warnings[].comment_id` + `warnings[].lossy_constructs[]` [array, optional] — if a comment id appears here, its `body` is a degraded markdown projection — re-read with native ADF tooling when fidelity matters.
+- Multi-key list: `data.results[]` [array, required] — ordered by requested key; each successful entry has `data.comments`, `data.pagination`, and optional per-key `data.warnings`.
 
 `comment delete KEY ID --force`:
 
@@ -66,6 +69,7 @@ When: the comment thread on an issue must be reviewed end-to-end before quoting 
 **Behavior**
 - `warnings[]` does not change the exit code — the response is still successful; treat lossy markers as a signal to switch to ADF reads, not as failure.
 - Pagination is cursor-based via `next_page_token`; do not assume `start_at + max_results` is enough.
+- `-p` / `--parallelism` is bounded to 1..16 and only affects multi-key reads.
 
 **Recover**
 | Symptom | Cause | Next |

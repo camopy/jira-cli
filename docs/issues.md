@@ -66,6 +66,106 @@ jira issue view <ISSUE_KEY>
     The human output applies the same labels you'd see in the web UI;
     JSON consumers need to map the IDs themselves.
 
+### Multiple keys
+
+`issue view` accepts more than one key. Pass separate arguments, comma
+lists, or inclusive ranges, and add `-p` / `--parallelism` when the
+read can safely fan out. Parallelism defaults to `1` and is capped at
+`16`.
+
+```sh
+jira issue view <ISSUE_KEY> <OTHER_ISSUE_KEY> --output=json
+jira issue view <PROJECT_KEY>-1:5 -p 4 --output=json
+```
+
+Single-key reads keep the existing `data.issue` payload. Multi-key reads
+return ordered per-key results under `data.results[]`; each entry has
+`ok: true` plus `issue`, or `ok: false` plus `error`. If one key fails,
+the command exits non-zero and writes the standard error envelope to
+stderr while preserving successful keys in `data.results[]`; stdout is
+empty for JSON failure envelopes. Human output keeps the
+success table on stdout; failed-key diagnostics go to stderr and are
+truncated for large batches. Use `--output=json` for the full per-key
+failure list.
+
+```json
+{
+  "ok": false,
+  "meta": { "command": "issue.view", "exit_code": 2, "timestamp": "...", "request_id": "..." },
+  "data": {
+    "results": [
+      {
+        "key": "<ISSUE_KEY>",
+        "ok": true,
+        "issue": { "id": "10401", "key": "<ISSUE_KEY>", "fields": { "summary": "..." } }
+      },
+      {
+        "key": "<OTHER_ISSUE_KEY>",
+        "ok": false,
+        "error": {
+          "type": "not_found",
+          "code": "not_found",
+          "message": "issue does not exist",
+          "retryable": false
+        }
+      }
+    ],
+    "succeeded": 1,
+    "failed": 1
+  },
+  "errors": [
+    {
+      "type": "not_found",
+      "code": "not_found",
+      "message": "issue does not exist",
+      "retryable": false
+    }
+  ],
+  "warnings": []
+}
+```
+
+### Issue-key expansion support
+
+The commands below accept issue-key lists and ranges such as
+`<PROJECT_KEY>-1..10` or `<PROJECT_KEY>-1:10`. Add `-p N` /
+`--parallelism N` to run up to `N` independent Jira requests at once
+(`1` by default, `16` maximum). Single-key calls keep their existing
+payload shape; multi-key calls return ordered `data.results[]` entries
+with `key`, `ok`, and either command-specific `data` or `error`.
+Expanded key sets are capped at 1000 keys and exit with a flag error
+before credentials, network calls, or dry-run mutation work when that
+cap is exceeded.
+
+| Command | Expanded argument | Parallelism | Notes |
+| --- | --- | --- | --- |
+| `jira issue view KEY...` | positional issue keys | per issue GET | Full issue payloads; failures are per key. |
+| `jira issue list --key KEY...` | `--key` values | per search chunk | Sparse ranges return visible issues; chunk failures preserve successful chunks. |
+| `jira issue edit KEY...` | positional issue keys | per issue edit pipeline | Explicit field/json edits only; the bare editor flow remains single-key. |
+| `jira issue clone KEY...` | positional source issue keys | per source clone | Applies the same override payload to each source. |
+| `jira issue move KEY...` | positional issue keys | per issue move | Applies the same move payload to each issue. |
+| `jira issue delete KEY...` | positional issue keys | per issue delete | Multi-key live delete requires `--force`; `--dry-run` previews every key. |
+| `jira issue attachment add KEY...` | positional issue keys | per issue upload | Same files are uploaded to each issue; use `--file` for unambiguous multi-key uploads. |
+| `jira issue attachment list KEY...` | positional issue keys | per issue attachment read | `download` and `delete` remain single-target because they take an attachment id. |
+| `jira issue comment add KEY...` | positional issue keys | per issue comment POST | Same body and visibility are applied to each issue. |
+| `jira issue comment list KEY...` | positional issue keys | per issue comment read | Per-key warnings are included in that result's `data.warnings`. |
+| `jira issue link KEY... --to KEY --type NAME` | positional inward issue keys | per link create | `--to` stays a single target; link delete remains single-target because it takes a link id. |
+| `jira issue link list KEY...` | positional issue keys | per issue link read | Lists existing links for each issue. |
+| `jira issue weblink KEY...` | positional issue keys | per web-link create | Same URL/title are attached to each issue. |
+| `jira issue watch KEY...` / `unwatch KEY...` | positional issue keys | per watcher mutation | Adds/removes the current user on each issue. |
+| `jira issue watchers add/remove KEY...` | positional issue keys | per watcher mutation | Same `--user` is resolved once and applied to each issue. |
+| `jira issue watchers list KEY...` | positional issue keys | per watcher read | Lists watcher state for each issue. |
+| `jira issue transition KEY...` | positional issue keys | per transition read or execution | With `--transition`, applies the same transition id to each issue. |
+| `jira worklog add KEY...` | positional issue keys | per worklog POST | Same worklog payload is added to each issue. |
+| `jira worklog list KEY...` | positional issue keys | per worklog read | Lists worklogs for each issue. |
+| `jira epic add ISSUE_KEY... EPIC_KEY` | positional issue keys | per epic membership update | Adds each issue to one epic. |
+| `jira epic remove ISSUE_KEY...` | positional issue keys | per epic membership update | Removes each issue from its epic. |
+
+Commands that combine an issue key with a single secondary id remain
+single-key by design: comment edit/delete, attachment download/delete,
+and link delete. The secondary id identifies one Jira object, so ranges
+would be ambiguous rather than a safe fan-out.
+
 ## list
 
 Filter issues by project, issue key, assignee, status, priority,
@@ -91,6 +191,7 @@ The default projection is a summary table, one row per issue. Pass
 ```sh
 jira issue list --project <PROJECT_KEY> --status "To Do" --order-by updated --desc
 jira issue list --key <PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12 --as-jql
+jira issue list --key <PROJECT_KEY>-1:100,<OTHER_PROJECT_KEY>-1:200 -p 15
 jira issue list --project <PROJECT_KEY> --as-jql              # show the JQL only
 jira issue list --jql 'project = <PROJECT_KEY> ORDER BY updated DESC'
 jira issue list --board "Engineering" --detail
@@ -153,7 +254,18 @@ are expanded independently, so
 must stay within one project prefix:
 `<PROJECT_KEY>-1:<OTHER_PROJECT_KEY>-100` exits with a flag error
 instead of crossing projects. Do not put spaces inside a `--key`
-value.
+value. Expanded key sets are capped at 1000 keys.
+
+When `--key` expands to a large set, add `-p N` / `--parallelism N`
+to split the key set into bounded search chunks and run up to `N`
+requests concurrently. This keeps `issue list` tolerant of sparse
+ranges: Jira returns the visible existing issues, rather than a per-key
+error record for every missing key. Chunked `--key` output is ordered by
+the requested keys, not by Jira's returned order. If one chunk request
+fails, successful chunks are retained in the error envelope and JSON
+adds `data.failed_key_chunks[]`; the command still exits non-zero. Use
+[`issue view`](#view) with `-p` when you need full per-key success/error
+results.
 
 ## mine
 
@@ -260,6 +372,7 @@ don't hang on a TTY prompt.
 
 ```sh
 jira issue edit <ISSUE_KEY> --summary "new title"
+jira issue edit <PROJECT_KEY>-1..10 -p 4 --summary "bulk title"
 jira issue edit <ISSUE_KEY> --assignee me
 jira issue edit <ISSUE_KEY> --no-input --json-input fields.json
 jira issue edit <ISSUE_KEY> --no-input --summary "preview only" --dry-run
@@ -303,8 +416,10 @@ format; markdown is the convenience wrapper.
 
 ```sh
 jira issue comment add <ISSUE_KEY> --body-markdown "looks good"
+jira issue comment add <PROJECT_KEY>-1..10 -p 4 --body-markdown "bulk note"
 jira issue comment add <ISSUE_KEY> --no-input --json-input adf.json
 jira issue comment list <ISSUE_KEY> --all
+jira issue comment list <PROJECT_KEY>-1..10 -p 4
 jira issue comment edit <ISSUE_KEY> 10244 --body-markdown "edited"
 jira issue comment delete <ISSUE_KEY> 10244 --force
 ```
@@ -355,6 +470,11 @@ jira issue comment delete <ISSUE_KEY> 10244 --force
     ```
 
 ### comment list
+
+`comment list` accepts the same issue-key lists and ranges as
+[`issue view`](#issue-key-expansion-support). Multi-key reads return
+`data.results[]`; each successful entry's `data` contains that issue's
+`comments`, `pagination`, and any per-key `warnings`.
 
 === "Human"
 
@@ -412,12 +532,19 @@ this one?" without comparing account IDs by hand.
 ```sh
 jira issue watch <ISSUE_KEY>              # add yourself
 jira issue unwatch <ISSUE_KEY>            # remove yourself
+jira issue watch <PROJECT_KEY>-1..10 -p 4
 jira issue watchers list <ISSUE_KEY>
+jira issue watchers list <PROJECT_KEY>-1..10 -p 4
 jira issue watchers add <ISSUE_KEY> --user <accountId>
+jira issue watchers add <PROJECT_KEY>-1..10 -p 4 --user <accountId>
 jira issue watchers remove <ISSUE_KEY> --user <accountId>
 ```
 
 ### watchers list
+
+`watchers list` supports issue-key lists and ranges. Multi-key reads
+return `data.results[]`, with each successful entry carrying that
+issue's `watchers`, `is_watching`, and `watch_count`.
 
 === "Human"
 
@@ -515,7 +642,9 @@ free once you've run [`cache prime`](cache.md).
 
 ```sh
 jira issue link <ISSUE_KEY> --to <OTHER_ISSUE_KEY> --type Blocks
+jira issue link <PROJECT_KEY>-1..10 -p 4 --to <OTHER_ISSUE_KEY> --type Blocks
 jira issue link list <ISSUE_KEY>
+jira issue link list <PROJECT_KEY>-1..10 -p 4
 jira issue link delete <ISSUE_KEY> 10173 --force
 jira issue link types
 ```
@@ -550,7 +679,9 @@ contacts Jira.
 
 Each link carries the type definition inline (so consumers don't have
 to round-trip to `link types`) plus the linked issue's summary and
-status.
+status. `link list` supports issue-key lists and ranges; multi-key
+reads return `data.results[]`, with each successful entry carrying
+that issue's `key`, `links`, and `count`.
 
 === "Human"
 
@@ -709,7 +840,9 @@ that doesn't belong in the comment thread.
 ```sh
 jira issue attachment add <ISSUE_KEY> ./screenshot.png
 jira issue attachment add <ISSUE_KEY> --file ./a.log --file ./b.log
+jira issue attachment add <PROJECT_KEY>-1..10 -p 4 --file ./a.log
 jira issue attachment list <ISSUE_KEY>
+jira issue attachment list <PROJECT_KEY>-1..10 -p 4
 jira issue attachment download <ISSUE_KEY> 10135 --to ./downloads/
 jira issue attachment delete <ISSUE_KEY> 10135 --force
 ```
@@ -753,6 +886,10 @@ jira issue attachment delete <ISSUE_KEY> 10135 --force
 instead of the uploaded `attachments`.
 
 ### attachment list
+
+`attachment list` supports issue-key lists and ranges. Multi-key reads
+return `data.results[]`, with each successful entry carrying that
+issue's `attachments` and `pagination`.
 
 === "Human"
 
@@ -836,14 +973,22 @@ first avoids guessing.
 
 ```sh
 jira issue transition <ISSUE_KEY>                    # list available transitions
+jira issue transition <PROJECT_KEY>-1..10 -p 4       # list for several issues
 jira issue transition <ISSUE_KEY> --transition 21    # execute (e.g. to In Progress)
+jira issue transition <PROJECT_KEY>-1..10 -p 4 --transition 21
 jira issue transition <ISSUE_KEY> --transition 21 --dry-run
 ```
 
 ### List available transitions
 
 The no-flag form lists the transitions allowed from the current status.
-`meta.command` for this form is `issue.transitions` (plural).
+`meta.command` for this form is `issue.transitions` (plural). The
+listing form supports issue-key lists and ranges; multi-key reads return
+`data.results[]`, with each successful entry carrying that issue's
+`transitions`. The execute form (`--transition <id>`) also accepts
+issue-key lists and ranges; it applies the same transition id to each
+issue and reports per-key failures when a transition is not valid for
+one issue's current workflow state.
 
 === "Human"
 
@@ -914,6 +1059,7 @@ original instead.
 
 ```sh
 jira issue clone <ISSUE_KEY> --no-input --force
+jira issue clone <PROJECT_KEY>-1..10 -p 4 --no-input --force
 jira issue clone <ISSUE_KEY> --no-input --dry-run    # preview, no --force needed
 ```
 
@@ -959,6 +1105,7 @@ alongside the project / type swap.
 
 ```sh
 jira issue move <ISSUE_KEY> --no-input --json-input move.json --force
+jira issue move <PROJECT_KEY>-1..10 -p 4 --no-input --json-input move.json --force
 jira issue move <ISSUE_KEY> --no-input --json-input move.json --dry-run
 ```
 
@@ -1014,9 +1161,13 @@ status (`Done`, `Cancelled`) instead.
 
 ```sh
 jira issue delete <ISSUE_KEY> --no-input --force
+jira issue delete <PROJECT_KEY>-1..10 -p 4 --no-input --force
 jira issue delete <ISSUE_KEY> --no-input --dry-run
 jira issue delete <ISSUE_KEY> --no-input --force --delete-subtasks   # cascade
 ```
+
+Live multi-key delete always requires `--force`, even in an interactive
+TTY. This avoids a long prompt loop and makes bulk deletion explicit.
 
 === "Human"
 

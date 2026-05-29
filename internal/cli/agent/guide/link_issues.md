@@ -12,8 +12,9 @@ When: two issues need a typed relationship (blocks, relates, is-blocked-by, etc.
 - A is a clone of B: `jira issue link <CLONE> --to <ORIGINAL> --type Cloners`.
 
 # subcommand
-- Create: `jira issue link KEY --to OTHER --type <Name>` (with optional `--dry-run`).
+- Create: `jira issue link KEY... --to OTHER --type <Name>` (with optional `--dry-run`).
 - List existing links on an issue: `jira issue link list KEY`.
+- List links for several issues/ranges: `jira issue link list KEY... -p N`; multi-key output uses `data.results[]`.
 - Delete by link id: `jira issue link delete KEY <link-id> --force`.
 - Discover available link types: `jira issue link types` (cached; primable via `jira cache linktypes`).
 
@@ -23,9 +24,11 @@ When: two issues need a typed relationship (blocks, relates, is-blocked-by, etc.
 
 **Run**
 - Create blocker: `jira issue link <BLOCKED_ISSUE_KEY> --to <BLOCKER_ISSUE_KEY> --type Blocks --output=json`
+- Bulk create blocker: `jira issue link <PROJECT_KEY>-1..10 -p 4 --to <BLOCKER_ISSUE_KEY> --type Blocks --output=json`
 - Create undirected: `jira issue link <BLOCKED_ISSUE_KEY> --to <BLOCKER_ISSUE_KEY> --type Relates --output=json`
 - Preview: `jira issue link <BLOCKED_ISSUE_KEY> --to <BLOCKER_ISSUE_KEY> --type Blocks --dry-run --output=json`
 - List on issue: `jira issue link list KEY --output=json`
+- Multi-key list: `jira issue link list <PROJECT_KEY>-1..10 -p 4 --output=json`
 - Delete: `jira issue link delete KEY 9001 --force --output=json`
 - Available link types: `jira issue link types --output=json | jq -r '.data.link_types[].name' | sort -u`
 - Prime / refresh link-type cache: `jira cache linktypes --output=json`
@@ -82,6 +85,7 @@ When: two issues need a typed relationship (blocks, relates, is-blocked-by, etc.
 - `data.links[].type` [object, required] — `{id, name, inward, outward}`; the verb you want is `outward` when `direction = outward`, `inward` otherwise.
 - `data.links[].direction` [string, required] — `outward` or `inward`; tells you which side of the link `KEY` is on.
 - `data.links[].other_issue` [object, required] — `{key, summary, status}` for the issue at the far end; this is the field agents should branch on, not raw inward/outward arrays.
+- Multi-key create/list: `data.results[]` [array, required] — ordered by requested key; each successful entry has command-specific `data`.
 - `data.link_types[].name` [string, required] — what to pass as `--type` on `link create`. Custom types may exist; always discover before assuming.
 - `data.from_cache` / `data.cache_state` / `data.cache_empty` [bool / string / bool] — cache-primer convention; see → `cache_metadata`.
 - `data.link_id` / `data.deleted` [string / bool, required on delete] — echo + success flag.
@@ -92,6 +96,7 @@ When: two issues need a typed relationship (blocks, relates, is-blocked-by, etc.
 
 **Behavior**
 - `link delete --force` is required under `--no-input` (force-gated).
+- `-p` / `--parallelism` is bounded to 1..16 and affects multi-key link create/list. `--to` remains one target issue; `link delete` remains single-target because it takes one link id.
 - The link-type cache follows the cache-primer convention — `cache linktypes` adds `data.profile` per primer rules.
 
 **Recover**

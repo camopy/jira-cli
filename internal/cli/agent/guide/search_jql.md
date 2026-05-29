@@ -13,6 +13,7 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 - Default summary set per row.
 - Wire-shape `fields:["*all"]`: `--full`.
 - Explicit selector: `--fields key,summary,customfield_10010`.
+- Jira may still omit fields the endpoint, token, project, or field screen does not expose. Always inspect the returned `data.issues[].fields` shape; do not infer that a missing requested field exists with an empty value.
 - Note `--detail` is NOT accepted on `search jql` / `search saved` — that flag belongs to → `list_issues`.
 
 # preview without calling Jira
@@ -20,6 +21,10 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 
 **Run**
 - Hand JQL: `jira search jql 'assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC' --output=json`
+- Active board-backed projects:
+  ```sh
+  jira search jql 'project in (<PROJECT_KEY>, <OTHER_PROJECT_KEY>) AND statusCategory != Done ORDER BY updated DESC' --output=json
+  ```
 - Saved query: `jira search saved my-open-bugs --output=json`
 - Build then run:
   ```sh
@@ -45,7 +50,7 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 > Requires `--output=json`.
 - `data.issues[].key` [string, required] — feed to → `read_issue`, → `edit_issue`, → `transition_issue`, etc.
 - `data.jql` [string, required on `jql build`] — the constructed JQL string; pipe to `search jql` or pass to `issue list --jql`.
-- `meta.pagination.startAt` / `.maxResults` / `.total` / `.isLast` [int / int / int / bool] — paginate until `isLast=true`.
+- `meta.pagination.startAt` / `.maxResults` / `.total` / `.isLast` [int / int / int / bool] — paginate until `isLast=true`. Treat `isLast` as authoritative; newer Jira search responses can report `total=0` or omit a trustworthy total while still returning rows.
 
 **Behavior**
 - Builder flag translations (so you don't hand-quote):
@@ -73,7 +78,8 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
   project = <PROJECT_KEY> AND issuetype = Bug AND assignee = currentUser() AND statusCategory != Done
   ORDER BY priority DESC, updated DESC
   ```
-- `--key` values accept single keys, comma lists, repeated flags, and ranges using `:` or `..`. Each comma member expands independently, so `<PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12` is valid. One range cannot cross projects: `<PROJECT_KEY>-1:<OTHER_PROJECT_KEY>-100` exits 3. Whitespace inside a `--key` value is rejected.
+- `--key` values accept single keys, comma lists, repeated flags, and ranges using `:` or `..`. Each comma member expands independently, so `<PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12` is valid. One range cannot cross projects: `<PROJECT_KEY>-1:<OTHER_PROJECT_KEY>-100` exits 3. Whitespace inside a `--key` value is rejected. Expanded key sets are capped at 1000 keys and exit `3` before emitting JQL when exceeded.
+- Key expansion is for known keys or deliberate sparse-range probes. For discovery questions like "what is active on this board?", start with project/board/JQL filters, then pass discovered keys to → `read_issue` if more detail is needed.
 
 **Recover**
 | Symptom | Cause | Next |
@@ -81,8 +87,10 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 | Exit `3`, `invalid order-by field` | `--order-by` value not on the allow-list (or contains shell metachars like `'updated; DROP TABLE x'`) | Use a vetted field name; see → `jql_reference` |
 | Exit `3` at flag-parse on `--label`/`--type`/`--status` | Unbalanced quotes in the value | Strip the bad quote before re-running |
 | Exit `3`, `same project` on `--key` | One key range crosses projects, e.g. `<PROJECT_KEY>-1:<OTHER_PROJECT_KEY>-100` | Split it into separate ranges: `<PROJECT_KEY>-1:100,<OTHER_PROJECT_KEY>-1:100` |
+| Exit `3`, `issue key expansion exceeds maximum of 1000 keys` | `--key` expanded past the local safety cap | Split the key set into smaller builder/list invocations, or use project/JQL filters for discovery |
 | Exit `3`, Jira `400` on unknown function/field | Hand-authored JQL references a field/function this instance does not expose | Cross-check operators, keywords, functions in → `jql_reference` |
 | Zero `data.issues[]` | Query is well-formed but matches nothing | Loosen the JQL; reconfirm `project`/`assignee` values |
+| Requested field is absent/null | Jira did not return that field despite `--fields` / `--full` | Trust the live `fields` object; use available summary fields, or verify the field via Jira UI/API permissions before depending on it |
 
 **Next**
 - Then: → `read_issue` on any captured key for the typed envelope.

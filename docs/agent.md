@@ -70,12 +70,12 @@ Cross-cutting contracts every workflow inherits.
 ### Read paths
 
 `read_issue`
-:   Fetch one issue's JSON envelope so downstream workflows can
-    inspect Jira's issue object.
+:   Fetch one or more issue JSON envelopes so downstream workflows can
+    inspect Jira issue objects.
 
 `list_issues`
 :   Page through issues for the active profile: by JQL, by board, or
-    by the default project.
+    by expanded key set, or by the default project.
 
 `search_jql`
 :   Run a JQL query (hand-authored, flag-built, or saved on disk) and
