@@ -25,6 +25,8 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/yuin/goldmark v1.8.2
 	github.com/zalando/go-keyring v0.2.8
+	go.uber.org/goleak v1.3.0
+	golang.org/x/sync v0.20.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -276,7 +278,6 @@ require (
 	golang.org/x/exp/typeparams v0.0.0-20260209203927-2842357ff358 // indirect
 	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/net v0.53.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260421165255-392afab6f40e // indirect
 	golang.org/x/term v0.42.0 // indirect

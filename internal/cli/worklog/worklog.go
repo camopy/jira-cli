@@ -1,6 +1,7 @@
 package worklog
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
+	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/pipeline"
 	"github.com/spf13/cobra"
@@ -16,11 +18,16 @@ import (
 func worklogAddCommand() *cobra.Command {
 	var timeSpent, commentMarkdown, started, jsonInput string
 	var dryRun bool
+	var parallelism int
 	cmd := &cobra.Command{
-		Use:   "add KEY",
+		Use:   "add KEY...",
 		Short: "Add a worklog",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
 			// commentADF carries a canonical ADF `comment` document
 			// supplied via --json-input. It is mutually exclusive with
 			// the Markdown comment form.
@@ -92,22 +99,32 @@ func worklogAddCommand() *cobra.Command {
 			// Submit the validated SubmitADF (post-compatibility),
 			// not the pre-pipeline comment doc.
 			comment = pipeOut.SubmitADF
+			if len(keys) > 1 {
+				return runWorklogAddMany(cmd, keys, parallelism, worklogAddInputs{
+					TimeSpentSeconds: seconds,
+					Started:          started,
+					Comment:          comment,
+					DryRun:           dryRun,
+					Warnings:         pipeOut.Warnings,
+				})
+			}
+			key := keys[0]
 			if !dryRun {
 				client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 				if err != nil {
 					return err
 				}
 				if ok {
-					worklog, resp, err := cmdutil.WorklogService(client).Add(cmd.Context(), args[0], &jira.WorklogAddRequest{TimeSpentSeconds: seconds, Started: started, Comment: comment})
+					worklog, resp, err := cmdutil.WorklogService(client).Add(cmd.Context(), key, &jira.WorklogAddRequest{TimeSpentSeconds: seconds, Started: started, Comment: comment})
 					if err != nil {
 						return err
 					}
-					return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "worklog.add", map[string]any{"issue": args[0], "worklog": worklog, "dry_run": false}, resp, pipeOut.Warnings)
+					return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "worklog.add", map[string]any{"issue": key, "worklog": worklog, "dry_run": false}, resp, pipeOut.Warnings)
 				}
 				return fmt.Errorf("jira base URL is required for worklog.add")
 			}
 			return cmdutil.WriteEnvelopeWithWarnings(cmd, "worklog.add", map[string]any{
-				"issue": args[0],
+				"issue": key,
 				"worklog": map[string]any{
 					"time_spent_seconds": seconds,
 					"started":            started,
@@ -127,7 +144,60 @@ func worklogAddCommand() *cobra.Command {
 	cmdutil.ExtendFlag(cmd.Flags(), "comment-markdown", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
 	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
+}
+
+type worklogAddInputs struct {
+	TimeSpentSeconds int
+	Started          string
+	Comment          *adf.Document
+	Warnings         []adf.Warning
+	DryRun           bool
+}
+
+func runWorklogAddMany(cmd *cobra.Command, keys []string, parallelism int, in worklogAddInputs) error {
+	if in.DryRun {
+		results := make([]cmdutil.KeyResult[map[string]any], len(keys))
+		for i, key := range keys {
+			results[i] = cmdutil.KeyResult[map[string]any]{
+				Key: key,
+				Value: map[string]any{
+					"issue": key,
+					"worklog": map[string]any{
+						"time_spent_seconds": in.TimeSpentSeconds,
+						"started":            in.Started,
+						"comment":            in.Comment,
+					},
+					"dry_run": true,
+				},
+			}
+		}
+		return cmdutil.WriteKeyedResultsEnvelope(cmd, "worklog.add", results, cmdutil.KeyedDataWithWarnings(in.Warnings))
+	}
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("jira base URL is required for worklog.add")
+	}
+	service := cmdutil.WorklogService(client)
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+		worklog, _, err := service.Add(ctx, key, &jira.WorklogAddRequest{
+			TimeSpentSeconds: in.TimeSpentSeconds,
+			Started:          in.Started,
+			Comment:          in.Comment,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"issue": key, "worklog": worklog, "dry_run": false}, nil
+	})
+	if err != nil {
+		return err
+	}
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, "worklog.add", results, cmdutil.KeyedDataWithWarnings(in.Warnings))
 }
 
 // NewCommand returns the `worklog` command group for managing issue worklogs.
@@ -139,27 +209,60 @@ func NewCommand() *cobra.Command {
 }
 
 func worklogListCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "list KEY",
+	var parallelism int
+	cmd := &cobra.Command{
+		Use:   "list KEY...",
 		Short: "List worklogs",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
 			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
 			if ok {
-				worklogs, resp, err := cmdutil.WorklogService(client).List(cmd.Context(), args[0], &jira.ListOptions{MaxResults: 50})
+				service := cmdutil.WorklogService(client)
+				if len(keys) == 1 {
+					worklogs, resp, err := service.List(cmd.Context(), keys[0], &jira.ListOptions{MaxResults: 50})
+					if err != nil {
+						return err
+					}
+					return cmdutil.WriteEnvelopeWithResponse(cmd, "worklog.list", worklogListData(keys[0], worklogs), resp)
+				}
+				results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) ([]*jira.Worklog, error) {
+					worklogs, _, err := service.List(ctx, key, &jira.ListOptions{MaxResults: 50})
+					return worklogs, err
+				})
 				if err != nil {
 					return err
 				}
-				return cmdutil.WriteEnvelopeWithResponse(cmd, "worklog.list", map[string]any{"issue": args[0], "worklogs": worklogs}, resp)
+				return cmdutil.WriteKeyedResultsEnvelope(cmd, "worklog.list", results, func(key string, worklogs []*jira.Worklog) any {
+					return worklogListData(key, worklogs)
+				})
 			}
-			return cmdutil.WriteEnvelope(cmd, "worklog.list", map[string]any{
-				"issue":    args[0],
-				"worklogs": []any{},
+			if len(keys) == 1 {
+				return cmdutil.WriteEnvelope(cmd, "worklog.list", worklogListData(keys[0], []any{}))
+			}
+			results := make([]cmdutil.KeyResult[any], 0, len(keys))
+			for _, key := range keys {
+				results = append(results, cmdutil.KeyResult[any]{Key: key, Value: []any{}})
+			}
+			return cmdutil.WriteKeyedResultsEnvelope(cmd, "worklog.list", results, func(key string, worklogs any) any {
+				return worklogListData(key, worklogs)
 			})
 		},
+	}
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
+	return cmd
+}
+
+func worklogListData(key string, worklogs any) map[string]any {
+	return map[string]any{
+		"issue":    key,
+		"worklogs": worklogs,
 	}
 }
 

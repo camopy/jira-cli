@@ -10,6 +10,7 @@
 package issue
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -30,8 +32,9 @@ import (
 func issueLinkSubCommand() *cobra.Command {
 	var to, linkType string
 	var dryRun bool
+	var parallelism int
 	cmd := &cobra.Command{
-		Use:   "link KEY",
+		Use:   "link KEY...",
 		Short: "Inspect, create, or remove issue links",
 		Long: `Manage Jira issue links.
 
@@ -49,17 +52,29 @@ Default action — no sub-command:
     Relates — KEY relates to --to
     Cloners — KEY clones --to (or "is cloned by", per direction)`,
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
-		Args:        cobra.MaximumNArgs(1),
+		Args:        cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return cmd.Help()
 			}
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
 			if to == "" || linkType == "" {
 				return fmt.Errorf("validation: --to and --type are required")
 			}
+			if len(keys) > 1 {
+				return runIssueLinkCreateMany(cmd, keys, parallelism, issueLinkCreateInput{
+					To:      to,
+					Type:    linkType,
+					DryRun:  dryRun,
+					Command: "issue.link",
+				})
+			}
 			if dryRun {
 				return cmdutil.WriteEnvelope(cmd, "issue.link", map[string]any{
-					"inward_issue": args[0], "outward_issue": to, "type": linkType, "dry_run": true,
+					"inward_issue": keys[0], "outward_issue": to, "type": linkType, "dry_run": true,
 				})
 			}
 			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
@@ -70,13 +85,13 @@ Default action — no sub-command:
 				return fmt.Errorf("jira base URL is required for issue.link")
 			}
 			resp, err := jira.NewIssueLinkService(client).Create(cmd.Context(), &jira.IssueLinkRequest{
-				Type: linkType, InwardIssue: args[0], OutwardIssue: to,
+				Type: linkType, InwardIssue: keys[0], OutwardIssue: to,
 			})
 			if err != nil {
 				return err
 			}
 			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.link", map[string]any{
-				"inward_issue": args[0], "outward_issue": to, "type": linkType, "dry_run": false,
+				"inward_issue": keys[0], "outward_issue": to, "type": linkType, "dry_run": false,
 			}, resp)
 		},
 	}
@@ -92,11 +107,60 @@ Default action — no sub-command:
 	cmdutil.ExtendFlag(cmd.Flags(), "to", clib.FlagExtra{Group: "Link", Placeholder: "KEY", Complete: "predictor=issuekey"})
 	cmdutil.ExtendFlag(cmd.Flags(), "type", clib.FlagExtra{Group: "Link", Placeholder: "NAME", Complete: "predictor=cachelinktype"})
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
 
 	cmd.AddCommand(issueLinkListCommand())
 	cmd.AddCommand(issueLinkDeleteCommand())
 	cmd.AddCommand(issueLinkTypesCommand())
 	return cmd
+}
+
+type issueLinkCreateInput struct {
+	To      string
+	Type    string
+	Command string
+	DryRun  bool
+}
+
+func runIssueLinkCreateMany(cmd *cobra.Command, keys []string, parallelism int, in issueLinkCreateInput) error {
+	if in.DryRun {
+		results := make([]cmdutil.KeyResult[map[string]any], len(keys))
+		for i, key := range keys {
+			results[i] = cmdutil.KeyResult[map[string]any]{Key: key, Value: issueLinkCreateData(key, in, true)}
+		}
+		return cmdutil.WriteKeyedResultsEnvelope(cmd, in.Command, results, func(_ string, data map[string]any) any { return data })
+	}
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("jira base URL is required for %s", in.Command)
+	}
+	service := jira.NewIssueLinkService(client)
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+		if _, err := service.Create(ctx, &jira.IssueLinkRequest{
+			Type:         in.Type,
+			InwardIssue:  key,
+			OutwardIssue: in.To,
+		}); err != nil {
+			return nil, err
+		}
+		return issueLinkCreateData(key, in, false), nil
+	})
+	if err != nil {
+		return err
+	}
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, in.Command, results, func(_ string, data map[string]any) any { return data })
+}
+
+func issueLinkCreateData(key string, in issueLinkCreateInput, dryRun bool) map[string]any {
+	return map[string]any{
+		"inward_issue":  key,
+		"outward_issue": in.To,
+		"type":          in.Type,
+		"dry_run":       dryRun,
+	}
 }
 
 // issueLinkListCommand wires `jira issue link list KEY`.
@@ -107,12 +171,17 @@ Default action — no sub-command:
 //
 // `--raw` returns Atlassian's `issuelinks` array verbatim.
 func issueLinkListCommand() *cobra.Command {
+	var parallelism int
 	cmd := &cobra.Command{
-		Use:         "list KEY",
+		Use:         "list KEY...",
 		Short:       "List the links on an issue (inward + outward)",
-		Args:        cobra.ExactArgs(1),
+		Args:        cobra.MinimumNArgs(1),
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
 			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
@@ -120,18 +189,36 @@ func issueLinkListCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.link.list")
 			}
-			links, _, err := jira.NewIssueLinkService(client).List(cmd.Context(), args[0])
+			service := jira.NewIssueLinkService(client)
+			if len(keys) == 1 {
+				links, _, err := service.List(cmd.Context(), keys[0])
+				if err != nil {
+					return err
+				}
+				return cmdutil.WriteEnvelope(cmd, "issue.link.list", issueLinkListData(keys[0], links))
+			}
+			results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) ([]jira.IssueLinkView, error) {
+				links, _, err := service.List(ctx, key)
+				return links, err
+			})
 			if err != nil {
 				return err
 			}
-			return cmdutil.WriteEnvelope(cmd, "issue.link.list", map[string]any{
-				"key":   args[0],
-				"links": links,
-				"count": len(links),
+			return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.link.list", results, func(key string, links []jira.IssueLinkView) any {
+				return issueLinkListData(key, links)
 			})
 		},
 	}
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
+}
+
+func issueLinkListData(key string, links []jira.IssueLinkView) map[string]any {
+	return map[string]any{
+		"key":   key,
+		"links": links,
+		"count": len(links),
+	}
 }
 
 // issueLinkDeleteCommand wires `jira issue link delete KEY LINK_ID`.

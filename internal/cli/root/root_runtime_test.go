@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/spf13/cobra"
 )
 
@@ -100,6 +101,61 @@ func TestRootCommandAttachesGlobalFlagsOnce(t *testing.T) {
 		if fa == fb {
 			t.Errorf("flag --%s is shared between two roots: per-instance construction must not reuse the same *pflag.Flag", name)
 		}
+	}
+}
+
+func TestRootProfileFlagUsesUppercaseShorthand(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{name: "long profile flag", args: []string{"--profile", "work", "version", "--output=json"}},
+		{name: "uppercase profile shorthand", args: []string{"-P", "work", "version", "--output=json"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root, _, err := NewRootCommandForTest()
+			if err != nil {
+				t.Fatalf("NewRootCommandForTest: %v", err)
+			}
+			root.SetArgs(tc.args)
+			if execErr := root.Execute(); execErr != nil {
+				t.Fatalf("execute %v: %v", tc.args, execErr)
+			}
+			if got := cmdutil.RequestedProfile(root); got != "work" {
+				t.Fatalf("RequestedProfile() = %q, want work", got)
+			}
+		})
+	}
+}
+
+func TestRootProfileFlagRejectsLowercaseShorthand(t *testing.T) {
+	root, _, err := NewRootCommandForTest()
+	if err != nil {
+		t.Fatalf("NewRootCommandForTest: %v", err)
+	}
+	root.SetArgs([]string{"-p", "work", "version", "--output=json"})
+	err = root.Execute()
+	if err == nil {
+		t.Fatal("execute with -p profile shorthand succeeded, want unknown shorthand error")
+	}
+	if !strings.Contains(err.Error(), "unknown shorthand flag: 'p'") {
+		t.Fatalf("execute error = %q, want unknown shorthand flag for -p", err)
+	}
+}
+
+func TestRootProfileFlagMetadataUsesUppercaseShorthand(t *testing.T) {
+	root, _, err := NewRootCommandForTest()
+	if err != nil {
+		t.Fatalf("NewRootCommandForTest: %v", err)
+	}
+	flag := root.PersistentFlags().Lookup("profile")
+	if flag == nil {
+		t.Fatal("root missing --profile flag")
+	}
+	if flag.Shorthand != "P" {
+		t.Fatalf("--profile shorthand = %q, want P", flag.Shorthand)
 	}
 }
 

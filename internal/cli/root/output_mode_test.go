@@ -220,6 +220,33 @@ func TestRootInteractiveFlagControlsDashboardLaunchIntent(t *testing.T) {
 	}
 }
 
+func TestIssueListPlainOutputMarksNonDefaultParallelism(t *testing.T) {
+	cmd, stdout, _ := outputModeTestCommand(cli.ModePlain)
+	var parallelism int
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
+	if err := cmd.Flags().Parse([]string{"-p", "2"}); err != nil {
+		t.Fatalf("parse -p 2: %v", err)
+	}
+
+	data := issue.IssueListOutputData(cmd, []map[string]any{}, false, "")
+	if err := cmdutil.WriteEnvelope(cmd, "issue.list", data); err != nil {
+		t.Fatalf("cmdutil.WriteEnvelope() error = %v", err)
+	}
+	if !strings.Contains(stdout.String(), "threads=2") {
+		t.Fatalf("issue list plain output omitted non-default thread count:\n%s", stdout.String())
+	}
+
+	cmd, stdout, _ = outputModeTestCommand(cli.ModePlain)
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
+	data = issue.IssueListOutputData(cmd, []map[string]any{}, false, "")
+	if err := cmdutil.WriteEnvelope(cmd, "issue.list", data); err != nil {
+		t.Fatalf("cmdutil.WriteEnvelope(default) error = %v", err)
+	}
+	if strings.Contains(stdout.String(), "threads=") {
+		t.Fatalf("issue list plain output should omit default thread count:\n%s", stdout.String())
+	}
+}
+
 func outputModeTestCommand(mode cli.Mode) (*cobra.Command, *bytes.Buffer, *bytes.Buffer) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}

@@ -248,7 +248,7 @@ func rootCompletionFlagMeta(root *cobra.Command) []complete.FlagMeta {
 // call installs a fresh, independent flag set.
 func configureRootFlags(root *cobra.Command) {
 	pf := root.PersistentFlags()
-	pf.StringP("profile", "p", "", "Jira profile name")
+	pf.StringP("profile", "P", "", "Jira profile name")
 	pf.StringP("config", "c", "", "Config file path")
 	pf.String("output", "auto", "Output mode: auto, human, json, or compact "+
 		"(compact is the JSON data payload without the envelope — no ok/meta/warnings/errors)")
@@ -440,6 +440,10 @@ func timeoutFromArgs(args []string) time.Duration {
 
 func writeCommandError(ctx context.Context, cmd *cobra.Command, err error) {
 	if err == nil {
+		return
+	}
+	var reported cmdutil.DiagnosticWrittenError
+	if errors.As(err, &reported) {
 		return
 	}
 	// Failures always emit a clog diagnostic on stderr.

@@ -13,7 +13,7 @@ type Globals struct {
 	Profile    string
 }
 
-// GlobalsFromArgs scans argv for the --config/--profile (and -c/-p) global
+// GlobalsFromArgs scans argv for the --config/--profile (and -c/-P) global
 // flags and returns their values, ignoring everything else.
 func GlobalsFromArgs(args []string) Globals {
 	return scanGlobals(args)
@@ -69,7 +69,7 @@ func scanGlobals(args []string) Globals {
 			globals.ConfigPath = shortFlagValue(args, &i, arg)
 			continue
 		}
-		if strings.HasPrefix(arg, "-p") && arg != "-" {
+		if strings.HasPrefix(arg, "-P") && arg != "-" {
 			globals.Profile = shortFlagValue(args, &i, arg)
 			continue
 		}
@@ -101,7 +101,7 @@ func consumeGlobal(args []string, i *int, globals *Globals) bool {
 		globals.ConfigPath = shortFlagValue(args, i, arg)
 		return true
 	}
-	if strings.HasPrefix(arg, "-p") && arg != "-" {
+	if strings.HasPrefix(arg, "-P") && arg != "-" {
 		globals.Profile = shortFlagValue(args, i, arg)
 		return true
 	}

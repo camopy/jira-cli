@@ -19,6 +19,9 @@ import (
 
 const (
 	defaultBaseURL       = "https://api.atlassian.com/"
+	defaultHTTPTimeout   = 30 * time.Second
+	defaultMaxIdleConns  = 100
+	maxIdleConnsPerHost  = 16
 	maxErrorBodyBytes    = 4096
 	maxResponseBodyBytes = 16 << 20
 )
@@ -126,7 +129,7 @@ func NewClientE(opts ...Option) (*Client, error) {
 
 func newClient(opts ...Option) (*Client, error) {
 	u, _ := url.Parse(defaultBaseURL)
-	c := &Client{client: &http.Client{Timeout: 30 * time.Second}, baseURL: u}
+	c := &Client{client: defaultHTTPClient(), baseURL: u}
 	for _, opt := range opts {
 		opt(c)
 	}
@@ -134,6 +137,23 @@ func newClient(opts ...Option) (*Client, error) {
 		return c, c.initErr
 	}
 	return c, nil
+}
+
+func defaultHTTPClient() *http.Client {
+	transport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return &http.Client{
+			Timeout:   defaultHTTPTimeout,
+			Transport: http.DefaultTransport,
+		}
+	}
+	transport = transport.Clone()
+	transport.MaxIdleConns = defaultMaxIdleConns
+	transport.MaxIdleConnsPerHost = maxIdleConnsPerHost
+	return &http.Client{
+		Timeout:   defaultHTTPTimeout,
+		Transport: transport,
+	}
 }
 
 func (c *Client) setInitErr(err error) {

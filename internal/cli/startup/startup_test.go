@@ -19,8 +19,9 @@ func TestGlobalsFromArgs(t *testing.T) {
 		{"short config space", []string{"-c", "/x"}, startup.Globals{ConfigPath: "/x"}},
 		{"short config glued", []string{"-c/x"}, startup.Globals{ConfigPath: "/x"}},
 		{"long profile space", []string{"--profile", "work"}, startup.Globals{Profile: "work"}},
-		{"short profile glued", []string{"-pwork"}, startup.Globals{Profile: "work"}},
-		{"both", []string{"-p", "work", "--config", "/y", "issue"}, startup.Globals{ConfigPath: "/y", Profile: "work"}},
+		{"short profile glued", []string{"-Pwork"}, startup.Globals{Profile: "work"}},
+		{"both", []string{"-P", "work", "--config", "/y", "issue"}, startup.Globals{ConfigPath: "/y", Profile: "work"}},
+		{"lowercase p no longer selects profile", []string{"-p", "work"}, startup.Globals{}},
 		{"terminator stops scan", []string{"--", "--config", "/x"}, startup.Globals{}},
 		{"trailing valueless config", []string{"--config"}, startup.Globals{}},
 	}

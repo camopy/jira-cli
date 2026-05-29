@@ -9,6 +9,7 @@ package issue
 
 import (
 	"github.com/matcra587/jira-cli/internal/cli/boardscope"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	clijql "github.com/matcra587/jira-cli/internal/cli/jql"
 	"github.com/spf13/cobra"
 )
@@ -27,6 +28,7 @@ func issueListCommand() *cobra.Command {
 	cmd.Flags().StringVar(&opts.jqlQuery, "jql", "", "Run a custom JQL query for the issue list")
 	cmd.Flags().BoolVar(&opts.asJQL, "as-jql", false, "Print the built JQL query without calling Jira")
 	clijql.AddJQLBuilderFlags(cmd, &opts.builder)
+	cmdutil.AddParallelismFlag(cmd, &opts.parallelism)
 	boardscope.AddFlags(cmd)
 	return cmd
 }

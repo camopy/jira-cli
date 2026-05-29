@@ -1,12 +1,14 @@
 package issue
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/spf13/cobra"
 )
@@ -46,14 +48,19 @@ func issueWatcherCommand() *cobra.Command {
 // branch by command name.
 func issueWatchCommand() *cobra.Command {
 	var dryRun, noReadback, validateRemote bool
+	var parallelism int
 	cmd := &cobra.Command{
-		Use:         "watch KEY",
+		Use:         "watch KEY...",
 		Short:       "Start watching an issue (alias for watchers add --user me)",
-		Args:        cobra.ExactArgs(1),
+		Args:        cobra.MinimumNArgs(1),
 		Annotations: issueKeyArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWatcherAdd(cmd, watcherMutationArgs{
-				Key: args[0], UserIdent: "me", DryRun: dryRun, NoReadback: noReadback,
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
+			return runWatcherAddKeys(cmd, keys, parallelism, watcherMutationArgs{
+				UserIdent: "me", DryRun: dryRun, NoReadback: noReadback,
 				ValidateRemote: validateRemote,
 			})
 		},
@@ -63,6 +70,7 @@ func issueWatchCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve --user against Jira (read-only); use with --dry-run")
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	cmdutil.ExtendWatcherValidationFlags(cmd.Flags())
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
 }
 
@@ -70,14 +78,19 @@ func issueWatchCommand() *cobra.Command {
 // `watchers remove --user me`.
 func issueUnwatchCommand() *cobra.Command {
 	var dryRun, noReadback, validateRemote bool
+	var parallelism int
 	cmd := &cobra.Command{
-		Use:         "unwatch KEY",
+		Use:         "unwatch KEY...",
 		Short:       "Stop watching an issue (alias for watchers remove --user me)",
-		Args:        cobra.ExactArgs(1),
+		Args:        cobra.MinimumNArgs(1),
 		Annotations: issueKeyArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWatcherRemove(cmd, watcherMutationArgs{
-				Key: args[0], UserIdent: "me", DryRun: dryRun, NoReadback: noReadback,
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
+			return runWatcherRemoveKeys(cmd, keys, parallelism, watcherMutationArgs{
+				UserIdent: "me", DryRun: dryRun, NoReadback: noReadback,
 				ValidateRemote: validateRemote,
 			})
 		},
@@ -87,6 +100,7 @@ func issueUnwatchCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve --user against Jira (read-only); use with --dry-run")
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	cmdutil.ExtendWatcherValidationFlags(cmd.Flags())
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
 }
 
@@ -107,14 +121,19 @@ type watcherMutationArgs struct {
 // ----- list -----------------------------------------------------------------
 
 func watcherListCommand() *cobra.Command {
+	var parallelism int
 	cmd := &cobra.Command{
-		Use:           "list KEY",
+		Use:           "list KEY...",
 		Short:         "List watchers on an issue",
-		Args:          cobra.ExactArgs(1),
+		Args:          cobra.MinimumNArgs(1),
 		Annotations:   issueKeyArg,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
 			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
@@ -122,19 +141,43 @@ func watcherListCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.watchers.list")
 			}
-			watchers, resp, err := jira.NewWatcherService(client).List(cmd.Context(), args[0])
+			service := jira.NewWatcherService(client)
+			if len(keys) == 1 {
+				watchers, resp, err := service.List(cmd.Context(), keys[0])
+				if err != nil {
+					return err
+				}
+				return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.watchers.list", watcherListEnvelopeData(watchers), resp)
+			}
+			results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (*jira.WatchersResponse, error) {
+				watchers, _, err := service.List(ctx, key)
+				return watchers, err
+			})
 			if err != nil {
 				return err
 			}
-			data := map[string]any{
-				"watchers":    watcherListData(watchers.Watchers),
-				"is_watching": watchers.IsWatching,
-				"watch_count": watchers.WatchCount,
-			}
-			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.watchers.list", data, resp)
+			return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.watchers.list", results, func(_ string, watchers *jira.WatchersResponse) any {
+				return watcherListEnvelopeData(watchers)
+			})
 		},
 	}
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
+}
+
+func watcherListEnvelopeData(watchers *jira.WatchersResponse) map[string]any {
+	if watchers == nil {
+		return map[string]any{
+			"watchers":    []map[string]any{},
+			"is_watching": false,
+			"watch_count": 0,
+		}
+	}
+	return map[string]any{
+		"watchers":    watcherListData(watchers.Watchers),
+		"is_watching": watchers.IsWatching,
+		"watch_count": watchers.WatchCount,
+	}
 }
 
 // ----- add ------------------------------------------------------------------
@@ -142,10 +185,11 @@ func watcherListCommand() *cobra.Command {
 func watcherAddCommand() *cobra.Command {
 	var user string
 	var dryRun, noReadback, validateRemote bool
+	var parallelism int
 	cmd := &cobra.Command{
-		Use:           "add KEY",
+		Use:           "add KEY...",
 		Short:         "Add a watcher to an issue",
-		Args:          cobra.ExactArgs(1),
+		Args:          cobra.MinimumNArgs(1),
 		Annotations:   issueKeyArg,
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -153,8 +197,12 @@ func watcherAddCommand() *cobra.Command {
 			if user == "" {
 				return fmt.Errorf("validation: --user is required (me / accountId:<id> / email)")
 			}
-			return runWatcherAdd(cmd, watcherMutationArgs{
-				Key: args[0], UserIdent: user, DryRun: dryRun, NoReadback: noReadback,
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
+			return runWatcherAddKeys(cmd, keys, parallelism, watcherMutationArgs{
+				UserIdent: user, DryRun: dryRun, NoReadback: noReadback,
 				ValidateRemote: validateRemote,
 			})
 		},
@@ -166,6 +214,7 @@ func watcherAddCommand() *cobra.Command {
 	cmdutil.ExtendWatcherUserFlag(cmd.Flags())
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	cmdutil.ExtendWatcherValidationFlags(cmd.Flags())
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
 }
 
@@ -174,10 +223,11 @@ func watcherAddCommand() *cobra.Command {
 func watcherRemoveCommand() *cobra.Command {
 	var user string
 	var dryRun, noReadback, validateRemote bool
+	var parallelism int
 	cmd := &cobra.Command{
-		Use:           "remove KEY",
+		Use:           "remove KEY...",
 		Short:         "Remove a watcher from an issue",
-		Args:          cobra.ExactArgs(1),
+		Args:          cobra.MinimumNArgs(1),
 		Annotations:   issueKeyArg,
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -185,8 +235,12 @@ func watcherRemoveCommand() *cobra.Command {
 			if user == "" {
 				return fmt.Errorf("validation: --user is required (me / accountId:<id> / email)")
 			}
-			return runWatcherRemove(cmd, watcherMutationArgs{
-				Key: args[0], UserIdent: user, DryRun: dryRun, NoReadback: noReadback,
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
+			return runWatcherRemoveKeys(cmd, keys, parallelism, watcherMutationArgs{
+				UserIdent: user, DryRun: dryRun, NoReadback: noReadback,
 				ValidateRemote: validateRemote,
 			})
 		},
@@ -198,10 +252,120 @@ func watcherRemoveCommand() *cobra.Command {
 	cmdutil.ExtendWatcherUserFlag(cmd.Flags())
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	cmdutil.ExtendWatcherValidationFlags(cmd.Flags())
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
 }
 
 // ----- shared add/remove drivers -------------------------------------------
+
+func runWatcherAddKeys(cmd *cobra.Command, keys []string, parallelism int, args watcherMutationArgs) error {
+	if len(keys) == 1 {
+		args.Key = keys[0]
+		return runWatcherAdd(cmd, args)
+	}
+	return runWatcherMutationMany(cmd, "issue.watchers.add", keys, parallelism, args, watcherMutationAdd)
+}
+
+func runWatcherRemoveKeys(cmd *cobra.Command, keys []string, parallelism int, args watcherMutationArgs) error {
+	if len(keys) == 1 {
+		args.Key = keys[0]
+		return runWatcherRemove(cmd, args)
+	}
+	return runWatcherMutationMany(cmd, "issue.watchers.remove", keys, parallelism, args, watcherMutationRemove)
+}
+
+type watcherMutationKind int
+
+const (
+	watcherMutationAdd watcherMutationKind = iota
+	watcherMutationRemove
+)
+
+func runWatcherMutationMany(
+	cmd *cobra.Command,
+	command string,
+	keys []string,
+	parallelism int,
+	args watcherMutationArgs,
+	kind watcherMutationKind,
+) error {
+	if args.DryRun {
+		return watcherDryRunPreviewMany(cmd, command, keys, args)
+	}
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("jira base URL is required for %s", command)
+	}
+	accountID, err := jira.NewUserService(client).ResolveUser(cmd.Context(), args.UserIdent)
+	if err != nil {
+		return handleResolveErr(cmd, command, err)
+	}
+	watcherSvc := jira.NewWatcherService(client)
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+		perKey := args
+		perKey.Key = key
+		switch kind {
+		case watcherMutationAdd:
+			return watcherAddData(ctx, watcherSvc, accountID, perKey)
+		case watcherMutationRemove:
+			return watcherRemoveData(ctx, watcherSvc, accountID, perKey)
+		default:
+			return nil, fmt.Errorf("unknown watcher mutation kind")
+		}
+	})
+	if err != nil {
+		return err
+	}
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, command, results, func(_ string, data map[string]any) any {
+		return data
+	})
+}
+
+func watcherDryRunPreviewMany(cmd *cobra.Command, command string, keys []string, args watcherMutationArgs) error {
+	accountID := ""
+	userResolved := false
+	if args.ValidateRemote {
+		client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("jira base URL is required for %s --validate-remote", command)
+		}
+		userSvc := jira.NewUserService(client)
+		if id, ok := accountIDFromIdentifier(args.UserIdent); ok {
+			accountID, err = userSvc.ResolveAccountID(cmd.Context(), id)
+		} else {
+			accountID, err = userSvc.ResolveUser(cmd.Context(), args.UserIdent)
+		}
+		if err != nil {
+			return handleResolveErr(cmd, command, err)
+		}
+		userResolved = true
+	} else if id, ok := localResolveUser(cmd, args.UserIdent); ok {
+		accountID = id
+		userResolved = true
+	}
+	results := make([]cmdutil.KeyResult[map[string]any], len(keys))
+	for i, key := range keys {
+		data := map[string]any{
+			"key":           key,
+			"user":          args.UserIdent,
+			"dry_run":       true,
+			"user_resolved": userResolved,
+		}
+		if accountID != "" {
+			data["account_id_resolved"] = accountID
+		}
+		results[i] = cmdutil.KeyResult[map[string]any]{Key: key, Value: data}
+	}
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, command, results, func(_ string, data map[string]any) any {
+		return data
+	})
+}
 
 func runWatcherAdd(cmd *cobra.Command, args watcherMutationArgs) error {
 	if args.DryRun {
@@ -228,33 +392,41 @@ func runWatcherAdd(cmd *cobra.Command, args watcherMutationArgs) error {
 	// Capture pre-state when readback is requested so we can populate
 	// `was_already_watching` in the envelope .
 	watcherSvc := jira.NewWatcherService(client)
-	var preState *jira.WatchersResponse
-	if !args.NoReadback {
-		preState, _, _ = watcherSvc.List(cmd.Context(), args.Key)
-	}
-
-	if _, err := watcherSvc.Add(cmd.Context(), args.Key, accountID); err != nil {
-		return err
-	}
-
-	if args.NoReadback {
-		return cmdutil.WriteEnvelope(cmd, "issue.watchers.add", map[string]any{
-			"account_id": accountID,
-			"attempted":  true,
-		})
-	}
-
-	post, resp, err := watcherSvc.List(cmd.Context(), args.Key)
+	data, err := watcherAddData(cmd.Context(), watcherSvc, accountID, args)
 	if err != nil {
 		return err
 	}
+	return cmdutil.WriteEnvelope(cmd, "issue.watchers.add", data)
+}
+
+func watcherAddData(ctx context.Context, watcherSvc jira.WatcherService, accountID string, args watcherMutationArgs) (map[string]any, error) {
+	var preState *jira.WatchersResponse
+	if !args.NoReadback {
+		preState, _, _ = watcherSvc.List(ctx, args.Key)
+	}
+
+	if _, err := watcherSvc.Add(ctx, args.Key, accountID); err != nil {
+		return nil, err
+	}
+
+	if args.NoReadback {
+		return map[string]any{
+			"account_id": accountID,
+			"attempted":  true,
+		}, nil
+	}
+
+	post, _, err := watcherSvc.List(ctx, args.Key)
+	if err != nil {
+		return nil, err
+	}
 	wasAlready := containsAccount(preState, accountID)
-	return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.watchers.add", map[string]any{
+	return map[string]any{
 		"watchers":             watcherListData(post.Watchers),
 		"is_watching":          post.IsWatching,
 		"watch_count":          post.WatchCount,
 		"was_already_watching": wasAlready,
-	}, resp)
+	}, nil
 }
 
 func runWatcherRemove(cmd *cobra.Command, args watcherMutationArgs) error {
@@ -277,33 +449,41 @@ func runWatcherRemove(cmd *cobra.Command, args watcherMutationArgs) error {
 	}
 
 	watcherSvc := jira.NewWatcherService(client)
-	var preState *jira.WatchersResponse
-	if !args.NoReadback {
-		preState, _, _ = watcherSvc.List(cmd.Context(), args.Key)
-	}
-
-	if _, err := watcherSvc.Remove(cmd.Context(), args.Key, accountID); err != nil {
-		return err
-	}
-
-	if args.NoReadback {
-		return cmdutil.WriteEnvelope(cmd, "issue.watchers.remove", map[string]any{
-			"account_id": accountID,
-			"attempted":  true,
-		})
-	}
-
-	post, resp, err := watcherSvc.List(cmd.Context(), args.Key)
+	data, err := watcherRemoveData(cmd.Context(), watcherSvc, accountID, args)
 	if err != nil {
 		return err
 	}
+	return cmdutil.WriteEnvelope(cmd, "issue.watchers.remove", data)
+}
+
+func watcherRemoveData(ctx context.Context, watcherSvc jira.WatcherService, accountID string, args watcherMutationArgs) (map[string]any, error) {
+	var preState *jira.WatchersResponse
+	if !args.NoReadback {
+		preState, _, _ = watcherSvc.List(ctx, args.Key)
+	}
+
+	if _, err := watcherSvc.Remove(ctx, args.Key, accountID); err != nil {
+		return nil, err
+	}
+
+	if args.NoReadback {
+		return map[string]any{
+			"account_id": accountID,
+			"attempted":  true,
+		}, nil
+	}
+
+	post, _, err := watcherSvc.List(ctx, args.Key)
+	if err != nil {
+		return nil, err
+	}
 	wasAlready := containsAccount(preState, accountID)
-	return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.watchers.remove", map[string]any{
+	return map[string]any{
 		"watchers":             watcherListData(post.Watchers),
 		"is_watching":          post.IsWatching,
 		"watch_count":          post.WatchCount,
 		"was_already_watching": wasAlready,
-	}, resp)
+	}, nil
 }
 
 // localResolveUser resolves a watcher --user identifier WITHOUT

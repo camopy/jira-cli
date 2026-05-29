@@ -54,18 +54,35 @@ func IsStructuredAgentCommand(cmd *cobra.Command) bool {
 }
 
 // PlainOptionsForCommand builds the plain-renderer option set for a command,
-// threading TTY detection, terminal width, and (when available) the active
-// profile's base URL.
+// threading TTY detection, terminal width, execution hints, and (when
+// available) the active profile's base URL.
 func PlainOptionsForCommand(cmd *cobra.Command) []cli.PlainOption {
 	det := DetectorFromContext(cmd)
 	opts := []cli.PlainOption{
 		cli.WithPlainTTY(det.IsTTY),
 		cli.WithPlainTermWidth(terminal.Width(os.Stdout)),
 	}
+	if debug, _ := cmd.Root().PersistentFlags().GetBool("debug"); debug {
+		opts = append(opts, cli.WithPlainDebug(true))
+	}
+	if parallelism := commandParallelism(cmd); parallelism != defaultParallelism {
+		opts = append(opts, cli.WithPlainThreads(parallelism))
+	}
 	if baseURL := plainBaseURL(cmd); baseURL != "" {
 		opts = append(opts, cli.WithPlainBaseURL(baseURL))
 	}
 	return opts
+}
+
+func commandParallelism(cmd *cobra.Command) int {
+	if flag := cmd.Flags().Lookup("parallelism"); flag == nil {
+		return defaultParallelism
+	}
+	value, err := cmd.Flags().GetInt("parallelism")
+	if err != nil {
+		return defaultParallelism
+	}
+	return value
 }
 
 // plainBaseURL returns the active profile's base URL for plain-mode link

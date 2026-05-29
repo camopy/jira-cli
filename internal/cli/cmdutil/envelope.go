@@ -26,7 +26,10 @@ func WriteEnvelopeWithErrors(cmd *cobra.Command, command string, data any, error
 		return WriteEnvelope(cmd, command, data)
 	}
 	if UsePlainOutput(cmd) {
-		return cli.WriteCommandPlain(cmd.OutOrStdout(), command, data, PlainOptionsForCommand(cmd)...)
+		if err := cli.WriteCommandPlain(cmd.OutOrStdout(), command, data, PlainOptionsForCommand(cmd)...); err != nil {
+			return err
+		}
+		return writePlainFailureDiagnostics(cmd.ErrOrStderr(), command, data, errorsOut)
 	}
 	exit := cli.ExitCode(errorsOut[0])
 	env := cli.Envelope{
@@ -42,6 +45,47 @@ func WriteEnvelopeWithErrors(cmd *cobra.Command, command string, data any, error
 		Warnings: []cli.Warning{},
 	}
 	return writeEnvelopeJSON(cmd, cmd.ErrOrStderr(), env)
+}
+
+// WriteEnvelopeWithResponseAndErrors emits an ok:false envelope with both a
+// preserved data payload and pagination metadata from resp.
+func WriteEnvelopeWithResponseAndErrors(cmd *cobra.Command, command string, data any, resp *jira.Response, errorsOut []cli.Error) error {
+	if resp == nil {
+		return WriteEnvelopeWithErrors(cmd, command, data, errorsOut)
+	}
+	if len(errorsOut) == 0 {
+		return WriteEnvelopeWithResponse(cmd, command, data, resp)
+	}
+	if UsePlainOutput(cmd) {
+		if err := cli.WriteCommandPlain(cmd.OutOrStdout(), command, data, PlainOptionsForCommand(cmd)...); err != nil {
+			return err
+		}
+		return writePlainFailureDiagnostics(cmd.ErrOrStderr(), command, data, errorsOut)
+	}
+	exit := cli.ExitCode(errorsOut[0])
+	env := cli.Envelope{
+		OK: false,
+		Meta: cli.Meta{
+			Command:    command,
+			ExitCode:   &exit,
+			Timestamp:  time.Now().UTC().Format(time.RFC3339),
+			RequestID:  cli.NewRequestID(),
+			Pagination: paginationFromResponse(resp),
+		},
+		Data:     data,
+		Errors:   errorsOut,
+		Warnings: []cli.Warning{},
+	}
+	return writeEnvelopeJSON(cmd, cmd.ErrOrStderr(), env)
+}
+
+func writePlainFailureDiagnostics(stderr io.Writer, command string, data any, errorsOut []cli.Error) error {
+	switch command {
+	case "issue.view":
+		return cli.WriteIssueViewFailureDiagnostics(stderr, data, errorsOut)
+	default:
+		return cli.WriteKeyedResultsFailureDiagnostics(stderr, data, errorsOut)
+	}
 }
 
 // WriteEnvelopeWithRawWarnings emits the standard envelope shape with a

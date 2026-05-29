@@ -41,6 +41,62 @@ func TestIssueViewPlainRendersReadableIssue(t *testing.T) {
 	}
 }
 
+func TestIssueViewPlainRendersMultiKeySummary(t *testing.T) {
+	type result struct {
+		Key   string         `json:"key"`
+		OK    bool           `json:"ok"`
+		Issue *jira.Issue    `json:"issue,omitempty"`
+		Error map[string]any `json:"error,omitempty"`
+	}
+	data := struct {
+		Results   []result `json:"results"`
+		Succeeded int      `json:"succeeded"`
+		Failed    int      `json:"failed"`
+	}{
+		Results: []result{
+			{
+				Key: "PROJ-1",
+				OK:  true,
+				Issue: &jira.Issue{
+					Key: jira.String("PROJ-1"),
+					Fields: &jira.IssueFields{
+						Summary:  jira.String("Readable issue"),
+						Status:   &jira.Status{Name: jira.String("Done")},
+						Priority: &jira.Priority{Name: jira.String("Medium")},
+					},
+				},
+			},
+			{
+				Key:   "PROJ-2",
+				OK:    false,
+				Error: map[string]any{"code": "jira_not_found"},
+			},
+		},
+		Succeeded: 1,
+		Failed:    1,
+	}
+
+	var buf bytes.Buffer
+	err := WriteCommandPlain(&buf, "issue.view", data, WithPlainThreads(2))
+	if err != nil {
+		t.Fatalf("WriteCommandPlain() error = %v", err)
+	}
+	got := buf.String()
+	for _, forbidden := range []string{"value=", "{...}", `\"fields\"`} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("multi-key issue view fell back to generic output %q:\n%s", forbidden, got)
+		}
+	}
+	for _, want := range []string{"viewed issues", "succeeded=1", "failed=1", "threads=2", "PROJ-1", "Readable issue", "Done", "Medium"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("multi-key issue view output missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "failed keys:") {
+		t.Fatalf("multi-key issue view stdout should omit failed-key diagnostics:\n%s", got)
+	}
+}
+
 func TestIssueTransitionsPlainRendersReadableTable(t *testing.T) {
 	var buf bytes.Buffer
 	err := WriteCommandPlain(&buf, "issue.transitions", map[string]any{

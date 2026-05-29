@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/matcra587/jira-cli/internal/config"
+	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -117,6 +118,9 @@ func MapError(err error) Error {
 		return out
 	}
 	if out, ok := mapJiraAPIError(err); ok {
+		return out
+	}
+	if out, ok := mapIssueKeyError(err); ok {
 		return out
 	}
 	if out, ok := mapValidationCandidatesError(err); ok {
@@ -247,6 +251,16 @@ func mapJiraAPIError(err error) (Error, bool) {
 		// UpstreamCode intentionally left empty: Jira exposes no stable
 		// machine-readable error code.
 	}
+	return out, true
+}
+
+func mapIssueKeyError(err error) (Error, bool) {
+	var limit *issuekey.ExpansionLimitError
+	if !errors.As(err, &limit) {
+		return Error{}, false
+	}
+	out := NewError(ErrorTypeValidation, limit.Error())
+	out.Hint = limit.Hint()
 	return out, true
 }
 

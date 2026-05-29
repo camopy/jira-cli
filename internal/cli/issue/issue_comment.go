@@ -1,6 +1,7 @@
 package issue
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/pipeline"
 	"github.com/spf13/cobra"
@@ -31,16 +33,20 @@ import (
 func issueCommentGroup() *cobra.Command {
 	addFlags := commentAddFlags{}
 	cmd := &cobra.Command{
-		Use:         "comment KEY",
+		Use:         "comment KEY...",
 		Short:       "Manage comments on a Jira issue",
 		Long:        "Add, list, edit, or delete comments. With no subcommand, behaves as `comment add KEY ...` for back-compat with the legacy `jira issue comment KEY` invocation.",
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
-		Args:        cobra.MaximumNArgs(1),
+		Args:        cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return cmd.Help()
 			}
-			return runCommentAdd(cmd, args[0], addFlags)
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
+			return runCommentAddKeys(cmd, keys, addFlags)
 		},
 	}
 	registerCommentAddFlags(cmd, &addFlags)
@@ -56,17 +62,46 @@ func issueCommentGroup() *cobra.Command {
 func commentListCommand() *cobra.Command {
 	var limit int
 	var all bool
+	var parallelism int
 	cmd := &cobra.Command{
-		Use:         "list KEY",
+		Use:         "list KEY...",
 		Short:       "List comments on an issue",
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
-		Args:        cobra.ExactArgs(1),
+		Args:        cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runCommentList(cmd, args[0], limit, all)
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
+			if len(keys) == 1 {
+				return runCommentList(cmd, keys[0], limit, all)
+			}
+			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return fmt.Errorf("jira base URL is required for issue.comment.list")
+			}
+			svc := jira.NewCommentService(client)
+			results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (commentListReadResult, error) {
+				return commentListEnvelopeData(ctx, svc, key, limit, all)
+			})
+			if err != nil {
+				return err
+			}
+			return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.comment.list", results, func(_ string, result commentListReadResult) any {
+				data := cmdutil.CopyAnyMap(result.Data)
+				if len(result.Warnings) > 0 {
+					data["warnings"] = result.Warnings
+				}
+				return data
+			})
 		},
 	}
 	cmd.Flags().IntVar(&limit, "limit", 50, "Maximum comments per page")
 	cmd.Flags().BoolVar(&all, "all", false, "Walk every page until isLast")
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	cmdutil.ExtendPaginationFlags(cmd.Flags())
 	return cmd
 }
@@ -83,8 +118,19 @@ func runCommentList(cmd *cobra.Command, key string, limit int, all bool) error {
 	if !ok {
 		return fmt.Errorf("jira base URL is required for issue.comment.list")
 	}
-	svc := jira.NewCommentService(client)
+	result, err := commentListEnvelopeData(cmd.Context(), jira.NewCommentService(client), key, limit, all)
+	if err != nil {
+		return err
+	}
+	return writeEnvelopeWithCommentWarnings(cmd, "issue.comment.list", result.Data, result.Warnings)
+}
 
+type commentListReadResult struct {
+	Data     map[string]any
+	Warnings []map[string]any
+}
+
+func commentListEnvelopeData(ctx context.Context, svc jira.CommentService, key string, limit int, all bool) (commentListReadResult, error) {
 	pageSize := limit
 	if pageSize <= 0 {
 		pageSize = 50
@@ -97,20 +143,20 @@ func runCommentList(cmd *cobra.Command, key string, limit int, all bool) error {
 		rateLimitHit *jira.APIError
 	)
 	if all {
-		drained, err := svc.ListAll(cmd.Context(), key, jira.CommentDrainOptions{PageSize: pageSize})
+		drained, err := svc.ListAll(ctx, key, jira.CommentDrainOptions{PageSize: pageSize})
 		if err != nil {
-			return err
+			return commentListReadResult{}, err
 		}
 		collected = drained.Comments
 		lastResp = drained.LastResp
 		pagesFetched = drained.PagesFetched
 		rateLimitHit = drained.RateLimitHit
 	} else {
-		comments, resp, err := svc.List(cmd.Context(), key, &jira.ListCommentsOptions{
+		comments, resp, err := svc.List(ctx, key, &jira.ListCommentsOptions{
 			ListOptions: jira.ListOptions{MaxResults: pageSize}, //nolint:gocritic // pagination-exempt: single-page request, no cursor follow-up.
 		})
 		if err != nil {
-			return err
+			return commentListReadResult{}, err
 		}
 		collected = comments
 		lastResp = resp
@@ -125,7 +171,7 @@ func runCommentList(cmd *cobra.Command, key string, limit int, all bool) error {
 	}
 
 	warnings := commentListWarnings(collected, rateLimitHit, pagesFetched)
-	return writeEnvelopeWithCommentWarnings(cmd, "issue.comment.list", data, warnings)
+	return commentListReadResult{Data: data, Warnings: warnings}, nil
 }
 
 // commentListPagination produces the snake-case pagination block per
@@ -288,22 +334,27 @@ func warningsOrEmpty(w []map[string]any) []map[string]any {
 // ---------- comment add ----------
 
 type commentAddFlags struct {
-	markdown  string
-	jsonInput string
-	visRole   string
-	visGroup  string
-	dryRun    bool
+	markdown    string
+	jsonInput   string
+	visRole     string
+	visGroup    string
+	parallelism int
+	dryRun      bool
 }
 
 func commentAddCommand() *cobra.Command {
 	flags := commentAddFlags{}
 	cmd := &cobra.Command{
-		Use:         "add KEY",
+		Use:         "add KEY...",
 		Short:       "Add a comment to an issue",
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
-		Args:        cobra.ExactArgs(1),
+		Args:        cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runCommentAdd(cmd, args[0], flags)
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
+			return runCommentAddKeys(cmd, keys, flags)
 		},
 	}
 	registerCommentAddFlags(cmd, &flags)
@@ -321,13 +372,14 @@ func registerCommentAddFlags(cmd *cobra.Command, flags *commentAddFlags) {
 	cmdutil.ExtendFlag(cmd.Flags(), "visibility-role", clib.FlagExtra{Group: "Visibility", Placeholder: "ROLE"})
 	cmdutil.ExtendFlag(cmd.Flags(), "visibility-group", clib.FlagExtra{Group: "Visibility", Placeholder: "GROUP"})
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.AddParallelismFlag(cmd, &flags.parallelism)
 	// Exactly one body source: a Markdown convenience string or a native
 	// ADF JSON file. Declared as Cobra flag metadata so the conflict is
 	// rejected before RunE reads either source.
 	cmd.MarkFlagsMutuallyExclusive("body-markdown", "json-input")
 }
 
-func runCommentAdd(cmd *cobra.Command, key string, flags commentAddFlags) error {
+func runCommentAddKeys(cmd *cobra.Command, keys []string, flags commentAddFlags) error {
 	doc, markdownWarnings, err := buildCommentBody(cmd, flags.markdown, flags.jsonInput, cmdutil.NoInputRequested(cmd))
 	if err != nil {
 		return err
@@ -354,6 +406,10 @@ func runCommentAdd(cmd *cobra.Command, key string, flags commentAddFlags) error 
 	// pre-pipeline document. ADFDoc was non-nil above, so the pipeline
 	// always sets SubmitADF.
 	submitDoc := pipeOut.SubmitADF
+	if len(keys) > 1 {
+		return runCommentAddMany(cmd, keys, flags.parallelism, submitDoc, vis, pipeOut.Warnings, flags.dryRun)
+	}
+	key := keys[0]
 	if flags.dryRun {
 		return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.comment.add", map[string]any{
 			"issue":   key,
@@ -388,6 +444,63 @@ func runCommentAdd(cmd *cobra.Command, key string, flags commentAddFlags) error 
 		"comment": commentToMap(comment),
 		"dry_run": false,
 	}, resp, pipeOut.Warnings)
+}
+
+func runCommentAddMany(
+	cmd *cobra.Command,
+	keys []string,
+	parallelism int,
+	submitDoc *adf.Document,
+	vis jira.VisibilityChange,
+	warnings []adf.Warning,
+	dryRun bool,
+) error {
+	if dryRun {
+		results := make([]cmdutil.KeyResult[map[string]any], len(keys))
+		for i, key := range keys {
+			results[i] = cmdutil.KeyResult[map[string]any]{
+				Key: key,
+				Value: map[string]any{
+					"issue":   key,
+					"comment": map[string]any{"body": submitDoc},
+					"dry_run": true,
+				},
+			}
+		}
+		return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.comment.add", results, cmdutil.KeyedDataWithWarnings(warnings))
+	}
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("jira base URL is required for issue.comment.add")
+	}
+	body := &jira.CommentBody{ADF: submitDoc}
+	svc := jira.NewCommentService(client)
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+		var (
+			comment *jira.Comment
+			addErr  error
+		)
+		if vis.Mode == jira.VisibilityReplace {
+			comment, _, addErr = svc.AddWithVisibility(ctx, key, body, vis)
+		} else {
+			comment, _, addErr = svc.Add(ctx, key, body)
+		}
+		if addErr != nil {
+			return nil, addErr
+		}
+		return map[string]any{
+			"issue":   key,
+			"comment": commentToMap(comment),
+			"dry_run": false,
+		}, nil
+	})
+	if err != nil {
+		return err
+	}
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.comment.add", results, cmdutil.KeyedDataWithWarnings(warnings))
 }
 
 // buildCommentBody parses --body-markdown / --json-input into an ADF doc.

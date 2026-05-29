@@ -8,6 +8,7 @@ package issue
 // future issue-key cache layer plugs in without further changes.
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"mime"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/spf13/cobra"
 )
@@ -56,12 +58,17 @@ func attachmentClient(cmd *cobra.Command) (jira.AttachmentService, bool, error) 
 func issueAttachmentListCommand() *cobra.Command {
 	var limit int
 	var all bool
+	var parallelism int
 	cmd := &cobra.Command{
-		Use:         "list KEY",
+		Use:         "list KEY...",
 		Short:       "List attachments on an issue",
-		Args:        cobra.ExactArgs(1),
+		Args:        cobra.MinimumNArgs(1),
 		Annotations: issueKeyArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
 			service, ok, err := attachmentClient(cmd)
 			if err != nil {
 				return err
@@ -69,58 +76,73 @@ func issueAttachmentListCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.attachment.list")
 			}
-			attachments, _, err := service.List(cmd.Context(), args[0])
+			if len(keys) == 1 {
+				attachments, _, err := service.List(cmd.Context(), keys[0])
+				if err != nil {
+					return err
+				}
+				return cmdutil.WriteEnvelope(cmd, "issue.attachment.list", attachmentListEnvelopeData(attachments, limit, all))
+			}
+			results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) ([]jira.Attachment, error) {
+				attachments, _, err := service.List(ctx, key)
+				return attachments, err
+			})
 			if err != nil {
 				return err
 			}
-			// Atlassian returns attachments oldest-first natively.
-			// Apply the requested page slice client-side: there's
-			// no dedicated /attachments list endpoint, so the full
-			// set always returns and the CLI bounds the visible
-			// window with --limit (default 50).
-			windowed := attachments
-			pageSize := limit
-			if pageSize <= 0 {
-				pageSize = 50
-			}
-			if !all && len(windowed) > pageSize {
-				windowed = windowed[:pageSize]
-			}
-			rows := make([]map[string]any, 0, len(windowed))
-			for _, a := range windowed {
-				rows = append(rows, attachmentToOutput(a))
-			}
-			data := map[string]any{
-				"attachments": rows,
-				"pagination": map[string]any{
-					"total":           len(attachments),
-					"start_at":        0,
-					"max_results":     pageSize,
-					"is_last":         all || len(attachments) <= pageSize,
-					"next_page_token": nil,
-				},
-			}
-			return cmdutil.WriteEnvelope(cmd, "issue.attachment.list", data)
+			return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.attachment.list", results, func(_ string, attachments []jira.Attachment) any {
+				return attachmentListEnvelopeData(attachments, limit, all)
+			})
 		},
 	}
 	cmd.Flags().IntVar(&limit, "limit", 50, "Page size (max attachments returned without --all)")
 	cmd.Flags().BoolVar(&all, "all", false, "Return every attachment regardless of --limit")
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	cmdutil.ExtendPaginationFlags(cmd.Flags())
 	return cmd
+}
+
+func attachmentListEnvelopeData(attachments []jira.Attachment, limit int, all bool) map[string]any {
+	// Atlassian returns attachments oldest-first natively. Apply the requested
+	// page slice client-side: there is no dedicated /attachments list endpoint.
+	windowed := attachments
+	pageSize := limit
+	if pageSize <= 0 {
+		pageSize = 50
+	}
+	if !all && len(windowed) > pageSize {
+		windowed = windowed[:pageSize]
+	}
+	rows := make([]map[string]any, 0, len(windowed))
+	for _, a := range windowed {
+		rows = append(rows, attachmentToOutput(a))
+	}
+	return map[string]any{
+		"attachments": rows,
+		"pagination": map[string]any{
+			"total":           len(attachments),
+			"start_at":        0,
+			"max_results":     pageSize,
+			"is_last":         all || len(attachments) <= pageSize,
+			"next_page_token": nil,
+		},
+	}
 }
 
 func issueAttachmentAddCommand() *cobra.Command {
 	var files []string
 	var dryRun bool
+	var parallelism int
 	cmd := &cobra.Command{
-		Use:         "add KEY [--file PATH ...] [PATH ...]",
+		Use:         "add KEY... [--file PATH ...] [PATH ...]",
 		Short:       "Upload one or more attachments to an issue",
 		Args:        cobra.MinimumNArgs(1),
 		Annotations: issueKeyArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			key := args[0]
-			paths := append([]string{}, files...)
-			paths = append(paths, args[1:]...) // positional file paths after KEY
+			keys, paths, err := attachmentAddKeysAndPaths(args, files)
+			if err != nil {
+				return err
+			}
 			if len(paths) == 0 {
 				return fmt.Errorf("attachment add: validation: at least one --file PATH or positional file argument is required")
 			}
@@ -139,8 +161,11 @@ func issueAttachmentAddCommand() *cobra.Command {
 				})
 			}
 			if dryRun {
+				if len(keys) > 1 {
+					return runAttachmentAddManyDryRun(cmd, keys, previews)
+				}
 				return cmdutil.WriteEnvelope(cmd, "issue.attachment.add", map[string]any{
-					"key":     key,
+					"key":     keys[0],
 					"files":   previews,
 					"dry_run": true,
 				})
@@ -152,26 +177,15 @@ func issueAttachmentAddCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.attachment.add")
 			}
-			handles := make([]*os.File, 0, len(paths))
-			defer func() {
-				for _, h := range handles {
-					_ = h.Close()
-				}
-			}()
-			fileSources := make([]jira.FileSource, 0, len(paths))
-			for _, source := range sources {
-				f, err := os.Open(source.Path)
-				if err != nil {
-					return fmt.Errorf("attachment add: validation: open %s: %w", source.Path, err)
-				}
-				handles = append(handles, f)
-				fileSources = append(fileSources, jira.FileSource{
-					Name:   filepath.Base(source.Path),
-					Size:   source.Size,
-					Reader: f,
-				})
+			if len(keys) > 1 {
+				return runAttachmentAddMany(cmd, service, keys, sources, parallelism)
 			}
-			uploaded, _, err := service.Add(cmd.Context(), key, fileSources)
+			fileSources, closeFiles, err := openAttachmentFileSources(sources)
+			if err != nil {
+				return err
+			}
+			defer closeFiles()
+			uploaded, _, err := service.Add(cmd.Context(), keys[0], fileSources)
 			if err != nil {
 				return err
 			}
@@ -180,7 +194,7 @@ func issueAttachmentAddCommand() *cobra.Command {
 				rows = append(rows, attachmentToOutput(a))
 			}
 			return cmdutil.WriteEnvelope(cmd, "issue.attachment.add", map[string]any{
-				"key":         key,
+				"key":         keys[0],
 				"attachments": rows,
 				"dry_run":     false,
 			})
@@ -193,7 +207,96 @@ func issueAttachmentAddCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without uploading")
 	cmdutil.ExtendFileFlag(cmd.Flags(), "file", "Input", "PATH")
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
+}
+
+func attachmentAddKeysAndPaths(args, files []string) ([]string, []string, error) {
+	if len(files) > 0 {
+		keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+		if err != nil {
+			return nil, nil, err
+		}
+		return keys, append([]string{}, files...), nil
+	}
+	keys, err := issuekey.ParseExpressions([]string{args[0]}, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+	if err != nil {
+		return nil, nil, err
+	}
+	paths := append([]string{}, args[1:]...)
+	return keys, paths, nil
+}
+
+func runAttachmentAddManyDryRun(cmd *cobra.Command, keys []string, previews []map[string]any) error {
+	results := make([]cmdutil.KeyResult[map[string]any], len(keys))
+	for i, key := range keys {
+		results[i] = cmdutil.KeyResult[map[string]any]{
+			Key: key,
+			Value: map[string]any{
+				"key":     key,
+				"files":   previews,
+				"dry_run": true,
+			},
+		}
+	}
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.attachment.add", results, func(_ string, data map[string]any) any { return data })
+}
+
+func runAttachmentAddMany(
+	cmd *cobra.Command,
+	service jira.AttachmentService,
+	keys []string,
+	sources []attachmentFileSource,
+	parallelism int,
+) error {
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+		fileSources, closeFiles, err := openAttachmentFileSources(sources)
+		if err != nil {
+			return nil, err
+		}
+		defer closeFiles()
+		uploaded, _, err := service.Add(ctx, key, fileSources)
+		if err != nil {
+			return nil, err
+		}
+		rows := make([]map[string]any, 0, len(uploaded))
+		for _, a := range uploaded {
+			rows = append(rows, attachmentToOutput(a))
+		}
+		return map[string]any{
+			"key":         key,
+			"attachments": rows,
+			"dry_run":     false,
+		}, nil
+	})
+	if err != nil {
+		return err
+	}
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.attachment.add", results, func(_ string, data map[string]any) any { return data })
+}
+
+func openAttachmentFileSources(sources []attachmentFileSource) ([]jira.FileSource, func(), error) {
+	handles := make([]*os.File, 0, len(sources))
+	closeFiles := func() {
+		for _, h := range handles {
+			_ = h.Close()
+		}
+	}
+	fileSources := make([]jira.FileSource, 0, len(sources))
+	for _, source := range sources {
+		f, err := os.Open(source.Path)
+		if err != nil {
+			closeFiles()
+			return nil, nil, fmt.Errorf("attachment add: validation: open %s: %w", source.Path, err)
+		}
+		handles = append(handles, f)
+		fileSources = append(fileSources, jira.FileSource{
+			Name:   filepath.Base(source.Path),
+			Size:   source.Size,
+			Reader: f,
+		})
+	}
+	return fileSources, closeFiles, nil
 }
 
 type attachmentFileSource struct {

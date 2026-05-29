@@ -2,9 +2,11 @@ package cmdutil
 
 import (
 	clib "github.com/gechr/clib/cli/cobra"
+	"github.com/gechr/clib/complete"
 	"github.com/gechr/clib/help"
 	"github.com/gechr/clib/theme"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // NewHelpRenderer builds the themed clib help renderer used by every command
@@ -22,5 +24,98 @@ func NewHelpRenderer() *help.Renderer {
 // StandardHelpSections returns the standard clib help sections for cmd,
 // with subcommand listing made optional.
 func StandardHelpSections(cmd *cobra.Command) []help.Section {
-	return clib.SectionsWithOptions(clib.WithSubcommandOptional())(cmd)
+	sections := clib.SectionsWithOptions(clib.WithSubcommandOptional())(cmd)
+	if cmd == nil || !cmd.Runnable() || !cmd.HasSubCommands() || helpSectionsContainFlags(sections) {
+		return sections
+	}
+
+	flagSections := runnableParentFlagSections(cmd)
+	if len(flagSections) == 0 {
+		return sections
+	}
+	markUsageWithOptions(sections)
+	return append(sections, flagSections...)
+}
+
+func helpSectionsContainFlags(sections []help.Section) bool {
+	for _, section := range sections {
+		for _, content := range section.Content {
+			if _, ok := content.(help.FlagGroup); ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func markUsageWithOptions(sections []help.Section) {
+	for i := range sections {
+		for j := range sections[i].Content {
+			usage, ok := sections[i].Content[j].(help.Usage)
+			if !ok {
+				continue
+			}
+			usage.ShowOptions = true
+			sections[i].Content[j] = usage
+		}
+	}
+}
+
+func runnableParentFlagSections(cmd *cobra.Command) []help.Section {
+	metaByName := make(map[string]complete.FlagMeta)
+	for _, meta := range clib.FlagMeta(cmd) {
+		metaByName[meta.Name] = meta
+	}
+
+	var classified []help.ClassifiedFlag
+	seen := make(map[string]struct{})
+	addFlags := func(flags *pflag.FlagSet) {
+		flags.VisitAll(func(flag *pflag.Flag) {
+			if flag.Hidden {
+				return
+			}
+			if _, ok := seen[flag.Name]; ok {
+				return
+			}
+			seen[flag.Name] = struct{}{}
+			meta := metaByName[flag.Name]
+			classified = append(classified, help.ClassifiedFlag{
+				Flag:  helpFlagFromPFlag(flag, meta),
+				Group: meta.Group,
+			})
+		})
+	}
+	addFlags(cmd.LocalNonPersistentFlags())
+	addFlags(cmd.PersistentFlags())
+
+	if len(classified) == 0 {
+		return nil
+	}
+	return help.BuildFlagSections(classified, help.WithKeepGroupOrder())
+}
+
+func helpFlagFromPFlag(flag *pflag.Flag, meta complete.FlagMeta) help.Flag {
+	out := help.Flag{
+		Short:         flag.Shorthand,
+		Long:          flag.Name,
+		Desc:          flag.Usage,
+		Enum:          meta.Enum,
+		EnumDefault:   meta.EnumDefault,
+		EnumHighlight: meta.EnumHighlight,
+		NoIndent:      meta.NoIndent,
+	}
+	if meta.HideLong {
+		out.Long = ""
+	}
+	if meta.HideShort {
+		out.Short = ""
+	}
+	if meta.HasArg {
+		out.Placeholder = meta.Placeholder
+		if out.Placeholder == "" {
+			out.Placeholder = flag.Name
+		}
+		out.Repeatable = meta.IsSlice
+	}
+	return out
 }

@@ -16,6 +16,19 @@ type Options struct {
 	MaxExpansion int
 }
 
+// ExpansionLimitError reports a locally-enforced issue-key expansion limit.
+type ExpansionLimitError struct {
+	Max int
+}
+
+func (e *ExpansionLimitError) Error() string {
+	return fmt.Sprintf("issue key expansion exceeds maximum of %d keys", e.Max)
+}
+
+func (e *ExpansionLimitError) Hint() string {
+	return "Split the key set into smaller invocations, or use project/JQL filters for discovery instead of probing a huge range."
+}
+
 // ParseExpressions expands issue-key expressions into canonical Jira keys.
 // Supported forms are single keys, comma lists, and inclusive ranges using
 // ":" or ".." with either a numeric end or a full issue key end.
@@ -31,7 +44,7 @@ func ParseExpressions(inputs []string, opts Options) ([]string, error) {
 		for _, part := range parts {
 			remaining := maxExpansion - len(out)
 			if remaining <= 0 {
-				return nil, fmt.Errorf("issue key expansion exceeds maximum of %d keys", maxExpansion)
+				return nil, &ExpansionLimitError{Max: maxExpansion}
 			}
 			if part == "" {
 				return nil, fmt.Errorf("issue key expression contains an empty list member")
@@ -94,7 +107,7 @@ func parseRange(left, right string, remaining, maxExpansion int) ([]string, erro
 	}
 	count := end.Number - start.Number + 1
 	if count > remaining {
-		return nil, fmt.Errorf("issue key expansion exceeds maximum of %d keys", maxExpansion)
+		return nil, &ExpansionLimitError{Max: maxExpansion}
 	}
 	keys := make([]string, 0, count)
 	for n := start.Number; n <= end.Number; n++ {

@@ -276,6 +276,31 @@ func outputSchemas() map[string]any {
 	return map[string]any{
 		"envelope": envelope,
 		"error":    errorSchema,
+		"issue.view": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"issue": map[string]any{
+					"type":        "object",
+					"description": "Present for single-key issue view success.",
+				},
+				"results": map[string]any{
+					"type":        "array",
+					"description": "Present for multi-key issue view; ordered like the requested keys.",
+					"items": map[string]any{
+						"type":     "object",
+						"required": []string{"key", "ok"},
+						"properties": map[string]any{
+							"key":   map[string]any{"type": "string"},
+							"ok":    map[string]any{"type": "boolean"},
+							"issue": map[string]any{"type": "object", "description": "Present when ok is true."},
+							"error": errorSchema,
+						},
+					},
+				},
+				"succeeded": map[string]any{"type": "integer"},
+				"failed":    map[string]any{"type": "integer"},
+			},
+		},
 		"issue.list": map[string]any{
 			"type":     "object",
 			"required": []string{"issues"},
@@ -302,6 +327,22 @@ func outputSchemas() map[string]any {
 					},
 				},
 				"detail": map[string]any{"type": "boolean"},
+				"succeeded_key_chunks": map[string]any{
+					"type":        "integer",
+					"description": "Present when chunked --key reads partially fail.",
+				},
+				"failed_key_chunks": map[string]any{
+					"type":        "array",
+					"description": "Present when chunked --key reads partially fail.",
+					"items": map[string]any{
+						"type":     "object",
+						"required": []string{"key_expr", "error"},
+						"properties": map[string]any{
+							"key_expr": map[string]any{"type": "string"},
+							"error":    errorSchema,
+						},
+					},
+				},
 			},
 		},
 		"issue.create": map[string]any{

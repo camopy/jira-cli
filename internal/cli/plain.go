@@ -24,6 +24,8 @@ type PlainOption func(*plainConfig)
 
 type plainConfig struct {
 	baseURL   string
+	debug     bool
+	threads   int
 	termWidth int
 	tty       bool
 	theme     *clibtheme.Theme
@@ -32,6 +34,26 @@ type plainConfig struct {
 func WithPlainBaseURL(baseURL string) PlainOption {
 	return func(cfg *plainConfig) {
 		cfg.baseURL = strings.TrimSpace(baseURL)
+	}
+}
+
+func WithPlainDebug(debug bool) PlainOption {
+	return func(cfg *plainConfig) {
+		cfg.debug = debug
+	}
+}
+
+func WithPlainParallel(parallel bool) PlainOption {
+	return func(cfg *plainConfig) {
+		if parallel && cfg.threads == 0 {
+			cfg.threads = 2
+		}
+	}
+}
+
+func WithPlainThreads(threads int) PlainOption {
+	return func(cfg *plainConfig) {
+		cfg.threads = threads
 	}
 }
 
@@ -99,6 +121,9 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 		opt(&cfg)
 	}
 	logger := newPlainLogger(w)
+	if command != "issue.view" && len(keyedResultRows(data)) > 0 {
+		return WriteKeyedResultsPlain(w, command, data, opts...)
+	}
 	if renderer, ok := dtoPlainRenderers[command]; ok {
 		return renderer.RenderPlain(w, command, data, opts...)
 	}
@@ -283,7 +308,10 @@ func writeIssueListPlain(logger *clog.Logger, data any, cfg plainConfig) error {
 	event := logger.Info().
 		Int("count", len(issues)).
 		Bool("detail", detail)
-	if jql != "" {
+	if cfg.threads > 0 {
+		event = event.Int("threads", cfg.threads)
+	}
+	if jql != "" && cfg.debug {
 		event = event.Str("jql", jql)
 	}
 	event.Msg("listed issues")

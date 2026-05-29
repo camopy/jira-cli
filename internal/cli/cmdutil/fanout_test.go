@@ -1,0 +1,197 @@
+package cmdutil
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"reflect"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+func TestFanOutKeysPreservesInputOrder(t *testing.T) {
+	results, err := FanOutKeys(context.Background(), []string{"A-1", "A-2", "A-3"}, 3, func(_ context.Context, key string) (string, error) {
+		switch key {
+		case "A-1":
+			time.Sleep(20 * time.Millisecond)
+		case "A-2":
+			time.Sleep(5 * time.Millisecond)
+		}
+		return key + "-value", nil
+	})
+	if err != nil {
+		t.Fatalf("FanOutKeys() error = %v", err)
+	}
+	got := []string{results[0].Key, results[1].Key, results[2].Key}
+	if !reflect.DeepEqual(got, []string{"A-1", "A-2", "A-3"}) {
+		t.Fatalf("result keys = %#v, want input order", got)
+	}
+	if results[0].Value != "A-1-value" || results[1].Value != "A-2-value" || results[2].Value != "A-3-value" {
+		t.Fatalf("result values = %#v", results)
+	}
+}
+
+func TestFanOutKeysNeverExceedsParallelism(t *testing.T) {
+	var current atomic.Int32
+	var peak atomic.Int32
+
+	_, err := FanOutKeys(context.Background(), []string{"A-1", "A-2", "A-3", "A-4", "A-5"}, 2, func(_ context.Context, key string) (string, error) {
+		now := current.Add(1)
+		for {
+			old := peak.Load()
+			if now <= old || peak.CompareAndSwap(old, now) {
+				break
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+		current.Add(-1)
+		return key, nil
+	})
+	if err != nil {
+		t.Fatalf("FanOutKeys() error = %v", err)
+	}
+	if got := peak.Load(); got > 2 {
+		t.Fatalf("peak concurrency = %d, want <= 2", got)
+	}
+	if got := peak.Load(); got < 2 {
+		t.Fatalf("peak concurrency = %d, want helper to use available slots", got)
+	}
+}
+
+func TestFanOutKeysAttemptsEveryKeyWhenOneFails(t *testing.T) {
+	wantErr := errors.New("missing issue")
+	var calls atomic.Int32
+
+	results, err := FanOutKeys(context.Background(), []string{"A-1", "A-2", "A-3"}, 2, func(_ context.Context, key string) (string, error) {
+		calls.Add(1)
+		if key == "A-2" {
+			return "", wantErr
+		}
+		return key + "-ok", nil
+	})
+	if err != nil {
+		t.Fatalf("FanOutKeys() error = %v", err)
+	}
+	if calls.Load() != 3 {
+		t.Fatalf("calls = %d, want 3", calls.Load())
+	}
+	if !errors.Is(results[1].Err, wantErr) {
+		t.Fatalf("A-2 error = %v, want %v", results[1].Err, wantErr)
+	}
+	if results[0].Err != nil || results[2].Err != nil {
+		t.Fatalf("unexpected errors in results: %#v", results)
+	}
+}
+
+func TestFanOutKeysStopsLaunchingOnContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var calls atomic.Int32
+
+	results, err := FanOutKeys(ctx, []string{"A-1", "A-2", "A-3"}, 1, func(_ context.Context, key string) (string, error) {
+		calls.Add(1)
+		cancel()
+		return key, nil
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("FanOutKeys() error = %v, want context.Canceled", err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("calls = %d, want only the in-flight key to run", calls.Load())
+	}
+	if results[0].Key != "A-1" {
+		t.Fatalf("first result key = %q, want A-1", results[0].Key)
+	}
+}
+
+func TestFanOutKeysDoesNotWriteToStdoutOrStderr(t *testing.T) {
+	stdout, stderr := captureProcessOutput(t, func() {
+		_, err := FanOutKeys(context.Background(), []string{"A-1"}, 1, func(_ context.Context, key string) (string, error) {
+			return key, nil
+		})
+		if err != nil {
+			t.Fatalf("FanOutKeys() error = %v", err)
+		}
+	})
+	if stdout != "" || stderr != "" {
+		t.Fatalf("FanOutKeys wrote stdout=%q stderr=%q", stdout, stderr)
+	}
+}
+
+func TestFanOutKeysRejectsNilInputs(t *testing.T) {
+	t.Run("nil context", func(t *testing.T) {
+		var ctx context.Context
+		_, err := FanOutKeys(ctx, []string{"A-1"}, 1, func(context.Context, string) (string, error) {
+			return "", nil
+		})
+		if err == nil || err.Error() != "context must not be nil" {
+			t.Fatalf("FanOutKeys() error = %v, want %q", err, "context must not be nil")
+		}
+	})
+
+	t.Run("nil function", func(t *testing.T) {
+		_, err := FanOutKeys[string](context.Background(), []string{"A-1"}, 1, nil)
+		if err == nil || err.Error() != "fanout function must not be nil" {
+			t.Fatalf("FanOutKeys() error = %v, want %q", err, "fanout function must not be nil")
+		}
+	})
+}
+
+func BenchmarkFanOutKeys(b *testing.B) {
+	keys := make([]string, 32)
+	for i := range keys {
+		keys[i] = fmt.Sprintf("A-%d", i+1)
+	}
+	ctx := context.Background()
+
+	for _, parallelism := range []int{1, 4, 16} {
+		b.Run(fmt.Sprintf("parallelism=%d", parallelism), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				results, err := FanOutKeys(ctx, keys, parallelism, func(_ context.Context, key string) (string, error) {
+					return key, nil
+				})
+				if err != nil {
+					b.Fatalf("FanOutKeys() error = %v", err)
+				}
+				if len(results) != len(keys) {
+					b.Fatalf("results len = %d, want %d", len(results), len(keys))
+				}
+			}
+		})
+	}
+}
+
+func captureProcessOutput(t *testing.T, fn func()) (string, string) {
+	t.Helper()
+	origStdout := os.Stdout
+	origStderr := os.Stderr
+	outR, outW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("stdout pipe: %v", err)
+	}
+	errR, errW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("stderr pipe: %v", err)
+	}
+	defer func() {
+		os.Stdout = origStdout
+		os.Stderr = origStderr
+	}()
+	os.Stdout = outW
+	os.Stderr = errW
+
+	fn()
+
+	_ = outW.Close()
+	_ = errW.Close()
+	var outBuf, errBuf bytes.Buffer
+	_, _ = io.Copy(&outBuf, outR)
+	_, _ = io.Copy(&errBuf, errR)
+	_ = outR.Close()
+	_ = errR.Close()
+	return outBuf.String(), errBuf.String()
+}

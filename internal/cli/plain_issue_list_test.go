@@ -99,3 +99,33 @@ func TestIssueListPlainDetailRendersFullIssuesAsTable(t *testing.T) {
 		}
 	}
 }
+
+func TestIssueListPlainShowsParallelWhenNonDefault(t *testing.T) {
+	t.Parallel()
+
+	data := map[string]any{
+		"detail": false,
+		"issues": []map[string]any{},
+	}
+
+	var buf bytes.Buffer
+	err := WriteCommandPlain(&buf, "issue.list", data, WithPlainThreads(4))
+	if err != nil {
+		t.Fatalf("WriteCommandPlain() error = %v", err)
+	}
+	got := buf.String()
+	for _, want := range []string{"listed issues", "count=0", "threads=4"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("issue list output missing %q:\n%s", want, got)
+		}
+	}
+
+	buf.Reset()
+	err = WriteCommandPlain(&buf, "issue.list", data)
+	if err != nil {
+		t.Fatalf("WriteCommandPlain(default) error = %v", err)
+	}
+	if strings.Contains(buf.String(), "parallel=") {
+		t.Fatalf("default issue list output should omit parallel:\n%s", buf.String())
+	}
+}

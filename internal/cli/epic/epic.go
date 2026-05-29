@@ -1,12 +1,16 @@
 package epic
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/spf13/cobra"
 )
+
+var epicIssueKeyArg = map[string]string{"clib": "dynamic-args='issuekey'"}
 
 // NewCommand returns the `epic` command group: list, board, add, and remove.
 func NewCommand() *cobra.Command {
@@ -111,67 +115,152 @@ func emptyEpicCounts() map[string]int {
 
 func epicAddCommand() *cobra.Command {
 	var dryRun bool
+	var parallelism int
 	cmd := &cobra.Command{
-		Use:   "add ISSUE_KEY EPIC_KEY",
-		Short: "Add an issue to an epic",
-		Args:  cobra.ExactArgs(2),
+		Use:         "add ISSUE_KEY... EPIC_KEY",
+		Short:       "Add an issue to an epic",
+		Args:        cobra.MinimumNArgs(2),
+		Annotations: epicIssueKeyArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			epicKey := args[len(args)-1]
+			keys, err := issuekey.ParseExpressions(args[:len(args)-1], issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
+			if len(keys) > 1 {
+				return runEpicAddMany(cmd, keys, epicKey, parallelism, dryRun)
+			}
 			if !dryRun {
 				client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 				if err != nil {
 					return err
 				}
 				if ok {
-					resp, err := jira.NewEpicService(client).AddIssue(cmd.Context(), args[1], args[0])
+					resp, err := jira.NewEpicService(client).AddIssue(cmd.Context(), epicKey, keys[0])
 					if err != nil {
 						return err
 					}
-					return cmdutil.WriteEnvelopeWithResponse(cmd, "epic.add", map[string]any{"issue": args[0], "epic": args[1], "dry_run": false, "added": true}, resp)
+					return cmdutil.WriteEnvelopeWithResponse(cmd, "epic.add", epicAddData(keys[0], epicKey, false), resp)
 				}
 				return fmt.Errorf("jira base URL is required for epic.add")
 			}
-			return cmdutil.WriteEnvelope(cmd, "epic.add", map[string]any{
-				"issue":   args[0],
-				"epic":    args[1],
-				"dry_run": dryRun,
-				"added":   !dryRun,
-			})
+			return cmdutil.WriteEnvelope(cmd, "epic.add", epicAddData(keys[0], epicKey, true))
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
+}
+
+func runEpicAddMany(cmd *cobra.Command, keys []string, epicKey string, parallelism int, dryRun bool) error {
+	if dryRun {
+		results := make([]cmdutil.KeyResult[map[string]any], len(keys))
+		for i, key := range keys {
+			results[i] = cmdutil.KeyResult[map[string]any]{Key: key, Value: epicAddData(key, epicKey, true)}
+		}
+		return cmdutil.WriteKeyedResultsEnvelope(cmd, "epic.add", results, func(_ string, data map[string]any) any { return data })
+	}
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("jira base URL is required for epic.add")
+	}
+	service := jira.NewEpicService(client)
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+		if _, err := service.AddIssue(ctx, epicKey, key); err != nil {
+			return nil, err
+		}
+		return epicAddData(key, epicKey, false), nil
+	})
+	if err != nil {
+		return err
+	}
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, "epic.add", results, func(_ string, data map[string]any) any { return data })
+}
+
+func epicAddData(issueKey, epicKey string, dryRun bool) map[string]any {
+	return map[string]any{
+		"issue":   issueKey,
+		"epic":    epicKey,
+		"dry_run": dryRun,
+		"added":   !dryRun,
+	}
 }
 
 func epicRemoveCommand() *cobra.Command {
 	var dryRun bool
+	var parallelism int
 	cmd := &cobra.Command{
-		Use:   "remove ISSUE_KEY",
-		Short: "Remove an issue from its epic",
-		Args:  cobra.ExactArgs(1),
+		Use:         "remove ISSUE_KEY...",
+		Short:       "Remove an issue from its epic",
+		Args:        cobra.MinimumNArgs(1),
+		Annotations: epicIssueKeyArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
+			if len(keys) > 1 {
+				return runEpicRemoveMany(cmd, keys, parallelism, dryRun)
+			}
 			if !dryRun {
 				client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 				if err != nil {
 					return err
 				}
 				if ok {
-					resp, err := jira.NewEpicService(client).RemoveIssue(cmd.Context(), args[0])
+					resp, err := jira.NewEpicService(client).RemoveIssue(cmd.Context(), keys[0])
 					if err != nil {
 						return err
 					}
-					return cmdutil.WriteEnvelopeWithResponse(cmd, "epic.remove", map[string]any{"issue": args[0], "dry_run": false, "removed": true}, resp)
+					return cmdutil.WriteEnvelopeWithResponse(cmd, "epic.remove", epicRemoveData(keys[0], false), resp)
 				}
 				return fmt.Errorf("jira base URL is required for epic.remove")
 			}
-			return cmdutil.WriteEnvelope(cmd, "epic.remove", map[string]any{
-				"issue":   args[0],
-				"dry_run": dryRun,
-				"removed": !dryRun,
-			})
+			return cmdutil.WriteEnvelope(cmd, "epic.remove", epicRemoveData(keys[0], true))
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
+}
+
+func runEpicRemoveMany(cmd *cobra.Command, keys []string, parallelism int, dryRun bool) error {
+	if dryRun {
+		results := make([]cmdutil.KeyResult[map[string]any], len(keys))
+		for i, key := range keys {
+			results[i] = cmdutil.KeyResult[map[string]any]{Key: key, Value: epicRemoveData(key, true)}
+		}
+		return cmdutil.WriteKeyedResultsEnvelope(cmd, "epic.remove", results, func(_ string, data map[string]any) any { return data })
+	}
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("jira base URL is required for epic.remove")
+	}
+	service := jira.NewEpicService(client)
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+		if _, err := service.RemoveIssue(ctx, key); err != nil {
+			return nil, err
+		}
+		return epicRemoveData(key, false), nil
+	})
+	if err != nil {
+		return err
+	}
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, "epic.remove", results, func(_ string, data map[string]any) any { return data })
+}
+
+func epicRemoveData(issueKey string, dryRun bool) map[string]any {
+	return map[string]any{
+		"issue":   issueKey,
+		"dry_run": dryRun,
+		"removed": !dryRun,
+	}
 }

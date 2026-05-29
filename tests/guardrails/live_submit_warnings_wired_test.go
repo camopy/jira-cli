@@ -36,13 +36,14 @@ func TestLiveSubmitMutationsThreadWarnings(t *testing.T) {
 	// Mutation command function names — every live-submit return inside
 	// these MUST go through writeEnvelopeWithResponseAndWarnings.
 	// Mutation paths implemented as run* helpers (issueEditWithEditor,
-	// runCommentAdd, runCommentEdit) are listed alongside the command
+	// runCommentAddKeys, runCommentAddMany, runCommentEdit) are listed alongside the command
 	// builders because they own a live-submit return site too.
 	mutationFns := map[string]bool{
 		"issueCreateCommand":      true,
 		"issueEditCommand":        true,
 		"issueEditWithEditor":     true,
-		"runCommentAdd":           true,
+		"runCommentAddKeys":       true,
+		"runCommentAddMany":       true,
 		"runCommentEdit":          true,
 		"issueTransitionCommand":  true,
 		"worklogAddCommand":       true,

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 
 	"charm.land/huh/v2"
@@ -17,6 +18,7 @@ import (
 	stdininput "github.com/matcra587/jira-cli/internal/cli/stdin"
 	"github.com/matcra587/jira-cli/internal/config"
 	editorpkg "github.com/matcra587/jira-cli/internal/editor"
+	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/jql"
 	"github.com/matcra587/jira-cli/internal/pipeline"
@@ -73,35 +75,157 @@ func issueMineCommand() *cobra.Command {
 }
 
 func issueViewCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "view KEY",
+	var parallelism int
+	cmd := &cobra.Command{
+		Use:   "view KEY...",
 		Short: "View issue details",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {
 				return err
 			}
-			if ok {
-				issue, resp, err := cmdutil.IssueService(client).Get(cmd.Context(), args[0], &jira.IssueGetOptions{Expand: []string{"renderedFields", "names", "schema", "transitions", "operations"}})
-				if err != nil {
-					return err
-				}
-				// ADF render-loss warnings describe what the HUMAN
-				// renderer drops when it flattens ADF to Markdown. The
-				// json/compact envelope carries the full ADF in
-				// data.issue, so nothing is lost there — emitting the
-				// warning on a machine path would be false.
-				// Scope the scan to the human output mode only.
-				var warnings []adf.Warning
-				if cmdutil.UsePlainOutput(cmd) {
-					warnings = collectIssueLossyWarnings(issue)
-				}
-				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.view", map[string]any{"issue": issue}, resp, warnings)
+			if len(keys) == 1 {
+				return runIssueViewSingle(cmd, keys[0])
 			}
-			return cmdutil.WriteEnvelope(cmd, "issue.view", map[string]any{"issue": map[string]any{"key": args[0]}})
+			return runIssueViewMany(cmd, keys, parallelism)
 		},
 	}
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
+	return cmd
+}
+
+func runIssueViewSingle(cmd *cobra.Command, key string) error {
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+	if err != nil {
+		return err
+	}
+	if ok {
+		issue, resp, err := cmdutil.IssueService(client).Get(cmd.Context(), key, issueViewGetOptions())
+		if err != nil {
+			return err
+		}
+		// ADF render-loss warnings describe what the HUMAN renderer drops when
+		// it flattens ADF to Markdown. The json/compact envelope carries the
+		// full ADF in data.issue, so nothing is lost there.
+		var warnings []adf.Warning
+		if cmdutil.UsePlainOutput(cmd) {
+			warnings = collectIssueLossyWarnings(issue)
+		}
+		return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.view", map[string]any{"issue": issue}, resp, warnings)
+	}
+	return cmdutil.WriteEnvelope(cmd, "issue.view", map[string]any{"issue": &jira.Issue{Key: jira.String(key)}})
+}
+
+type issueViewManyData struct {
+	Results   []issueViewResult `json:"results"`
+	Succeeded int               `json:"succeeded"`
+	Failed    int               `json:"failed"`
+}
+
+type issueViewResult struct {
+	Key   string      `json:"key"`
+	OK    bool        `json:"ok"`
+	Issue *jira.Issue `json:"issue,omitempty"`
+	Error *cli.Error  `json:"error,omitempty"`
+}
+
+func runIssueViewMany(cmd *cobra.Command, keys []string, parallelism int) error {
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		data := issueViewManyData{Results: make([]issueViewResult, 0, len(keys)), Succeeded: len(keys)}
+		for _, key := range keys {
+			data.Results = append(data.Results, issueViewResult{
+				Key:   key,
+				OK:    true,
+				Issue: &jira.Issue{Key: jira.String(key)},
+			})
+		}
+		return cmdutil.WriteEnvelope(cmd, "issue.view", data)
+	}
+
+	service := cmdutil.IssueService(client)
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (*jira.Issue, error) {
+		issue, _, err := service.Get(ctx, key, issueViewGetOptions())
+		return issue, err
+	})
+	if err != nil {
+		return err
+	}
+	data, errorsOut, topErr := issueViewManyEnvelopeData(results)
+	if len(errorsOut) > 0 {
+		if err := cmdutil.WriteEnvelopeWithErrors(cmd, "issue.view", data, errorsOut); err != nil {
+			return err
+		}
+		err := cmdutil.EnvelopeWritten(topErr)
+		if cmdutil.UsePlainOutput(cmd) {
+			return cmdutil.DiagnosticWritten(err)
+		}
+		return err
+	}
+	return cmdutil.WriteEnvelope(cmd, "issue.view", data)
+}
+
+func issueViewGetOptions() *jira.IssueGetOptions {
+	return &jira.IssueGetOptions{Expand: []string{"renderedFields", "names", "schema", "transitions", "operations"}}
+}
+
+func issueViewManyEnvelopeData(results []cmdutil.KeyResult[*jira.Issue]) (issueViewManyData, []cli.Error, error) {
+	data := issueViewManyData{Results: make([]issueViewResult, len(results))}
+	type mappedFailure struct {
+		err  cli.Error
+		src  error
+		exit int
+	}
+	var failures []mappedFailure
+	for i, result := range results {
+		entry := issueViewResult{Key: result.Key, OK: result.Err == nil}
+		if result.Err != nil {
+			mapped := cli.MapError(result.Err)
+			entry.Error = &mapped
+			data.Failed++
+			failures = append(failures, mappedFailure{err: mapped, src: result.Err, exit: cli.ExitCode(mapped)})
+		} else {
+			entry.Issue = result.Value
+			data.Succeeded++
+		}
+		data.Results[i] = entry
+	}
+	sort.SliceStable(failures, func(i, j int) bool {
+		return failures[i].exit > failures[j].exit
+	})
+	errorsOut := make([]cli.Error, len(failures))
+	var topErr error
+	for i, failure := range failures {
+		errorsOut[i] = failure.err
+		if i == 0 {
+			topErr = issueViewPartialFailureError(data, failure.err)
+		}
+	}
+	return data, errorsOut, topErr
+}
+
+func issueViewPartialFailureError(data issueViewManyData, top cli.Error) error {
+	total := data.Succeeded + data.Failed
+	reason := issueViewFailureReason(top)
+	status := "successful issues are shown above"
+	if data.Succeeded == 0 {
+		status = "no issues were read successfully"
+	}
+	return fmt.Errorf("issue view completed with %d of %d failed (%s); %s", data.Failed, total, reason, status)
+}
+
+func issueViewFailureReason(top cli.Error) string {
+	if top.Code != "" {
+		return strings.ReplaceAll(top.Code, "_", " ")
+	}
+	if top.Type != "" {
+		return top.Type
+	}
+	return "error"
 }
 
 // collectIssueLossyWarnings inspects an *jira.Issue for ADF surfaces
@@ -163,10 +287,11 @@ func collectIssueLossyWarnings(issue *jira.Issue) []adf.Warning {
 // issueListOptions captures every input the issue-list runner needs.
 // Both `issue list` and `issue mine` populate it from their flags.
 type issueListOptions struct {
-	builder  jql.BuildOptions
-	jqlQuery string
-	detail   bool
-	asJQL    bool
+	builder     jql.BuildOptions
+	jqlQuery    string
+	parallelism int
+	detail      bool
+	asJQL       bool
 }
 
 // runIssueList is the shared body for `issue list` and `issue mine`. It
@@ -222,11 +347,29 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 		return cmdutil.WriteEnvelope(cmd, "issue.list", boardScopedListData(cmd, []map[string]any{}, opts.detail, query, scope, precedence))
 	}
 	service := cmdutil.IssueService(client)
+	keyChunks, err := issueListKeyChunks(builder.Keys)
+	if err != nil {
+		return err
+	}
 	fields := jira.DefaultIssueListFields()
 	var expand []string
 	if opts.detail {
 		fields = []string{"*all"}
 		expand = issueListDetailExpand()
+	}
+	if len(keyChunks) > 0 {
+		return runIssueListKeyChunks(cmd, issueListKeyChunkInputs{
+			service:     service,
+			opts:        opts,
+			builder:     builder,
+			scope:       scope,
+			precedence:  precedence,
+			fullQuery:   query,
+			keyChunks:   keyChunks,
+			fields:      fields,
+			expand:      expand,
+			parallelism: opts.parallelism,
+		})
 	}
 	issues, resp, err := service.List(cmd.Context(), &jira.IssueListOptions{
 		ListOptions: jira.ListOptions{MaxResults: 50},
@@ -239,6 +382,141 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 	}
 	issueData := cmdutil.IssueOutput(issues, opts.detail)
 	return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.list", boardScopedListData(cmd, issueData, opts.detail, query, scope, precedence), resp)
+}
+
+const issueListKeyChunkSize = 50
+
+type issueListKeyChunkInputs struct {
+	service     jira.IssueService
+	opts        issueListOptions
+	builder     jql.BuildOptions
+	scope       jira.BoardScope
+	precedence  string
+	fullQuery   string
+	keyChunks   []string
+	fields      []string
+	expand      []string
+	parallelism int
+}
+
+type issueListKeyChunkFailure struct {
+	KeyExpr string    `json:"key_expr"`
+	Error   cli.Error `json:"error"`
+}
+
+func runIssueListKeyChunks(cmd *cobra.Command, in issueListKeyChunkInputs) error {
+	results, err := cmdutil.FanOutKeys(cmd.Context(), in.keyChunks, in.parallelism, func(ctx context.Context, keyExpr string) ([]*jira.Issue, error) {
+		builder := in.builder
+		builder.Keys = []string{keyExpr}
+		query, err := jql.IssueList(in.opts.jqlQuery, builder)
+		if err != nil {
+			return nil, err
+		}
+		query = boardscope.ApplyClauseToJQL(query, in.scope)
+		issues, _, err := in.service.List(ctx, &jira.IssueListOptions{
+			ListOptions: jira.ListOptions{MaxResults: issueListKeyChunkSize},
+			JQL:         query,
+			Fields:      in.fields,
+			Expand:      in.expand,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("issue list key chunk %q: %w", keyExpr, err)
+		}
+		return issues, nil
+	})
+	if err != nil {
+		return err
+	}
+
+	issues := make([]*jira.Issue, 0, len(in.keyChunks)*issueListKeyChunkSize)
+	failures := make([]issueListKeyChunkFailure, 0)
+	errorsOut := make([]cli.Error, 0)
+	for _, result := range results {
+		if result.Err != nil {
+			mapped := cli.MapError(result.Err)
+			failures = append(failures, issueListKeyChunkFailure{KeyExpr: result.Key, Error: mapped})
+			errorsOut = append(errorsOut, mapped)
+			continue
+		}
+		issues = append(issues, result.Value...)
+	}
+	order := issueListKeyOrder(in.keyChunks)
+	sort.SliceStable(issues, func(i, j int) bool {
+		return issueOrderIndex(order, issues[i]) < issueOrderIndex(order, issues[j])
+	})
+	resp := &jira.Response{
+		MaxResults: len(order),
+		Total:      len(issues),
+		IsLast:     true,
+		TokenPage:  true,
+	}
+	issueData := cmdutil.IssueOutput(issues, in.opts.detail)
+	data := boardScopedListData(cmd, issueData, in.opts.detail, in.fullQuery, in.scope, in.precedence)
+	if len(failures) > 0 {
+		sort.SliceStable(errorsOut, func(i, j int) bool {
+			return cli.ExitCode(errorsOut[i]) > cli.ExitCode(errorsOut[j])
+		})
+		data["succeeded_key_chunks"] = len(results) - len(failures)
+		data["failed_key_chunks"] = failures
+		if err := cmdutil.WriteEnvelopeWithResponseAndErrors(cmd, "issue.list", data, resp, errorsOut); err != nil {
+			return err
+		}
+		return cmdutil.EnvelopeWritten(issueListKeyChunkPartialFailureError(len(results)-len(failures), len(failures), errorsOut[0]))
+	}
+	return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.list", data, resp)
+}
+
+func issueListKeyChunkPartialFailureError(succeeded, failed int, top cli.Error) error {
+	total := succeeded + failed
+	reason := issueViewFailureReason(top)
+	status := "successful issues are shown above"
+	if succeeded == 0 {
+		status = "no issue chunks were read successfully"
+	}
+	return fmt.Errorf("issue list completed with %d of %d key chunks failed (%s); %s", failed, total, reason, status)
+}
+
+func issueListKeyChunks(inputs []string) ([]string, error) {
+	keys, err := issuekey.ParseExpressions(inputs, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+	if err != nil {
+		return nil, err
+	}
+	chunks := make([]string, 0, (len(keys)+issueListKeyChunkSize-1)/issueListKeyChunkSize)
+	for start := 0; start < len(keys); start += issueListKeyChunkSize {
+		end := start + issueListKeyChunkSize
+		if end > len(keys) {
+			end = len(keys)
+		}
+		chunks = append(chunks, strings.Join(keys[start:end], ","))
+	}
+	return chunks, nil
+}
+
+func issueListKeyOrder(chunks []string) map[string]int {
+	order := map[string]int{}
+	index := 0
+	for _, chunk := range chunks {
+		for _, key := range strings.Split(chunk, ",") {
+			if key == "" {
+				continue
+			}
+			if _, ok := order[key]; !ok {
+				order[key] = index
+				index++
+			}
+		}
+	}
+	return order
+}
+
+func issueOrderIndex(order map[string]int, issue *jira.Issue) int {
+	if issue == nil || issue.Key == nil {
+		return len(order)
+	}
+	if index, ok := order[*issue.Key]; ok {
+		return index
+	}
+	return len(order)
 }
 
 // boardScopedListData extends IssueListOutputData with the new envelope
@@ -599,8 +877,9 @@ func extractDescriptionDoc(payload map[string]any) (doc adf.Document, present bo
 func issueEditCommand() *cobra.Command {
 	var dryRun bool
 	var jsonInput, summary, assignee string
+	var parallelism int
 	cmd := &cobra.Command{
-		Use:   "edit KEY",
+		Use:   "edit KEY...",
 		Short: "Edit an issue",
 		Long: `Edit a Jira issue.
 
@@ -610,8 +889,12 @@ for headless or single-field edits.
 
 In headless mode (--no-input), at least one field flag MUST be provided
 — there is no editor to open and silent no-ops are validation errors.`,
-		Args: cobra.ExactArgs(1),
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
 			noInput := cmdutil.NoInputRequested(cmd)
 			payload := map[string]any{"fields": map[string]any{}}
 			if jsonInput != "" {
@@ -652,11 +935,14 @@ In headless mode (--no-input), at least one field flag MUST be provided
 				if noInput {
 					return fmt.Errorf("validation: no fields specified for issue edit; provide --summary, --assignee, or --json-input")
 				}
+				if len(keys) > 1 {
+					return fmt.Errorf("validation: multi-key issue edit requires --summary, --assignee, or --json-input")
+				}
 				det := cmdutil.DetectorFromContext(cmd)
 				if det.Agent || !stdininput.IsTerminal() {
 					return fmt.Errorf("validation: issue edit requires an interactive terminal for the editor flow; in agent or non-TTY context, provide --summary, --assignee, or --json-input")
 				}
-				return issueEditWithEditor(cmd, args[0], dryRun)
+				return issueEditWithEditor(cmd, keys[0], dryRun)
 			}
 			// Any ADF-shaped value in the fields object (e.g. a raw
 			// `description` document supplied via --json-input) MUST be
@@ -666,6 +952,13 @@ In headless mode (--no-input), at least one field flag MUST be provided
 			namedADF, adfParseErr := extractNamedADFDocs(fields)
 			if adfParseErr != nil {
 				return adfParseErr
+			}
+			if len(keys) > 1 {
+				return runIssueEditMany(cmd, keys, parallelism, issueEditManyInput{
+					Fields:       fields,
+					NamedADFDocs: namedADF,
+					DryRun:       dryRun,
+				})
 			}
 			// For a live edit, resolve the client up front and attach an
 			// edit-screen schema fetcher (editmeta) so stage 3 validates
@@ -692,7 +985,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 			if editClient != nil && !cmdutil.ReadOnlyEnabled(cmd) {
 				editIn.SchemaFetcher = newEditScreenSchemaFetcher(
 					cmd.Context(), cmdutil.ServicesForClient(editClient).Project(0),
-					cmdutil.ProfileForEnvelope(cmd), args[0],
+					cmdutil.ProfileForEnvelope(cmd), keys[0],
 				)
 			}
 			pipeOut := pipeline.RunMutation(editIn)
@@ -706,19 +999,19 @@ In headless mode (--no-input), at least one field flag MUST be provided
 				submitFields = map[string]any{}
 			}
 			if !dryRun {
-				issue, resp, err := cmdutil.IssueService(editClient).Update(cmd.Context(), args[0], &jira.IssueUpdateRequest{Fields: submitFields})
+				issue, resp, err := cmdutil.IssueService(editClient).Update(cmd.Context(), keys[0], &jira.IssueUpdateRequest{Fields: submitFields})
 				if err != nil {
 					return err
 				}
 				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.edit", map[string]any{
-					"issue":   args[0],
+					"issue":   keys[0],
 					"result":  issue,
 					"dry_run": false,
 					"fields":  submitFields,
 				}, resp, pipeOut.Warnings)
 			}
 			return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.edit", map[string]any{
-				"issue":   args[0],
+				"issue":   keys[0],
 				"dry_run": true,
 				"fields":  submitFields,
 			}, pipeOut.Warnings)
@@ -732,7 +1025,75 @@ In headless mode (--no-input), at least one field flag MUST be provided
 	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
 	cmdutil.ExtendFlag(cmd.Flags(), "summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
 	cmdutil.ExtendFlag(cmd.Flags(), "assignee", clib.FlagExtra{Group: "Fields", Placeholder: "USER"})
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
+}
+
+type issueEditManyInput struct {
+	Fields       map[string]any
+	NamedADFDocs map[string]adf.Document
+	DryRun       bool
+}
+
+func runIssueEditMany(cmd *cobra.Command, keys []string, parallelism int, in issueEditManyInput) error {
+	var editClient *jira.Client
+	var service jira.IssueService
+	var err error
+	if !in.DryRun {
+		var ok bool
+		editClient, _, ok, err = cmdutil.JiraClientForCommand(cmd)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("jira base URL is required for issue.edit")
+		}
+		service = cmdutil.IssueService(editClient)
+	}
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+		editIn := pipeline.MutationInput{
+			Mode:         cmdutil.ADFModeFor(cmd, true),
+			Fields:       cmdutil.CopyAnyMap(in.Fields),
+			NamedADFDocs: in.NamedADFDocs,
+			DryRun:       in.DryRun,
+		}
+		if editClient != nil && !cmdutil.ReadOnlyEnabled(cmd) {
+			editIn.SchemaFetcher = newEditScreenSchemaFetcher(
+				ctx, cmdutil.ServicesForClient(editClient).Project(0),
+				cmdutil.ProfileForEnvelope(cmd), key,
+			)
+		}
+		pipeOut := pipeline.RunMutation(editIn)
+		if pipeOut.Aborted {
+			return nil, pipeOut.Err
+		}
+		submitFields := pipeOut.SubmitFields
+		if submitFields == nil {
+			submitFields = map[string]any{}
+		}
+		data := map[string]any{
+			"issue":   key,
+			"dry_run": in.DryRun,
+			"fields":  submitFields,
+		}
+		if len(pipeOut.Warnings) > 0 {
+			data["warnings"] = pipeOut.Warnings
+		}
+		if in.DryRun {
+			return data, nil
+		}
+		issue, _, err := service.Update(ctx, key, &jira.IssueUpdateRequest{Fields: submitFields})
+		if err != nil {
+			return nil, err
+		}
+		data["result"] = issue
+		data["dry_run"] = false
+		return data, nil
+	})
+	if err != nil {
+		return err
+	}
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.edit", results, func(_ string, data map[string]any) any { return data })
 }
 
 func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
@@ -819,11 +1180,40 @@ func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
 func issueTransitionCommand() *cobra.Command {
 	var dryRun bool
 	var transitionID string
+	var parallelism int
 	returnCmd := &cobra.Command{
-		Use:   "transition KEY",
+		Use:   "transition KEY...",
 		Short: "Transition an issue",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
+			if len(keys) > 1 {
+				if transitionID != "" {
+					return runIssueTransitionMany(cmd, keys, parallelism, transitionID, dryRun)
+				}
+				client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return fmt.Errorf("jira base URL is required for issue.transitions")
+				}
+				service := cmdutil.IssueService(client)
+				results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) ([]*jira.Transition, error) {
+					transitions, _, err := service.Transitions(ctx, key)
+					return transitions, err
+				})
+				if err != nil {
+					return err
+				}
+				return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.transitions", results, func(key string, transitions []*jira.Transition) any {
+					return map[string]any{"issue": key, "transitions": transitions}
+				})
+			}
+			key := keys[0]
 			// A workflow transition is a Jira mutation and MUST run
 			// through the 5-stage pipeline. No fields/ADF doc to
 			// validate today (transitions don't carry payload here),
@@ -836,7 +1226,7 @@ func issueTransitionCommand() *cobra.Command {
 				return pipeOut.Err
 			}
 			if dryRun {
-				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", map[string]any{"issue": args[0], "transition": transitionID, "dry_run": dryRun}, pipeOut.Warnings)
+				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", map[string]any{"issue": key, "transition": transitionID, "dry_run": dryRun}, pipeOut.Warnings)
 			}
 			if transitionID == "" {
 				// List available transitions — this is a READ, not a
@@ -848,11 +1238,11 @@ func issueTransitionCommand() *cobra.Command {
 					return err
 				}
 				if ok {
-					transitions, resp, err := cmdutil.IssueService(client).Transitions(cmd.Context(), args[0])
+					transitions, resp, err := cmdutil.IssueService(client).Transitions(cmd.Context(), key)
 					if err != nil {
 						return err
 					}
-					return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transitions", map[string]any{"issue": args[0], "transitions": transitions}, resp, pipeOut.Warnings)
+					return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transitions", map[string]any{"issue": key, "transitions": transitions}, resp, pipeOut.Warnings)
 				}
 			}
 			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
@@ -860,33 +1250,85 @@ func issueTransitionCommand() *cobra.Command {
 				return err
 			}
 			if ok && transitionID != "" {
-				resp, err := cmdutil.IssueService(client).Transition(cmd.Context(), args[0], &jira.TransitionRequest{ID: transitionID})
+				resp, err := cmdutil.IssueService(client).Transition(cmd.Context(), key, &jira.TransitionRequest{ID: transitionID})
 				if err != nil {
 					return err
 				}
-				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transition", map[string]any{"issue": args[0], "transition": transitionID, "dry_run": false}, resp, pipeOut.Warnings)
+				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transition", map[string]any{"issue": key, "transition": transitionID, "dry_run": false}, resp, pipeOut.Warnings)
 			}
 			if !dryRun && transitionID != "" {
 				return fmt.Errorf("jira base URL is required for issue.transition")
 			}
-			return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", map[string]any{"issue": args[0], "dry_run": dryRun}, pipeOut.Warnings)
+			return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", map[string]any{"issue": key, "dry_run": dryRun}, pipeOut.Warnings)
 		},
 	}
 	returnCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
 	returnCmd.Flags().StringVar(&transitionID, "transition", "", "Transition ID to execute")
+	cmdutil.AddParallelismFlag(returnCmd, &parallelism)
 	cmdutil.ExtendDryRunFlag(returnCmd.Flags())
 	cmdutil.ExtendFlag(returnCmd.Flags(), "transition", clib.FlagExtra{Group: "Transition", Placeholder: "ID"})
 	return returnCmd
 }
 
+func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, transitionID string, dryRun bool) error {
+	pipeOut := pipeline.RunMutation(pipeline.MutationInput{
+		Mode:   cmdutil.ADFModeFor(cmd, true),
+		DryRun: dryRun,
+	})
+	if pipeOut.Aborted {
+		return pipeOut.Err
+	}
+	if dryRun {
+		results := make([]cmdutil.KeyResult[map[string]any], len(keys))
+		for i, key := range keys {
+			results[i] = cmdutil.KeyResult[map[string]any]{
+				Key: key,
+				Value: map[string]any{
+					"issue":      key,
+					"transition": transitionID,
+					"dry_run":    true,
+				},
+			}
+		}
+		return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.transition", results, cmdutil.KeyedDataWithWarnings(pipeOut.Warnings))
+	}
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("jira base URL is required for issue.transition")
+	}
+	service := cmdutil.IssueService(client)
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+		if _, err := service.Transition(ctx, key, &jira.TransitionRequest{ID: transitionID}); err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"issue":      key,
+			"transition": transitionID,
+			"dry_run":    false,
+		}, nil
+	})
+	if err != nil {
+		return err
+	}
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.transition", results, cmdutil.KeyedDataWithWarnings(pipeOut.Warnings))
+}
+
 func destructiveIssueCommand(name, short string) *cobra.Command {
 	var dryRun, force, deleteSubtasks bool
 	var jsonInput string
+	var parallelism int
 	cmd := &cobra.Command{
-		Use:   name + " KEY",
+		Use:   name + " KEY...",
 		Short: short,
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
 			noInput := cmdutil.NoInputRequested(cmd)
 			payload := map[string]any{"fields": map[string]any{}}
 			if jsonInput != "" {
@@ -899,13 +1341,20 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 			// 2-4 no-op); clone/move carry a fields payload that stages
 			// 3 (screen schema) and 4 (customfield encoding) validate.
 			pipeFields := issueFieldsFromPayload(payload)
+			if len(keys) > 1 {
+				return runDestructiveIssueMany(cmd, name, keys, parallelism, destructiveIssueManyInput{
+					Fields:         pipeFields,
+					DryRun:         dryRun,
+					Force:          force,
+					DeleteSubtasks: deleteSubtasks,
+				})
+			}
 			// For a live clone/move, resolve the client up front and
 			// attach an edit-screen schema fetcher (editmeta on the
 			// source issue) so stage 3 validates the override fields
 			// against a real screen. delete carries no fields, and a
 			// dry-run runs without credentials — neither gets a fetcher.
 			var destructiveClient *jira.Client
-			var err error
 			if !dryRun && name != "delete" {
 				var hasClient bool
 				destructiveClient, _, hasClient, err = cmdutil.JiraClientForCommand(cmd)
@@ -930,7 +1379,7 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 			if destructiveClient != nil && !cmdutil.ReadOnlyEnabled(cmd) {
 				destructiveIn.SchemaFetcher = newEditScreenSchemaFetcher(
 					cmd.Context(), cmdutil.ServicesForClient(destructiveClient).Project(0),
-					cmdutil.ProfileForEnvelope(cmd), args[0],
+					cmdutil.ProfileForEnvelope(cmd), keys[0],
 				)
 			}
 			pipeOut := pipeline.RunMutation(destructiveIn)
@@ -944,7 +1393,7 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 				submitFields = map[string]any{}
 			}
 			if dryRun {
-				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue."+name, map[string]any{"issue": args[0], "payload": map[string]any{"fields": submitFields}, "dry_run": true}, pipeOut.Warnings)
+				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue."+name, map[string]any{"issue": keys[0], "payload": map[string]any{"fields": submitFields}, "dry_run": true}, pipeOut.Warnings)
 			}
 			// Destructive op safety: in TTY mode (a human at the
 			// keyboard) require either --force OR an interactive
@@ -960,7 +1409,7 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 					return fmt.Errorf("issue %s requires --force in headless / agent / --no-input mode", name)
 				}
 				// TTY human → huh confirmation prompt.
-				if ok, err := confirmDestructive(cmd, name, args[0]); err != nil {
+				if ok, err := confirmDestructive(cmd, name, keys[0]); err != nil {
 					return err
 				} else if !ok {
 					return cli.NewPromptError(cli.PromptAborted, "issue "+name, nil)
@@ -981,16 +1430,16 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 				var issue *jira.Issue
 				switch name {
 				case "delete":
-					resp, err = service.Delete(cmd.Context(), args[0], &jira.IssueDeleteOptions{DeleteSubtasks: deleteSubtasks})
+					resp, err = service.Delete(cmd.Context(), keys[0], &jira.IssueDeleteOptions{DeleteSubtasks: deleteSubtasks})
 				case "clone":
-					issue, resp, err = service.Clone(cmd.Context(), args[0], &jira.IssueCloneRequest{Fields: submitFields})
+					issue, resp, err = service.Clone(cmd.Context(), keys[0], &jira.IssueCloneRequest{Fields: submitFields})
 				case "move":
-					issue, resp, err = service.Move(cmd.Context(), args[0], &jira.IssueMoveRequest{Fields: submitFields})
+					issue, resp, err = service.Move(cmd.Context(), keys[0], &jira.IssueMoveRequest{Fields: submitFields})
 				}
 				if err != nil {
 					return err
 				}
-				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue."+name, map[string]any{"issue": args[0], "result": issue, "dry_run": false}, resp, pipeOut.Warnings)
+				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue."+name, map[string]any{"issue": keys[0], "result": issue, "dry_run": false}, resp, pipeOut.Warnings)
 			}
 			return fmt.Errorf("jira base URL is required for issue.%s", name)
 		},
@@ -1005,7 +1454,103 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 		cmdutil.ExtendFlag(cmd.Flags(), "delete-subtasks", clib.FlagExtra{Group: "Safety"})
 	}
 	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
+}
+
+type destructiveIssueManyInput struct {
+	Fields         map[string]any
+	DryRun         bool
+	Force          bool
+	DeleteSubtasks bool
+}
+
+func runDestructiveIssueMany(
+	cmd *cobra.Command,
+	name string,
+	keys []string,
+	parallelism int,
+	in destructiveIssueManyInput,
+) error {
+	if !in.DryRun && !in.Force {
+		return fmt.Errorf("validation: issue %s with multiple keys requires --force", name)
+	}
+	var client *jira.Client
+	var service jira.IssueService
+	var err error
+	if !in.DryRun {
+		var ok bool
+		client, _, ok, err = cmdutil.JiraClientForCommand(cmd)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("jira base URL is required for issue.%s", name)
+		}
+		service = cmdutil.IssueService(client)
+	}
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+		destructiveIn := pipeline.MutationInput{
+			Mode:   cmdutil.ADFModeFor(cmd, true),
+			Fields: cmdutil.CopyAnyMap(in.Fields),
+			DryRun: in.DryRun,
+		}
+		if name == "move" {
+			destructiveIn.ScreenValidationExemptFields = map[string]bool{
+				"project":   true,
+				"issuetype": true,
+			}
+		}
+		if client != nil && name != "delete" && !cmdutil.ReadOnlyEnabled(cmd) {
+			destructiveIn.SchemaFetcher = newEditScreenSchemaFetcher(
+				ctx, cmdutil.ServicesForClient(client).Project(0),
+				cmdutil.ProfileForEnvelope(cmd), key,
+			)
+		}
+		pipeOut := pipeline.RunMutation(destructiveIn)
+		if pipeOut.Aborted {
+			return nil, pipeOut.Err
+		}
+		submitFields := pipeOut.SubmitFields
+		if submitFields == nil {
+			submitFields = map[string]any{}
+		}
+		data := map[string]any{
+			"issue":   key,
+			"dry_run": in.DryRun,
+		}
+		if in.DryRun {
+			data["payload"] = map[string]any{"fields": submitFields}
+			if len(pipeOut.Warnings) > 0 {
+				data["warnings"] = pipeOut.Warnings
+			}
+			return data, nil
+		}
+		var issue *jira.Issue
+		switch name {
+		case "delete":
+			_, err = service.Delete(ctx, key, &jira.IssueDeleteOptions{DeleteSubtasks: in.DeleteSubtasks})
+		case "clone":
+			issue, _, err = service.Clone(ctx, key, &jira.IssueCloneRequest{Fields: submitFields})
+		case "move":
+			issue, _, err = service.Move(ctx, key, &jira.IssueMoveRequest{Fields: submitFields})
+		default:
+			return nil, fmt.Errorf("unknown issue mutation %q", name)
+		}
+		if err != nil {
+			return nil, err
+		}
+		data["result"] = issue
+		data["dry_run"] = false
+		if len(pipeOut.Warnings) > 0 {
+			data["warnings"] = pipeOut.Warnings
+		}
+		return data, nil
+	})
+	if err != nil {
+		return err
+	}
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue."+name, results, func(_ string, data map[string]any) any { return data })
 }
 
 // confirmDestructive prompts the user via huh for an interactive
@@ -1048,13 +1593,20 @@ func confirmDestructive(cmd *cobra.Command, action, key string) (bool, error) {
 func issueWebLinkCommand() *cobra.Command {
 	var url, title string
 	var dryRun bool
+	var parallelism int
 	cmd := &cobra.Command{
-		Use:   "weblink KEY",
+		Use:   "weblink KEY...",
 		Short: "Attach a web link (URL + title) to an issue",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
 			if url == "" {
-				return fmt.Errorf("validation: --url is required")
+				err := cli.NewCLIInputError(cli.InputRequiredFlagMissing, "--url is required")
+				err.Flag = "url"
+				return err
 			}
 			// Local URL syntax validation runs in BOTH dry-run and live
 			// mode. dry-run is a local preview: it checks the URL parses
@@ -1063,9 +1615,12 @@ func issueWebLinkCommand() *cobra.Command {
 			if err := validateWebLinkURL(url); err != nil {
 				return err
 			}
+			if len(keys) > 1 {
+				return runIssueWebLinkMany(cmd, keys, parallelism, issueWebLinkInput{URL: url, Title: title, DryRun: dryRun})
+			}
 			if dryRun {
 				return cmdutil.WriteEnvelope(cmd, "issue.weblink", map[string]any{
-					"issue": args[0], "url": url, "title": title, "dry_run": true,
+					"issue": keys[0], "url": url, "title": title, "dry_run": true,
 					// Be explicit that dry-run did NOT contact the
 					// target URL — only its syntax was checked locally.
 					"url_remote_checked": false,
@@ -1078,14 +1633,14 @@ func issueWebLinkCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.weblink")
 			}
-			resp, err := cmdutil.IssueService(client).AddRemoteLink(cmd.Context(), args[0], &jira.RemoteLinkRequest{
+			resp, err := cmdutil.IssueService(client).AddRemoteLink(cmd.Context(), keys[0], &jira.RemoteLinkRequest{
 				URL: url, Title: title,
 			})
 			if err != nil {
 				return err
 			}
 			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.weblink", map[string]any{
-				"issue": args[0], "url": url, "title": title, "dry_run": false,
+				"issue": keys[0], "url": url, "title": title, "dry_run": false,
 			}, resp)
 		},
 	}
@@ -1095,7 +1650,55 @@ func issueWebLinkCommand() *cobra.Command {
 	cmdutil.ExtendFlag(cmd.Flags(), "url", clib.FlagExtra{Group: "Link", Placeholder: "URL", Hint: "url"})
 	cmdutil.ExtendFlag(cmd.Flags(), "title", clib.FlagExtra{Group: "Link", Placeholder: "TEXT"})
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
+}
+
+type issueWebLinkInput struct {
+	URL    string
+	Title  string
+	DryRun bool
+}
+
+func runIssueWebLinkMany(cmd *cobra.Command, keys []string, parallelism int, in issueWebLinkInput) error {
+	if in.DryRun {
+		results := make([]cmdutil.KeyResult[map[string]any], len(keys))
+		for i, key := range keys {
+			results[i] = cmdutil.KeyResult[map[string]any]{Key: key, Value: issueWebLinkData(key, in, true)}
+		}
+		return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.weblink", results, func(_ string, data map[string]any) any { return data })
+	}
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("jira base URL is required for issue.weblink")
+	}
+	service := cmdutil.IssueService(client)
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+		if _, err := service.AddRemoteLink(ctx, key, &jira.RemoteLinkRequest{URL: in.URL, Title: in.Title}); err != nil {
+			return nil, err
+		}
+		return issueWebLinkData(key, in, false), nil
+	})
+	if err != nil {
+		return err
+	}
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.weblink", results, func(_ string, data map[string]any) any { return data })
+}
+
+func issueWebLinkData(key string, in issueWebLinkInput, dryRun bool) map[string]any {
+	data := map[string]any{
+		"issue":   key,
+		"url":     in.URL,
+		"title":   in.Title,
+		"dry_run": dryRun,
+	}
+	if dryRun {
+		data["url_remote_checked"] = false
+	}
+	return data
 }
 
 // validateWebLinkURL performs the local, offline syntax check the
@@ -1105,13 +1708,19 @@ func issueWebLinkCommand() *cobra.Command {
 func validateWebLinkURL(raw string) error {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
-		return fmt.Errorf("validation: --url %q is not a valid URL: %w", raw, err)
+		inputErr := cli.NewCLIInputError(cli.InputFlagValueInvalid, fmt.Sprintf("--url %q is not a valid URL: %v", raw, err))
+		inputErr.Flag = "url"
+		return inputErr
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("validation: --url %q must be an absolute http or https URL", raw)
+		err := cli.NewCLIInputError(cli.InputFlagValueInvalid, fmt.Sprintf("--url %q must be an absolute http or https URL", raw))
+		err.Flag = "url"
+		return err
 	}
 	if u.Host == "" {
-		return fmt.Errorf("validation: --url %q is missing a host", raw)
+		err := cli.NewCLIInputError(cli.InputFlagValueInvalid, fmt.Sprintf("--url %q is missing a host", raw))
+		err.Flag = "url"
+		return err
 	}
 	return nil
 }

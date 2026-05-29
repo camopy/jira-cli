@@ -50,7 +50,7 @@ func TestSchemaCommandIncludesDetailedFlagSignatures(t *testing.T) {
 	for _, flag := range env.Data.Commands[0].Flags {
 		if flag.Name == "--profile" {
 			found = true
-			if flag.Type != "string" || flag.Shorthand != "p" || flag.Usage == "" {
+			if flag.Type != "string" || flag.Shorthand != "P" || flag.Usage == "" {
 				t.Fatalf("profile flag signature incomplete: %+v\n%s", flag, out)
 			}
 		}
@@ -87,7 +87,7 @@ func TestAgentSchemaPublishesLiveLeafPathsAndFlagGroups(t *testing.T) {
 	if issueList == nil {
 		t.Fatalf("agent schema missing leaf command_path %q", "jira issue list")
 	}
-	for _, want := range []string{"--board", "--board-id", "--key"} {
+	for _, want := range []string{"--board", "--board-id", "--key", "--parallelism"} {
 		if !hasAgentSchemaFlag(issueList.Flags, want) {
 			t.Fatalf("jira issue list schema missing local flag %s: %+v", want, issueList.Flags)
 		}
@@ -97,6 +97,48 @@ func TestAgentSchemaPublishesLiveLeafPathsAndFlagGroups(t *testing.T) {
 	}
 	if !hasFlagGroup(issueList.MutuallyExclusiveFlags, "--board", "--board-id") {
 		t.Fatalf("jira issue list missing board mutex group: %+v", issueList.MutuallyExclusiveFlags)
+	}
+	issueView := findAgentSchemaCommand(env.Data.Commands, "jira issue view")
+	if issueView == nil {
+		t.Fatalf("agent schema missing leaf command_path %q", "jira issue view")
+	}
+	if !hasAgentSchemaFlag(issueView.Flags, "--parallelism") {
+		t.Fatalf("jira issue view schema missing local flag --parallelism: %+v", issueView.Flags)
+	}
+	if issueView.OutputSchema != "issue.view" {
+		t.Fatalf("jira issue view output schema = %q, want issue.view", issueView.OutputSchema)
+	}
+	for _, path := range []string{
+		"jira epic add",
+		"jira epic remove",
+		"jira issue attachment add",
+		"jira issue attachment list",
+		"jira issue clone",
+		"jira issue comment",
+		"jira issue comment add",
+		"jira issue comment list",
+		"jira issue delete",
+		"jira issue edit",
+		"jira issue link",
+		"jira issue link list",
+		"jira issue move",
+		"jira issue transition",
+		"jira issue unwatch",
+		"jira issue watchers list",
+		"jira issue watch",
+		"jira issue watchers add",
+		"jira issue watchers remove",
+		"jira issue weblink",
+		"jira worklog add",
+		"jira worklog list",
+	} {
+		cmd := findAgentSchemaCommand(env.Data.Commands, path)
+		if cmd == nil {
+			t.Fatalf("agent schema missing leaf command_path %q", path)
+		}
+		if !hasAgentSchemaFlag(cmd.Flags, "--parallelism") {
+			t.Fatalf("%s schema missing local flag --parallelism: %+v", path, cmd.Flags)
+		}
 	}
 
 	jqlBuild := findAgentSchemaCommand(env.Data.Commands, "jira jql build")

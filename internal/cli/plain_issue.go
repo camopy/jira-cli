@@ -15,11 +15,18 @@ func WriteIssueViewPlain(w io.Writer, command string, data any, opts ...PlainOpt
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	logger := clog.New(clog.NewOutput(w, clog.ColorAuto))
+	logger := newPlainLogger(w)
 
-	m, ok := data.(map[string]any)
-	if !ok {
+	m := mapFromAny(data)
+	if len(m) == 0 {
 		return writeGenericPlain(logger, messageForCommand(command), data)
+	}
+	if rawResults, ok := m["results"]; ok {
+		results := normalizeMapList(rawResults)
+		if results == nil {
+			return writeGenericPlain(logger, messageForCommand(command), data)
+		}
+		return writeIssueViewManyPlain(logger, results, cfg)
 	}
 	issue := mapFromAny(m["issue"])
 	if len(issue) == 0 {
@@ -55,6 +62,136 @@ func WriteIssueViewPlain(w io.Writer, command string, data any, opts ...PlainOpt
 		logger.Info().Parts(clog.PartMessage).Msg("  " + description)
 	}
 	return nil
+}
+
+func writeIssueViewManyPlain(logger *clog.Logger, results []map[string]any, cfg plainConfig) error {
+	successes := make([]map[string]any, 0, len(results))
+	failureCount := 0
+	for _, result := range results {
+		key := stringFromMap(result, "key")
+		if ok, _ := result["ok"].(bool); !ok {
+			failureCount++
+			continue
+		}
+		issue := mapFromAny(result["issue"])
+		row := issueViewSummaryRow(issue)
+		if row["key"] == "" {
+			row["key"] = key
+		}
+		successes = append(successes, row)
+	}
+
+	event := logger.Info().
+		Int("total", len(results)).
+		Int("succeeded", len(successes)).
+		Int("failed", failureCount)
+	if cfg.threads > 0 {
+		event = event.Int("threads", cfg.threads)
+	}
+	event.Msg("viewed issues")
+	for _, row := range issueRows(successes, cfg) {
+		if row != "" {
+			logger.Info().Parts(clog.PartMessage).Msg(row)
+		}
+	}
+	return nil
+}
+
+const issueViewFailedKeysPlainLimit = 5
+
+// WriteIssueViewFailureDiagnostics mirrors multi-key issue-view failures to
+// stderr for human mode. stdout stays reserved for successful rows.
+func WriteIssueViewFailureDiagnostics(w io.Writer, data any, errorsOut []Error) error {
+	failures := issueViewFailureKeys(data)
+	if len(failures) == 0 || w == nil {
+		return nil
+	}
+	logger := clog.New(clog.NewOutput(w, clog.ColorAuto))
+	logger.SetLevel(clog.LevelError)
+	shown, omitted := issueViewShownFailureKeys(failures)
+	total, succeeded, failed := issueViewFailureCounts(data, len(failures))
+	event := logger.Error().
+		Int("total", total).
+		Int("succeeded", succeeded).
+		Int("failed", failed).
+		Str("reason", issueViewPlainFailureReason(errorsOut)).
+		Str("keys", strings.Join(shown, ", ")).
+		Int("shown", len(shown))
+	if omitted > 0 {
+		event = event.Int("omitted", omitted)
+	}
+	event = event.Str("hint", "use --output=json for full per-key errors")
+	event.Msg("failed keys")
+	return nil
+}
+
+func issueViewFailureCounts(data any, failureKeys int) (int, int, int) {
+	m := mapFromAny(data)
+	results := normalizeMapList(m["results"])
+	total := len(results)
+	succeeded := intFromMap(m, "succeeded")
+	failed := intFromMap(m, "failed")
+	if failed == 0 {
+		failed = failureKeys
+	}
+	if total == 0 {
+		total = succeeded + failed
+	}
+	if succeeded == 0 && total > failed {
+		succeeded = total - failed
+	}
+	return total, succeeded, failed
+}
+
+func issueViewPlainFailureReason(errorsOut []Error) string {
+	if len(errorsOut) == 0 {
+		return "error"
+	}
+	top := errorsOut[0]
+	if top.Code != "" {
+		return strings.ReplaceAll(top.Code, "_", " ")
+	}
+	if top.Type != "" {
+		return top.Type
+	}
+	return "error"
+}
+
+func issueViewFailureKeys(data any) []string {
+	m := mapFromAny(data)
+	results := normalizeMapList(m["results"])
+	if len(results) == 0 {
+		return nil
+	}
+	failures := make([]string, 0)
+	for _, result := range results {
+		if ok, _ := result["ok"].(bool); ok {
+			continue
+		}
+		if key := stringFromMap(result, "key"); key != "" {
+			failures = append(failures, key)
+		}
+	}
+	return failures
+}
+
+func issueViewShownFailureKeys(keys []string) ([]string, int) {
+	limit := issueViewFailedKeysPlainLimit
+	if len(keys) < limit {
+		limit = len(keys)
+	}
+	return keys[:limit], len(keys) - limit
+}
+
+func issueViewSummaryRow(issue map[string]any) map[string]any {
+	fields := mapFromAny(issue["fields"])
+	return map[string]any{
+		"key":      stringFromMap(issue, "key"),
+		"summary":  stringFromMap(fields, "summary"),
+		"status":   nestedString(fields, "status", "name"),
+		"assignee": mapFromAny(fields["assignee"]),
+		"priority": nestedString(fields, "priority", "name"),
+	}
 }
 
 func WriteIssueTransitionsPlain(w io.Writer, command string, data any, opts ...PlainOption) error {
@@ -119,6 +256,20 @@ func stringFromMap(m map[string]any, key string) string {
 		return value.String()
 	default:
 		return ""
+	}
+}
+
+func intFromMap(m map[string]any, key string) int {
+	if m == nil {
+		return 0
+	}
+	switch value := m[key].(type) {
+	case int:
+		return value
+	case float64:
+		return int(value)
+	default:
+		return 0
 	}
 }
 

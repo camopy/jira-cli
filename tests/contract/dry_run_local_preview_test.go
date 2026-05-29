@@ -147,19 +147,71 @@ func TestWatcherAddValidateRemoteRejectsInactiveAccountID(t *testing.T) {
 // must do honest LOCAL validation. A syntactically invalid URL must be
 // caught without contacting Jira.
 func TestWeblinkDryRunRejectsMalformedURLLocally(t *testing.T) {
+	var hits int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
 		t.Errorf("weblink --dry-run made a live request: %s %s", r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer srv.Close()
 
 	cfg := jiraConfig(t, srv.URL)
-	_, stderr, code := runJira(t, "--config", cfg, "--output=json",
+	stdout, stderr, code := runJira(t, "--config", cfg, "--output=json",
 		"issue", "weblink", "KAN-1", "--url", "not a url", "--dry-run")
 	if code == 0 {
 		t.Fatalf("weblink --dry-run accepted a malformed URL; want local validation failure")
 	}
-	_ = stderr
+	if n := atomic.LoadInt32(&hits); n != 0 {
+		t.Fatalf("weblink --dry-run made %d live request(s); URL validation must be local-only", n)
+	}
+	assertWeblinkURLErrorEnvelope(t, stdout, stderr, []string{
+		"jira", "--config", cfg, "--output=json",
+		"issue", "weblink", "KAN-1", "--url", "not a url", "--dry-run",
+	}, "flag_value_invalid")
+}
+
+func TestWeblinkRejectsMissingURLWithSpecificCode(t *testing.T) {
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		t.Errorf("weblink with missing --url made a live request: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	cfg := jiraConfig(t, srv.URL)
+	stdout, stderr, code := runJira(t, "--config", cfg, "--output=json",
+		"issue", "weblink", "KAN-1", "--dry-run")
+	if code == 0 {
+		t.Fatalf("weblink --dry-run accepted a missing --url; want required-flag failure")
+	}
+	if n := atomic.LoadInt32(&hits); n != 0 {
+		t.Fatalf("weblink with missing --url made %d live request(s); required-flag validation must be local-only", n)
+	}
+	assertWeblinkURLErrorEnvelope(t, stdout, stderr, []string{
+		"jira", "--config", cfg, "--output=json",
+		"issue", "weblink", "KAN-1", "--dry-run",
+	}, "required_flag_missing")
+}
+
+func assertWeblinkURLErrorEnvelope(t *testing.T, stdout, stderr []byte, args []string, wantCode string) {
+	t.Helper()
+	var env struct {
+		Errors []struct {
+			Code string `json:"code"`
+			Flag string `json:"flag"`
+		} `json:"errors"`
+	}
+	decodeErrorEnvelopeFromStderr(t, stdout, stderr, args, &env)
+	if len(env.Errors) == 0 {
+		t.Fatalf("error envelope has no errors\nstderr=%s", stderr)
+	}
+	if got := env.Errors[0].Code; got != wantCode {
+		t.Fatalf("errors[0].code = %q, want %q\nstderr=%s", got, wantCode, stderr)
+	}
+	if got := env.Errors[0].Flag; got != "url" {
+		t.Fatalf("errors[0].flag = %q, want url\nstderr=%s", got, stderr)
+	}
 }
 
 // TestWeblinkDryRunStatesRemoteNotChecked — a valid URL passes
