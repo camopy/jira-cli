@@ -66,6 +66,47 @@ func TestReleaseWorkflowRunsLocalPreflightBeforePublishing(t *testing.T) {
 	}
 }
 
+func TestReleaseWorkflowUsesStrictBashDefaults(t *testing.T) {
+	release, err := os.ReadFile("../../.github/workflows/release.yml")
+	if err != nil {
+		t.Fatalf("ReadFile(release) error = %v", err)
+	}
+	got := string(release)
+	for _, want := range []string{
+		"defaults:",
+		"run:",
+		"shell: bash --noprofile --norc -euo pipefail {0}",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("release workflow missing strict bash default %q\n%s", want, release)
+		}
+	}
+	if strings.Contains(got, "set -euo pipefail") {
+		t.Fatalf("release workflow should use defaults.run.shell for strict bash, not per-step set lines\n%s", release)
+	}
+}
+
+func TestReleaseWorkflowDoesNotRequireLinuxKeyringForPreflight(t *testing.T) {
+	release, err := os.ReadFile("../../.github/workflows/release.yml")
+	if err != nil {
+		t.Fatalf("ReadFile(release) error = %v", err)
+	}
+	got := string(release)
+	for _, forbidden := range []string{
+		"name: Install Linux keyring dependencies",
+		"dbus-x11",
+		"gnome-keyring",
+		"dbus-run-session",
+	} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("release preflight should not require Linux keyring setup %q\n%s", forbidden, release)
+		}
+	}
+	if !strings.Contains(got, "mise run release:preflight") {
+		t.Fatalf("release workflow missing preflight command\n%s", release)
+	}
+}
+
 func TestReleaseWorkflowValidatesExactSemverTag(t *testing.T) {
 	release, err := os.ReadFile("../../.github/workflows/release.yml")
 	if err != nil {

@@ -73,10 +73,6 @@ func TestAuthLoginFailedVerifyForNewProfileDoesNotMutateExistingProfile(t *testi
 	bin := buildJiraBinary(t)
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 	serviceHash := sha256.Sum256([]byte(configPath))
-	// KeyringStore resolves JIRA_KEYRING_SERVICE on every Get/Put/Delete call.
-	// This per-test namespace keeps the seeded and cleanup refs away from both
-	// real credentials and other contract runs using the suite default service.
-	t.Setenv("JIRA_KEYRING_SERVICE", "jira-cli-contract-"+hex.EncodeToString(serviceHash[:8]))
 	probeProfile := "probe-" + hex.EncodeToString(serviceHash[8:12])
 	initial := `default_profile = "default"
 
@@ -99,7 +95,7 @@ workday_seconds = 28800
 	}
 	store := cmdutil.CredentialStoreFor(config.SecretBackendKeyring)
 	// Use the same identity helper as the binary so the assertions target the
-	// exact keyring entries auth login would write or preserve.
+	// exact credential entries auth login would write or preserve.
 	mustRef := func(profile, baseURL string) config.SecretRef {
 		t.Helper()
 		ref, err := cmdutil.SecretRefFor(config.Profile{
@@ -132,6 +128,9 @@ workday_seconds = 28800
 	cmd.Env = append(os.Environ(), "JIRA_EXISTING_TOKEN="+existingCredential)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("seed auth login error = %v\n%s", err, out)
+	}
+	if stored, err := config.StoredCredential(context.Background(), store, defaultRef); err != nil || stored != existingCredential {
+		t.Fatalf("default profile credential after seed = %q, %v", stored, err)
 	}
 	before, err := os.ReadFile(configPath)
 	if err != nil {

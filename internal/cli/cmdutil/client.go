@@ -2,7 +2,6 @@ package cmdutil
 
 import (
 	"fmt"
-	"net/http"
 	"net/url"
 	"time"
 
@@ -55,6 +54,9 @@ func ProfileForEnvelope(cmd *cobra.Command) string {
 func CredentialStoreFor(backend config.SecretBackend) config.CredentialStore {
 	if backend == config.SecretBackendOnePassword {
 		return config.OnePasswordStore{}
+	}
+	if store, ok := config.FileCredentialStoreFromEnv(); ok {
+		return store
 	}
 	return config.KeyringStore{}
 }
@@ -117,7 +119,7 @@ func JiraClientForProfile(cmd *cobra.Command, profile config.Profile) (*jira.Cli
 	debug, _ := cmd.Root().PersistentFlags().GetBool("debug")
 	opts := []jira.Option{
 		jira.WithBaseURL(profile.BaseURL),
-		jira.WithHTTPClient(&http.Client{Timeout: time.Duration(profile.TimeoutSeconds) * time.Second}),
+		jira.WithHTTPTimeout(time.Duration(profile.TimeoutSeconds) * time.Second),
 		// Single source of truth for the read-only gate. Set on the client
 		// so EVERY mutation across EVERY command is automatically refused
 		// without per-command boilerplate that's easy to forget.

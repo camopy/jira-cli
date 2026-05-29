@@ -16,6 +16,9 @@ jobs:
     name: GoReleaser
     runs-on: ubuntu-latest
     environment: deploy
+    defaults:
+      run:
+        shell: bash --noprofile --norc -euo pipefail {0}
     permissions:
       contents: write           # Required to create GitHub releases and upload assets.
       id-token: write           # Required for cosign via OIDC.
@@ -39,10 +42,7 @@ jobs:
       - name: Validate release tag
         env:
           TAG_NAME: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-
-          [[ "${TAG_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+        run: '[[ "${TAG_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]'
 
       - name: Check release state
         id: release-state
@@ -50,14 +50,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ github.ref_name }}
         run: |
-          set -euo pipefail
-
           if gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             echo "exists=true" >>"${GITHUB_OUTPUT}"
             echo "release ${TAG_NAME} already exists; skipping GoReleaser publish"
           else
             echo "exists=false" >>"${GITHUB_OUTPUT}"
           fi
+
+      - name: Release preflight
+        if: steps.release-state.outputs.exists != 'true'
+        run: mise run release:preflight
 
       - name: Run GoReleaser
         if: steps.release-state.outputs.exists != 'true'
@@ -75,8 +77,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ github.ref_name }}
         run: |
-          set -euo pipefail
-
           mkdir -p dist
           gh release download "${TAG_NAME}" \
             --repo "${GITHUB_REPOSITORY}" \

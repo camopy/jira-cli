@@ -1,13 +1,11 @@
-// MOTIVATION: the contract and integration suites exec the real jira binary,
-// which stores credentials in the OS keyring. Each suite's TestMain sets
-// JIRA_KEYRING_SERVICE to a throwaway namespace so a credential-mutating
-// command can never reach a developer's real "jira-cli" credential — but that
-// only holds if every exec inherits the parent process environment. A test that
-// assigns a command's Env a from-scratch slice silently drops the override and
-// reopens the footgun (a real credential was once deleted on every `go test`
-// run). These guards fail on such an assignment, and fail if a suite stops
-// setting the override to a real non-default namespace, so the isolation cannot
-// be quietly removed.
+// MOTIVATION: the contract and integration suites exec the real jira binary.
+// Each suite's TestMain sets JIRA_TEST_CREDENTIAL_STORE_DIR so keyring-backed
+// fixture profiles use a temp file store instead of the developer's OS
+// keyring. A test that assigns a command's Env a from-scratch slice silently
+// drops the override and reopens the footgun (a real credential was once
+// deleted on every `go test` run). These guards fail on such an assignment, and
+// fail if a suite stops setting the file-store override, so the isolation
+// cannot be quietly removed.
 //
 // Known limits (deterrents, not proofs): the env guard catches direct
 // `.Env = []string{...}` and `.Env = append([]string{...}, ...)`, but not a
@@ -32,19 +30,16 @@ import (
 )
 
 // keyringIsolatedSuites are the test suites that drive the real binary and so
-// MUST confine its keyring use to a throwaway namespace via an inherited
-// JIRA_KEYRING_SERVICE. The live suite is intentionally absent: it
+// MUST redirect keyring-backed fixtures to a temp file store via an inherited
+// JIRA_TEST_CREDENTIAL_STORE_DIR. The live suite is intentionally absent: it
 // authenticates against a real tenant with the developer's real credential and
 // must reach the real keyring.
 var keyringIsolatedSuites = []string{"../contract", "../integration"}
 
 // keyringIsolationEnv is the environment variable each isolated suite sets to
-// redirect credential storage away from the real service. defaultKeyringName
-// mirrors internal/config's defaultKeyringService (unexported there, so it is
-// repeated here): setting the override to this value would NOT isolate anything.
+// redirect credential storage away from the real keyring.
 const (
-	keyringIsolationEnv = "JIRA_KEYRING_SERVICE"
-	defaultKeyringName  = "jira-cli"
+	keyringIsolationEnv = "JIRA_TEST_CREDENTIAL_STORE_DIR"
 )
 
 // suiteGoFiles returns every .go file under dir.
@@ -80,11 +75,10 @@ func stringLitValue(expr ast.Expr) (string, bool) {
 	return v, true
 }
 
-// TestIsolatedSuitesSetKeyringNamespace fails unless each isolated suite calls
-// Setenv(JIRA_KEYRING_SERVICE, <non-empty, non-default literal>). A textual
-// mention is not enough — the override must actually be set to a namespace that
-// differs from the production service.
-func TestIsolatedSuitesSetKeyringNamespace(t *testing.T) {
+// TestIsolatedSuitesSetCredentialStoreDir fails unless each isolated suite
+// calls Setenv(JIRA_TEST_CREDENTIAL_STORE_DIR, ...). A textual mention is not
+// enough — the override must actually be installed before child binaries run.
+func TestIsolatedSuitesSetCredentialStoreDir(t *testing.T) {
 	for _, dir := range keyringIsolatedSuites {
 		isolated := false
 		for _, path := range suiteGoFiles(t, dir) {
@@ -105,15 +99,18 @@ func TestIsolatedSuitesSetKeyringNamespace(t *testing.T) {
 				if key, ok := stringLitValue(call.Args[0]); !ok || key != keyringIsolationEnv {
 					return true
 				}
-				if val, ok := stringLitValue(call.Args[1]); ok &&
-					strings.TrimSpace(val) != "" && val != defaultKeyringName {
+				if _, ok := call.Args[1].(*ast.Ident); ok {
+					isolated = true
+					return true
+				}
+				if val, ok := stringLitValue(call.Args[1]); ok && strings.TrimSpace(val) != "" {
 					isolated = true
 				}
 				return true
 			})
 		}
 		if !isolated {
-			t.Errorf("suite %s does not Setenv %s to a non-default namespace; the real OS keyring is not isolated from this suite", dir, keyringIsolationEnv)
+			t.Errorf("suite %s does not Setenv %s; the real OS keyring is not isolated from this suite", dir, keyringIsolationEnv)
 		}
 	}
 }
@@ -121,8 +118,9 @@ func TestIsolatedSuitesSetKeyringNamespace(t *testing.T) {
 // TestIsolatedSuitesInheritProcessEnv fails when a test in an isolated suite
 // assigns a command's Env to a from-scratch slice — `.Env = []string{...}` or
 // `.Env = append([]string{...}, ...)` — which drops the inherited
-// keyringIsolationEnv and lets the exec'd binary mutate the real keyring. Tests
-// must extend the parent environment (os.Environ() / cmd.Environ()) instead.
+// keyringIsolationEnv and lets the exec'd binary mutate the real keyring.
+// Tests must extend the parent environment (os.Environ() / cmd.Environ())
+// instead.
 func TestIsolatedSuitesInheritProcessEnv(t *testing.T) {
 	for _, dir := range keyringIsolatedSuites {
 		for _, path := range suiteGoFiles(t, dir) {
