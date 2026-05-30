@@ -341,22 +341,24 @@ func issueListPlainData(data map[string]any) (rawIssues any, detail bool, jql st
 }
 
 type issueTableRow struct {
-	Key      string
-	Summary  string
-	Status   string
-	Assignee string
-	Priority string
+	Key       string
+	Summary   string
+	Status    string
+	StatusCat string
+	Assignee  string
+	Priority  string
 }
 
 func issueRows(issues []map[string]any, cfg plainConfig) []string {
 	rows := make([]issueTableRow, 0, len(issues))
 	for _, issue := range issues {
 		rows = append(rows, issueTableRow{
-			Key:      formatHumanField(issue["key"]),
-			Summary:  formatHumanField(issue["summary"]),
-			Status:   formatHumanField(issue["status"]),
-			Assignee: formatAssignee(issue["assignee"]),
-			Priority: formatHumanField(issue["priority"]),
+			Key:       formatHumanField(issue["key"]),
+			Summary:   formatHumanField(issue["summary"]),
+			Status:    formatHumanField(issue["status"]),
+			StatusCat: formatHumanField(issue["status_category"]),
+			Assignee:  formatAssignee(issue["assignee"]),
+			Priority:  formatHumanField(issue["priority"]),
 		})
 	}
 	rendered := issueTableRenderer(cfg).Render(rows)
@@ -400,7 +402,7 @@ func issueTableRenderer(cfg plainConfig) *table.Renderer[issueTableRow] {
 			Name:   "status",
 			Header: "STATUS",
 			Render: func(row issueTableRow, _ *table.RenderContext) table.Cell {
-				return styledCell(statusStyle(cfg, row.Status), row.Status)
+				return styledCell(statusStyle(cfg, row.Status, row.StatusCat), row.Status)
 			},
 		},
 		{
@@ -456,11 +458,24 @@ func styledCell(style lipgloss.Style, text string) table.Cell {
 	return table.StyledCell(style.Render(text), text)
 }
 
-func statusStyle(cfg plainConfig, status string) lipgloss.Style {
-	if !cfg.tty {
+// statusStyle colors a status by its workflow category (the stable
+// new/indeterminate/done key) so e.g. every done-category status reads green,
+// mirroring Jira's own category colors. An unknown or absent category falls
+// back to a per-name hash color.
+func statusStyle(cfg plainConfig, status, category string) lipgloss.Style {
+	if !cfg.tty || cfg.theme == nil {
 		return lipgloss.NewStyle()
 	}
-	return hashStyle(cfg.theme, "status:"+status)
+	switch normalizeStyleKey(category) {
+	case "done":
+		return foregroundStyle(cfg.theme.Green)
+	case "indeterminate":
+		return foregroundStyle(cfg.theme.Yellow)
+	case "new":
+		return foregroundStyle(cfg.theme.Blue)
+	default:
+		return hashStyle(cfg.theme, "status:"+status)
+	}
 }
 
 func priorityStyle(cfg plainConfig, priority string) lipgloss.Style {

@@ -15,10 +15,30 @@ func TestIssueSummaryAlwaysIncludesSpecKeys(t *testing.T) {
 			Updated: jira.String("2026-05-03T10:00:00Z"),
 		},
 	})
-	for _, key := range []string{"key", "summary", "status", "updated", "assignee", "priority"} {
+	for _, key := range []string{"key", "summary", "status", "status_category", "updated", "assignee", "priority"} {
 		if _, ok := got[key]; !ok {
 			t.Fatalf("issueSummary missing %q: %#v", key, got)
 		}
+	}
+}
+
+// status_category carries the workflow category key when the status object
+// includes one, and stays an empty string otherwise (stable shape).
+func TestIssueSummaryStatusCategory(t *testing.T) {
+	withCat := IssueSummary(&jira.Issue{Fields: &jira.IssueFields{
+		Status: &jira.Status{
+			Name:           jira.String("Done"),
+			StatusCategory: &jira.StatusCategory{Key: jira.String("done")},
+		},
+	}})
+	if withCat["status_category"] != "done" {
+		t.Fatalf("status_category = %#v, want \"done\"", withCat["status_category"])
+	}
+	withoutCat := IssueSummary(&jira.Issue{Fields: &jira.IssueFields{
+		Status: &jira.Status{Name: jira.String("Open")},
+	}})
+	if withoutCat["status_category"] != "" {
+		t.Fatalf("status_category = %#v, want empty string", withoutCat["status_category"])
 	}
 }
 

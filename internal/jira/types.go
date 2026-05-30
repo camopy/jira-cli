@@ -52,6 +52,15 @@ type IssueLink struct {
 }
 
 type Status struct {
+	Name           *string         `json:"name,omitempty"`
+	StatusCategory *StatusCategory `json:"statusCategory,omitempty"`
+}
+
+// StatusCategory is the workflow bucket a status belongs to. Key is one of
+// "new", "indeterminate", or "done" — stable across projects and used to
+// color statuses by category in human output.
+type StatusCategory struct {
+	Key  *string `json:"key,omitempty"`
 	Name *string `json:"name,omitempty"`
 }
 

@@ -22,12 +22,13 @@ func IssueOutput(issues []*jira.Issue, detail bool) any {
 // fields keep their zero placeholder so the shape never varies.
 func IssueSummary(issue *jira.Issue) map[string]any {
 	summary := map[string]any{
-		"key":      "",
-		"summary":  "",
-		"status":   "",
-		"assignee": nil,
-		"priority": nil,
-		"updated":  "",
+		"key":             "",
+		"summary":         "",
+		"status":          "",
+		"status_category": "",
+		"assignee":        nil,
+		"priority":        nil,
+		"updated":         "",
 	}
 	if issue == nil {
 		return summary
@@ -41,8 +42,13 @@ func IssueSummary(issue *jira.Issue) map[string]any {
 	if issue.Fields.Summary != nil {
 		summary["summary"] = *issue.Fields.Summary
 	}
-	if issue.Fields.Status != nil && issue.Fields.Status.Name != nil {
-		summary["status"] = *issue.Fields.Status.Name
+	if status := issue.Fields.Status; status != nil {
+		if status.Name != nil {
+			summary["status"] = *status.Name
+		}
+		if status.StatusCategory != nil && status.StatusCategory.Key != nil {
+			summary["status_category"] = *status.StatusCategory.Key
+		}
 	}
 	if user := issue.Fields.Assignee; user != nil {
 		summary["assignee"] = AssigneeSummary(user)

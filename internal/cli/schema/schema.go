@@ -309,11 +309,15 @@ func outputSchemas() map[string]any {
 					"type": "array",
 					"items": map[string]any{
 						"type":     "object",
-						"required": []string{"key", "summary", "status", "updated"},
+						"required": []string{"key", "summary", "status", "status_category", "updated"},
 						"properties": map[string]any{
 							"key":     map[string]any{"type": "string"},
 							"summary": map[string]any{"type": "string"},
 							"status":  map[string]any{"type": "string"},
+							"status_category": map[string]any{
+								"type":        "string",
+								"description": "Workflow category key (new, indeterminate, done); empty when the status carries none.",
+							},
 							"assignee": map[string]any{
 								"type": []string{"object", "null"},
 								"properties": map[string]any{
