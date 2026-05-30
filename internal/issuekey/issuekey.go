@@ -16,6 +16,23 @@ type Options struct {
 	MaxExpansion int
 }
 
+// IsExpression reports whether s begins like an issue-key expression (a single
+// key, a range, or a comma list) rather than free text such as a status name.
+// It only checks the leading token against the key pattern — it does not
+// validate a range end or list members — so it stays cheap and never expands a
+// range. ParseExpressions still fully validates the keys afterwards. Callers
+// use it to tell an issue key from a status name in mixed argument lists like
+// `transition KEY "In Progress"`.
+func IsExpression(s string) bool {
+	head := strings.TrimSpace(s)
+	for _, sep := range []string{",", "..", ":"} {
+		if i := strings.Index(head, sep); i >= 0 {
+			head = head[:i]
+		}
+	}
+	return keyPattern.MatchString(strings.TrimSpace(head))
+}
+
 // ExpansionLimitError reports a locally-enforced issue-key expansion limit.
 type ExpansionLimitError struct {
 	Max int

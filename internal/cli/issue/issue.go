@@ -1305,17 +1305,28 @@ func issueTransitionCommand() *cobra.Command {
 	var transitionID string
 	var parallelism int
 	returnCmd := &cobra.Command{
-		Use:   "transition KEY...",
-		Short: "Transition an issue",
-		Args:  cobra.MinimumNArgs(1),
+		Use:   "transition KEY... [STATUS]",
+		Short: "Transition an issue to a new status",
+		Long: `Move one or more issues to a new workflow status.
+
+Give the target status as a trailing argument — its name (e.g. "In Progress")
+or a numeric transition id: jira issue transition KEY "In Progress". A name is
+resolved against the issue's available transitions at runtime. With no status
+argument the available transitions are listed instead. The --transition <id>
+flag is still accepted.`,
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			target, keyArgs := splitTransitionTarget(args, transitionID)
+			keys, err := issuekey.ParseExpressions(keyArgs, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {
 				return err
 			}
+			if len(keys) == 0 {
+				return fmt.Errorf("validation: issue transition requires an issue key")
+			}
 			if len(keys) > 1 {
-				if transitionID != "" {
-					return runIssueTransitionMany(cmd, keys, parallelism, transitionID, dryRun)
+				if target != "" {
+					return runIssueTransitionMany(cmd, keys, parallelism, target, dryRun)
 				}
 				client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 				if err != nil {
@@ -1349,51 +1360,142 @@ func issueTransitionCommand() *cobra.Command {
 				return pipeOut.Err
 			}
 			if dryRun {
-				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", map[string]any{"issue": key, "transition": transitionID, "dry_run": dryRun}, pipeOut.Warnings)
-			}
-			if transitionID == "" {
-				// List available transitions — this is a READ, not a
-				// mutation; it returns successor IDs the caller chooses
-				// from. Skip the warnings helper since pipeline only
-				// runs to satisfy stage gating consistency.
-				client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
-				if err != nil {
-					return err
-				}
-				if ok {
-					transitions, resp, err := cmdutil.IssueService(client).Transitions(cmd.Context(), key)
-					if err != nil {
-						return err
-					}
-					return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transitions", map[string]any{"issue": key, "transitions": transitions}, resp, pipeOut.Warnings)
-				}
+				// Dry-run is local: echo the requested target without
+				// resolving a name to an id (that needs a live list).
+				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", map[string]any{"issue": key, "transition": target, "dry_run": dryRun}, pipeOut.Warnings)
 			}
 			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
-			if ok && transitionID != "" {
-				resp, err := cmdutil.IssueService(client).Transition(cmd.Context(), key, &jira.TransitionRequest{ID: transitionID})
+			if target == "" {
+				// No target → list available transitions (a read). Offline
+				// (no base URL) returns a bare envelope, as before.
+				if !ok {
+					return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", map[string]any{"issue": key, "dry_run": dryRun}, pipeOut.Warnings)
+				}
+				transitions, resp, err := cmdutil.IssueService(client).Transitions(cmd.Context(), key)
 				if err != nil {
 					return err
 				}
-				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transition", map[string]any{"issue": key, "transition": transitionID, "dry_run": false}, resp, pipeOut.Warnings)
+				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transitions", map[string]any{"issue": key, "transitions": transitions}, resp, pipeOut.Warnings)
 			}
-			if !dryRun && transitionID != "" {
+			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.transition")
 			}
-			return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", map[string]any{"issue": key, "dry_run": dryRun}, pipeOut.Warnings)
+			service := cmdutil.IssueService(client)
+			id, err := resolveTransitionID(cmd.Context(), service, key, target)
+			if err != nil {
+				return err
+			}
+			resp, err := service.Transition(cmd.Context(), key, &jira.TransitionRequest{ID: id})
+			if err != nil {
+				return err
+			}
+			return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transition", map[string]any{"issue": key, "transition": id, "dry_run": false}, resp, pipeOut.Warnings)
 		},
 	}
 	returnCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
-	returnCmd.Flags().StringVar(&transitionID, "transition", "", "Transition ID to execute")
+	returnCmd.Flags().StringVar(&transitionID, "transition", "", "Transition id or status name (or pass the status as a positional argument)")
 	cmdutil.AddParallelismFlag(returnCmd, &parallelism)
 	cmdutil.ExtendDryRunFlag(returnCmd.Flags())
-	cmdutil.ExtendFlag(returnCmd.Flags(), "transition", clib.FlagExtra{Group: "Transition", Placeholder: "ID"})
+	cmdutil.ExtendFlag(returnCmd.Flags(), "transition", clib.FlagExtra{Group: "Transition", Placeholder: "STATUS"})
 	return returnCmd
 }
 
-func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, transitionID string, dryRun bool) error {
+// splitTransitionTarget separates the transition target (a status name or id)
+// from the issue-key arguments. An explicit --transition flag is the target and
+// leaves every positional as a key. Otherwise the keys are the leading run of
+// issue-key expressions and any remaining arguments form the target, joined
+// with spaces — so both `transition KEY "In Progress"` and the unquoted
+// `transition KEY In Progress` work, while `transition KEY1 KEY2` (all keys)
+// still lists transitions. A mistyped key in the trailing position (e.g.
+// lowercase) is intentionally read as a status name; it then surfaces as a
+// "no transition matching" error rather than an invalid-key one.
+func splitTransitionTarget(args []string, flagTarget string) (target string, keyArgs []string) {
+	if t := strings.TrimSpace(flagTarget); t != "" {
+		return t, args
+	}
+	split := len(args)
+	for i, arg := range args {
+		if !issuekey.IsExpression(arg) {
+			split = i
+			break
+		}
+	}
+	if split == len(args) {
+		return "", args
+	}
+	return strings.TrimSpace(strings.Join(args[split:], " ")), args[:split]
+}
+
+// resolveTransitionID turns a target (a transition id or a status name) into a
+// transition id. A purely numeric target is treated as an id and used directly,
+// preserving the --transition <id> fast path with no extra request. Anything
+// else is matched case-insensitively against the issue's available transitions
+// by name, then by id.
+func resolveTransitionID(ctx context.Context, service jira.IssueService, key, target string) (string, error) {
+	target = strings.TrimSpace(target)
+	if isAllDigits(target) {
+		return target, nil
+	}
+	transitions, _, err := service.Transitions(ctx, key)
+	if err != nil {
+		return "", err
+	}
+	return matchTransition(transitions, target, key)
+}
+
+// matchTransition finds the id of the transition whose name (case-insensitive)
+// or id equals target, preferring a name match. It errors with the available
+// transitions when nothing matches.
+func matchTransition(transitions []*jira.Transition, target, key string) (string, error) {
+	for _, t := range transitions {
+		if t.Name != nil && t.ID != nil && strings.EqualFold(strings.TrimSpace(*t.Name), target) {
+			return *t.ID, nil
+		}
+	}
+	for _, t := range transitions {
+		if t.ID != nil && *t.ID == target {
+			return *t.ID, nil
+		}
+	}
+	return "", fmt.Errorf("validation: no transition matching %q for %s; available: %s", target, key, transitionNames(transitions))
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// transitionNames renders the available transitions as "Name (id)" for an
+// error hint when a requested status cannot be matched.
+func transitionNames(transitions []*jira.Transition) string {
+	names := make([]string, 0, len(transitions))
+	for _, t := range transitions {
+		if t.Name == nil {
+			continue
+		}
+		label := *t.Name
+		if t.ID != nil {
+			label += " (" + *t.ID + ")"
+		}
+		names = append(names, label)
+	}
+	if len(names) == 0 {
+		return "(none)"
+	}
+	return strings.Join(names, ", ")
+}
+
+func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, target string, dryRun bool) error {
 	pipeOut := pipeline.RunMutation(pipeline.MutationInput{
 		Mode:   cmdutil.ADFModeFor(cmd, true),
 		DryRun: dryRun,
@@ -1408,7 +1510,7 @@ func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, 
 				Key: key,
 				Value: map[string]any{
 					"issue":      key,
-					"transition": transitionID,
+					"transition": target,
 					"dry_run":    true,
 				},
 			}
@@ -1423,13 +1525,19 @@ func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, 
 		return fmt.Errorf("jira base URL is required for issue.transition")
 	}
 	service := cmdutil.IssueService(client)
+	// Resolve the target per issue: the same status name can map to
+	// different transition ids across issues in different workflow states.
 	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
-		if _, err := service.Transition(ctx, key, &jira.TransitionRequest{ID: transitionID}); err != nil {
+		id, err := resolveTransitionID(ctx, service, key, target)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := service.Transition(ctx, key, &jira.TransitionRequest{ID: id}); err != nil {
 			return nil, err
 		}
 		return map[string]any{
 			"issue":      key,
-			"transition": transitionID,
+			"transition": id,
 			"dry_run":    false,
 		}, nil
 	})

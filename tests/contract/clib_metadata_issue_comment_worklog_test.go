@@ -59,7 +59,7 @@ func TestIssueCommentAndWorklogFlagsPublishClibMetadata(t *testing.T) {
 		{commandPath: "jira issue edit", flagName: "--assignee", group: "Fields", placeholder: "USER"},
 
 		{commandPath: "jira issue transition", flagName: "--dry-run", group: "Safety"},
-		{commandPath: "jira issue transition", flagName: "--transition", group: "Transition", placeholder: "ID"},
+		{commandPath: "jira issue transition", flagName: "--transition", group: "Transition", placeholder: "STATUS"},
 
 		{commandPath: "jira issue clone", flagName: "--dry-run", group: "Safety"},
 		{commandPath: "jira issue clone", flagName: "--force", group: "Safety"},

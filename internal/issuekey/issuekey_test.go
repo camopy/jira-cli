@@ -101,3 +101,26 @@ func TestParseExpressionsRejectsAmbiguousOrUnsafeInput(t *testing.T) {
 		})
 	}
 }
+
+func TestIsExpression(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want bool
+	}{
+		{"KAN-1", true},
+		{"KAN-1..KAN-5", true},
+		{"KAN-1:5", true},
+		{"KAN-1,KAN-2", true},
+		{"  KAN-3  ", true},
+		{"In Progress", false},
+		{"Done", false},
+		{"To Do", false},
+		{"Code Review", false},
+		{"31", false},
+		{"", false},
+	} {
+		if got := IsExpression(tc.in); got != tc.want {
+			t.Errorf("IsExpression(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
