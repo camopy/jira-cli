@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/gechr/x/fs"
 	"github.com/gechr/x/shell"
 	"github.com/go-viper/mapstructure/v2"
 	koanftoml "github.com/knadh/koanf/parsers/toml"
@@ -139,6 +140,9 @@ func Save(path string, cfg *Config) error {
 	if path == "" {
 		path = DefaultPath()
 	}
+	// Resolve symlinks so the atomic rename below rewrites the link's target
+	// rather than replacing the symlink itself.
+	path = writeThroughPath(path)
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
@@ -164,6 +168,32 @@ func Save(path string, cfg *Config) error {
 		return err
 	}
 	return os.Rename(tmpName, path)
+}
+
+// writeThroughPath resolves path so an atomic temp-file+rename rewrites a
+// symlinked config file's target rather than replacing the link. A live link
+// resolves via EvalSymlinks; a dangling link (its target not created yet) is
+// followed one level via Readlink so the first write lands on the intended
+// target. A path that is not a symlink — including a genuinely new file — is
+// returned unchanged.
+func writeThroughPath(path string) string {
+	if resolved, err := fs.Resolve(path); err == nil {
+		return resolved
+	}
+	// Resolve failed — e.g. a dangling link whose target is not created yet.
+	// If path is itself a symlink, follow it one level so the write lands on
+	// the declared target rather than clobbering the link.
+	if link, err := fs.IsSymlink(path); err != nil || !link {
+		return path
+	}
+	dest, err := os.Readlink(path)
+	if err != nil {
+		return path
+	}
+	if !filepath.IsAbs(dest) {
+		dest = filepath.Join(filepath.Dir(path), dest)
+	}
+	return dest
 }
 
 // Get returns the string form of a configuration value addressed by its
