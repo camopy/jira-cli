@@ -81,6 +81,11 @@ type Detection struct {
 	IsTTY     bool
 	Agent     bool
 	AgentName string
+	// StdinPiped reports that stdin is NOT an interactive terminal (a pipe,
+	// redirect, or /dev/null). It is deliberately negative so the zero value
+	// means "interactive" — the safe default for code that builds a Detection
+	// without a real stdin. Set from the runtime's stdin in PersistentPreRunE.
+	StdinPiped bool
 }
 
 type AgentName string

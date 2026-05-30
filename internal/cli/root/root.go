@@ -126,6 +126,7 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 		return err
 	}
 	det := detectOutput(rt)
+	det.StdinPiped = !runtimeStdinIsTTY(rt)
 	det.Mode = cli.ResolveOutputMode(outputMode, det)
 	interactive, _ := pf.GetBool("interactive")
 	if interactive {
@@ -206,6 +207,14 @@ func runtimeStdoutIsTTY(rt *runtime.Runtime) bool {
 	return ok && terminal.Is(f)
 }
 
+// runtimeStdinIsTTY reports whether the runtime stdin reader is an
+// interactive terminal. A non-*os.File reader (test buffer, pipe) is never a
+// TTY, so a piped or redirected stdin reads as non-interactive.
+func runtimeStdinIsTTY(rt *runtime.Runtime) bool {
+	f, ok := rt.Stdin().(*os.File)
+	return ok && terminal.Is(f)
+}
+
 // New builds a fully assembled root command for the given runtime — the
 // importable entry point used by both cmd/jira (to run) and cmd/gen-docs
 // (to generate reference docs). The bare root plus every command family
@@ -254,7 +263,7 @@ func configureRootFlags(root *cobra.Command) {
 		"(compact is the JSON data payload without the envelope — no ok/meta/warnings/errors)")
 	pf.BoolP("interactive", "i", false, "Launch persistent dashboard from root command")
 	pf.BoolP("debug", "d", false, "Enable debug output")
-	pf.Bool("no-input", false, "Disable interactive prompts (mandatory for headless / agent invocation)")
+	pf.Bool("no-input", false, "Disable interactive prompts (implied off a TTY or in an agent; pass --no-input=false to force prompts)")
 	pf.Duration("timeout", 0, "Whole-invocation deadline (e.g. 30s, 2m); 0 disables it")
 	pf.String("color", "auto", `Color mode: "auto", "always", or "never"`)
 	// ADF strict/best-effort selection — mutually exclusive;

@@ -16,7 +16,6 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/boardscope"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
-	stdininput "github.com/matcra587/jira-cli/internal/cli/stdin"
 	"github.com/matcra587/jira-cli/internal/config"
 	editorpkg "github.com/matcra587/jira-cli/internal/editor"
 	"github.com/matcra587/jira-cli/internal/issuekey"
@@ -997,25 +996,22 @@ In headless mode (--no-input), at least one field flag MUST be provided
 				fields["assignee"] = wire
 			}
 			// kubectl-style default: bare `jira issue edit KEY` (no field
-			// flags, no --json-input) opens the configured external editor
-			// on the issue description. The editor reads keystrokes from
-			// stdin, so the gate checks stdin specifically — piping stdout
-			// (`jira issue edit KEY | tee out.json`) is a legitimate human
-			// workflow that must NOT trip the refusal. det.Agent covers
-			// LLM-agent harnesses regardless of stdin shape.
+			// flags, no --json-input) opens the configured external editor on
+			// the issue description. The editor needs an interactive terminal,
+			// so any headless context refuses and asks for a field instead.
+			// NoInputRequested is the single gate: it is true under explicit
+			// --no-input, an agent harness, or a piped/redirected stdin — but
+			// stays false for `jira issue edit KEY | tee out.json`, which pipes
+			// stdout yet keeps an interactive stdin, so that editor still opens.
 			if len(fields) == 0 {
 				if jsonInput != "" && issueEditPayloadHasTopLevelFieldCandidates(payload) {
 					return fmt.Errorf(`validation: --json-input payload has no recognized fields; wrap issue fields under a top-level "fields" object, e.g. {"fields": {"summary": "New"}}`)
 				}
 				if noInput {
-					return fmt.Errorf("validation: no fields specified for issue edit; provide --summary, --assignee, or --json-input")
+					return fmt.Errorf("validation: the issue edit editor needs an interactive terminal; in a non-interactive context, provide --summary, --assignee, or --json-input")
 				}
 				if len(keys) > 1 {
 					return fmt.Errorf("validation: multi-key issue edit requires --summary, --assignee, or --json-input")
-				}
-				det := cmdutil.DetectorFromContext(cmd)
-				if det.Agent || !stdininput.IsTerminal() {
-					return fmt.Errorf("validation: issue edit requires an interactive terminal for the editor flow; in agent or non-TTY context, provide --summary, --assignee, or --json-input")
 				}
 				return issueEditWithEditor(cmd, keys[0], dryRun)
 			}

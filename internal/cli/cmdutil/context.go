@@ -44,15 +44,30 @@ func ConfigPath(cmd *cobra.Command) string {
 	return path
 }
 
-// NoInputRequested reports whether the caller opted out of interactive
-// prompts via the root --no-input flag. It is the single source of truth
-// for headless-mode detection across every subcommand.
+// NoInputRequested reports whether interactive prompts are off. It is the
+// single source of truth for headless-mode detection across every subcommand.
+//
+// An explicit --no-input always wins. When the flag is not set, no-input is
+// implied for a non-interactive session — an agent harness or a piped/
+// redirected stdin — so a scripted mutation never stalls waiting for a prompt
+// it cannot show. The probe is stdin, not stdout: `jira issue edit KEY | tee`
+// pipes stdout but keeps an interactive stdin, and must still open the editor.
 //
 // Commands MUST read root persistent flags through this helper rather than
 // re-declaring a same-name local flag: a local flag of the same name shadows
 // the inherited one, so `jira --no-input issue create` would set the root
 // flag while the handler read an unset local copy.
 func NoInputRequested(cmd *cobra.Command) bool {
-	v, _ := cmd.Root().PersistentFlags().GetBool("no-input")
-	return v
+	pf := cmd.Root().PersistentFlags()
+	if v, _ := pf.GetBool("no-input"); v {
+		return true
+	}
+	// The flag is false. An explicit --no-input=false wins (the caller wants
+	// prompts even off a TTY); otherwise imply no-input for a non-interactive
+	// session.
+	if f := pf.Lookup("no-input"); f != nil && f.Changed {
+		return false
+	}
+	det := DetectorFromContext(cmd)
+	return det.Agent || det.StdinPiped
 }
