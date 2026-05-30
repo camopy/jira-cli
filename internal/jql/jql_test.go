@@ -118,6 +118,48 @@ func TestIssueMineJQLCombinesRawJQLWithAssignee(t *testing.T) {
 	}
 }
 
+// Status comparator filters compile to statusCategory clauses over the
+// To Do < In Progress < Done order; ! negates a specific status; plain names
+// keep their in-clause.
+func TestStatusComparatorFilters(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		statuses []string
+		want     string // substring expected in the built query
+		wantErr  bool
+	}{
+		{name: "plain single", statuses: []string{"Open"}, want: "status = Open"},
+		{name: "plain multiple", statuses: []string{"Open", "Closed"}, want: "status in (Open, Closed)"},
+		{name: "less than category", statuses: []string{"<Done"}, want: `statusCategory in ("To Do", "In Progress")`},
+		{name: "ge category", statuses: []string{">=In Progress"}, want: `statusCategory in ("In Progress", Done)`},
+		{name: "gt category single", statuses: []string{">In Progress"}, want: "statusCategory = Done"},
+		{name: "le category all", statuses: []string{"<=Done"}, want: `statusCategory in ("To Do", "In Progress", Done)`},
+		{name: "negate specific status", statuses: []string{"!Abandoned"}, want: "status != Abandoned"},
+		{name: "comparator and negation combine", statuses: []string{">=In Progress", "!Abandoned"}, want: `statusCategory in ("In Progress", Done) AND status != Abandoned`},
+		{name: "plain and comparator are OR alternatives", statuses: []string{"Open", ">=In Progress"}, want: `(status = Open OR statusCategory in ("In Progress", Done))`},
+		{name: "case-insensitive no-space category alias", statuses: []string{">=inprogress"}, want: `statusCategory in ("In Progress", Done)`},
+		{name: "non-category operand errors", statuses: []string{"<Abandoned"}, wantErr: true},
+		{name: "empty comparator result errors", statuses: []string{">Done"}, wantErr: true},
+		{name: "bare bang errors", statuses: []string{"!"}, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := jql.BuildOptions{Statuses: tc.statuses}.Build()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Build() = %q, want error", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Build() error = %v", err)
+			}
+			if !strings.Contains(got, tc.want) {
+				t.Fatalf("Build() = %q, want substring %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // A custom --jql without its own ORDER BY must still apply --order-by, which
 // was previously dropped silently.
 func TestIssueListAppliesOrderByToRawWithoutOrderBy(t *testing.T) {

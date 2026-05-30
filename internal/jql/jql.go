@@ -104,11 +104,138 @@ func (o BuildOptions) filterClauses() ([]string, error) {
 		clauses = append(clauses, clause)
 	}
 	appendInClause("parent", o.Epics)
-	appendInClause("status", o.Statuses)
+	statusClauses, err := statusFilterClauses(o.Statuses)
+	if err != nil {
+		return nil, err
+	}
+	clauses = append(clauses, statusClauses...)
 	appendInClause("priority", o.Priorities)
 	appendInClause("labels", o.Labels)
 	appendInClause("issuetype", o.IssueTypes)
 	return clauses, nil
+}
+
+// statusCategoryOrder is Jira's universal three-bucket workflow ordering. It
+// is the basis for the comparator status filters; specific workflow statuses
+// map onto one of these buckets, so the comparators need no live workflow
+// fetch or per-project configuration.
+var statusCategoryOrder = []string{"To Do", "In Progress", "Done"}
+
+// statusFilterClauses turns --status values into JQL. The values fall into two
+// kinds: positive predicates (a plain status name, or a category comparator)
+// are alternatives, OR-ed together; negations are constraints, AND-ed on.
+//
+//	plain name           one `status = N` / `status in (N, ...)` term
+//	<C / <=C / >C / >=C   category comparator over statusCategoryOrder (C must
+//	                      be a category: To Do, In Progress, Done)
+//	!S                    exclude a specific status (status != S)
+//
+// So `--status Open,'>=In Progress'` reads as "Open OR in-progress-or-beyond",
+// not their (empty) intersection, while `--status '>=In Progress','!Abandoned'`
+// keeps the negation as an AND-ed constraint.
+func statusFilterClauses(values []string) ([]string, error) {
+	values = CompactStrings(values)
+	if len(values) == 0 {
+		return nil, nil
+	}
+	var plain, positives, negatives []string
+	for _, v := range values {
+		switch {
+		case strings.HasPrefix(v, "!"):
+			name := strings.TrimSpace(v[1:])
+			if name == "" {
+				return nil, fmt.Errorf("status filter %q: missing status name after %q", v, "!")
+			}
+			negatives = append(negatives, "status != "+jqlValue(name))
+		case statusComparatorPrefix(v) != "":
+			clause, err := statusCategoryComparator(v)
+			if err != nil {
+				return nil, err
+			}
+			positives = append(positives, clause)
+		default:
+			plain = append(plain, v)
+		}
+	}
+	switch len(plain) {
+	case 0:
+	case 1:
+		positives = append([]string{"status = " + jqlValue(plain[0])}, positives...)
+	default:
+		positives = append([]string{"status in (" + joinJQLValues(plain) + ")"}, positives...)
+	}
+
+	var clauses []string
+	switch len(positives) {
+	case 0:
+	case 1:
+		clauses = append(clauses, positives[0])
+	default:
+		clauses = append(clauses, "("+strings.Join(positives, " OR ")+")")
+	}
+	return append(clauses, negatives...), nil
+}
+
+// statusComparatorPrefix returns the leading comparator operator in v, or "".
+// Two-character operators are tested first so "<=" is not read as "<".
+func statusComparatorPrefix(v string) string {
+	for _, op := range []string{"<=", ">=", "<", ">"} {
+		if strings.HasPrefix(v, op) {
+			return op
+		}
+	}
+	return ""
+}
+
+// statusCategoryComparator compiles a comparator expression (e.g. ">=In
+// Progress") into a statusCategory clause over statusCategoryOrder.
+func statusCategoryComparator(v string) (string, error) {
+	op := statusComparatorPrefix(v)
+	target, ok := statusCategoryIndex(strings.TrimSpace(v[len(op):]))
+	if !ok {
+		return "", fmt.Errorf("status filter %q: %q comparators take a status category (To Do, In Progress, Done)", v, op)
+	}
+	var cats []string
+	for i, name := range statusCategoryOrder {
+		if comparatorMatches(op, i, target) {
+			cats = append(cats, name)
+		}
+	}
+	if len(cats) == 0 {
+		return "", fmt.Errorf("status filter %q matches no status category", v)
+	}
+	if len(cats) == 1 {
+		return "statusCategory = " + jqlValue(cats[0]), nil
+	}
+	return "statusCategory in (" + joinJQLValues(cats) + ")", nil
+}
+
+// statusCategoryIndex maps a category name (case-insensitive, with or without
+// the space in "To Do") to its position in statusCategoryOrder.
+func statusCategoryIndex(name string) (int, bool) {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "to do", "todo":
+		return 0, true
+	case "in progress", "inprogress":
+		return 1, true
+	case "done":
+		return 2, true
+	}
+	return 0, false
+}
+
+func comparatorMatches(op string, i, target int) bool {
+	switch op {
+	case "<":
+		return i < target
+	case "<=":
+		return i <= target
+	case ">":
+		return i > target
+	case ">=":
+		return i >= target
+	}
+	return false
 }
 
 // IssueList combines a raw JQL string with the builder's structured filters.

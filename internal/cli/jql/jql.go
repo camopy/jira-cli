@@ -52,7 +52,7 @@ func AddJQLBuilderFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 	cmd.Flags().StringSliceVar(&builder.Epics, "epic", nil, "Restrict to issues in epic keys")
 	cmd.Flags().StringVar(&builder.Assignee, "assignee", "", `Restrict by assignee; use "me" for currentUser()`)
 	cmd.Flags().StringVar(&builder.Reporter, "reporter", "", `Restrict by reporter; use "me" for currentUser()`)
-	cmd.Flags().StringSliceVar(&builder.Statuses, "status", nil, "Restrict by status name")
+	cmd.Flags().StringSliceVar(&builder.Statuses, "status", nil, `Restrict by status name, category comparator ("<Done", ">=In Progress"), or negation ("!Abandoned")`)
 	cmd.Flags().StringSliceVar(&builder.Priorities, "priority", nil, "Restrict by priority")
 	cmd.Flags().StringSliceVar(&builder.Labels, "label", nil, "Restrict by label")
 	cmd.Flags().StringSliceVar(&builder.IssueTypes, "type", nil, "Restrict by issue type")

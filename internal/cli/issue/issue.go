@@ -65,7 +65,7 @@ func issueMineCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.detail, "detail", false, "Fetch full issue records")
 	cmd.Flags().StringVar(&opts.jqlQuery, "jql", "", "Add custom JQL clauses (combined with assignee = currentUser())")
 	cmd.Flags().BoolVar(&opts.asJQL, "as-jql", false, "Print the built JQL without calling Jira")
-	cmd.Flags().StringSliceVar(&opts.builder.Statuses, "status", nil, "Restrict by status name")
+	cmd.Flags().StringSliceVar(&opts.builder.Statuses, "status", nil, `Restrict by status name, category comparator ("<Done", ">=In Progress"), or negation ("!Abandoned")`)
 	cmd.Flags().StringSliceVar(&opts.builder.Projects, "project", nil, "Restrict by project key")
 	cmdutil.ExtendFlag(cmd.Flags(), "detail", clib.FlagExtra{Group: "Output"})
 	cmdutil.ExtendFlag(cmd.Flags(), "jql", clib.FlagExtra{Group: "Filters", Placeholder: "JQL"})

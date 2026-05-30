@@ -64,10 +64,18 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 | Repeated `--label X`        | `labels in (X, Y, Z)`                  |
 | Repeated `--type X`         | `issuetype in (X, Y, Z)`               |
 | Repeated `--status X`       | `status in (X, Y, Z)`                  |
+| `--status '<Done'`          | `statusCategory in ("To Do", "In Progress")` |
+| `--status '>=In Progress'`  | `statusCategory in ("In Progress", Done)` |
+| `--status '!Abandoned'`     | `status != Abandoned`                  |
 | `--order-by F --desc`       | `ORDER BY F DESC` (default)            |
 | `--order-by F --desc=false` | `ORDER BY F ASC`                       |
 | no flags                    | `updated >= -365d ORDER BY updated DESC` |
 
+- Status comparators (`<`, `<=`, `>`, `>=`) operate on the three workflow
+  *categories* (`To Do` < `In Progress` < `Done`), not on status names — so
+  `<Done` excludes every done-category status (Closed, Resolved, Won't Do, …),
+  and the operand must be one of those three category names. Plain names and
+  comparators combine as alternatives (OR); `!Status` is AND-ed as an exclusion.
 - Saved queries live as files with optional YAML frontmatter:
   ```text
   ---
