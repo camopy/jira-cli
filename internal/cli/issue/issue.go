@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/mail"
 	"net/url"
 	"sort"
 	"strings"
@@ -576,8 +577,10 @@ func issueCreateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			// --assignee shortcut: feeds the spec's assignee_account_id input
-			// when "me" / a literal account-id is supplied. "none" clears it.
+			// --assignee shortcut: feeds the assignee_account_id alias for "me" /
+			// a literal account-id; "none" clears it; an email is resolved to an
+			// account id after a live client exists.
+			var assigneeEmail string
 			if v := strings.TrimSpace(assignee); v != "" {
 				switch strings.ToLower(v) {
 				case "none", "unassigned":
@@ -587,7 +590,16 @@ func issueCreateCommand() *cobra.Command {
 						payload["assignee_account_id"] = profile.AccountID
 					}
 				default:
-					payload["assignee_account_id"] = v
+					if email, ok, aerr := assigneeEmailFrom(v); aerr != nil {
+						return aerr
+					} else if ok {
+						if dryRun {
+							return fmt.Errorf("validation: %s", assigneeEmailDryRunErr)
+						}
+						assigneeEmail = email
+					} else {
+						payload["assignee_account_id"] = v
+					}
 				}
 			}
 			if noInput {
@@ -661,6 +673,17 @@ func issueCreateCommand() *cobra.Command {
 					return fmt.Errorf("jira base URL is required for issue.create")
 				}
 			}
+			// An --assignee email is resolved to an account id now that a live
+			// client exists (a dry-run was already rejected above). The wire
+			// `assignee` field is set directly — alias normalization has already
+			// run and there is no assignee_account_id to conflict with.
+			if assigneeEmail != "" {
+				wire, rerr := resolveAssigneeEmail(cmd.Context(), client, assigneeEmail)
+				if rerr != nil {
+					return rerr
+				}
+				payload["assignee"] = wire
+			}
 			pipeIn := pipeline.MutationInput{
 				Mode:             cmdutil.ADFModeFor(cmd, true),
 				Fields:           payload,
@@ -733,7 +756,7 @@ func issueCreateCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
 	cmd.Flags().StringVar(&summary, "summary", "", "Issue summary")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read issue create payload from JSON file")
-	cmd.Flags().StringVar(&assignee, "assignee", "", `Assign on creation: "me" or a Jira account ID`)
+	cmd.Flags().StringVar(&assignee, "assignee", "", `Assign on creation: "me", an email, or a Jira account ID`)
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	cmdutil.ExtendFlag(cmd.Flags(), "summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
 	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
@@ -746,33 +769,62 @@ func issueCreateCommand() *cobra.Command {
 // field if set, otherwise the global Config.Editor. The resolver in
 // internal/editor layers $JIRA_EDITOR / $EDITOR / $VISUAL / "vi" on
 // top of whatever this returns.
-// resolveAssigneeField turns an --assignee flag value into the Jira `assignee`
-// field shape. Accepted values:
-//   - ""                         → no change (set ok=false)
-//   - "me" / "@me"               → profile.AccountID
-//   - "none" / "unassigned"      → nil (clears assignee)
-//   - "<accountId>"              → {accountId: "..."}
-//
-// Returns (value, set, error). set=false with err=nil means no flag was given
-// (no field change). err is non-nil when input was supplied but couldn't be
-// resolved — the caller MUST surface this rather than silently dropping it,
-// because Jira Cloud ignores email-based assignment without complaint.
-func resolveAssigneeField(input string, profile config.Profile) (any, bool, error) {
+// resolveAssigneeField interprets an --assignee value into a Jira wire assignee.
+// It returns the ready wire value for me/none/account-id; when the value is an
+// email address it returns a non-empty email instead, which the caller resolves
+// to an account-id via resolveAssigneeEmail once a live client is available.
+// set is false only when input is blank.
+func resolveAssigneeField(input string, profile config.Profile) (wire any, email string, set bool, err error) {
 	v := strings.TrimSpace(input)
 	if v == "" {
-		return nil, false, nil
+		return nil, "", false, nil
 	}
 	switch strings.ToLower(v) {
 	case "none", "unassigned":
-		return nil, true, nil
+		return nil, "", true, nil
 	case "me", "@me":
 		if profile.AccountID != "" {
-			return map[string]string{"accountId": profile.AccountID}, true, nil
+			return map[string]string{"accountId": profile.AccountID}, "", true, nil
 		}
-		return nil, false, fmt.Errorf("--assignee me requires profile.account_id; run `jira auth whoami --save` to populate it")
+		return nil, "", false, fmt.Errorf("--assignee me requires profile.account_id; run `jira auth whoami --save` to populate it")
 	default:
-		return map[string]string{"accountId": v}, true, nil
+		if email, ok, err := assigneeEmailFrom(v); err != nil {
+			return nil, "", false, err
+		} else if ok {
+			return nil, email, true, nil
+		}
+		return map[string]string{"accountId": v}, "", true, nil
 	}
+}
+
+// assigneeEmailFrom classifies an assignee token: a value containing "@" is
+// treated as an email and must be a bare, valid address (no display-name or
+// comment form), returned for remote resolution; a value without "@" is a
+// literal account id (ok=false, no error). net/mail both validates and trims.
+func assigneeEmailFrom(v string) (email string, ok bool, err error) {
+	if !strings.Contains(v, "@") {
+		return "", false, nil
+	}
+	addr, perr := mail.ParseAddress(strings.TrimSpace(v))
+	if perr != nil || addr.Address != strings.TrimSpace(v) {
+		return "", false, fmt.Errorf("invalid assignee email %q", v)
+	}
+	return addr.Address, true, nil
+}
+
+// assigneeEmailDryRunErr is the shared message when an --assignee email cannot
+// be resolved because --dry-run makes no live request.
+const assigneeEmailDryRunErr = "resolving an assignee email needs a live request; not available with --dry-run — pass an account id instead"
+
+// resolveAssigneeEmail resolves an email to a wire assignee value via the
+// /user/search resolver (0 matches → ErrUserNotFound, 1 → that account, 2+ →
+// AmbiguousUserError). It requires a live client.
+func resolveAssigneeEmail(ctx context.Context, client *jira.Client, email string) (any, error) {
+	id, err := jira.NewUserService(client).ResolveUser(ctx, email)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{"accountId": id}, nil
 }
 
 func issueEditPayloadHasTopLevelFieldCandidates(payload map[string]any) bool {
@@ -916,10 +968,33 @@ In headless mode (--no-input), at least one field flag MUST be provided
 			if v := strings.TrimSpace(summary); v != "" {
 				fields["summary"] = v
 			}
-			if v, set, err := resolveAssigneeField(assignee, profile); err != nil {
-				return err
-			} else if set {
-				fields["assignee"] = v
+			assigneeWire, assigneeEmail, assigneeSet, aerr := resolveAssigneeField(assignee, profile)
+			if aerr != nil {
+				return aerr
+			}
+			if assigneeSet && assigneeEmail == "" {
+				fields["assignee"] = assigneeWire
+			}
+			// An --assignee email is resolved to an account id up front — before
+			// the editor-default check and the single/multi-key split — so every
+			// path (including multi-key) submits the resolved assignee. It needs
+			// a live request and is rejected under --dry-run.
+			if assigneeEmail != "" {
+				if dryRun {
+					return fmt.Errorf("validation: %s", assigneeEmailDryRunErr)
+				}
+				rc, _, hasRC, cerr := cmdutil.JiraClientForCommand(cmd)
+				if cerr != nil {
+					return cerr
+				}
+				if !hasRC {
+					return fmt.Errorf("jira base URL is required for issue.edit")
+				}
+				wire, rerr := resolveAssigneeEmail(cmd.Context(), rc, assigneeEmail)
+				if rerr != nil {
+					return rerr
+				}
+				fields["assignee"] = wire
 			}
 			// kubectl-style default: bare `jira issue edit KEY` (no field
 			// flags, no --json-input) opens the configured external editor
@@ -1020,7 +1095,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read issue edit payload from JSON file")
 	cmd.Flags().StringVar(&summary, "summary", "", "Replace the issue summary")
-	cmd.Flags().StringVar(&assignee, "assignee", "", `Set assignee: "me", "none"/"unassigned", or a Jira account ID`)
+	cmd.Flags().StringVar(&assignee, "assignee", "", `Set assignee: "me", "none"/"unassigned", an email, or a Jira account ID`)
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
 	cmdutil.ExtendFlag(cmd.Flags(), "summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/mail"
 	"os"
 	"strings"
 	"time"
@@ -220,6 +221,16 @@ func authLoginCommand() *cobra.Command {
 			}
 			if profileName == "" {
 				profileName = "default"
+			}
+			// Normalise and validate the email on every path. The interactive
+			// form already validates; this also covers the headless --email /
+			// --json-input path, where a trailing space would otherwise be
+			// stored and silently break Jira user lookups.
+			email = strings.TrimSpace(email)
+			if email != "" {
+				if _, mErr := mail.ParseAddress(email); mErr != nil {
+					return fmt.Errorf("validation: invalid account email %q: %w", email, mErr)
+				}
 			}
 			flagBackend := config.SecretBackend(backend)
 			if err := validateSecretBackend(backend); err != nil {
@@ -622,7 +633,7 @@ func authLoginForm(skipVerify bool, profileName *string, profileNameHint string,
 				Title("Atlassian account email").
 				Description("The Atlassian account email the API token belongs to; sent as the basic-auth username.").
 				Value(email).
-				Validate(requiredString("account email is required")),
+				Validate(validateEmailField),
 		).Title("Jira profile").Description("Configure the Jira instance and account identity."),
 		huh.NewGroup(
 			huh.NewSelect[string]().
@@ -709,6 +720,20 @@ func requiredString(message string) func(string) error {
 		}
 		return nil
 	}
+}
+
+// validateEmailField requires a non-empty, well-formed email address. Trimming
+// before parsing catches a trailing space that would otherwise be stored and
+// silently break Jira user lookups.
+func validateEmailField(value string) error {
+	v := strings.TrimSpace(value)
+	if v == "" {
+		return errors.New("account email is required")
+	}
+	if _, err := mail.ParseAddress(v); err != nil {
+		return errors.New("enter a valid email address")
+	}
+	return nil
 }
 
 func validateSecretBackend(value string) error {
