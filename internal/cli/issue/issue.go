@@ -556,6 +556,8 @@ func issueListDetailExpand() []string {
 func issueCreateCommand() *cobra.Command {
 	var dryRun bool
 	var summary, jsonInput, assignee string
+	var project, issueType, parent, priority string
+	var labels []string
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create an issue",
@@ -568,6 +570,17 @@ func issueCreateCommand() *cobra.Command {
 					return err
 				}
 			}
+			// Convenience flags layer onto --json-input so common fields need
+			// no hand-written JSON. An explicit flag overrides the same key in
+			// --json-input; a clashing project/type alias-vs-wire pair is
+			// caught later by NormalizeCreateAliasesChecked.
+			applyCreateFlags(payload, createFlags{
+				project:   project,
+				issueType: issueType,
+				parent:    parent,
+				priority:  priority,
+				labels:    labels,
+			})
 			// Resolve the profile WITHOUT building a client: --assignee me,
 			// --no-input validation, and the dry-run preview only need
 			// profile metadata. Credentials are resolved later, at the
@@ -756,11 +769,50 @@ func issueCreateCommand() *cobra.Command {
 	cmd.Flags().StringVar(&summary, "summary", "", "Issue summary")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read issue create payload from JSON file")
 	cmd.Flags().StringVar(&assignee, "assignee", "", `Assign on creation: "me", an email, or a Jira account ID`)
+	cmd.Flags().StringVar(&project, "project", "", "Project key (overrides the profile default)")
+	cmd.Flags().StringVar(&issueType, "type", "", "Issue type name (overrides the profile default)")
+	cmd.Flags().StringVar(&parent, "parent", "", "Parent issue key (for a subtask or epic child)")
+	cmd.Flags().StringVar(&priority, "priority", "", "Priority name")
+	cmd.Flags().StringSliceVar(&labels, "label", nil, "Label to attach (repeatable)")
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	cmdutil.ExtendFlag(cmd.Flags(), "summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
 	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
 	cmdutil.ExtendFlag(cmd.Flags(), "assignee", clib.FlagExtra{Group: "Fields", Placeholder: "USER"})
+	cmdutil.ExtendFlag(cmd.Flags(), "project", clib.FlagExtra{Group: "Fields", Placeholder: "KEY", Complete: "predictor=cacheproject"})
+	cmdutil.ExtendFlag(cmd.Flags(), "type", clib.FlagExtra{Group: "Fields", Placeholder: "NAME", Complete: "predictor=cacheissuetype"})
+	cmdutil.ExtendFlag(cmd.Flags(), "parent", clib.FlagExtra{Group: "Fields", Placeholder: "KEY", Complete: "predictor=issuekey"})
+	cmdutil.ExtendFlag(cmd.Flags(), "priority", clib.FlagExtra{Group: "Fields", Placeholder: "NAME"})
+	cmdutil.ExtendFlag(cmd.Flags(), "label", clib.FlagExtra{Group: "Fields", Placeholder: "NAME", Complete: "predictor=cachelabel,comma"})
 	return cmd
+}
+
+// createFlags carries the issue-create convenience flag values.
+type createFlags struct {
+	project, issueType, parent, priority string
+	labels                               []string
+}
+
+// applyCreateFlags merges the convenience flags into the create payload. Each
+// value is set only when non-empty, so it overrides a same-key --json-input
+// value but an unset flag leaves the payload untouched. project/issueType use
+// the create-input aliases the pipeline already normalises; parent/priority
+// take their Jira wire object shapes and labels a string array.
+func applyCreateFlags(payload map[string]any, f createFlags) {
+	if v := strings.TrimSpace(f.project); v != "" {
+		payload["project_key"] = v
+	}
+	if v := strings.TrimSpace(f.issueType); v != "" {
+		payload["issue_type"] = v
+	}
+	if v := strings.TrimSpace(f.parent); v != "" {
+		payload["parent"] = map[string]any{"key": v}
+	}
+	if v := strings.TrimSpace(f.priority); v != "" {
+		payload["priority"] = map[string]any{"name": v}
+	}
+	if cleaned := jql.CompactStrings(f.labels); len(cleaned) > 0 {
+		payload["labels"] = cleaned
+	}
 }
 
 // cmdutil.ConfiguredEditorFor returns the editor.Resolve(...) "configured"
@@ -877,7 +929,7 @@ func issueCreatePreview(fields map[string]any, profile config.Profile) (map[stri
 	if acct := cmdutil.WireObjectString(fields["assignee"], "accountId"); acct != "" {
 		preview["assignee_account_id"] = acct
 	}
-	for _, key := range []string{"priority", "labels", "components", "epic_key", "custom_fields"} {
+	for _, key := range []string{"priority", "labels", "parent", "components", "epic_key", "custom_fields"} {
 		if v, ok := fields[key]; ok {
 			preview[key] = v
 		}
