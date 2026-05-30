@@ -541,7 +541,11 @@ func authLoginQuestions() []authLoginQuestion {
 
 func promptAuthLogin(cmd *cobra.Command, skipVerify bool, profileName, baseURL, email, backend, onePasswordAccount, vault, item, credential *string) error {
 	var confirmed bool
-	form := authLoginForm(skipVerify, profileName, baseURL, email, backend, onePasswordAccount, vault, item, credential, &confirmed).
+	// The resolved default is shown only as a placeholder, not pre-filled into
+	// the editable field (authLoginForm starts it empty); a blank entry falls
+	// back to this hint after the form.
+	nameHint := strings.TrimSpace(*profileName)
+	form := authLoginForm(skipVerify, profileName, nameHint, baseURL, email, backend, onePasswordAccount, vault, item, credential, &confirmed).
 		WithInput(cmd.InOrStdin()).
 		WithOutput(cmd.ErrOrStderr())
 	if err := form.RunWithContext(cmd.Context()); err != nil {
@@ -564,21 +568,45 @@ func promptAuthLogin(cmd *cobra.Command, skipVerify bool, profileName, baseURL, 
 		return cli.NewPromptError(cli.PromptAborted, "auth login", errors.New("login not confirmed"))
 	}
 	trimAuthLoginValues(profileName, baseURL, email, backend, onePasswordAccount, vault, item, credential)
+	*profileName = resolveProfileName(*profileName, nameHint)
 	return nil
 }
 
-func authLoginForm(skipVerify bool, profileName, baseURL, email, backend, onePasswordAccount, vault, item, credential *string, confirmed *bool) *huh.Form {
+// resolveProfileName picks the effective profile name from the interactive
+// form: a typed value (trimmed) wins; a blank field falls back to the resolved
+// default that was shown as the placeholder hint.
+func resolveProfileName(typed, hint string) string {
+	if t := strings.TrimSpace(typed); t != "" {
+		return t
+	}
+	return hint
+}
+
+// profileNameInput builds the interactive profile-name field. The resolved
+// default is shown only as a placeholder, never as the editable value: huh
+// appends keystrokes to a pre-filled value, so a placeholder keeps a typed
+// name from being mangled onto the default.
+func profileNameInput(value *string, hint string) *huh.Input {
+	return huh.NewInput().
+		Title("Profile name").
+		Description("Short local name for this Jira account, for example work or personal.").
+		Placeholder(hint).
+		Value(value)
+}
+
+func authLoginForm(skipVerify bool, profileName *string, profileNameHint string, baseURL, email, backend, onePasswordAccount, vault, item, credential *string, confirmed *bool) *huh.Form {
+	// Start the profile-name field empty with the resolved default shown only as
+	// a placeholder: huh appends keystrokes to a pre-filled value, so pre-filling
+	// the name would mangle a typed one and could overwrite the wrong profile.
+	// promptAuthLogin restores the hint for a blank field after the form.
+	*profileName = ""
 	confirmDescription := "The token is verified against Jira before it is saved."
 	if skipVerify {
 		confirmDescription = "The credential is stored without verification (--skip-verify)."
 	}
 	return huh.NewForm(
 		huh.NewGroup(
-			huh.NewInput().
-				Title("Profile name").
-				Description("Short local name for this Jira account, for example work or personal.").
-				Value(profileName).
-				Validate(requiredString("profile name is required")),
+			profileNameInput(profileName, profileNameHint),
 			huh.NewInput().
 				Title("Jira site").
 				Description(`Your Atlassian site name, e.g. "acme" for acme.atlassian.net. A full https:// URL also works.`).
@@ -645,7 +673,7 @@ func authLoginForm(skipVerify bool, profileName, baseURL, email, backend, onePas
 			huh.NewNote().
 				Title("Review").
 				DescriptionFunc(func() string {
-					return loginReviewSummary(*profileName, *baseURL, *email, *backend, *onePasswordAccount, *vault, *item)
+					return loginReviewSummary(resolveProfileName(*profileName, profileNameHint), *baseURL, *email, *backend, *onePasswordAccount, *vault, *item)
 				}, []*string{profileName, baseURL, email, backend, onePasswordAccount, vault, item}),
 			huh.NewConfirm().
 				Title("Store this credential?").
