@@ -1,6 +1,8 @@
 package cmdutil
 
 import (
+	"slices"
+
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/gechr/clib/complete"
 	"github.com/gechr/clib/help"
@@ -22,19 +24,49 @@ func NewHelpRenderer() *help.Renderer {
 }
 
 // StandardHelpSections returns the standard clib help sections for cmd,
-// with subcommand listing made optional.
+// with subcommand listing made optional and the Output group rendered last.
 func StandardHelpSections(cmd *cobra.Command) []help.Section {
 	sections := clib.SectionsWithOptions(clib.WithSubcommandOptional())(cmd)
 	if cmd == nil || !cmd.Runnable() || !cmd.HasSubCommands() || helpSectionsContainFlags(sections) {
-		return sections
+		return moveOutputSectionLast(sections)
 	}
 
 	flagSections := runnableParentFlagSections(cmd)
 	if len(flagSections) == 0 {
-		return sections
+		return moveOutputSectionLast(sections)
 	}
 	markUsageWithOptions(sections)
-	return append(sections, flagSections...)
+	return moveOutputSectionLast(append(sections, flagSections...))
+}
+
+// moveOutputSectionLast reorders the flag sections so the "Output" group is the
+// last domain group. clib renders groups in first-seen registration order,
+// which otherwise places Output wherever its first flag happened to be
+// declared (e.g. before "Filters"). Output is re-inserted just before the
+// trailing generic "Options"/"Global Options" block so it reads last among the
+// command's own groups while the conventional -h/--help line stays at the very
+// bottom.
+func moveOutputSectionLast(sections []help.Section) []help.Section {
+	idx := -1
+	for i := range sections {
+		if sections[i].Title == "Output" {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return sections
+	}
+	target := sections[idx]
+	out := slices.Delete(slices.Clone(sections), idx, idx+1)
+	insertAt := len(out)
+	for i := range out {
+		if out[i].Title == "Options" || out[i].Title == "Global Options" {
+			insertAt = i
+			break
+		}
+	}
+	return slices.Insert(out, insertAt, target)
 }
 
 func helpSectionsContainFlags(sections []help.Section) bool {
