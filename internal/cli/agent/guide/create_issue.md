@@ -57,9 +57,10 @@ Richer payload (every key past the aliases is forwarded verbatim into Jira's `fi
 
 **Save**
 > Requires `--output=json`.
-- `data.key` [string, required] — the new issue key (e.g. `<ISSUE_KEY>`); feed into `→ ` `read_issue`, `→ ` `edit_issue`, `→ ` `add_comment`, `→ ` `transition_issue`.
-- `data.self` [string, optional] — REST URL of the new issue.
-- `meta.command` [string] — `issue.create`; on `--dry-run` the payload is validated and no Jira call is made.
+- `data.issue.key` [string, required] — the new issue key (e.g. `<ISSUE_KEY>`); feed into `→ ` `read_issue`, `→ ` `edit_issue`, `→ ` `add_comment`, `→ ` `transition_issue`. The key is nested under `data.issue`, so a top-level `jq -r '.data.key'` extraction returns empty even though the create succeeded — read `.data.issue.key`.
+- `data.issue.id` [string] — numeric issue id; `data.issue.self` [string] — REST URL of the new issue.
+- `data.dry_run` [bool] — `false` on a real create. On `--dry-run` the payload is validated and no Jira call is made: `data` carries `dry_run: true` and a `preview` object instead of `issue`, so no key is returned.
+- `meta.command` [string] — `issue.create`.
 
 **Preconditions**
 - Native ADF is the canonical wire shape. Use the **bare Jira field name** (`description`, `environment`, `customfield_NNNN`) when passing an ADF document — there is no `*_adf` convention; the CLI does not rename keys, and Jira rejects unknown keys.

@@ -33,7 +33,8 @@ Subtask payload (note `issue_type: "Subtask"` and `parent.key`):
 
 **Save**
 > Requires `--output=json`.
-- `data.key` [string, required] — the new subtask key; feed into `→ ` `read_issue` or downstream mutations.
+- `data.issue.key` [string, required] — the new subtask key; feed into `→ ` `read_issue` or downstream mutations. The key is nested under `data.issue` (read `.data.issue.key`, not a top-level field).
+- `data.issue.id` [string] — numeric issue id; `data.issue.self` [string] — REST URL of the new subtask.
 - `meta.command` [string] — `issue.create` (subtasks share the create envelope).
 
 **Preconditions**
@@ -53,6 +54,6 @@ Subtask payload (note `issue_type: "Subtask"` and `parent.key`):
 | Any ADF / alias / required-field error | Same as → `create_issue` | See the `create_issue` Recover table |
 
 **Next**
-- Then: → `read_issue` on the returned `data.key` (the parent's subtask list is not exposed via the typed envelope).
+- Then: → `read_issue` on the returned `data.issue.key` (the parent's subtask list is not exposed via the typed envelope).
 - Then: → `link_issues` to add non-parent/child relationships.
 - Composes: → `create_issue` (subtask creation is a specialization of the create workflow).
