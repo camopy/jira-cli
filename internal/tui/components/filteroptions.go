@@ -194,7 +194,7 @@ func (f FilterOptions) View() tea.View {
 	for i, row := range f.rows {
 		cursor := "  "
 		if i == f.cursor {
-			cursor = "> "
+			cursor = "❯ "
 		}
 		label := dim.Render(fmt.Sprintf("%-*s", maxLabel, row.Label+":"))
 		choices := make([]string, 0, len(row.Choices))
