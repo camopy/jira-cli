@@ -417,13 +417,30 @@ func authLoginCommand() *cobra.Command {
 			if note := revokeOldCredentialOnRelogin(cmd, previousProfile, profile); note != "" {
 				cmdutil.RecordCredentialWarnings(cmd, []string{note})
 			}
+			// Warm the boards cache once on a verified login so the first
+			// `--board`/completion use is served from disk. Best-effort: the
+			// login has already committed, so a warm failure is a note, never a
+			// login failure. Skipped on --skip-verify (offline/unreachable
+			// setup) where a network fetch would contradict the intent.
+			boardsCached := -1
+			if verifiedUser != nil {
+				count, warmNote := warmBoardsCache(cmd, profile)
+				boardsCached = count
+				if warmNote != "" {
+					cmdutil.RecordCredentialWarnings(cmd, []string{warmNote})
+				}
+			}
 			// On a human terminal, confirm who the verified token belongs to so
 			// the user sees the identity instead of a silent return. Machine
 			// modes consume the same identity from the envelope below.
 			if verifiedUser != nil {
 				if mode := cmdutil.DetectorFromContext(cmd).Mode; mode == cli.ModePlain || mode == cli.ModeTUI {
 					name := cmdutil.FirstNonEmpty(verifiedUser.DisplayName, verifiedUser.EmailAddress, profile.Email)
-					clog.Info().Parts(clog.PartMessage).Msg("✓ Logged in as " + name)
+					msg := "✓ Logged in as " + name
+					if boardsCached >= 0 {
+						msg += fmt.Sprintf(" — cached %d board(s)", boardsCached)
+					}
+					clog.Info().Parts(clog.PartMessage).Msg(msg)
 				}
 			}
 			data := map[string]any{
@@ -438,6 +455,9 @@ func authLoginCommand() *cobra.Command {
 			if verifiedUser != nil {
 				data["account_id"] = verifiedUser.AccountID
 				data["display_name"] = verifiedUser.DisplayName
+			}
+			if boardsCached >= 0 {
+				data["boards_cached"] = boardsCached
 			}
 			return cmdutil.WriteEnvelope(cmd, "auth.login", data)
 		},
@@ -462,6 +482,26 @@ func authLoginCommand() *cobra.Command {
 	clib.Extend(cmd.Flags().Lookup("profile-name"), clib.FlagExtra{Placeholder: "NAME", Complete: "predictor=profile"})
 	clib.Extend(cmd.Flags().Lookup("backend"), clib.FlagExtra{Placeholder: "BACKEND", Enum: []string{"keyring", "1password"}, EnumDefault: "keyring"})
 	return cmd
+}
+
+// boardsWarmTTLMinutes is the freshness window stamped on the login-warmed
+// boards cache, matching `cache boards`'s default TTL.
+const boardsWarmTTLMinutes = 60
+
+// warmBoardsCache primes the per-profile boards cache after a verified login.
+// It returns the cached board count, or -1 with a note when the warm could not
+// run or failed — the caller surfaces the note as a warning rather than failing
+// the (already committed) login.
+func warmBoardsCache(cmd *cobra.Command, profile config.Profile) (int, string) {
+	client, _, ok, err := cmdutil.JiraClientForProfile(cmd, profile)
+	if err != nil || !ok || client == nil {
+		return -1, ""
+	}
+	file, _, _, err := cmdutil.PrimeAndCacheBoards(cmd.Context(), cmdutil.CacheKeyForProfile(cmd, profile), client, boardsWarmTTLMinutes, false)
+	if err != nil {
+		return -1, "boards cache not warmed (" + err.Error() + ") — run `jira cache boards --refresh` when ready"
+	}
+	return len(file.Items), ""
 }
 
 type authLoginQuestionKind string

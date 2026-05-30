@@ -3,6 +3,7 @@ package cmdutil
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -65,6 +66,26 @@ func AddCacheStateFields(data map[string]any, sourceState string, count int) {
 	data["cache_state"] = CacheStateForCount(sourceState, count)
 	data["cache_source_state"] = sourceState
 	data["cache_empty"] = count == 0
+}
+
+// PrimeAndCacheBoards primes the boards for the profile and writes them to the
+// per-profile boards cache, returning the normalized file, the written cache
+// entry, and any prime warnings. It is the shared fetch-and-store step behind
+// `cache boards --refresh` and the post-login boards-cache warm.
+func PrimeAndCacheBoards(ctx context.Context, cacheKey string, client *jira.Client, ttlMinutes int, unbounded bool) (jira.BoardsCacheFile, cache.Entry, []map[string]any, error) {
+	file, warnings, err := PrimeBoards(ctx, client, ttlMinutes, unbounded)
+	if err != nil {
+		return jira.BoardsCacheFile{}, cache.Entry{}, warnings, err
+	}
+	body, err := json.Marshal(file)
+	if err != nil {
+		return file, cache.Entry{}, warnings, fmt.Errorf("cache.boards: marshal cache: %w", err)
+	}
+	entry, err := cache.Write(cacheKey, "boards", body)
+	if err != nil {
+		return file, cache.Entry{}, warnings, fmt.Errorf("cache.boards: write: %w", err)
+	}
+	return file, entry, warnings, nil
 }
 
 // PrimeBoards fetches every board (and its project keys) for the profile and

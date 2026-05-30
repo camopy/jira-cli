@@ -434,18 +434,9 @@ func cacheBoardsCommand() *cobra.Command {
 				return fmt.Errorf("jira base URL is required for cache.boards")
 			}
 
-			file, warnings, err := cmdutil.PrimeBoards(cmd.Context(), client, ttlMinutes, unbounded)
+			file, entry, warnings, err := cmdutil.PrimeAndCacheBoards(cmd.Context(), cmdutil.CacheKeyForProfile(cmd, profile), client, ttlMinutes, unbounded)
 			if err != nil {
 				return err
-			}
-
-			body, err := json.Marshal(file)
-			if err != nil {
-				return fmt.Errorf("cache.boards: marshal cache: %w", err)
-			}
-			entry, err := cache.Write(cmdutil.CacheKeyForProfile(cmd, profile), "boards", body)
-			if err != nil {
-				return fmt.Errorf("cache.boards: write: %w", err)
 			}
 			data := map[string]any{
 				"profile":          profile.Name,
