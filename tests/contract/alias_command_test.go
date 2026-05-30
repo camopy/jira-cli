@@ -52,7 +52,7 @@ func TestAliasSetListDeleteAndExpansion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("alias expansion error = %v\n%s", err, out)
 	}
-	if seenJQL != "project = PROJ" || !envelopeHasKV(t, out, "key", "PROJ-1") {
+	if seenJQL != "project = PROJ ORDER BY updated DESC" || !envelopeHasKV(t, out, "key", "PROJ-1") {
 		t.Fatalf("alias expansion seenJQL=%q output=%s", seenJQL, out)
 	}
 

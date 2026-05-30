@@ -130,8 +130,8 @@ func TestAliasExpansionSkipsValueTakingGlobalFlags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("alias expansion after global flags: %v\n%s", err, out)
 	}
-	if seenJQL != "project = PROJ" {
-		t.Fatalf("alias expansion sent JQL %q, want project = PROJ\n%s", seenJQL, out)
+	if seenJQL != "project = PROJ ORDER BY updated DESC" {
+		t.Fatalf("alias expansion sent JQL %q, want project = PROJ ORDER BY updated DESC\n%s", seenJQL, out)
 	}
 
 	seenJQL = ""
@@ -140,8 +140,8 @@ func TestAliasExpansionSkipsValueTakingGlobalFlags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("alias expansion with post-command --config: %v\n%s", err, out)
 	}
-	if seenJQL != "project = PROJ" {
-		t.Fatalf("post-command --config alias expansion sent JQL %q, want project = PROJ\n%s", seenJQL, out)
+	if seenJQL != "project = PROJ ORDER BY updated DESC" {
+		t.Fatalf("post-command --config alias expansion sent JQL %q, want project = PROJ ORDER BY updated DESC\n%s", seenJQL, out)
 	}
 }
 

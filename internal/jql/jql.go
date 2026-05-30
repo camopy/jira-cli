@@ -52,17 +52,29 @@ func (o BuildOptions) Build() (string, error) {
 	if orderBy == "" {
 		orderBy = "updated"
 	}
-	if orderBy != "none" {
-		if !isSafeJQLIdentifier(orderBy) {
-			return "", fmt.Errorf("invalid order-by field %q", orderBy)
-		}
-		direction := "ASC"
-		if o.Descending {
-			direction = "DESC"
-		}
-		query += " ORDER BY " + orderBy + " " + direction
+	clause, err := orderByClause(orderBy, o.Descending)
+	if err != nil {
+		return "", err
 	}
-	return query, nil
+	return query + clause, nil
+}
+
+// orderByClause renders " ORDER BY <field> <DIR>" for a sort field, or "" when
+// the field is blank or "none" (sort disabled). The field is validated as a
+// safe JQL identifier.
+func orderByClause(orderBy string, descending bool) (string, error) {
+	orderBy = strings.TrimSpace(orderBy)
+	if orderBy == "" || orderBy == "none" {
+		return "", nil
+	}
+	if !isSafeJQLIdentifier(orderBy) {
+		return "", fmt.Errorf("invalid order-by field %q", orderBy)
+	}
+	direction := "ASC"
+	if descending {
+		direction = "DESC"
+	}
+	return " ORDER BY " + orderBy + " " + direction, nil
 }
 
 func (o BuildOptions) filterClauses() ([]string, error) {
@@ -100,26 +112,36 @@ func (o BuildOptions) filterClauses() ([]string, error) {
 }
 
 // IssueList combines a raw JQL string with the builder's structured filters.
-// A non-empty raw query is parenthesized and AND-ed beneath the filters,
-// preserving any top-level ORDER BY suffix. An empty raw query falls back to
-// Build.
+// A non-empty raw query is parenthesized and AND-ed beneath the filters. The
+// raw query's own top-level ORDER BY always wins; when it has none, the
+// builder's --order-by is applied (an empty or "none" order-by adds nothing).
+// An empty raw query falls back to Build.
 func IssueList(raw string, builder BuildOptions) (string, error) {
-	if raw := strings.TrimSpace(raw); raw != "" {
-		clauses, err := builder.filterClauses()
-		if err != nil {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return builder.Build()
+	}
+
+	clauses, err := builder.filterClauses()
+	if err != nil {
+		return "", err
+	}
+
+	query, orderBy := SplitTopLevelOrderBy(raw)
+	if orderBy == "" {
+		if orderBy, err = orderByClause(builder.OrderBy, builder.Descending); err != nil {
 			return "", err
 		}
-		if len(clauses) == 0 {
-			return raw, nil
-		}
-		query, orderBy := SplitTopLevelOrderBy(raw)
-		if strings.TrimSpace(query) == "" {
-			return strings.Join(clauses, " AND ") + orderBy, nil
-		}
-		clauses = append(clauses, parenthesizeJQL(query))
+	}
+
+	if len(clauses) == 0 {
+		return query + orderBy, nil
+	}
+	if strings.TrimSpace(query) == "" {
 		return strings.Join(clauses, " AND ") + orderBy, nil
 	}
-	return builder.Build()
+	clauses = append(clauses, parenthesizeJQL(query))
+	return strings.Join(clauses, " AND ") + orderBy, nil
 }
 
 // CombineClauses AND-joins two JQL fragments, dropping either side when blank.

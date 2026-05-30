@@ -117,3 +117,57 @@ func TestIssueMineJQLCombinesRawJQLWithAssignee(t *testing.T) {
 		t.Fatalf("IssueList() = %q, want %q", query, want)
 	}
 }
+
+// A custom --jql without its own ORDER BY must still apply --order-by, which
+// was previously dropped silently.
+func TestIssueListAppliesOrderByToRawWithoutOrderBy(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		raw     string
+		builder jql.BuildOptions
+		want    string
+	}{
+		{
+			name:    "no filters appends order-by",
+			raw:     "project = RAW",
+			builder: jql.BuildOptions{OrderBy: "updated", Descending: true},
+			want:    "project = RAW ORDER BY updated DESC",
+		},
+		{
+			name:    "with filters appends order-by",
+			raw:     "project = RAW",
+			builder: jql.BuildOptions{Projects: []string{"BUILT"}, OrderBy: "priority"},
+			want:    "project = BUILT AND (project = RAW) ORDER BY priority ASC",
+		},
+		{
+			name:    "raw order-by wins over builder",
+			raw:     "project = RAW ORDER BY created ASC",
+			builder: jql.BuildOptions{OrderBy: "updated", Descending: true},
+			want:    "project = RAW ORDER BY created ASC",
+		},
+		{
+			name:    "order-by none appends nothing",
+			raw:     "project = RAW",
+			builder: jql.BuildOptions{OrderBy: "none"},
+			want:    "project = RAW",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			query, err := jql.IssueList(tc.raw, tc.builder)
+			if err != nil {
+				t.Fatalf("IssueList() error = %v", err)
+			}
+			if query != tc.want {
+				t.Fatalf("IssueList() = %q, want %q", query, tc.want)
+			}
+		})
+	}
+}
+
+// An unsafe --order-by field must be rejected on the custom-JQL path too, not
+// only via Build.
+func TestIssueListRejectsUnsafeOrderBy(t *testing.T) {
+	if _, err := jql.IssueList("project = RAW", jql.BuildOptions{OrderBy: "updated; DROP TABLE x"}); err == nil {
+		t.Fatal("IssueList() accepted unsafe order-by field")
+	}
+}

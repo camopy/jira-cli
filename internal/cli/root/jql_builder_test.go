@@ -80,8 +80,13 @@ workday_seconds = 28800
 	if err := json.Unmarshal(out, &env); err != nil {
 		t.Fatalf("issue list --as-jql output is not JSON: %v\n%s", err, out)
 	}
-	if env.Data.JQL != "project = CUSTOM" {
-		t.Fatalf("issue list raw JQL = %q, want project = CUSTOM", env.Data.JQL)
+	// The custom --jql is not polluted with the profile's default_project, but
+	// it does pick up the default --order-by (previously dropped silently).
+	if env.Data.JQL != "project = CUSTOM ORDER BY updated DESC" {
+		t.Fatalf("issue list raw JQL = %q, want %q", env.Data.JQL, "project = CUSTOM ORDER BY updated DESC")
+	}
+	if strings.Contains(env.Data.JQL, "SAM1") {
+		t.Fatalf("issue list raw JQL leaked default_project: %q", env.Data.JQL)
 	}
 }
 

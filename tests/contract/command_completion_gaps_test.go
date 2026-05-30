@@ -31,7 +31,7 @@ func TestCommandsUseConfiguredJiraServices(t *testing.T) {
 			switch body.JQL {
 			case jql.DefaultIssueListJQL:
 				_, _ = w.Write([]byte(`{"isLast":true,"issues":[{"key":"PROJ-1","fields":{"summary":"From server","status":{"name":"To Do"},"priority":{"name":"High"},"updated":"2026-05-03T10:00:00Z"}}]}`))
-			case "project = CUSTOM":
+			case "project = CUSTOM ORDER BY updated DESC":
 				_, _ = w.Write([]byte(`{"isLast":true,"issues":[{"key":"CUSTOM-1","fields":{"summary":"Custom search"}}]}`))
 			case "project = PROJ":
 				_, _ = w.Write([]byte(`{"isLast":true,"issues":[{"key":"PROJ-2","fields":{"summary":"Search hit"}}]}`))
@@ -66,7 +66,7 @@ func TestCommandsUseConfiguredJiraServices(t *testing.T) {
 			t.Fatalf("jira %v output missing %s=%v:\n%s", tc.args, tc.key, tc.val, out)
 		}
 	}
-	for _, want := range []string{jql.DefaultIssueListJQL, "project = CUSTOM", "project = PROJ"} {
+	for _, want := range []string{jql.DefaultIssueListJQL, "project = CUSTOM ORDER BY updated DESC", "project = PROJ"} {
 		if !slices.Contains(seenJQL, want) {
 			t.Fatalf("missing JQL %q in %v", want, seenJQL)
 		}
