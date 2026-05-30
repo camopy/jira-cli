@@ -13,6 +13,7 @@ import (
 	"charm.land/huh/v2"
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/matcra587/jira-cli/internal/adf"
+	"github.com/matcra587/jira-cli/internal/browser"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/boardscope"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
@@ -76,6 +77,7 @@ func issueMineCommand() *cobra.Command {
 
 func issueViewCommand() *cobra.Command {
 	var parallelism int
+	var web bool
 	cmd := &cobra.Command{
 		Use:   "view KEY...",
 		Short: "View issue details",
@@ -85,6 +87,12 @@ func issueViewCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if web {
+				if len(keys) != 1 {
+					return fmt.Errorf("validation: --web opens a single issue; pass exactly one key")
+				}
+				return openIssueWeb(cmd, keys[0], "issue.view")
+			}
 			if len(keys) == 1 {
 				return runIssueViewSingle(cmd, keys[0])
 			}
@@ -92,6 +100,46 @@ func issueViewCommand() *cobra.Command {
 		},
 	}
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
+	cmd.Flags().BoolVar(&web, "web", false, "Open the issue in a browser instead of printing it")
+	cmdutil.ExtendFlag(cmd.Flags(), "web", clib.FlagExtra{Group: "Output"})
+	return cmd
+}
+
+// openIssueWeb builds the issue's browse URL from the active profile and opens
+// it in a browser when interactive, reporting the URL in the envelope either
+// way. It needs no Jira call — only the configured base URL. Shared by
+// `issue view --web` and the top-level `jira open`.
+func openIssueWeb(cmd *cobra.Command, key, command string) error {
+	profile, err := cmdutil.ProfileForCommand(cmd)
+	if err != nil {
+		return err
+	}
+	u := browser.IssueURL(profile.BaseURL, key)
+	if u == "" {
+		return fmt.Errorf("validation: opening an issue in the browser requires a configured base URL")
+	}
+	return cmdutil.WriteWebEnvelope(cmd, command, u, map[string]any{"issue": map[string]any{"key": key}})
+}
+
+// NewOpenCommand returns the top-level `jira open KEY` shortcut that opens an
+// issue in the browser — the muscle-memory command, sharing openIssueWeb with
+// `issue view --web`.
+func NewOpenCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "open KEY",
+		Short: "Open an issue in a browser",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			if err != nil {
+				return err
+			}
+			if len(keys) != 1 {
+				return fmt.Errorf("validation: open takes exactly one issue key")
+			}
+			return openIssueWeb(cmd, keys[0], "open")
+		},
+	}
 	return cmd
 }
 

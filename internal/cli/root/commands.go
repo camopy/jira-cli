@@ -27,6 +27,7 @@ func registerCommands(root *cobra.Command) {
 		version.NewCommand(),
 		auth.NewCommand(),
 		issue.NewCommand(),
+		issue.NewOpenCommand(),
 		boards.NewCommand(),
 		epic.NewCommand(),
 		jql.NewCommand(),

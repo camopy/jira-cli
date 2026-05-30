@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	"github.com/matcra587/jira-cli/internal/browser"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -22,6 +23,7 @@ func NewCommand() *cobra.Command {
 type searchOptions struct {
 	fields []string
 	full   bool
+	web    bool
 }
 
 func searchJQLCommand() *cobra.Command {
@@ -31,6 +33,9 @@ func searchJQLCommand() *cobra.Command {
 		Short: "Run a JQL query",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if opts.web {
+				return openSearchWeb(cmd, args[0])
+			}
 			fields, detail, err := searchOutputFields(opts)
 			if err != nil {
 				return err
@@ -121,9 +126,26 @@ func searchSavedCommand() *cobra.Command {
 func addSearchOutputFlags(cmd *cobra.Command, opts *searchOptions) {
 	cmd.Flags().StringSliceVar(&opts.fields, "fields", nil, "Issue fields to request from Jira (comma-separated)")
 	cmd.Flags().BoolVar(&opts.full, "full", false, `Request Jira's full issue payload with fields ["*all"]`)
+	cmd.Flags().BoolVar(&opts.web, "web", false, "Open the query in a browser instead of printing results")
 	cmd.MarkFlagsMutuallyExclusive("fields", "full")
 	clib.Extend(cmd.Flags().Lookup("fields"), clib.FlagExtra{Group: "Output", Placeholder: "FIELD", Complete: "predictor=cachefield,comma"})
 	clib.Extend(cmd.Flags().Lookup("full"), clib.FlagExtra{Group: "Output"})
+	clib.Extend(cmd.Flags().Lookup("web"), clib.FlagExtra{Group: "Output"})
+}
+
+// openSearchWeb builds the JQL search URL from the active profile and opens it
+// in a browser when interactive, reporting the URL in the envelope either way.
+// It needs no Jira call — only the configured base URL.
+func openSearchWeb(cmd *cobra.Command, jqlQuery string) error {
+	profile, err := cmdutil.ProfileForCommand(cmd)
+	if err != nil {
+		return err
+	}
+	u := browser.SearchURL(profile.BaseURL, jqlQuery)
+	if u == "" {
+		return fmt.Errorf("validation: opening a query in the browser requires a configured base URL")
+	}
+	return cmdutil.WriteWebEnvelope(cmd, "search.jql", u, map[string]any{"source": "inline", "jql": jqlQuery})
 }
 
 func searchOutputFields(opts searchOptions) ([]string, bool, error) {

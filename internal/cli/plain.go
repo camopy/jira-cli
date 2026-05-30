@@ -6,7 +6,6 @@ import (
 	"hash/fnv"
 	"image/color"
 	"io"
-	"net/url"
 	"reflect"
 	"sort"
 	"strings"
@@ -17,6 +16,7 @@ import (
 	"github.com/gechr/primer/table"
 	termansi "github.com/gechr/x/ansi"
 	"github.com/matcra587/jira-cli/internal/adf"
+	"github.com/matcra587/jira-cli/internal/browser"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -379,7 +379,7 @@ func issueTableRenderer(cfg plainConfig) *table.Renderer[issueTableRow] {
 			Header: "KEY",
 			Render: func(row issueTableRow, ctx *table.RenderContext) table.Cell {
 				text := row.Key
-				if link := issueURL(cfg.baseURL, row.Key); link != "" {
+				if link := browser.IssueURL(cfg.baseURL, row.Key); link != "" {
 					if cfg.tty {
 						text = lipgloss.NewStyle().Underline(true).Render(text)
 					}
@@ -519,15 +519,6 @@ func foregroundStyle(style *lipgloss.Style) lipgloss.Style {
 
 func normalizeStyleKey(value string) string {
 	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(value)), " "))
-}
-
-func issueURL(baseURL, key string) string {
-	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
-	key = strings.TrimSpace(key)
-	if baseURL == "" || key == "" {
-		return ""
-	}
-	return baseURL + "/browse/" + url.PathEscape(key)
 }
 
 func formatAssignee(value any) string {
