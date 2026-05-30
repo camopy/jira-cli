@@ -50,6 +50,15 @@ func ExtendSafetyFlag(flags *pflag.FlagSet, name string) {
 	ExtendFlag(flags, name, clib.FlagExtra{Group: "Safety"})
 }
 
+// AddIssueColumnFlags registers the --columns and --tsv human-output flags on
+// flags, binding them to columns and tsv, and groups them under Output.
+func AddIssueColumnFlags(flags *pflag.FlagSet, columns *[]string, tsv *bool) {
+	flags.StringSliceVar(columns, "columns", nil, "Select and order columns for human/TSV output (key, summary, status, assignee, priority, updated)")
+	flags.BoolVar(tsv, "tsv", false, "Render as tab-separated values for scripts (off a TTY this implies --output=human)")
+	ExtendFlag(flags, "columns", clib.FlagExtra{Group: "Output", Placeholder: "COLS"})
+	ExtendFlag(flags, "tsv", clib.FlagExtra{Group: "Output"})
+}
+
 // ExtendWatcherUserFlag attaches User-group metadata to the --user flag.
 func ExtendWatcherUserFlag(flags *pflag.FlagSet) {
 	ExtendFlag(flags, "user", clib.FlagExtra{Group: "User", Placeholder: "IDENTIFIER"})

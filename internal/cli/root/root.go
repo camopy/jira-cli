@@ -128,6 +128,14 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	det := detectOutput(rt)
 	det.StdinPiped = !runtimeStdinIsTTY(rt)
 	det.Mode = cli.ResolveOutputMode(outputMode, det)
+	// --tsv is a script-output format. Off a TTY auto-detection would resolve
+	// to JSON, so when the user has not pinned --output explicitly, honor
+	// --tsv by rendering the plain (human) TSV table.
+	if outputMode == cli.OutputAuto && cmd.Flags().Lookup("tsv") != nil {
+		if tsv, _ := cmd.Flags().GetBool("tsv"); tsv {
+			det.Mode = cli.ModePlain
+		}
+	}
 	interactive, _ := pf.GetBool("interactive")
 	if interactive {
 		det.Mode = cli.ModeTUI

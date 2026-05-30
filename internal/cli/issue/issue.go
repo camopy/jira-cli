@@ -67,6 +67,7 @@ func issueMineCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.asJQL, "as-jql", false, "Print the built JQL without calling Jira")
 	cmd.Flags().StringSliceVar(&opts.builder.Statuses, "status", nil, `Restrict by status name, category comparator ("<Done", ">=In Progress"), or negation ("!Abandoned")`)
 	cmd.Flags().StringSliceVar(&opts.builder.Projects, "project", nil, "Restrict by project key")
+	cmdutil.AddIssueColumnFlags(cmd.Flags(), &opts.columns, &opts.tsv)
 	cmdutil.ExtendFlag(cmd.Flags(), "detail", clib.FlagExtra{Group: "Output"})
 	cmdutil.ExtendFlag(cmd.Flags(), "jql", clib.FlagExtra{Group: "Filters", Placeholder: "JQL"})
 	cmdutil.ExtendFlag(cmd.Flags(), "as-jql", clib.FlagExtra{Group: "Output"})
@@ -340,6 +341,8 @@ type issueListOptions struct {
 	parallelism int
 	detail      bool
 	asJQL       bool
+	columns     []string
+	tsv         bool
 }
 
 // runIssueList is the shared body for `issue list` and `issue mine`. It
@@ -348,6 +351,14 @@ type issueListOptions struct {
 // client is configured. Output flows through the same `issue.list` envelope
 // shape so consumers can't tell which command emitted it.
 func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
+	if err := cli.ValidateIssueColumns(opts.columns); err != nil {
+		// Typed so the offending --columns value (which is echoed into the
+		// message) can't trip the substring error classifier — e.g.
+		// `--columns auth` must map to a flag-value validation error, not auth.
+		inputErr := cli.NewCLIInputError(cli.InputFlagValueInvalid, err.Error())
+		inputErr.Flag = "columns"
+		return inputErr
+	}
 	scope, precedence, scopeErr := boardscope.FromFlags(cmd)
 	if scopeErr != nil {
 		return scopeErr

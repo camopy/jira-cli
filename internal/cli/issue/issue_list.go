@@ -29,6 +29,7 @@ func issueListCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.asJQL, "as-jql", false, "Print the built JQL query without calling Jira")
 	clijql.AddJQLBuilderFlags(cmd, &opts.builder)
 	cmdutil.AddParallelismFlag(cmd, &opts.parallelism)
+	cmdutil.AddIssueColumnFlags(cmd.Flags(), &opts.columns, &opts.tsv)
 	boardscope.AddFlags(cmd)
 	return cmd
 }

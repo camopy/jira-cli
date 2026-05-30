@@ -29,6 +29,8 @@ type plainConfig struct {
 	termWidth int
 	tty       bool
 	theme     *clibtheme.Theme
+	columns   []string
+	tsv       bool
 }
 
 func WithPlainBaseURL(baseURL string) PlainOption {
@@ -72,6 +74,22 @@ func WithPlainTTY(tty bool) PlainOption {
 func WithPlainTheme(theme *clibtheme.Theme) PlainOption {
 	return func(cfg *plainConfig) {
 		cfg.theme = theme
+	}
+}
+
+// WithPlainColumns selects and orders the issue-list columns for human and
+// TSV output. An empty slice keeps the default column set.
+func WithPlainColumns(columns []string) PlainOption {
+	return func(cfg *plainConfig) {
+		cfg.columns = columns
+	}
+}
+
+// WithPlainTSV renders the issue list as tab-separated values instead of the
+// styled table — one header line plus one line per issue, no ANSI or box.
+func WithPlainTSV(tsv bool) PlainOption {
+	return func(cfg *plainConfig) {
+		cfg.tsv = tsv
 	}
 }
 
@@ -305,6 +323,9 @@ func writeIssueListPlain(logger *clog.Logger, data any, cfg plainConfig) error {
 	if !ok {
 		return writeGenericPlain(logger, "listed issues", data)
 	}
+	if cfg.tsv {
+		return writeIssueTSV(logger, issues, cfg)
+	}
 	event := logger.Info().
 		Int("count", len(issues)).
 		Bool("detail", detail)
@@ -318,10 +339,29 @@ func writeIssueListPlain(logger *clog.Logger, data any, cfg plainConfig) error {
 	if len(issues) == 0 {
 		return nil
 	}
-	for _, row := range issueRows(issues, cfg) {
+	rows, err := issueRows(issues, cfg)
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
 		if row != "" {
 			logger.Info().Parts(clog.PartMessage).Msg(row)
 		}
+	}
+	return nil
+}
+
+// writeIssueTSV emits the issue list as tab-separated values: one header line
+// of column names plus one line per issue, with no status line, ANSI, or box.
+// The header is always written so a script can detect the columns even when
+// the result set is empty.
+func writeIssueTSV(logger *clog.Logger, issues []map[string]any, cfg plainConfig) error {
+	lines, err := issueTSVLines(issues, cfg)
+	if err != nil {
+		return err
+	}
+	for _, line := range lines {
+		logger.Info().Parts(clog.PartMessage).Msg(line)
 	}
 	return nil
 }
@@ -347,9 +387,125 @@ type issueTableRow struct {
 	StatusCat string
 	Assignee  string
 	Priority  string
+	Updated   string
 }
 
-func issueRows(issues []map[string]any, cfg plainConfig) []string {
+// issueColumn defines one selectable issue-list column: its flag name, table
+// header, and the two ways it renders — a plain string for TSV and a styled
+// table.Cell for the human table. issueColumnDefs is the single source of
+// column truth shared by both renderers and the --columns validator.
+type issueColumn struct {
+	name   string
+	header string
+	flex   bool
+	text   func(issueTableRow) string
+	cell   func(issueTableRow, plainConfig, *table.RenderContext) table.Cell
+}
+
+var issueColumnDefs = []issueColumn{
+	{
+		name:   "key",
+		header: "KEY",
+		text:   func(r issueTableRow) string { return r.Key },
+		cell: func(r issueTableRow, cfg plainConfig, ctx *table.RenderContext) table.Cell {
+			text := r.Key
+			if link := browser.IssueURL(cfg.baseURL, r.Key); link != "" {
+				if cfg.tty {
+					text = lipgloss.NewStyle().Underline(true).Render(text)
+				}
+				text = ctx.Ansi.Hyperlink(link, text)
+			}
+			return table.StyledCell(text, r.Key)
+		},
+	},
+	{
+		name:   "summary",
+		header: "SUMMARY",
+		flex:   true,
+		text:   func(r issueTableRow) string { return r.Summary },
+		cell: func(r issueTableRow, _ plainConfig, _ *table.RenderContext) table.Cell {
+			return table.TextCell(r.Summary)
+		},
+	},
+	{
+		name:   "status",
+		header: "STATUS",
+		text:   func(r issueTableRow) string { return r.Status },
+		cell: func(r issueTableRow, cfg plainConfig, _ *table.RenderContext) table.Cell {
+			return styledCell(statusStyle(cfg, r.Status, r.StatusCat), r.Status)
+		},
+	},
+	{
+		name:   "assignee",
+		header: "ASSIGNEE",
+		flex:   true,
+		text:   func(r issueTableRow) string { return r.Assignee },
+		cell: func(r issueTableRow, cfg plainConfig, _ *table.RenderContext) table.Cell {
+			return styledCell(assigneeStyle(cfg, r.Assignee), firstNonEmpty(r.Assignee, "unassigned"))
+		},
+	},
+	{
+		name:   "priority",
+		header: "PRIORITY",
+		text:   func(r issueTableRow) string { return r.Priority },
+		cell: func(r issueTableRow, cfg plainConfig, _ *table.RenderContext) table.Cell {
+			return styledCell(priorityStyle(cfg, r.Priority), r.Priority)
+		},
+	},
+	{
+		name:   "updated",
+		header: "UPDATED",
+		text:   func(r issueTableRow) string { return r.Updated },
+		cell: func(r issueTableRow, _ plainConfig, _ *table.RenderContext) table.Cell {
+			return table.TextCell(r.Updated)
+		},
+	},
+}
+
+var defaultIssueColumns = []string{"key", "summary", "status", "assignee", "priority"}
+
+func issueColumnNames() []string {
+	names := make([]string, len(issueColumnDefs))
+	for i, c := range issueColumnDefs {
+		names[i] = c.name
+	}
+	return names
+}
+
+// resolveIssueColumns maps the requested column names (or the default set when
+// empty) to their definitions, preserving the caller's order. Names are
+// case-insensitive and space-trimmed; an unknown name is an error.
+func resolveIssueColumns(selected []string) ([]issueColumn, error) {
+	names := defaultIssueColumns
+	if len(selected) > 0 {
+		names = selected
+	}
+	cols := make([]issueColumn, 0, len(names))
+	for _, raw := range names {
+		want := strings.ToLower(strings.TrimSpace(raw))
+		idx := -1
+		for i := range issueColumnDefs {
+			if issueColumnDefs[i].name == want {
+				idx = i
+				break
+			}
+		}
+		if idx == -1 {
+			return nil, fmt.Errorf("unknown column %q: valid columns are %s", raw, strings.Join(issueColumnNames(), ", "))
+		}
+		cols = append(cols, issueColumnDefs[idx])
+	}
+	return cols, nil
+}
+
+// ValidateIssueColumns reports whether every requested column name is known,
+// so a command can fail fast before calling Jira.
+func ValidateIssueColumns(selected []string) error {
+	_, err := resolveIssueColumns(selected)
+	return err
+}
+
+func buildIssueRows(issues []map[string]any) []issueTableRow {
 	rows := make([]issueTableRow, 0, len(issues))
 	for _, issue := range issues {
 		rows = append(rows, issueTableRow{
@@ -359,68 +515,69 @@ func issueRows(issues []map[string]any, cfg plainConfig) []string {
 			StatusCat: formatHumanField(issue["status_category"]),
 			Assignee:  formatAssignee(issue["assignee"]),
 			Priority:  formatHumanField(issue["priority"]),
+			Updated:   formatHumanField(issue["updated"]),
 		})
 	}
-	rendered := issueTableRenderer(cfg).Render(rows)
-	if rendered.String() == "" {
-		return nil
-	}
-	return strings.Split(rendered.String(), "\n")
+	return rows
 }
 
-func issueTableRenderer(cfg plainConfig) *table.Renderer[issueTableRow] {
+func issueRows(issues []map[string]any, cfg plainConfig) ([]string, error) {
+	cols, err := resolveIssueColumns(cfg.columns)
+	if err != nil {
+		return nil, err
+	}
+	renderer := issueTableRenderer(cfg, cols)
+	rendered := renderer.Render(buildIssueRows(issues))
+	if rendered.String() == "" {
+		return nil, nil
+	}
+	return strings.Split(rendered.String(), "\n"), nil
+}
+
+// issueTSVLines renders the selected columns as tab-separated lines: a header
+// line followed by one line per issue. Tabs and newlines inside a value are
+// collapsed to spaces so they never break the column layout.
+func issueTSVLines(issues []map[string]any, cfg plainConfig) ([]string, error) {
+	cols, err := resolveIssueColumns(cfg.columns)
+	if err != nil {
+		return nil, err
+	}
+	headers := make([]string, len(cols))
+	for i, c := range cols {
+		headers[i] = c.header
+	}
+	lines := []string{strings.Join(headers, "\t")}
+	for _, row := range buildIssueRows(issues) {
+		fields := make([]string, len(cols))
+		for i, c := range cols {
+			fields[i] = sanitizeTSVField(c.text(row))
+		}
+		lines = append(lines, strings.Join(fields, "\t"))
+	}
+	return lines, nil
+}
+
+func sanitizeTSVField(s string) string {
+	return strings.NewReplacer("\t", " ", "\n", " ", "\r", " ").Replace(s)
+}
+
+func issueTableRenderer(cfg plainConfig, cols []issueColumn) *table.Renderer[issueTableRow] {
 	th := primerTheme{theme: cfg.theme, styled: cfg.tty}
 	a := termansi.New(
 		termansi.WithTerminal(cfg.tty),
 		termansi.WithHyperlinkFallback(termansi.HyperlinkFallbackText),
 	)
 	ctx := table.NewRenderContext(th, a)
-	columns := []table.Column[issueTableRow]{
-		{
-			Name:   "key",
-			Header: "KEY",
-			Render: func(row issueTableRow, ctx *table.RenderContext) table.Cell {
-				text := row.Key
-				if link := browser.IssueURL(cfg.baseURL, row.Key); link != "" {
-					if cfg.tty {
-						text = lipgloss.NewStyle().Underline(true).Render(text)
-					}
-					text = ctx.Ansi.Hyperlink(link, text)
-				}
-				return table.StyledCell(text, row.Key)
+	columns := make([]table.Column[issueTableRow], 0, len(cols))
+	for _, c := range cols {
+		columns = append(columns, table.Column[issueTableRow]{
+			Name:   c.name,
+			Header: c.header,
+			Flex:   c.flex,
+			Render: func(row issueTableRow, rctx *table.RenderContext) table.Cell {
+				return c.cell(row, cfg, rctx)
 			},
-		},
-		{
-			Name:   "summary",
-			Header: "SUMMARY",
-			Flex:   true,
-			Render: func(row issueTableRow, _ *table.RenderContext) table.Cell {
-				return table.TextCell(row.Summary)
-			},
-		},
-		{
-			Name:   "status",
-			Header: "STATUS",
-			Render: func(row issueTableRow, _ *table.RenderContext) table.Cell {
-				return styledCell(statusStyle(cfg, row.Status, row.StatusCat), row.Status)
-			},
-		},
-		{
-			Name:   "assignee",
-			Header: "ASSIGNEE",
-			Flex:   true,
-			Render: func(row issueTableRow, _ *table.RenderContext) table.Cell {
-				assignee := firstNonEmpty(row.Assignee, "unassigned")
-				return styledCell(assigneeStyle(cfg, row.Assignee), assignee)
-			},
-		},
-		{
-			Name:   "priority",
-			Header: "PRIORITY",
-			Render: func(row issueTableRow, _ *table.RenderContext) table.Cell {
-				return styledCell(priorityStyle(cfg, row.Priority), row.Priority)
-			},
-		},
+		})
 	}
 	return table.NewRenderer(columns, ctx, table.WithTTY(cfg.tty), table.WithTermWidth(cfg.termWidth))
 }

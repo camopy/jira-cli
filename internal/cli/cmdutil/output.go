@@ -71,6 +71,16 @@ func PlainOptionsForCommand(cmd *cobra.Command) []cli.PlainOption {
 	if baseURL := plainBaseURL(cmd); baseURL != "" {
 		opts = append(opts, cli.WithPlainBaseURL(baseURL))
 	}
+	if cmd.Flags().Lookup("columns") != nil {
+		if columns, err := cmd.Flags().GetStringSlice("columns"); err == nil && len(columns) > 0 {
+			opts = append(opts, cli.WithPlainColumns(columns))
+		}
+	}
+	if cmd.Flags().Lookup("tsv") != nil {
+		if tsv, err := cmd.Flags().GetBool("tsv"); err == nil && tsv {
+			opts = append(opts, cli.WithPlainTSV(true))
+		}
+	}
 	return opts
 }
 

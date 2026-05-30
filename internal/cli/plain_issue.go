@@ -92,7 +92,11 @@ func writeIssueViewManyPlain(logger *clog.Logger, results []map[string]any, cfg 
 		event = event.Int("threads", cfg.threads)
 	}
 	event.Msg("viewed issues")
-	for _, row := range issueRows(successes, cfg) {
+	rows, err := issueRows(successes, cfg)
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
 		if row != "" {
 			logger.Info().Parts(clog.PartMessage).Msg(row)
 		}
