@@ -83,7 +83,7 @@ func commentListCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.comment.list")
 			}
-			svc := jira.NewCommentService(client)
+			svc := cmdutil.ServicesForClient(client).Comment()
 			results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (commentListReadResult, error) {
 				return commentListEnvelopeData(ctx, svc, key, limit, all)
 			})
@@ -118,7 +118,7 @@ func runCommentList(cmd *cobra.Command, key string, limit int, all bool) error {
 	if !ok {
 		return fmt.Errorf("jira base URL is required for issue.comment.list")
 	}
-	result, err := commentListEnvelopeData(cmd.Context(), jira.NewCommentService(client), key, limit, all)
+	result, err := commentListEnvelopeData(cmd.Context(), cmdutil.ServicesForClient(client).Comment(), key, limit, all)
 	if err != nil {
 		return err
 	}
@@ -425,7 +425,7 @@ func runCommentAddKeys(cmd *cobra.Command, keys []string, flags commentAddFlags)
 		return fmt.Errorf("jira base URL is required for issue.comment.add")
 	}
 	body := &jira.CommentBody{ADF: submitDoc}
-	svc := jira.NewCommentService(client)
+	svc := cmdutil.ServicesForClient(client).Comment()
 	var (
 		comment *jira.Comment
 		resp    *jira.Response
@@ -477,7 +477,7 @@ func runCommentAddMany(
 		return fmt.Errorf("jira base URL is required for issue.comment.add")
 	}
 	body := &jira.CommentBody{ADF: submitDoc}
-	svc := jira.NewCommentService(client)
+	svc := cmdutil.ServicesForClient(client).Comment()
 	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		var (
 			comment *jira.Comment
@@ -640,7 +640,7 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 	if !ok {
 		return fmt.Errorf("jira base URL is required for issue.comment.edit")
 	}
-	comment, resp, err := jira.NewCommentService(client).Edit(cmd.Context(), key, commentID, &jira.CommentBody{ADF: submitDoc}, vis)
+	comment, resp, err := cmdutil.ServicesForClient(client).Comment().Edit(cmd.Context(), key, commentID, &jira.CommentBody{ADF: submitDoc}, vis)
 	if err != nil {
 		return err
 	}
@@ -702,7 +702,7 @@ func commentDeleteCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.comment.delete")
 			}
-			resp, err := jira.NewCommentService(client).Delete(cmd.Context(), args[0], args[1])
+			resp, err := cmdutil.ServicesForClient(client).Comment().Delete(cmd.Context(), args[0], args[1])
 			if err != nil {
 				return err
 			}

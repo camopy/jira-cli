@@ -33,7 +33,7 @@ func epicListCommand() *cobra.Command {
 				return err
 			}
 			if ok {
-				epics, resp, err := jira.NewEpicService(client).List(cmd.Context(), &jira.ListOptions{MaxResults: 50})
+				epics, resp, err := cmdutil.ServicesForClient(client).Epic().List(cmd.Context(), &jira.ListOptions{MaxResults: 50})
 				if err != nil {
 					return err
 				}
@@ -64,7 +64,7 @@ func epicBoardCommand() *cobra.Command {
 					"totals": emptyEpicCounts(),
 				})
 			}
-			service := jira.NewEpicService(client)
+			service := cmdutil.ServicesForClient(client).Epic()
 			epics, _, err := service.List(cmd.Context(), &jira.ListOptions{MaxResults: 50})
 			if err != nil {
 				return err
@@ -136,7 +136,7 @@ func epicAddCommand() *cobra.Command {
 					return err
 				}
 				if ok {
-					resp, err := jira.NewEpicService(client).AddIssue(cmd.Context(), epicKey, keys[0])
+					resp, err := cmdutil.ServicesForClient(client).Epic().AddIssue(cmd.Context(), epicKey, keys[0])
 					if err != nil {
 						return err
 					}
@@ -168,7 +168,7 @@ func runEpicAddMany(cmd *cobra.Command, keys []string, epicKey string, paralleli
 	if !ok {
 		return fmt.Errorf("jira base URL is required for epic.add")
 	}
-	service := jira.NewEpicService(client)
+	service := cmdutil.ServicesForClient(client).Epic()
 	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		if _, err := service.AddIssue(ctx, epicKey, key); err != nil {
 			return nil, err
@@ -212,7 +212,7 @@ func epicRemoveCommand() *cobra.Command {
 					return err
 				}
 				if ok {
-					resp, err := jira.NewEpicService(client).RemoveIssue(cmd.Context(), keys[0])
+					resp, err := cmdutil.ServicesForClient(client).Epic().RemoveIssue(cmd.Context(), keys[0])
 					if err != nil {
 						return err
 					}
@@ -244,7 +244,7 @@ func runEpicRemoveMany(cmd *cobra.Command, keys []string, parallelism int, dryRu
 	if !ok {
 		return fmt.Errorf("jira base URL is required for epic.remove")
 	}
-	service := jira.NewEpicService(client)
+	service := cmdutil.ServicesForClient(client).Epic()
 	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		if _, err := service.RemoveIssue(ctx, key); err != nil {
 			return nil, err
