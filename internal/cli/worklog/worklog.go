@@ -115,7 +115,7 @@ func worklogAddCommand() *cobra.Command {
 					return err
 				}
 				if ok {
-					worklog, resp, err := cmdutil.WorklogService(client).Add(cmd.Context(), key, &jira.WorklogAddRequest{TimeSpentSeconds: seconds, Started: started, Comment: comment})
+					worklog, resp, err := cmdutil.ServicesForClient(client).Worklog().Add(cmd.Context(), key, &jira.WorklogAddRequest{TimeSpentSeconds: seconds, Started: started, Comment: comment})
 					if err != nil {
 						return err
 					}
@@ -182,7 +182,7 @@ func runWorklogAddMany(cmd *cobra.Command, keys []string, parallelism int, in wo
 	if !ok {
 		return fmt.Errorf("jira base URL is required for worklog.add")
 	}
-	service := cmdutil.WorklogService(client)
+	service := cmdutil.ServicesForClient(client).Worklog()
 	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		worklog, _, err := service.Add(ctx, key, &jira.WorklogAddRequest{
 			TimeSpentSeconds: in.TimeSpentSeconds,
@@ -224,7 +224,7 @@ func worklogListCommand() *cobra.Command {
 				return err
 			}
 			if ok {
-				service := cmdutil.WorklogService(client)
+				service := cmdutil.ServicesForClient(client).Worklog()
 				if len(keys) == 1 {
 					worklogs, resp, err := service.List(cmd.Context(), keys[0], &jira.ListOptions{MaxResults: 50})
 					if err != nil {

@@ -45,7 +45,7 @@ func searchJQLCommand() *cobra.Command {
 				return err
 			}
 			if ok {
-				issues, resp, err := cmdutil.SearchService(client).JQL(cmd.Context(), &jira.SearchRequest{
+				issues, resp, err := cmdutil.ServicesForClient(client).Search().JQL(cmd.Context(), &jira.SearchRequest{
 					JQL:         args[0],
 					Fields:      fields,
 					ListOptions: jira.ListOptions{MaxResults: 50},
@@ -96,7 +96,7 @@ func searchSavedCommand() *cobra.Command {
 			issues := any([]any{})
 			var resp *jira.Response
 			if hasClient {
-				found, response, err := cmdutil.SearchService(client).JQL(cmd.Context(), &jira.SearchRequest{
+				found, response, err := cmdutil.ServicesForClient(client).Search().JQL(cmd.Context(), &jira.SearchRequest{
 					JQL:         query.JQL,
 					Fields:      fields,
 					ListOptions: jira.ListOptions{MaxResults: 50},

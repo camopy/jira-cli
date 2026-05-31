@@ -150,7 +150,7 @@ func runIssueViewSingle(cmd *cobra.Command, key string) error {
 		return err
 	}
 	if ok {
-		issue, resp, err := cmdutil.IssueService(client).Get(cmd.Context(), key, issueViewGetOptions())
+		issue, resp, err := cmdutil.ServicesForClient(client).Issue().Get(cmd.Context(), key, issueViewGetOptions())
 		if err != nil {
 			return err
 		}
@@ -196,7 +196,7 @@ func runIssueViewMany(cmd *cobra.Command, keys []string, parallelism int) error 
 		return cmdutil.WriteEnvelope(cmd, "issue.view", data)
 	}
 
-	service := cmdutil.IssueService(client)
+	service := cmdutil.ServicesForClient(client).Issue()
 	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (*jira.Issue, error) {
 		issue, _, err := service.Get(ctx, key, issueViewGetOptions())
 		return issue, err
@@ -405,7 +405,7 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 	if !ok {
 		return cmdutil.WriteEnvelope(cmd, "issue.list", boardScopedListData(cmd, []map[string]any{}, opts.detail, query, scope, precedence))
 	}
-	service := cmdutil.IssueService(client)
+	service := cmdutil.ServicesForClient(client).Issue()
 	keyChunks, err := issueListKeyChunks(builder.Keys)
 	if err != nil {
 		return err
@@ -817,7 +817,7 @@ func issueCreateCommand() *cobra.Command {
 				Summary: cmdutil.StringFromAny(submitFields["summary"]),
 				Fields:  submitFields,
 			}
-			issue, resp, err := cmdutil.IssueService(client).Create(cmd.Context(), req)
+			issue, resp, err := cmdutil.ServicesForClient(client).Issue().Create(cmd.Context(), req)
 			if err != nil {
 				return err
 			}
@@ -930,7 +930,7 @@ const assigneeEmailDryRunErr = "resolving an assignee email needs a live request
 // /user/search resolver (0 matches → ErrUserNotFound, 1 → that account, 2+ →
 // AmbiguousUserError). It requires a live client.
 func resolveAssigneeEmail(ctx context.Context, client *jira.Client, email string) (any, error) {
-	id, err := jira.NewUserService(client).ResolveUser(ctx, email)
+	id, err := cmdutil.ServicesForClient(client).User().ResolveUser(ctx, email)
 	if err != nil {
 		return nil, err
 	}
@@ -1181,7 +1181,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 				submitFields = map[string]any{}
 			}
 			if !dryRun {
-				issue, resp, err := cmdutil.IssueService(editClient).Update(cmd.Context(), keys[0], &jira.IssueUpdateRequest{Fields: submitFields})
+				issue, resp, err := cmdutil.ServicesForClient(editClient).Issue().Update(cmd.Context(), keys[0], &jira.IssueUpdateRequest{Fields: submitFields})
 				if err != nil {
 					return err
 				}
@@ -1230,7 +1230,7 @@ func runIssueEditMany(cmd *cobra.Command, keys []string, parallelism int, in iss
 		if !ok {
 			return fmt.Errorf("jira base URL is required for issue.edit")
 		}
-		service = cmdutil.IssueService(editClient)
+		service = cmdutil.ServicesForClient(editClient).Issue()
 	}
 	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		editIn := pipeline.MutationInput{
@@ -1286,7 +1286,7 @@ func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
 	if !ok {
 		return fmt.Errorf("jira base URL is required for issue.edit --edit")
 	}
-	issueService := cmdutil.IssueService(client)
+	issueService := cmdutil.ServicesForClient(client).Issue()
 	issue, _, err := issueService.Get(cmd.Context(), key, &jira.IssueGetOptions{})
 	if err != nil {
 		return err
@@ -1394,7 +1394,7 @@ flag is still accepted.`,
 				if !ok {
 					return fmt.Errorf("jira base URL is required for issue.transitions")
 				}
-				service := cmdutil.IssueService(client)
+				service := cmdutil.ServicesForClient(client).Issue()
 				results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) ([]*jira.Transition, error) {
 					transitions, _, err := service.Transitions(ctx, key)
 					return transitions, err
@@ -1433,7 +1433,7 @@ flag is still accepted.`,
 				if !ok {
 					return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", map[string]any{"issue": key, "dry_run": dryRun}, pipeOut.Warnings)
 				}
-				transitions, resp, err := cmdutil.IssueService(client).Transitions(cmd.Context(), key)
+				transitions, resp, err := cmdutil.ServicesForClient(client).Issue().Transitions(cmd.Context(), key)
 				if err != nil {
 					return err
 				}
@@ -1442,7 +1442,7 @@ flag is still accepted.`,
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.transition")
 			}
-			service := cmdutil.IssueService(client)
+			service := cmdutil.ServicesForClient(client).Issue()
 			id, err := resolveTransitionID(cmd.Context(), service, key, target)
 			if err != nil {
 				return err
@@ -1583,7 +1583,7 @@ func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, 
 	if !ok {
 		return fmt.Errorf("jira base URL is required for issue.transition")
 	}
-	service := cmdutil.IssueService(client)
+	service := cmdutil.ServicesForClient(client).Issue()
 	// Resolve the target per issue: the same status name can map to
 	// different transition ids across issues in different workflow states.
 	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
@@ -1715,7 +1715,7 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 				}
 			}
 			if ok && !dryRun {
-				service := cmdutil.IssueService(client)
+				service := cmdutil.ServicesForClient(client).Issue()
 				var resp *jira.Response
 				var issue *jira.Issue
 				switch name {
@@ -1777,7 +1777,7 @@ func runDestructiveIssueMany(
 		if !ok {
 			return fmt.Errorf("jira base URL is required for issue.%s", name)
 		}
-		service = cmdutil.IssueService(client)
+		service = cmdutil.ServicesForClient(client).Issue()
 	}
 	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		destructiveIn := pipeline.MutationInput{
@@ -1923,7 +1923,7 @@ func issueWebLinkCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.weblink")
 			}
-			resp, err := cmdutil.IssueService(client).AddRemoteLink(cmd.Context(), keys[0], &jira.RemoteLinkRequest{
+			resp, err := cmdutil.ServicesForClient(client).Issue().AddRemoteLink(cmd.Context(), keys[0], &jira.RemoteLinkRequest{
 				URL: url, Title: title,
 			})
 			if err != nil {
@@ -1965,7 +1965,7 @@ func runIssueWebLinkMany(cmd *cobra.Command, keys []string, parallelism int, in 
 	if !ok {
 		return fmt.Errorf("jira base URL is required for issue.weblink")
 	}
-	service := cmdutil.IssueService(client)
+	service := cmdutil.ServicesForClient(client).Issue()
 	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		if _, err := service.AddRemoteLink(ctx, key, &jira.RemoteLinkRequest{URL: in.URL, Title: in.Title}); err != nil {
 			return nil, err

@@ -83,23 +83,3 @@ func (f *ServiceFactory) IssueLink() jira.IssueLinkService {
 func (f *ServiceFactory) IssueLinkType() jira.IssueLinkTypeService {
 	return jira.NewIssueLinkTypeService(f.client)
 }
-
-// IssueService is a shorthand for ServicesForClient(client).Issue(). It is
-// retained only until its callers move to the factory accessor directly, at
-// which point this shim and its siblings are removed so there is one way to
-// reach a service.
-func IssueService(client *jira.Client) jira.IssueService {
-	return ServicesForClient(client).Issue()
-}
-
-// SearchService is a shorthand for ServicesForClient(client).Search(), retained
-// until its callers move to the factory accessor.
-func SearchService(client *jira.Client) jira.SearchService {
-	return ServicesForClient(client).Search()
-}
-
-// WorklogService is a shorthand for ServicesForClient(client).Worklog(),
-// retained until its callers move to the factory accessor.
-func WorklogService(client *jira.Client) jira.WorklogService {
-	return ServicesForClient(client).Worklog()
-}

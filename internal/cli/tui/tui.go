@@ -67,7 +67,7 @@ func tuiOptionsForCommand(cmd *cobra.Command) tui.Options {
 		if opts.AccountID == "" {
 			ctx, cancel := context.WithTimeout(cmd.Context(), 5*time.Second)
 			defer cancel()
-			if user, _, err := jira.NewUserService(client).Myself(ctx); err == nil && user.AccountID != "" {
+			if user, _, err := cmdutil.ServicesForClient(client).User().Myself(ctx); err == nil && user.AccountID != "" {
 				opts.AccountID = user.AccountID
 				if opts.Email == "" && user.EmailAddress != "" {
 					opts.Email = user.EmailAddress
@@ -75,10 +75,10 @@ func tuiOptionsForCommand(cmd *cobra.Command) tui.Options {
 			}
 		}
 		opts.IssueProvider = tui.IssueProviderFunc(func(ctx context.Context) ([]*jira.Issue, error) {
-			issues, _, err := cmdutil.IssueService(client).List(ctx, &jira.IssueListOptions{ListOptions: jira.ListOptions{MaxResults: 50}})
+			issues, _, err := cmdutil.ServicesForClient(client).Issue().List(ctx, &jira.IssueListOptions{ListOptions: jira.ListOptions{MaxResults: 50}})
 			return issues, err
 		})
-		opts.MutationService = tuiJiraMutations{issues: cmdutil.IssueService(client), worklogs: cmdutil.WorklogService(client)}
+		opts.MutationService = tuiJiraMutations{issues: cmdutil.ServicesForClient(client).Issue(), worklogs: cmdutil.ServicesForClient(client).Worklog()}
 	}
 	return opts
 }

@@ -2,7 +2,9 @@ package unit
 
 import (
 	"context"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -26,57 +28,59 @@ func TestJiraServicesAreExportedInterfaces(t *testing.T) {
 }
 
 func TestCommandLayerDoesNotConstructConcreteJiraServicesDirectly(t *testing.T) {
-	dir := "../../cmd/jira"
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("ReadDir(%s) error = %v", dir, err)
-	}
-	// Two files are allowed to construct services directly:
-	//
-	//   services.go — the injected service factory itself. Building the
-	//   concrete services is its whole purpose; it is the factory every
-	//   other file is told to use.
-	//
-	//   cache.go — warms the local cache by constructing services
-	//   directly. That predates this guard (which historically read only
-	//   commands.go) and is a known, pre-existing gap the command file
-	//   split neither introduced nor widened.
-	//
-	// Every other file in the command layer must go through the factory.
+	root := "../../internal/cli"
+	// services.go is the service factory itself: building the concrete
+	// services is its whole purpose, and it is the one seam every command
+	// reaches them through. Every other file in the command layer must go
+	// through cmdutil.ServicesForClient(client) rather than calling
+	// jira.NewXService directly, so construction stays in one place.
 	allowedDirectConstruction := map[string]bool{
 		"services.go": true,
-		"cache.go":    true,
 	}
 	forbidden := []string{
 		"jira.NewIssueService(",
-		"jira.NewEpicService(",
 		"jira.NewSearchService(",
 		"jira.NewWorklogService(",
 		"jira.NewProjectService(",
+		"jira.NewUserService(",
+		"jira.NewBoardService(",
+		"jira.NewLabelService(",
+		"jira.NewEpicService(",
+		"jira.NewCommentService(",
+		"jira.NewAttachmentService(",
+		"jira.NewWatcherService(",
+		"jira.NewIssueLinkService(",
+		"jira.NewIssueLinkTypeService(",
 	}
 	scanned := 0
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
+	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		name := d.Name()
+		if d.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			return nil
 		}
 		if allowedDirectConstruction[name] {
-			continue
+			return nil
+		}
+		content, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
 		}
 		scanned++
-		path := dir + "/" + name
-		content, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("ReadFile(%s) error = %v", path, err)
-		}
 		for _, f := range forbidden {
 			if strings.Contains(string(content), f) {
-				t.Fatalf("%s directly constructs service %s; use injected service factory", path, f)
+				t.Errorf("%s directly constructs a Jira service with %s; reach it through cmdutil.ServicesForClient(client) instead", path, f)
 			}
 		}
+		return nil
+	})
+	if walkErr != nil {
+		t.Fatalf("WalkDir(%s) error = %v", root, walkErr)
 	}
 	if scanned == 0 {
-		t.Fatalf("no command files found under %s — guard is inert", dir)
+		t.Fatalf("no command files found under %s — guard is inert", root)
 	}
 }
 
