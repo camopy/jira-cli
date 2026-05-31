@@ -29,14 +29,14 @@ func TestJiraServicesAreExportedInterfaces(t *testing.T) {
 
 func TestCommandLayerDoesNotConstructConcreteJiraServicesDirectly(t *testing.T) {
 	root := "../../internal/cli"
-	// services.go is the service factory itself: building the concrete
-	// services is its whole purpose, and it is the one seam every command
-	// reaches them through. Every other file in the command layer must go
-	// through cmdutil.ServicesForClient(client) rather than calling
-	// jira.NewXService directly, so construction stays in one place.
-	allowedDirectConstruction := map[string]bool{
-		"services.go": true,
-	}
+	// The cmdutil service factory is the one file allowed to construct
+	// services: building them is its whole purpose, and it is the seam every
+	// command reaches them through. Every other file in the command layer must
+	// go through cmdutil.ServicesForClient(client) rather than calling
+	// jira.NewXService directly. The exemption is the factory's full path, not
+	// its basename, so a future file that merely happens to be named
+	// services.go is not silently let through.
+	factoryFile := "cmdutil/services.go"
 	forbidden := []string{
 		"jira.NewIssueService(",
 		"jira.NewSearchService(",
@@ -61,7 +61,7 @@ func TestCommandLayerDoesNotConstructConcreteJiraServicesDirectly(t *testing.T) 
 		if d.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			return nil
 		}
-		if allowedDirectConstruction[name] {
+		if strings.HasSuffix(filepath.ToSlash(path), factoryFile) {
 			return nil
 		}
 		content, readErr := os.ReadFile(path)
