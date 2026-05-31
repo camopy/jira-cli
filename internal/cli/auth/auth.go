@@ -596,7 +596,11 @@ func promptAuthLogin(cmd *cobra.Command, skipVerify bool, profileName, baseURL, 
 	// the editable field (authLoginForm starts it empty); a blank entry falls
 	// back to this hint after the form.
 	nameHint := strings.TrimSpace(*profileName)
-	form := authLoginForm(skipVerify, profileName, nameHint, baseURL, email, backend, onePasswordAccount, vault, item, credential, &confirmed).
+	// The profile-name field is bound to a caller-owned value that starts empty
+	// (so a typed name is never appended to a pre-filled default); the typed
+	// result is resolved back into *profileName after the form.
+	var nameField string
+	form := authLoginForm(skipVerify, &nameField, nameHint, baseURL, email, backend, onePasswordAccount, vault, item, credential, &confirmed).
 		WithInput(cmd.InOrStdin()).
 		WithOutput(cmd.ErrOrStderr())
 	if err := form.RunWithContext(cmd.Context()); err != nil {
@@ -618,8 +622,10 @@ func promptAuthLogin(cmd *cobra.Command, skipVerify bool, profileName, baseURL, 
 	if !confirmed {
 		return cli.NewPromptError(cli.PromptAborted, "auth login", errors.New("login not confirmed"))
 	}
-	trimAuthLoginValues(profileName, baseURL, email, backend, onePasswordAccount, vault, item, credential)
-	*profileName = resolveProfileName(*profileName, nameHint)
+	// nameField is intentionally omitted from the trim: resolveProfileName
+	// already trims the typed value (or falls back to the trimmed hint).
+	trimAuthLoginValues(baseURL, email, backend, onePasswordAccount, vault, item, credential)
+	*profileName = resolveProfileName(nameField, nameHint)
 	return nil
 }
 
@@ -645,19 +651,21 @@ func profileNameInput(value *string, hint string) *huh.Input {
 		Value(value)
 }
 
-func authLoginForm(skipVerify bool, profileName *string, profileNameHint string, baseURL, email, backend, onePasswordAccount, vault, item, credential *string, confirmed *bool) *huh.Form {
-	// Start the profile-name field empty with the resolved default shown only as
-	// a placeholder: huh appends keystrokes to a pre-filled value, so pre-filling
-	// the name would mangle a typed one and could overwrite the wrong profile.
-	// promptAuthLogin restores the hint for a blank field after the form.
-	*profileName = ""
+func authLoginForm(skipVerify bool, nameField *string, profileNameHint string, baseURL, email, backend, onePasswordAccount, vault, item, credential *string, confirmed *bool) *huh.Form {
+	// nameField is a caller-owned value that promptAuthLogin starts empty, so the
+	// profile-name input begins blank with the resolved default shown only as a
+	// placeholder: huh appends keystrokes to a pre-filled value, so a pre-filled
+	// name would mangle a typed one and could overwrite the wrong profile.
+	// promptAuthLogin resolves the typed value (or the hint, when blank) into the
+	// real profile name after the form — the builder binds nameField as-is and
+	// never mutates a caller argument as a side effect.
 	confirmDescription := "The token is verified against Jira before it is saved."
 	if skipVerify {
 		confirmDescription = "The credential is stored without verification (--skip-verify)."
 	}
 	return huh.NewForm(
 		huh.NewGroup(
-			profileNameInput(profileName, profileNameHint),
+			profileNameInput(nameField, profileNameHint),
 			huh.NewInput().
 				Title("Jira site").
 				Description(`Your Atlassian site name, e.g. "acme" for acme.atlassian.net. A full https:// URL also works.`).
@@ -724,8 +732,8 @@ func authLoginForm(skipVerify bool, profileName *string, profileNameHint string,
 			huh.NewNote().
 				Title("Review").
 				DescriptionFunc(func() string {
-					return loginReviewSummary(resolveProfileName(*profileName, profileNameHint), *baseURL, *email, *backend, *onePasswordAccount, *vault, *item)
-				}, []*string{profileName, baseURL, email, backend, onePasswordAccount, vault, item}),
+					return loginReviewSummary(resolveProfileName(*nameField, profileNameHint), *baseURL, *email, *backend, *onePasswordAccount, *vault, *item)
+				}, []*string{nameField, baseURL, email, backend, onePasswordAccount, vault, item}),
 			huh.NewConfirm().
 				Title("Store this credential?").
 				Description(confirmDescription).

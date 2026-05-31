@@ -19,20 +19,27 @@ func TestResolveProfileName(t *testing.T) {
 	}
 }
 
-// authLoginForm must start the profile-name field empty, showing the resolved
-// default only as a placeholder: huh appends keystrokes to a pre-filled value,
-// so pre-filling the name would mangle a typed one and could overwrite the wrong
-// profile. Building the form clears the bound value; a regression that pre-fills
-// it (the original bug) would leave the default here.
-func TestAuthLoginFormStartsProfileNameEmpty(t *testing.T) {
-	name := "default" // the resolved default the command hands to the form
-	baseURL, email, backend := "", "", "keyring"
-	op, vault, item, cred := "", "", "", ""
-	var confirmed bool
+// authLoginForm must never write to the profile-name field it is given: it
+// binds the caller's value as-is. Two cases pin that:
+//   - an empty field stays empty — the builder does NOT pre-fill it (an
+//     earlier bug appended a typed name onto a pre-filled default and could
+//     overwrite the wrong profile); the empty-start guarantee is upheld
+//     by promptAuthLogin passing a fresh empty field, never by an in-builder clear.
+//   - a non-empty field is left untouched — building the form has no side
+//     effect on caller state (a regression reintroducing `*field = ""` fails here).
+func TestAuthLoginFormDoesNotWriteNameField(t *testing.T) {
+	for _, start := range []string{"", "sentinel"} {
+		nameField := start
+		baseURL, email, backend := "", "", "keyring"
+		op, vault, item, cred := "", "", "", ""
+		var confirmed bool
 
-	_ = authLoginForm(true, &name, "default", &baseURL, &email, &backend, &op, &vault, &item, &cred, &confirmed)
-
-	if name != "" {
-		t.Fatalf("authLoginForm left the name field pre-filled with %q; it must start empty so a typed name is not appended", name)
+		form := authLoginForm(true, &nameField, "default", &baseURL, &email, &backend, &op, &vault, &item, &cred, &confirmed)
+		if form == nil {
+			t.Fatalf("authLoginForm returned nil (start=%q)", start)
+		}
+		if nameField != start {
+			t.Fatalf("authLoginForm wrote the bound name field %q -> %q; it must bind the value as-is with no side effect", start, nameField)
+		}
 	}
 }
