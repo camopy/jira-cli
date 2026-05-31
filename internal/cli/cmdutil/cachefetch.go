@@ -92,7 +92,7 @@ func PrimeAndCacheBoards(ctx context.Context, cacheKey string, client *jira.Clie
 // returns the normalized cache file plus any warnings describing data dropped
 // during the prime (bad records, unsafe project keys, partial pagination).
 func PrimeBoards(ctx context.Context, client *jira.Client, ttlMinutes int, unbounded bool) (jira.BoardsCacheFile, []map[string]any, error) {
-	svc := jira.NewBoardService(client)
+	svc := ServicesForClient(client).Board()
 	res, err := svc.ListAll(ctx, jira.BoardDrainOptions{Unbounded: unbounded})
 	if err != nil {
 		return jira.BoardsCacheFile{}, nil, err

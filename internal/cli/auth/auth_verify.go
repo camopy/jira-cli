@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -23,7 +24,7 @@ func verifyCredential(ctx context.Context, baseURL, email, token string, timeout
 	if err != nil {
 		return nil, err
 	}
-	user, _, err := jira.NewUserService(client).Myself(ctx)
+	user, _, err := cmdutil.ServicesForClient(client).User().Myself(ctx)
 	if err != nil {
 		return nil, err
 	}

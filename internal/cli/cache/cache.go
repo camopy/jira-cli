@@ -54,7 +54,7 @@ func cacheLabelsCommand() *cobra.Command {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.labels")
 				}
-				labels, _, err := jira.NewLabelService(client).List(cmd.Context(), nil)
+				labels, _, err := cmdutil.ServicesForClient(client).Label().List(cmd.Context(), nil)
 				if err != nil {
 					return nil, err
 				}
@@ -100,7 +100,7 @@ func cacheProjectsCommand() *cobra.Command {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.projects")
 				}
-				projects, _, err := jira.NewProjectService(client, 0).List(cmd.Context(), nil)
+				projects, _, err := cmdutil.ServicesForClient(client).Project(0).List(cmd.Context(), nil)
 				if err != nil {
 					return nil, err
 				}
@@ -181,7 +181,7 @@ func cacheEpicsCommand() *cobra.Command {
 }
 
 func fetchEpicsForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
-	issues, _, err := jira.NewEpicService(client).List(ctx, &jira.ListOptions{MaxResults: 200})
+	issues, _, err := cmdutil.ServicesForClient(client).Epic().List(ctx, &jira.ListOptions{MaxResults: 200})
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +364,7 @@ func cacheLinkTypesCommand() *cobra.Command {
 				if !ok {
 					return nil, fmt.Errorf("jira base URL is required for cache.linktypes")
 				}
-				types, _, err := jira.NewIssueLinkTypeService(client).List(cmd.Context())
+				types, _, err := cmdutil.ServicesForClient(client).IssueLinkType().List(cmd.Context())
 				if err != nil {
 					return nil, err
 				}

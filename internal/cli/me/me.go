@@ -6,7 +6,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
-	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 // NewCommand returns the `me` command: a short alias for the identity
@@ -27,7 +26,7 @@ func NewCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for me")
 			}
-			user, _, err := jira.NewUserService(client).Myself(cmd.Context())
+			user, _, err := cmdutil.ServicesForClient(client).User().Myself(cmd.Context())
 			if err != nil {
 				return err
 			}

@@ -86,7 +86,7 @@ func authWhoamiCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for auth.whoami")
 			}
-			user, _, err := jira.NewUserService(client).Myself(cmd.Context())
+			user, _, err := cmdutil.ServicesForClient(client).User().Myself(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -962,7 +962,7 @@ func probeRemoteAuth(cmd *cobra.Command, profile config.Profile, projectKey stri
 		out["error"] = "profile has no base URL to probe"
 		return out
 	}
-	user := jira.NewUserService(client)
+	user := cmdutil.ServicesForClient(client).User()
 
 	// /myself reveals scope-level auth issues (granular tokens missing
 	// read:user/group/avatar/application-role 4-scope union).
