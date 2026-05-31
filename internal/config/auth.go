@@ -64,6 +64,20 @@ func profileNameIsNamespaceSafe(name string) bool {
 	return true
 }
 
+// ValidateProfileName reports whether a profile name can be encoded into a
+// credential key that round-trips uniquely. It is the input-time guard for the
+// same namespace safety CredentialIdentity enforces at store time, so a bad
+// name (uppercase, whitespace, a slash, anything outside lowercase letters,
+// digits, hyphen, and underscore) is rejected when it is typed or passed —
+// not late, after a token has already been sent to Jira. The returned error is
+// a validation-class CredentialError.
+func ValidateProfileName(name string) error {
+	if !profileNameIsNamespaceSafe(name) {
+		return namespaceCollisionError(name)
+	}
+	return nil
+}
+
 // CredentialIdentity derives the stable credential identity for a profile.
 // The returned SecretRef carries the site host (derived from the profile's
 // base URL) and profile name — the credential belongs to that site + profile
@@ -76,8 +90,8 @@ func profileNameIsNamespaceSafe(name string) bool {
 // rejected with a CredentialError carrying
 // ErrorCodeCredentialNamespaceCollision.
 func CredentialIdentity(profile Profile) (SecretRef, error) {
-	if !profileNameIsNamespaceSafe(profile.Name) {
-		return SecretRef{}, namespaceCollisionError(profile.Name)
+	if err := ValidateProfileName(profile.Name); err != nil {
+		return SecretRef{}, err
 	}
 	host := siteHost(profile.BaseURL)
 	item := profile.Item

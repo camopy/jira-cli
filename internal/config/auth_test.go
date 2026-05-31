@@ -601,6 +601,30 @@ func TestCredentialIdentityRejectsUnsafeProfileName(t *testing.T) {
 	}
 }
 
+// ValidateProfileName is the input-time guard for the same namespace safety
+// CredentialIdentity enforces at store time, so a bad name can be rejected
+// when it is typed rather than surfacing late. A safe name passes; an unsafe
+// one returns the typed namespace-collision validation error.
+func TestValidateProfileName(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{"default", "work", "work-staging", "work_staging", "a1"} {
+		if err := ValidateProfileName(name); err != nil {
+			t.Errorf("ValidateProfileName(%q) = %v, want nil", name, err)
+		}
+	}
+	for _, name := range []string{"", "Work", "my profile", "a/b", "a:b", "café"} {
+		err := ValidateProfileName(name)
+		if err == nil {
+			t.Errorf("ValidateProfileName(%q) = nil, want a namespace-collision error", name)
+			continue
+		}
+		var ce *CredentialError
+		if !errors.As(err, &ce) || ce.Type != ErrorTypeValidation || ce.ErrCode != ErrorCodeCredentialNamespaceCollision {
+			t.Errorf("ValidateProfileName(%q) error = %v, want a validation namespace-collision CredentialError", name, err)
+		}
+	}
+}
+
 // envToken resolution must use the bijective key so a JIRA_TOKEN_* override
 // for one profile cannot bleed into a sibling whose name differs only by a
 // hyphen/underscore swap.

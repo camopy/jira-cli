@@ -340,6 +340,45 @@ func TestAuthLoginRejectsCleartextBaseURLBeforeSendingToken(t *testing.T) {
 	}
 }
 
+// A profile name that cannot be encoded into a credential key must be rejected
+// at input time — before the token is sent to Jira for verification and before
+// anything is stored — not late at credential-store time. The verification
+// server records whether it was contacted: an input-time rejection never dials
+// it.
+func TestAuthLoginRejectsUnsafeProfileNameBeforeSendingToken(t *testing.T) {
+	var hit bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hit = true
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"accountId":"acc-1","displayName":"Ada","emailAddress":"ada@example.com"}`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("JIRA_TEST_TOKEN", "secret-token")
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+
+	_, _, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+		"--profile-name", "Bad Name",
+		"--base-url", srv.URL,
+		"--email", "ada@example.com",
+		"--backend", "keyring",
+		"--credential-env", "JIRA_TEST_TOKEN",
+	)
+	if err == nil {
+		t.Fatal("auth login accepted a namespace-unsafe profile name")
+	}
+	var ce *config.CredentialError
+	if !errors.As(err, &ce) || ce.ErrCode != config.ErrorCodeCredentialNamespaceCollision {
+		t.Fatalf("error is not a namespace-collision validation failure: %v", err)
+	}
+	// No network call means nothing was verified and nothing was stored: an
+	// unsafe name cannot form a SecretRef, so the credential never reaches a
+	// backend.
+	if hit {
+		t.Fatal("token was sent to Jira before the profile name was validated")
+	}
+}
+
 // An offline re-login (--skip-verify) that changes the account email must not
 // keep the previous profile's account_id: it belongs to the old account and
 // would mis-target `--assignee me`. It is dropped for `auth whoami --save` to

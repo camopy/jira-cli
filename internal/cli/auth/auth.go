@@ -219,8 +219,17 @@ func authLoginCommand() *cobra.Command {
 			if noInput && strings.TrimSpace(baseURL) == "" {
 				return fmt.Errorf("validation: --no-input requires --base-url (or --json-input with base_url)")
 			}
+			// Trim and validate the profile name on every path. The
+			// interactive form already validates inline; this also covers the
+			// headless --profile-name / --json-input path, and rejects a
+			// namespace-unsafe name here — before the token is sent to Jira —
+			// rather than late at credential-store time.
+			profileName = strings.TrimSpace(profileName)
 			if profileName == "" {
 				profileName = "default"
+			}
+			if err := config.ValidateProfileName(profileName); err != nil {
+				return err
 			}
 			// Normalise and validate the email on every path. The interactive
 			// form already validates; this also covers the headless --email /
@@ -648,7 +657,15 @@ func profileNameInput(value *string, hint string) *huh.Input {
 		Title("Profile name").
 		Description("Short local name for this Jira account, for example work or personal.").
 		Placeholder(hint).
-		Value(value)
+		Value(value).
+		Validate(func(v string) error {
+			// A blank field falls back to the placeholder default, which is
+			// already a safe name; only a typed value needs checking.
+			if v = strings.TrimSpace(v); v == "" {
+				return nil
+			}
+			return config.ValidateProfileName(v)
+		})
 }
 
 func authLoginForm(skipVerify bool, nameField *string, profileNameHint string, baseURL, email, backend, onePasswordAccount, vault, item, credential *string, confirmed *bool) *huh.Form {
