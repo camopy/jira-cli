@@ -264,9 +264,20 @@ func authLoginCommand() *cobra.Command {
 				}
 				credential = secret
 			}
+			// LoadOrInit seeds a placeholder profile named "default" when it
+			// creates a config. This login already knows the name it is
+			// configuring, and that profile is the first real one — so on a
+			// freshly created config, start from no profiles and let the login
+			// create exactly the profile requested, rather than leaving the
+			// seed beside it as a phantom unconfigured "default".
+			_, statErr := os.Stat(cmdutil.ConfigPath(cmd))
+			configExisted := statErr == nil
 			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
+			}
+			if !configExisted {
+				cfg.Profiles = nil
 			}
 			// : merge with existing profile instead of wholesale replace.
 			// Start from the persisted profile (if any) so that fields not

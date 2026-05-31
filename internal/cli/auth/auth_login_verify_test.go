@@ -379,6 +379,70 @@ func TestAuthLoginRejectsUnsafeProfileNameBeforeSendingToken(t *testing.T) {
 	}
 }
 
+// LoadOrInit seeds an empty "default" profile when it creates a config. A
+// login that configures a different profile name on that fresh config must not
+// leave that seed behind: an unconfigured default lingers as a phantom profile
+// and makes `auth status` report it as unhealthy. End state for a fresh
+// custom-name login is exactly one profile — the one that was configured.
+func TestAuthLoginFreshConfigCustomNameLeavesNoSeededDefault(t *testing.T) {
+	t.Setenv("JIRA_TEST_TOKEN", "tok")
+	configPath := filepath.Join(t.TempDir(), "config.toml") // does not exist yet
+
+	_, stderr, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+		"--profile-name", "work",
+		"--base-url", "https://company.atlassian.net",
+		"--email", "ada@example.com",
+		"--backend", "keyring",
+		"--credential-env", "JIRA_TEST_TOKEN",
+		"--skip-verify",
+	)
+	if err != nil {
+		t.Fatalf("auth login error = %v\nstderr=%s", err, stderr)
+	}
+	cfg, loadErr := config.Load(config.WithPath(configPath))
+	if loadErr != nil {
+		t.Fatalf("Load() error = %v", loadErr)
+	}
+	var names []string
+	for _, p := range cfg.Profiles {
+		names = append(names, p.Name)
+	}
+	if len(cfg.Profiles) != 1 || cfg.Profiles[0].Name != "work" {
+		t.Fatalf("fresh custom-name login left profiles %v, want exactly [work]", names)
+	}
+	if cfg.DefaultProfile != "work" {
+		t.Fatalf("default_profile = %q, want work", cfg.DefaultProfile)
+	}
+}
+
+// The seed cleanup must only fire when a different name is configured: logging
+// into the default profile on a fresh config keeps it, configured normally.
+func TestAuthLoginFreshConfigDefaultNameKeepsProfile(t *testing.T) {
+	t.Setenv("JIRA_TEST_TOKEN", "tok")
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+
+	_, stderr, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+		"--base-url", "https://company.atlassian.net",
+		"--email", "ada@example.com",
+		"--backend", "keyring",
+		"--credential-env", "JIRA_TEST_TOKEN",
+		"--skip-verify",
+	)
+	if err != nil {
+		t.Fatalf("auth login error = %v\nstderr=%s", err, stderr)
+	}
+	cfg, loadErr := config.Load(config.WithPath(configPath))
+	if loadErr != nil {
+		t.Fatalf("Load() error = %v", loadErr)
+	}
+	if len(cfg.Profiles) != 1 || cfg.Profiles[0].Name != "default" {
+		t.Fatalf("fresh default login should yield exactly [default], got %d profiles", len(cfg.Profiles))
+	}
+	if cfg.Profiles[0].BaseURL == "" {
+		t.Fatalf("default profile was not configured (empty base URL)")
+	}
+}
+
 // An offline re-login (--skip-verify) that changes the account email must not
 // keep the previous profile's account_id: it belongs to the old account and
 // would mis-target `--assignee me`. It is dropped for `auth whoami --save` to
