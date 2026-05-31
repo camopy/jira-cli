@@ -52,7 +52,7 @@ func attachmentClient(cmd *cobra.Command) (jira.AttachmentService, bool, error) 
 	if !ok {
 		return nil, false, nil
 	}
-	return jira.NewAttachmentService(client), true, nil
+	return cmdutil.ServicesForClient(client).Attachment(), true, nil
 }
 
 func issueAttachmentListCommand() *cobra.Command {

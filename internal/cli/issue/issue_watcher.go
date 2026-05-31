@@ -141,7 +141,7 @@ func watcherListCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.watchers.list")
 			}
-			service := jira.NewWatcherService(client)
+			service := cmdutil.ServicesForClient(client).Watcher()
 			if len(keys) == 1 {
 				watchers, resp, err := service.List(cmd.Context(), keys[0])
 				if err != nil {
@@ -299,11 +299,11 @@ func runWatcherMutationMany(
 	if !ok {
 		return fmt.Errorf("jira base URL is required for %s", command)
 	}
-	accountID, err := jira.NewUserService(client).ResolveUser(cmd.Context(), args.UserIdent)
+	accountID, err := cmdutil.ServicesForClient(client).User().ResolveUser(cmd.Context(), args.UserIdent)
 	if err != nil {
 		return handleResolveErr(cmd, command, err)
 	}
-	watcherSvc := jira.NewWatcherService(client)
+	watcherSvc := cmdutil.ServicesForClient(client).Watcher()
 	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		perKey := args
 		perKey.Key = key
@@ -335,7 +335,7 @@ func watcherDryRunPreviewMany(cmd *cobra.Command, command string, keys []string,
 		if !ok {
 			return fmt.Errorf("jira base URL is required for %s --validate-remote", command)
 		}
-		userSvc := jira.NewUserService(client)
+		userSvc := cmdutil.ServicesForClient(client).User()
 		if id, ok := accountIDFromIdentifier(args.UserIdent); ok {
 			accountID, err = userSvc.ResolveAccountID(cmd.Context(), id)
 		} else {
@@ -379,7 +379,7 @@ func runWatcherAdd(cmd *cobra.Command, args watcherMutationArgs) error {
 	if !ok {
 		return fmt.Errorf("jira base URL is required for issue.watchers.add")
 	}
-	user := jira.NewUserService(client)
+	user := cmdutil.ServicesForClient(client).User()
 
 	// Resolve the user first — bailing on a not-found / ambiguous query
 	// before the pre-state readback avoids a wasted /watchers GET on the
@@ -391,7 +391,7 @@ func runWatcherAdd(cmd *cobra.Command, args watcherMutationArgs) error {
 
 	// Capture pre-state when readback is requested so we can populate
 	// `was_already_watching` in the envelope .
-	watcherSvc := jira.NewWatcherService(client)
+	watcherSvc := cmdutil.ServicesForClient(client).Watcher()
 	data, err := watcherAddData(cmd.Context(), watcherSvc, accountID, args)
 	if err != nil {
 		return err
@@ -441,14 +441,14 @@ func runWatcherRemove(cmd *cobra.Command, args watcherMutationArgs) error {
 	if !ok {
 		return fmt.Errorf("jira base URL is required for issue.watchers.remove")
 	}
-	user := jira.NewUserService(client)
+	user := cmdutil.ServicesForClient(client).User()
 
 	accountID, err := user.ResolveUser(cmd.Context(), args.UserIdent)
 	if err != nil {
 		return handleResolveErr(cmd, "issue.watchers.remove", err)
 	}
 
-	watcherSvc := jira.NewWatcherService(client)
+	watcherSvc := cmdutil.ServicesForClient(client).Watcher()
 	data, err := watcherRemoveData(cmd.Context(), watcherSvc, accountID, args)
 	if err != nil {
 		return err
@@ -548,7 +548,7 @@ func watcherDryRunPreview(cmd *cobra.Command, command string, args watcherMutati
 	if !ok {
 		return fmt.Errorf("jira base URL is required for %s --validate-remote", command)
 	}
-	userSvc := jira.NewUserService(client)
+	userSvc := cmdutil.ServicesForClient(client).User()
 	var (
 		accountID string
 		rerr      error

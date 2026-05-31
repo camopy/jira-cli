@@ -84,7 +84,7 @@ Default action — no sub-command:
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.link")
 			}
-			resp, err := jira.NewIssueLinkService(client).Create(cmd.Context(), &jira.IssueLinkRequest{
+			resp, err := cmdutil.ServicesForClient(client).IssueLink().Create(cmd.Context(), &jira.IssueLinkRequest{
 				Type: linkType, InwardIssue: keys[0], OutwardIssue: to,
 			})
 			if err != nil {
@@ -137,7 +137,7 @@ func runIssueLinkCreateMany(cmd *cobra.Command, keys []string, parallelism int, 
 	if !ok {
 		return fmt.Errorf("jira base URL is required for %s", in.Command)
 	}
-	service := jira.NewIssueLinkService(client)
+	service := cmdutil.ServicesForClient(client).IssueLink()
 	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		if _, err := service.Create(ctx, &jira.IssueLinkRequest{
 			Type:         in.Type,
@@ -189,7 +189,7 @@ func issueLinkListCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.link.list")
 			}
-			service := jira.NewIssueLinkService(client)
+			service := cmdutil.ServicesForClient(client).IssueLink()
 			if len(keys) == 1 {
 				links, _, err := service.List(cmd.Context(), keys[0])
 				if err != nil {
@@ -262,7 +262,7 @@ func issueLinkDeleteCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.link.delete")
 			}
-			resp, err := jira.NewIssueLinkService(client).Delete(cmd.Context(), linkID)
+			resp, err := cmdutil.ServicesForClient(client).IssueLink().Delete(cmd.Context(), linkID)
 			if err != nil {
 				return err
 			}
@@ -338,7 +338,7 @@ func issueLinkTypesCommand() *cobra.Command {
 // and returns the JSON-encoded slice. Reused by the cache primer
 // command in cache.go.
 func fetchLinkTypesForCache(cmd *cobra.Command, client *jira.Client) (json.RawMessage, error) {
-	types, _, err := jira.NewIssueLinkTypeService(client).List(cmd.Context())
+	types, _, err := cmdutil.ServicesForClient(client).IssueLinkType().List(cmd.Context())
 	if err != nil {
 		return nil, err
 	}

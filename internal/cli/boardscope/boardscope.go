@@ -118,7 +118,7 @@ func FromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
 		// ResolveOne is cache-only — no client needed, no credential
 		// backend touched. Pinned by tests/unit/board_resolver_test.go
 		// which fails the test if the resolver hits the network.
-		svc := jira.NewBoardService(nil)
+		svc := cmdutil.ServicesForClient(nil).Board()
 		scope, err := svc.ResolveOne(cmd.Context(), cacheProfile, boardName)
 		if err != nil {
 			return jira.BoardScope{}, precedenceFlag, classifyErr(err)
@@ -131,7 +131,7 @@ func FromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
 	// profile carries a configured default_board, resolve that against
 	// the cache. Empty / unset → no scope, precedence "none".
 	if def := strings.TrimSpace(profile.DefaultBoard); def != "" {
-		svc := jira.NewBoardService(nil)
+		svc := cmdutil.ServicesForClient(nil).Board()
 		scope, err := svc.ResolveOne(cmd.Context(), cacheProfile, def)
 		if err != nil {
 			// Pinned wording when default_board doesn't resolve.
