@@ -5,6 +5,7 @@ import (
 	"time"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	"github.com/matcra587/jira-cli/internal/browser"
 	"github.com/matcra587/jira-cli/internal/cache"
 	"github.com/matcra587/jira-cli/internal/cli/boardscope"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
@@ -30,8 +31,16 @@ func NewCommand() *cobra.Command {
 				return err
 			}
 			query = boardscope.ApplyClauseToJQL(query, scope)
+			// Deep link built offline from the profile base URL, best-effort:
+			// `jql build` never calls Jira and must still work without a fully
+			// configured profile, so an unresolvable profile just yields no URL.
+			url := ""
+			if profile, perr := cmdutil.ProfileForCommand(cmd); perr == nil {
+				url = browser.SearchURL(profile.BaseURL, query)
+			}
 			data := map[string]any{
 				"jql":         query,
+				"url":         url,
 				"precedence":  precedence,
 				"board_scope": boardscope.EnvelopeData(scope),
 			}

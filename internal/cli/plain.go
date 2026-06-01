@@ -148,6 +148,8 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 	switch command {
 	case "issue.list":
 		return writeIssueListPlain(logger, data, cfg)
+	case "issue.list.jql", "jql.build":
+		return writeJQLPreviewPlain(logger, data, cfg)
 	case "issue.view":
 		return WriteIssueViewPlain(w, command, data, opts...)
 	case "issue.transitions":
@@ -351,6 +353,61 @@ func writeIssueListPlain(logger *clog.Logger, data any, cfg plainConfig) error {
 	return nil
 }
 
+// writeJQLPreviewPlain renders the `--as-jql` / `jql build` preview. The
+// preview's whole job is to hand back the JQL the command WOULD run, so its
+// human output is the bare query — copy/paste- and pipe-safe — not the
+// envelope's diagnostic fields. On a TTY the query is wrapped in an OSC 8
+// hyperlink to the Jira search URL (degrading to plain text off a TTY), and
+// --debug restores the operational diagnostics for troubleshooting.
+func writeJQLPreviewPlain(logger *clog.Logger, data any, cfg plainConfig) error {
+	m, ok := data.(map[string]any)
+	if !ok {
+		return writeGenericPlain(logger, "", data)
+	}
+	query, _ := m["jql"].(string)
+	if strings.TrimSpace(query) == "" {
+		return writeGenericPlain(logger, "", data)
+	}
+	if cfg.debug {
+		// Flatten through the shared plain-field helper so the diagnostic uses
+		// the same dotted form (board_scope.applied=…) as every other command's
+		// human output, rather than a raw Go map blob.
+		diag := map[string]any{"jql": query}
+		for _, key := range []string{"board_scope", "detail", "precedence"} {
+			if v, present := m[key]; present {
+				diag[key] = v
+			}
+		}
+		event := logger.Info()
+		for _, field := range plainFields(diag) {
+			event = event.Any(field.key, field.value)
+		}
+		event.Send()
+	}
+	url, _ := m["url"].(string)
+	logger.Info().Parts(clog.PartMessage).Msg(hyperlink(cfg, url, query))
+	return nil
+}
+
+// hyperlink renders text as an OSC 8 terminal link to url and is the single
+// source of truth for how every terminal link in the CLI is styled. On a TTY
+// the display text is underlined so the link reads as a link; off a TTY (or
+// when url is empty) the bare text is returned unchanged, keeping output
+// copy/paste- and pipe-safe.
+func hyperlink(cfg plainConfig, url, text string) string {
+	if url == "" {
+		return text
+	}
+	if cfg.tty {
+		text = lipgloss.NewStyle().Underline(true).Render(text)
+	}
+	a := termansi.New(
+		termansi.WithTerminal(cfg.tty),
+		termansi.WithHyperlinkFallback(termansi.HyperlinkFallbackText),
+	)
+	return a.Hyperlink(url, text)
+}
+
 // writeIssueTSV emits the issue list as tab-separated values: one header line
 // of column names plus one line per issue, with no status line, ANSI, or box.
 // The header is always written so a script can detect the columns even when
@@ -407,14 +464,8 @@ var issueColumnDefs = []issueColumn{
 		name:   "key",
 		header: "KEY",
 		text:   func(r issueTableRow) string { return r.Key },
-		cell: func(r issueTableRow, cfg plainConfig, ctx *table.RenderContext) table.Cell {
-			text := r.Key
-			if link := browser.IssueURL(cfg.baseURL, r.Key); link != "" {
-				if cfg.tty {
-					text = lipgloss.NewStyle().Underline(true).Render(text)
-				}
-				text = ctx.Ansi.Hyperlink(link, text)
-			}
+		cell: func(r issueTableRow, cfg plainConfig, _ *table.RenderContext) table.Cell {
+			text := hyperlink(cfg, browser.IssueURL(cfg.baseURL, r.Key), r.Key)
 			return table.StyledCell(text, r.Key)
 		},
 	},

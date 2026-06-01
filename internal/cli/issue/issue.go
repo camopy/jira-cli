@@ -387,7 +387,11 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 			return err
 		}
 		query = boardscope.ApplyClauseToJQL(query, scope)
-		return cmdutil.WriteEnvelope(cmd, "issue.list.jql", boardScopedListData(cmd, []map[string]any{}, opts.detail, query, scope, precedence))
+		data := boardScopedListData(cmd, []map[string]any{}, opts.detail, query, scope, precedence)
+		// The deep link is built offline from the profile base URL — the same
+		// builder `search jql --web` uses — so the preview never calls Jira.
+		data["url"] = browser.SearchURL(profile.BaseURL, query)
+		return cmdutil.WriteEnvelope(cmd, "issue.list.jql", data)
 	}
 	client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
