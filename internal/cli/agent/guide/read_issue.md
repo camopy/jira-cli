@@ -34,6 +34,7 @@ When: known issue keys need full payloads for downstream reasoning — transitio
 - Other issue-key commands also accept lists/ranges plus `-p` when the same operation can be applied independently per issue: comment add/list, attachment add/list, link create/list, web links, watcher add/remove/list, worklog add/list, edit with explicit fields, clone/move/delete, epic add/remove, and transition list/execute.
 - Commands with a single secondary id remain single-key: comment edit/delete, attachment download/delete, and link delete.
 - `issue view` does not have a separate raw REST passthrough mode; the command's normal JSON payload is already the Jira issue object wrapped by the CLI envelope.
+- To get an issue's browse URL without fetching the whole object, `jira open KEY` (or `jira issue view KEY --web`) reports it at `data.url`, built offline from the profile base URL with no Jira call. The browser is launched only in an interactive session — never for an agent or piped stdin — so the URL stays usable headless.
 - `issue view` and `issue list` do not have a `--fields` flag. Their default field sets can omit `issuetype`; absence means the field was not returned, not that the issue has no type.
 - For the type catalog (`Bug`, `Epic`, `Task`, etc.), use → `cache_metadata` (`jira cache issuetypes`). Use `search jql --fields issuetype` only when you need the actual type of one existing issue, and verify the returned `fields` object because Jira may omit requested fields.
 

@@ -65,7 +65,7 @@ Every ADF doc starts with the root:
 {"type": "text", "text": "line one"}, {"type": "hardBreak"}, {"type": "text", "text": "line two"}
 
 // mention — id MUST be the user's accountId
-{"type": "mention", "attrs": {"id": "712020:ff38cf6b-...", "text": "@Test User"}}
+{"type": "mention", "attrs": {"id": "712020:00000000-0000-0000-0000-000000000000", "text": "@Test User"}}
 
 // emoji — shortName + id (unicode codepoint) + text (the actual unicode)
 {"type": "emoji", "attrs": {"shortName": ":rocket:", "id": "1f680", "text": "🚀"}}
@@ -164,7 +164,7 @@ what the CLI's ADF validator detects.
 ```json
 {"type": "paragraph", "content": [
   {"type": "text", "text": "cc "},
-  {"type": "mention", "attrs": {"id": "712020:ff38cf6b-...", "text": "@Test User"}},
+  {"type": "mention", "attrs": {"id": "712020:00000000-0000-0000-0000-000000000000", "text": "@Test User"}},
   {"type": "text", "text": " — heads up"}
 ]}
 ```

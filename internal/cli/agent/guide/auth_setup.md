@@ -90,6 +90,7 @@ Further reading:
 | `unsupported auth type "X"` | Typo in `--auth-type` | Use one of `token`, `basic`, `pat`, `mtls` |
 | `credential not found` | Backend has no entry for this profile | `jira auth login --profile-name <name>` |
 | `OP_SERVICE_ACCOUNT_TOKEN not set` | 1Password service-account env missing | Export it, or fall back to keyring backend via `jira auth migrate --backend keyring` |
+| Exit 3, `1Password backend requires a vault` / `requires an item` | `--backend 1password` headless without `--vault`/`--item` | Pass both `--vault` and `--item` — they form the secret reference and are validated up front, before any network call |
 | 401 on a previously-working profile | Token revoked / rotated | `jira auth login --profile-name <name>` to replace |
 
 **Next**

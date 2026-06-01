@@ -12,7 +12,7 @@ When: a brand-new issue is needed and the project key and issue type are known; 
 
 # body
 - Recommended: `--json-input payload.json` with native ADF for `description` (round-trips losslessly).
-- Default-backed one-shots: `--summary "..."` (optionally `--assignee me|none|<accountId>`) — only when the active profile already supplies the project and issue type.
+- Default-backed one-shots: `--summary "..."` (optionally `--assignee me|none|<accountId>|<email>`) — only when the active profile already supplies the project and issue type. An `--assignee` value containing `@` must be a bare, valid email; it is resolved to an account id via a live `/user/search` (no match → not-found, many → ambiguous), so it is rejected under `--dry-run`.
 - Lossy human shortcut: `description_markdown` in the payload (converted to ADF; GFM features beyond the supported set degrade).
 
 # guard
@@ -51,7 +51,7 @@ Richer payload (every key past the aliases is forwarded verbatim into Jira's `fi
   "environment": {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "production / linux-amd64"}]}]},
   "components": [{"name": "ui"}],
   "fixVersions": [{"name": "1.1.0"}],
-  "assignee_account_id": "712020:ff38cf6b-faa6-42ae-aa4b-20a2108cfc0f"
+  "assignee_account_id": "712020:00000000-0000-0000-0000-000000000000"
 }
 ```
 

@@ -20,7 +20,7 @@ When: one or more fields on an existing issue need new values; the bare-form `ji
 - Canonical (bulk JSON): `jira issue edit KEY --no-input --json-input fields.json --output=json`
 - Single field: `jira issue edit KEY --no-input --summary "New title" --output=json`
 - Multi-key single field: `jira issue edit <PROJECT_KEY>-1..10 -p 4 --no-input --summary "New title" --output=json`
-- Reassign: `jira issue edit KEY --no-input --assignee me --output=json` (also accepts `none` or a bare `accountId`)
+- Reassign: `jira issue edit KEY --no-input --assignee me --output=json` (also accepts `none`, a bare `accountId`, or an email — an `@` value must be a bare valid address, resolved to an account id via a live `/user/search`, so it is rejected under `--dry-run`)
 - Stdin variant: `cat fields.json | jira issue edit KEY --no-input --json-input - --output=json`
 
 Bulk edit payload shape:

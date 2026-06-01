@@ -88,6 +88,7 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
   ```
 - `--key` values accept single keys, comma lists, repeated flags, and ranges using `:` or `..`. Each comma member expands independently, so `<PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12` is valid. One range cannot cross projects: `<PROJECT_KEY>-1:<OTHER_PROJECT_KEY>-100` exits 3. Whitespace inside a `--key` value is rejected. Expanded key sets are capped at 1000 keys and exit `3` before emitting JQL when exceeded.
 - Key expansion is for known keys or deliberate sparse-range probes. For discovery questions like "what is active on this board?", start with project/board/JQL filters, then pass discovered keys to → `read_issue` if more detail is needed.
+- `jira search jql 'JQL' --web` reports the Jira search URL for the query at `data.url`, built offline from the profile base URL. The browser is launched only in an interactive session (never for an agent or piped stdin), so the URL stays usable headless.
 
 **Recover**
 | Symptom | Cause | Next |
