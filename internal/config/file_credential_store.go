@@ -75,35 +75,9 @@ func (s FileCredentialStore) Put(_ context.Context, ref SecretRef, secret string
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return fmt.Errorf("test credential mkdir: %w", err)
+	if err := atomicWrite(path, []byte(secret)); err != nil {
+		return fmt.Errorf("test credential put %q: %w", ref.Profile, err)
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".credential-*")
-	if err != nil {
-		return fmt.Errorf("test credential create: %w", err)
-	}
-	tmpName := tmp.Name()
-	cleanup := true
-	defer func() {
-		if cleanup {
-			_ = os.Remove(tmpName)
-		}
-	}()
-	if err := tmp.Chmod(0o600); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("test credential chmod: %w", err)
-	}
-	if _, err := tmp.WriteString(secret); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("test credential write: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("test credential close: %w", err)
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		return fmt.Errorf("test credential rename: %w", err)
-	}
-	cleanup = false
 	return nil
 }
 

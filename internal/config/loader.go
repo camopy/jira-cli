@@ -164,7 +164,7 @@ func atomicWrite(path string, data []byte) error {
 	if !fs.IsWritableDir(dir) {
 		return fmt.Errorf("config directory %q is not writable", dir)
 	}
-	tmp, err := os.CreateTemp(dir, ".config-*.toml.tmp")
+	tmp, err := os.CreateTemp(dir, ".atomic-*.tmp")
 	if err != nil {
 		return err
 	}

@@ -83,7 +83,7 @@ func TestSaveAtomicConcurrentRace(t *testing.T) {
 	readerWG.Wait()
 
 	// No leftover temp files in the directory.
-	entries, err := filepath.Glob(filepath.Join(dir, ".config-*.toml.tmp"))
+	entries, err := filepath.Glob(filepath.Join(dir, ".atomic-*.tmp"))
 	if err != nil {
 		t.Fatalf("glob: %v", err)
 	}
