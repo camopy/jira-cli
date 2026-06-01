@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -140,12 +141,28 @@ func Save(path string, cfg *Config) error {
 	if path == "" {
 		path = DefaultPath()
 	}
-	// Resolve symlinks so the atomic rename below rewrites the link's target
-	// rather than replacing the symlink itself.
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(cfg); err != nil {
+		return err
+	}
+	return atomicWrite(path, buf.Bytes())
+}
+
+// atomicWrite writes data to path via a temp file and rename in the same
+// directory, so a reader never observes a partial config. It first resolves
+// path through any symlink (writeThroughPath) so the rename rewrites the link's
+// target rather than replacing the link, and creates the resolved target's
+// directory if it does not exist yet. Every config write — initial creation and
+// later updates alike — goes through here, so symlink and atomicity guarantees
+// hold uniformly.
+func atomicWrite(path string, data []byte) error {
 	path = writeThroughPath(path)
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
+	}
+	if !fs.IsWritableDir(dir) {
+		return fmt.Errorf("config directory %q is not writable", dir)
 	}
 	tmp, err := os.CreateTemp(dir, ".config-*.toml.tmp")
 	if err != nil {
@@ -156,13 +173,13 @@ func Save(path string, cfg *Config) error {
 		// Best-effort cleanup when rename below fails.
 		_ = os.Remove(tmpName)
 	}()
-	if err2 := os.Chmod(tmpName, 0o600); err2 != nil {
+	if err := os.Chmod(tmpName, 0o600); err != nil {
 		_ = tmp.Close()
-		return err2
+		return err
 	}
-	if encErr := toml.NewEncoder(tmp).Encode(cfg); encErr != nil {
+	if _, err := tmp.Write(data); err != nil {
 		_ = tmp.Close()
-		return encErr
+		return err
 	}
 	if err := tmp.Close(); err != nil {
 		return err
@@ -275,36 +292,24 @@ func DefaultPath() string {
 }
 
 func ensureConfig(path string) error {
-	if _, err := os.Stat(path); err == nil {
+	// Resolve through any symlink so existence is tested — and the seed below
+	// is written — against the link's real target, never the link itself.
+	target := writeThroughPath(path)
+	exists, err := fs.Exists(target)
+	if err != nil {
+		return err
+	}
+	if exists {
 		return nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(defaultTOML()), 0o600)
-}
-
-func defaultTOML() string {
-	return `default_profile = "default"
-queries_path = "~/.config/jira-cli/queries"
-
-[aliases]
-
-[tui]
-refresh_interval = 30
-default_tab = "issues"
-tabs = ["issues", "epics", "search", "activity"]
-
-[[profiles]]
-name = "default"
-auth_type = "token"
-secret_backend = "keyring"
-refresh_interval = 30
-timeout = 30
-workday_seconds = 28800
-`
+	// Seed the initial config by persisting the canonical Defaults() through
+	// Save — the one config writer. This keeps a single source of truth for the
+	// defaults (the same Defaults() that feeds the in-memory load layer) instead
+	// of a hand-maintained TOML template that could drift, and inherits Save's
+	// atomic, symlink-aware write (a symlinked config.toml is followed, not
+	// clobbered, and a missing target directory is created).
+	d := Defaults()
+	return Save(path, &d)
 }
 
 func defaultMap() map[string]any {

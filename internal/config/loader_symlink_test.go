@@ -73,3 +73,34 @@ func TestSaveWritesThroughDanglingSymlink(t *testing.T) {
 		t.Fatalf("target content = %q", string(got))
 	}
 }
+
+// LoadOrInit must initialize a missing config through the same symlink-aware,
+// directory-creating path as Save. A config.toml symlinked to a target whose
+// directory does not exist yet (a dotfiles symlink staged before the real file)
+// must have the target — and the target's directory — created, with the link
+// left intact. The previous init path made the LINK's directory and wrote the
+// raw path, so it could neither follow the link into a missing target dir nor
+// guarantee the symlink survived.
+func TestLoadOrInitInitializesThroughDanglingSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "dotfiles", "jira.toml") // dir "dotfiles" absent
+	link := filepath.Join(dir, "config.toml")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := LoadOrInit(WithPath(link)); err != nil {
+		t.Fatalf("LoadOrInit through dangling symlink into a missing dir: %v", err)
+	}
+
+	fi, err := os.Lstat(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("LoadOrInit replaced the symlink with a regular file")
+	}
+	if _, err := os.ReadFile(target); err != nil {
+		t.Fatalf("init did not create the config at the link's target: %v", err)
+	}
+}
