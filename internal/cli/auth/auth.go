@@ -245,6 +245,18 @@ func authLoginCommand() *cobra.Command {
 			if err := validateSecretBackend(backend); err != nil {
 				return err
 			}
+			// The 1Password backend locates the credential by vault and item.
+			// The interactive form validates both inline, but the headless
+			// flag/--json-input path bypasses the form, so enforce the same
+			// requirement here — before the token is verified or stored —
+			// rather than failing late at store time with an obscure backend
+			// error. Same validators the form binds, so the check cannot drift.
+			if err := validateOnePasswordVault(flagBackend, vault); err != nil {
+				return err
+			}
+			if err := validateOnePasswordItem(flagBackend, item); err != nil {
+				return err
+			}
 			if secretStdin {
 				b, err := io.ReadAll(cmd.InOrStdin())
 				if err != nil {
@@ -735,20 +747,14 @@ func authLoginForm(skipVerify bool, nameField *string, profileNameHint string, b
 				Description("Vault name used when the 1Password backend is selected.").
 				Value(vault).
 				Validate(func(value string) error {
-					if config.SecretBackend(*backend) == config.SecretBackendOnePassword && strings.TrimSpace(value) == "" {
-						return errors.New("1Password vault is required")
-					}
-					return nil
+					return validateOnePasswordVault(config.SecretBackend(*backend), value)
 				}),
 			huh.NewInput().
 				Title("1Password item").
 				Description("Item title for this Jira profile in the selected 1Password vault.").
 				Value(item).
 				Validate(func(value string) error {
-					if config.SecretBackend(*backend) == config.SecretBackendOnePassword && strings.TrimSpace(value) == "" {
-						return errors.New("1Password item is required")
-					}
-					return nil
+					return validateOnePasswordItem(config.SecretBackend(*backend), value)
 				}),
 		).Title("1Password").Description("Only used when the 1Password backend is selected.").WithHideFunc(func() bool {
 			return config.SecretBackend(*backend) != config.SecretBackendOnePassword
@@ -819,6 +825,25 @@ func validateSecretBackend(value string) error {
 	default:
 		return fmt.Errorf("unsupported secret backend %q", value)
 	}
+}
+
+// validateOnePasswordVault and validateOnePasswordItem require their locator
+// when the 1Password backend is selected: together they form the secret
+// reference that points at the credential, so neither can be blank. Both are
+// no-ops for other backends. The interactive form binds these and the headless
+// command body calls them, so the two input paths share one rule.
+func validateOnePasswordVault(backend config.SecretBackend, value string) error {
+	if backend == config.SecretBackendOnePassword && strings.TrimSpace(value) == "" {
+		return errors.New("1Password backend requires a vault")
+	}
+	return nil
+}
+
+func validateOnePasswordItem(backend config.SecretBackend, value string) error {
+	if backend == config.SecretBackendOnePassword && strings.TrimSpace(value) == "" {
+		return errors.New("1Password backend requires an item")
+	}
+	return nil
 }
 
 func trimAuthLoginValues(values ...*string) {

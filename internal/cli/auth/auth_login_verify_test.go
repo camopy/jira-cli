@@ -379,6 +379,58 @@ func TestAuthLoginRejectsUnsafeProfileNameBeforeSendingToken(t *testing.T) {
 	}
 }
 
+// The interactive form requires a vault and an item when the 1Password backend
+// is chosen. The headless flag path must enforce the same: a 1Password login
+// missing either locator is rejected as a validation failure at input time —
+// before the token is verified against Jira or handed to the backend — rather
+// than failing late and obscurely at credential-store time.
+func TestAuthLoginRejects1PasswordWithoutVaultItemBeforeNetwork(t *testing.T) {
+	cases := []struct{ name, vault, item string }{
+		{"neither", "", ""},
+		{"vault only", "Private", ""},
+		{"item only", "", "Jira"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var hit bool
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				hit = true
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"accountId":"acc-1","displayName":"Ada","emailAddress":"ada@example.com"}`))
+			}))
+			defer srv.Close()
+
+			t.Setenv("JIRA_TEST_TOKEN", "secret-token")
+			configPath := filepath.Join(t.TempDir(), "config.toml")
+
+			args := []string{
+				"--profile-name", "op",
+				"--base-url", srv.URL,
+				"--email", "ada@example.com",
+				"--backend", "1password",
+				"--credential-env", "JIRA_TEST_TOKEN",
+			}
+			if tc.vault != "" {
+				args = append(args, "--vault", tc.vault)
+			}
+			if tc.item != "" {
+				args = append(args, "--item", tc.item)
+			}
+
+			_, _, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath, args...)
+			if err == nil {
+				t.Fatal("auth login accepted a 1Password profile without both vault and item")
+			}
+			if hit {
+				t.Fatal("token was verified against Jira before the 1Password vault/item were validated")
+			}
+			if got := cli.ExitCode(cli.MapError(err)); got != 3 {
+				t.Fatalf("exit code = %d, want 3 (validation); err = %v", got, err)
+			}
+		})
+	}
+}
+
 // LoadOrInit seeds an empty "default" profile when it creates a config. A
 // login that configures a different profile name on that fresh config must not
 // leave that seed behind: an unconfigured default lingers as a phantom profile
