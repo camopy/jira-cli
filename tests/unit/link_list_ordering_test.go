@@ -14,7 +14,7 @@ func TestSortLinksDirectionTypeKey(t *testing.T) {
 		{ID: "1", Direction: "outward", Type: jira.IssueLinkType{Name: "Relates"}, OtherIssue: jira.IssueRef{Key: "KAN-200"}},
 		{ID: "2", Direction: "inward", Type: jira.IssueLinkType{Name: "Blocks"}, OtherIssue: jira.IssueRef{Key: "KAN-100"}},
 		{ID: "3", Direction: "outward", Type: jira.IssueLinkType{Name: "Blocks"}, OtherIssue: jira.IssueRef{Key: "KAN-300"}},
-		{ID: "4", Direction: "outward", Type: jira.IssueLinkType{Name: "Blocks"}, OtherIssue: jira.IssueRef{Key: "KAN-150"}},
+		{ID: "4", Direction: "outward", Type: jira.IssueLinkType{Name: "Blocks"}, OtherIssue: jira.IssueRef{Key: "KAN-250"}},
 		{ID: "5", Direction: "inward", Type: jira.IssueLinkType{Name: "Cloners"}, OtherIssue: jira.IssueRef{Key: "KAN-50"}},
 	}
 	jira.SortIssueLinks(links)
