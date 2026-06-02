@@ -52,17 +52,17 @@ func mineJQL(t *testing.T, cfg string, extraArgs ...string) string {
 // no default leaves the query unscoped.
 func TestIssueMineScopesToDefaultProject(t *testing.T) {
 	got := mineJQL(t, mineDefaultProjectConfig(t, "ACME"))
-	if got != "project = ACME AND assignee = currentUser() ORDER BY updated ASC" {
+	if got != "project = ACME AND assignee = currentUser() ORDER BY updated DESC" {
 		t.Fatalf("mine jql = %q", got)
 	}
 
 	got = mineJQL(t, mineDefaultProjectConfig(t, "ACME"), "--project", "OTHER")
-	if got != "project = OTHER AND assignee = currentUser() ORDER BY updated ASC" {
+	if got != "project = OTHER AND assignee = currentUser() ORDER BY updated DESC" {
 		t.Fatalf("mine --project override jql = %q", got)
 	}
 
 	got = mineJQL(t, mineDefaultProjectConfig(t, ""))
-	if got != "assignee = currentUser() ORDER BY updated ASC" {
+	if got != "assignee = currentUser() ORDER BY updated DESC" {
 		t.Fatalf("mine without default_project jql = %q", got)
 	}
 }

@@ -10,6 +10,7 @@ When: a batch of issue keys is needed for downstream per-issue work and the filt
 - Known key set: `--key <ISSUE_KEY>,<OTHER_ISSUE_KEY>` or `--key <PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12`.
 - Show the JQL that WOULD run without calling Jira: `--as-jql` (local-only preview, no API call).
 - Restrict to one agile board: `--board <NAME>` (exact case-insensitive) or `--board-id <id>` (numeric escape when names collide).
+- Restrict by date: `--updated` / `--created` / `--resolved`. Value is a signed relative duration (`-7d`), an absolute `YYYY-MM-DD`, a comparator form (`>=2026-01-01`), or an inclusive `..` range (`2026-01-01..2026-02-01`); bare = lower bound. See → `search_jql` for the full grammar.
 - Active tickets on one or more boards: discover board project keys first, then query those projects with `statusCategory != Done`. Use key expansion only after discovery, when you already have a known key set or a deliberate sparse-range probe.
 
 # field set
@@ -32,6 +33,8 @@ When: a batch of issue keys is needed for downstream per-issue work and the filt
 - With issue-key ranges: `jira issue list --key <PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12 --output=json`
 - With large sparse issue-key ranges: `jira issue list --key <PROJECT_KEY>-1:100,<OTHER_PROJECT_KEY>-1:200 -p 15 --output=json`
 - Preview JQL only: `jira issue list --as-jql --output=json`
+- Changed in a window: `jira issue list --project <PROJECT_KEY> --updated=-7d --output=json` (use `=` so the leading-dash value is not read as a flag)
+- Recently resolved: `jira issue mine --status Done --resolved=-7d --order-by resolved --output=json`
 - Full field records: `jira issue list --detail --output=json`
 - Board filter (name): `jira issue list --board "Engineering Sprint" --output=json`
 - Board filter (id): `jira issue list --board-id 42 --output=json`

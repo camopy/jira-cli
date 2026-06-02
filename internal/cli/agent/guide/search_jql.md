@@ -67,6 +67,10 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 | `--status '<Done'`          | `statusCategory in ("To Do", "In Progress")` |
 | `--status '>=In Progress'`  | `statusCategory in ("In Progress", Done)` |
 | `--status '!Abandoned'`     | `status != Abandoned`                  |
+| `--updated -7d`             | `updated >= -7d`                       |
+| `--created 2026-01-01`      | `created >= "2026-01-01"`              |
+| `--resolved '<=2026-02-01'` | `resolved <= "2026-02-01"`             |
+| `--created 2026-01-01..2026-02-01` | `created >= "2026-01-01" AND created <= "2026-02-01"` |
 | `--order-by F --desc`       | `ORDER BY F DESC` (default)            |
 | `--order-by F --desc=false` | `ORDER BY F ASC`                       |
 | no flags                    | `updated >= -365d ORDER BY updated DESC` |
@@ -87,6 +91,7 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
   ORDER BY priority DESC, updated DESC
   ```
 - `--key` values accept single keys, comma lists, repeated flags, and ranges using `:` or `..`. Each comma member expands independently, so `<PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12` is valid. One range cannot cross projects: `<PROJECT_KEY>-1:<OTHER_PROJECT_KEY>-100` exits 3. Whitespace inside a `--key` value is rejected. Expanded key sets are capped at 1000 keys and exit `3` before emitting JQL when exceeded.
+- `--updated` / `--created` / `--resolved` take one value: a signed relative duration (`-7d`, Jira units `w`/`d`/`h`/`m`), an absolute `YYYY-MM-DD`, an explicit comparator (`>=2026-01-01`, `<2026-02-01`), or an inclusive `..` range (`2026-01-01..2026-02-01`, open-ended as `2026-01-01..` or `..2026-02-01`). A bare value is a lower bound (`>=`). Relative durations MUST carry a sign — a bare `7d` exits `3`. The range delimiter is `..` only (not `:`, which collides with the time `HH:mm`). Relative values pass through to JQL so Jira evaluates them server-side; the CLI computes no dates.
 - Key expansion is for known keys or deliberate sparse-range probes. For discovery questions like "what is active on this board?", start with project/board/JQL filters, then pass discovered keys to → `read_issue` if more detail is needed.
 - `jira search jql 'JQL' --web` reports the Jira search URL for the query at `data.url`, built offline from the profile base URL. The browser is launched only in an interactive session (never for an agent or piped stdin), so the URL stays usable headless.
 

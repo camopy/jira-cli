@@ -6,6 +6,7 @@ package jql
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -28,6 +29,9 @@ type BuildOptions struct {
 	Priorities []string
 	Labels     []string
 	IssueTypes []string
+	Updated    string
+	Created    string
+	Resolved   string
 	OrderBy    string
 	Descending bool
 }
@@ -112,7 +116,93 @@ func (o BuildOptions) filterClauses() ([]string, error) {
 	appendInClause("priority", o.Priorities)
 	appendInClause("labels", o.Labels)
 	appendInClause("issuetype", o.IssueTypes)
+	for _, df := range []struct{ field, value string }{
+		{"updated", o.Updated},
+		{"created", o.Created},
+		{"resolved", o.Resolved},
+	} {
+		dateClauses, err := dateFilterClauses(df.field, df.value)
+		if err != nil {
+			return nil, err
+		}
+		clauses = append(clauses, dateClauses...)
+	}
 	return clauses, nil
+}
+
+// dateRelativePattern matches a Jira relative duration with a mandatory sign,
+// e.g. -7d, +2w. The sign is required so a bare 7d is rejected rather than
+// silently guessed at. dateAbsolutePattern matches a YYYY-MM-DD calendar date.
+var (
+	dateRelativePattern = regexp.MustCompile(`^[+-]\d+[wdhm]$`)
+	dateAbsolutePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+)
+
+// dateFilterClauses turns one --updated/--created/--resolved value into one or
+// two JQL clauses for field. Forms:
+//
+//	-7d / 2026-01-01        bare value, a lower bound (field >= value)
+//	>X >=X <X <=X           explicit comparator
+//	A..B / A.. / ..B        inclusive range, open-ended on either side
+//
+// ".." is the only range delimiter — ":" is deliberately not accepted because
+// it collides with Jira's time-of-day (HH:mm).
+func dateFilterClauses(field, value string) ([]string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+	if left, right, ok := strings.Cut(value, ".."); ok {
+		left = strings.TrimSpace(left)
+		right = strings.TrimSpace(right)
+		if left == "" && right == "" {
+			return nil, fmt.Errorf("%s date range %q needs at least one bound", field, value)
+		}
+		clauses := make([]string, 0, 2)
+		if left != "" {
+			rendered, err := jqlDateValue(field, left)
+			if err != nil {
+				return nil, err
+			}
+			clauses = append(clauses, field+" >= "+rendered)
+		}
+		if right != "" {
+			rendered, err := jqlDateValue(field, right)
+			if err != nil {
+				return nil, err
+			}
+			clauses = append(clauses, field+" <= "+rendered)
+		}
+		return clauses, nil
+	}
+	operator := ">="
+	operand := value
+	for _, candidate := range []string{">=", "<=", ">", "<"} {
+		if rest, ok := strings.CutPrefix(value, candidate); ok {
+			operator = candidate
+			operand = strings.TrimSpace(rest)
+			break
+		}
+	}
+	rendered, err := jqlDateValue(field, operand)
+	if err != nil {
+		return nil, err
+	}
+	return []string{field + " " + operator + " " + rendered}, nil
+}
+
+// jqlDateValue validates a single date operand and renders it for JQL: a signed
+// relative duration passes through unquoted (Jira evaluates it server-side); an
+// absolute YYYY-MM-DD date is quoted, as Jira requires.
+func jqlDateValue(field, operand string) (string, error) {
+	switch {
+	case dateRelativePattern.MatchString(operand):
+		return operand, nil
+	case dateAbsolutePattern.MatchString(operand):
+		return `"` + operand + `"`, nil
+	default:
+		return "", fmt.Errorf("invalid %s date %q: use a signed relative duration (e.g. -7d, -2w) or an absolute date (YYYY-MM-DD)", field, operand)
+	}
 }
 
 // statusCategoryOrder is Jira's universal three-bucket workflow ordering. It

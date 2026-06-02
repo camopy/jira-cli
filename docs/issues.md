@@ -169,8 +169,8 @@ would be ambiguous rather than a safe fan-out.
 ## list
 
 Filter issues by project, issue key, assignee, status, priority,
-label, type, epic, or board. The binary translates the flags into JQL
-and runs it.
+label, type, epic, board, or date (`--updated` / `--created` /
+`--resolved`). The binary translates the flags into JQL and runs it.
 Add or drop flags until the result is what you want, then save the
 resolved query as `--jql` for the next run. `--as-jql` prints the
 query without calling Jira, useful when a flag like `--label foo`
@@ -192,10 +192,53 @@ The default projection is a summary table, one row per issue. Pass
 jira issue list --project <PROJECT_KEY> --status "To Do" --order-by updated --desc
 jira issue list --key <PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12 --as-jql
 jira issue list --key <PROJECT_KEY>-1:100,<OTHER_PROJECT_KEY>-1:200 -p 15
+jira issue list --project <PROJECT_KEY> --updated=-7d         # changed in the last 7 days
+jira issue list --project <PROJECT_KEY> --created 2026-01-01..2026-02-01
 jira issue list --project <PROJECT_KEY> --as-jql              # show the JQL only
 jira issue list --jql 'project = <PROJECT_KEY> ORDER BY updated DESC'
 jira issue list --board "Engineering" --detail
 ```
+
+Date flags accept a relative window (`-7d`, signed, Jira units
+`w`/`d`/`h`/`m`), an absolute `YYYY-MM-DD`, an explicit comparator
+(`>=2026-01-01`, `<2026-02-01`), or an inclusive `..` range
+(`2026-01-01..2026-02-01`, open-ended as `2026-01-01..` or
+`..2026-02-01`). A bare value is a lower bound (`>=`). See
+[JQL → Date filters](jql.md#date-filters) for the full grammar.
+
+=== "Human"
+
+    ```text
+    INF ℹ️ listed issues count=2 detail=false
+    KEY       SUMMARY                STATUS       ASSIGNEE    PRIORITY
+    <ISSUE_KEY>    Example issue summary  In Progress  unassigned  Medium
+    <OTHER_ISSUE_KEY>    Example issue summary  To Do        unassigned  Medium
+    ```
+
+=== "JSON"
+
+    ```json
+    {
+      "ok": true,
+      "meta": { "command": "issue.list", "timestamp": "…", "request_id": "…" },
+      "data": {
+        "board_scope": { "applied": false },
+        "detail": false,
+        "issues": [
+          {
+            "key": "<ISSUE_KEY>",
+            "summary": "Example issue summary",
+            "status": "In Progress",
+            "priority": "Medium",
+            "assignee": null,
+            "updated": "2026-06-01T22:00:29.281-0400"
+          }
+        ]
+      },
+      "errors": [],
+      "warnings": []
+    }
+    ```
 
 === "Human"
 
@@ -271,12 +314,15 @@ results.
 
 Shows what's assigned to you right now. Equivalent to
 `list --assignee me` with the assignee pinned and a narrower flag
-surface. Add `--status`, `--project`, or arbitrary `--jql` to narrow
-further.
+surface. Add `--status`, `--project`, the date flags (`--updated` /
+`--created` / `--resolved`), `--order-by` / `--desc`, or arbitrary
+`--jql` to narrow and sort further. Like `issue list`, the default
+sort is `updated` descending.
 
 ```sh
 jira issue mine
 jira issue mine --status "In Progress"
+jira issue mine --status Done --resolved=-7d --order-by resolved   # recently closed, newest first
 jira issue mine --as-jql --output=json   # print the JQL without calling Jira
 ```
 

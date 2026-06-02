@@ -33,6 +33,7 @@ for the full flag set and current limits.
 ```sh
 jira jql build --project <PROJECT_KEY> --assignee me --priority Medium
 jira jql build --key <PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12
+jira jql build --project <PROJECT_KEY> --updated=-7d   # last 7 days
 jira jql build --project <PROJECT_KEY> --desc=false
 jira jql build                                        # no filters: defaults
 ```
@@ -73,8 +74,8 @@ jira jql build                                        # no filters: defaults
 
     The builder is intentionally limited today; the flag set will
     grow over time. Anything outside what's listed below (raw
-    clauses, date ranges, custom fields, `IN (…)` literals,
-    `NOT`, `OR`, parentheses) needs hand-written JQL via
+    clauses, custom fields, `IN (…)` literals, `NOT`, `OR`,
+    parentheses) needs hand-written JQL via
     [`search jql`](search.md#search-jql). File what you need.
 
 Builder flags map to documented Jira JQL concepts:
@@ -82,11 +83,41 @@ Builder flags map to documented Jira JQL concepts:
 *   Fields: `--project`, `--epic`, `--assignee`, `--reporter`,
     `--key`, `--status`, `--priority`, `--label`, `--type`,
     `--board`, `--board-id`
+*   Dates: `--updated`, `--created`, `--resolved` (see
+    [Date filters](#date-filters))
 *   Sort: `--order-by <field>`, `--desc=false` for ascending order
 *   Operators applied: `=`, `IN (...)` (for repeated flag values),
-    `is EMPTY`
+    `is EMPTY`, date comparators `>=` `<=` `>` `<`
 *   Keywords/functions: `AND`, `ORDER BY`, `currentUser()` (via
     `--assignee me` or `--reporter me`)
+
+### Date filters
+
+`--updated`, `--created`, and `--resolved` filter by date. Each takes a
+single value in one of these forms:
+
+| Value | Meaning | JQL |
+|-------|---------|-----|
+| `-7d` | relative, last 7 days (bare = lower bound) | `updated >= -7d` |
+| `2026-01-01` | absolute, on or after | `created >= "2026-01-01"` |
+| `>=2026-01-01` | explicit comparator (`>` `>=` `<` `<=`) | `created >= "2026-01-01"` |
+| `2026-01-01..2026-02-01` | inclusive range | `created >= "2026-01-01" AND created <= "2026-02-01"` |
+| `2026-01-01..` | open upper bound | `created >= "2026-01-01"` |
+| `..2026-02-01` | open lower bound | `created <= "2026-02-01"` |
+
+```sh
+jira jql build --updated=-7d
+jira jql build --created 2026-01-01..2026-02-01
+jira jql build --resolved '<=2026-02-01'
+```
+
+Relative durations use Jira's units (`w` `d` `h` `m`) and **must carry a
+sign** — `-7d` is accepted, a bare `7d` is rejected. They pass through to
+JQL unevaluated, so Jira resolves them server-side. Absolute dates are
+`YYYY-MM-DD`. The range delimiter is `..` only; `:` is not accepted for
+dates because it collides with the time-of-day `HH:mm`. Ranges are
+inclusive both ends — note Jira resolves a date-only upper bound to
+midnight, so `<= 2026-02-01` excludes that day's later events.
 
 ### Issue key ranges
 

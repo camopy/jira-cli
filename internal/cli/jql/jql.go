@@ -65,8 +65,6 @@ func AddJQLBuilderFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 	cmd.Flags().StringSliceVar(&builder.Priorities, "priority", nil, "Restrict by priority")
 	cmd.Flags().StringSliceVar(&builder.Labels, "label", nil, "Restrict by label")
 	cmd.Flags().StringSliceVar(&builder.IssueTypes, "type", nil, "Restrict by issue type")
-	cmd.Flags().StringVar(&builder.OrderBy, "order-by", "updated", "Sort field")
-	cmd.Flags().BoolVar(&builder.Descending, "desc", true, "Sort descending")
 	clib.Extend(
 		cmd.Flags().Lookup("project"),
 		clib.FlagExtra{Group: "Filters", Placeholder: "KEY", Complete: "predictor=cacheproject,comma"},
@@ -97,6 +95,17 @@ func AddJQLBuilderFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 	)
 	clib.Extend(cmd.Flags().Lookup("status"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME"})
 	clib.Extend(cmd.Flags().Lookup("priority"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME"})
+	AddSortFlags(cmd, builder)
+	AddDateFilterFlags(cmd, builder)
+}
+
+// AddSortFlags attaches the --order-by/--desc sort flags to cmd. Shared by the
+// full builder flag set and by `issue mine`, which carries its own reduced flag
+// surface, so the sort defaults (field "updated", descending) are defined once
+// and stay consistent across every command that builds a query.
+func AddSortFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
+	cmd.Flags().StringVar(&builder.OrderBy, "order-by", "updated", "Sort field")
+	cmd.Flags().BoolVar(&builder.Descending, "desc", true, "Sort descending")
 	clib.Extend(
 		cmd.Flags().Lookup("order-by"),
 		clib.FlagExtra{
@@ -107,6 +116,20 @@ func AddJQLBuilderFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 		},
 	)
 	clib.Extend(cmd.Flags().Lookup("desc"), clib.FlagExtra{Group: "Sort"})
+}
+
+// AddDateFilterFlags attaches the --updated/--created/--resolved timeframe
+// flags to cmd. Shared by the full builder flag set and by `issue mine`, which
+// carries its own reduced flag surface, so the date-flag grammar is defined
+// once. Each value is a relative duration (-7d), an absolute date (2026-01-01),
+// a comparator form (>=2026-01-01), or an A..B range — see jql.BuildOptions.
+func AddDateFilterFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
+	cmd.Flags().StringVar(&builder.Updated, "updated", "", "Filter by updated date: -7d, 2026-01-01, >=2026-01-01, or A..B range")
+	cmd.Flags().StringVar(&builder.Created, "created", "", "Filter by created date (same value grammar as --updated)")
+	cmd.Flags().StringVar(&builder.Resolved, "resolved", "", "Filter by resolved date (same value grammar as --updated)")
+	for _, name := range []string{"updated", "created", "resolved"} {
+		clib.Extend(cmd.Flags().Lookup(name), clib.FlagExtra{Group: "Filters", Placeholder: "DATE"})
+	}
 }
 
 // ReadCacheJSON loads a cache resource into v for the given profile, ignoring

@@ -17,6 +17,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/boardscope"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	clijql "github.com/matcra587/jira-cli/internal/cli/jql"
 	"github.com/matcra587/jira-cli/internal/config"
 	editorpkg "github.com/matcra587/jira-cli/internal/editor"
 	"github.com/matcra587/jira-cli/internal/issuekey"
@@ -67,6 +68,8 @@ func issueMineCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.asJQL, "as-jql", false, "Print the built JQL without calling Jira")
 	cmd.Flags().StringSliceVar(&opts.builder.Statuses, "status", nil, `Restrict by status name, category comparator ("<Done", ">=In Progress"), or negation ("!Abandoned")`)
 	cmd.Flags().StringSliceVar(&opts.builder.Projects, "project", nil, "Restrict by project key")
+	clijql.AddDateFilterFlags(cmd, &opts.builder)
+	clijql.AddSortFlags(cmd, &opts.builder)
 	cmdutil.AddIssueColumnFlags(cmd.Flags(), &opts.columns, &opts.tsv)
 	cmdutil.ExtendFlag(cmd.Flags(), "detail", clib.FlagExtra{Group: "Output"})
 	cmdutil.ExtendFlag(cmd.Flags(), "jql", clib.FlagExtra{Group: "Filters", Placeholder: "JQL"})
