@@ -8,6 +8,7 @@ it three ways:
 | [`issue list`](issues.md#list) filter flags | Common case. The CLI assembles the JQL from `--project`, `--status`, etc. |
 | [`jira jql build`](#build) | Same flag surface, but prints the JQL instead of running it. Useful as a preview, or as a starting point for a saved query. |
 | [`search jql`](search.md#search-jql) | Hand-written JQL when the flag set can't express what you need. |
+| [`jira jql validate`](#validate) | Check a query through Jira's own parser and report errors/warnings. |
 
 `jira issue list` starts from a bounded default query:
 
@@ -67,6 +68,56 @@ jira jql build                                        # no filters: defaults
     Pass `--desc=false` for ascending.
 *   `--order-by`: defaults to `updated`; other values are `created`,
     `priority`, `status`, `key`, `summary`.
+
+## validate
+
+`jira jql validate 'JQL'` checks a query through Jira's own parser and
+reports per-query errors and warnings — the same parser the server uses,
+so it catches field/function/syntax problems the local builder can't.
+It is a call to
+[`POST /jql/parse`](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-jql/#api-rest-api-3-jql-parse-post),
+so it needs a configured profile.
+
+Pass one or more queries. `--mode` sets strictness: `strict` (default,
+structural warnings count), `warn`, or `none`.
+
+```sh
+jira jql validate 'project = ENG AND statusCategory != Done'
+jira jql validate 'bad =' 'project = ENG' --mode warn
+```
+
+A query that fails to parse is reported as a *result*, not a CLI error:
+the command still exits `0` and the envelope is `ok: true`. Branch on
+`data.queries[].valid` — do not rely on the exit code to detect invalid
+JQL.
+
+=== "Human"
+
+    One line per query — `OK`, `OK (warnings)`, or `INVALID` with the
+    parser message:
+
+    ```text
+    OK  project = ENG AND statusCategory != Done
+    INVALID  bad = — Error in the JQL Query: expecting a value
+    ```
+
+=== "JSON"
+
+    ```json
+    {
+      "ok": true,
+      "meta": { "command": "jql.validate", "timestamp": "…", "request_id": "…" },
+      "data": {
+        "queries": [
+          { "query": "project = ENG", "valid": true },
+          { "query": "bad =", "valid": false,
+            "errors": ["Error in the JQL Query: expecting a value"] }
+        ]
+      },
+      "errors": [],
+      "warnings": []
+    }
+    ```
 
 ## Builder coverage
 

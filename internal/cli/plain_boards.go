@@ -72,7 +72,7 @@ func boardPlainLine(m map[string]any, style authPlainStyle) string {
 		name = "(unnamed)"
 	}
 	typeName, _ := m["type"].(string)
-	projects := boardProjectKeys(m["project_keys"])
+	projects := coerceStringSlice(m["project_keys"])
 
 	idCell := padLeft(idStr, 5)
 	nameCell := padRight(truncate(name, 40), 24)
@@ -101,25 +101,6 @@ func boardIDString(v any) string {
 		return fmt.Sprintf("%d", int64(x))
 	}
 	return ""
-}
-
-// boardProjectKeys normalizes the JSON-decoded project list into a
-// concrete []string so the descriptor logic doesn't have to branch on
-// every call.
-func boardProjectKeys(v any) []string {
-	switch x := v.(type) {
-	case []string:
-		return x
-	case []any:
-		out := make([]string, 0, len(x))
-		for _, raw := range x {
-			if s, ok := raw.(string); ok {
-				out = append(out, s)
-			}
-		}
-		return out
-	}
-	return nil
 }
 
 // boardProjectDescriptor implements : comma-join up to two keys;

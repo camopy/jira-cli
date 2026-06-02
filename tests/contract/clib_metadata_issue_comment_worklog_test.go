@@ -60,6 +60,7 @@ func TestIssueCommentAndWorklogFlagsPublishClibMetadata(t *testing.T) {
 
 		{commandPath: "jira issue list", flagName: "--count", group: "Output"},
 		{commandPath: "jira search jql", flagName: "--count", group: "Output"},
+		{commandPath: "jira jql validate", flagName: "--mode", group: "Validation", placeholder: "MODE", enumContains: []string{"strict", "warn", "none"}},
 
 		{commandPath: "jira issue create", flagName: "--dry-run", group: "Safety"},
 		{commandPath: "jira issue create", flagName: "--summary", group: "Fields", placeholder: "TEXT"},

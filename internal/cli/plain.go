@@ -152,6 +152,8 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 		return writeJQLPreviewPlain(logger, data, cfg)
 	case "issue.list.count", "search.count":
 		return writeCountPlain(logger, data, cfg)
+	case "jql.validate":
+		return writeValidatePlain(logger, data)
 	case "issue.view":
 		return WriteIssueViewPlain(w, command, data, opts...)
 	case "issue.transitions":
@@ -407,6 +409,52 @@ func writeCountPlain(logger *clog.Logger, data any, cfg plainConfig) error {
 		event.Send()
 	}
 	logger.Info().Parts(clog.PartMessage).Msg(fmt.Sprintf("%v", m["count"]))
+	return nil
+}
+
+// writeValidatePlain renders `jql validate` output: one line per query stating
+// whether it is valid, with the parse errors (or warnings) appended. The query
+// text is included so a multi-query run is legible.
+func writeValidatePlain(logger *clog.Logger, data any) error {
+	m, ok := data.(map[string]any)
+	if !ok {
+		return writeGenericPlain(logger, "", data)
+	}
+	queries := normalizeMapList(m["queries"])
+	if len(queries) == 0 {
+		return writeGenericPlain(logger, "", data)
+	}
+	for _, q := range queries {
+		query, _ := q["query"].(string)
+		valid, _ := q["valid"].(bool)
+		switch {
+		case !valid:
+			logger.Info().Parts(clog.PartMessage).Msg("INVALID  " + query + " — " + strings.Join(coerceStringSlice(q["errors"]), "; "))
+		case len(coerceStringSlice(q["warnings"])) > 0:
+			logger.Info().Parts(clog.PartMessage).Msg("OK (warnings)  " + query + " — " + strings.Join(coerceStringSlice(q["warnings"]), "; "))
+		default:
+			logger.Info().Parts(clog.PartMessage).Msg("OK  " + query)
+		}
+	}
+	return nil
+}
+
+// coerceStringSlice normalises a value that may be []string (the in-process
+// envelope path) or []any of strings (a JSON round-trip) into []string. Shared
+// by the validate and board renderers.
+func coerceStringSlice(v any) []string {
+	switch s := v.(type) {
+	case []string:
+		return s
+	case []any:
+		out := make([]string, 0, len(s))
+		for _, e := range s {
+			if str, ok := e.(string); ok {
+				out = append(out, str)
+			}
+		}
+		return out
+	}
 	return nil
 }
 

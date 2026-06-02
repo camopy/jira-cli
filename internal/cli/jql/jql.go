@@ -2,6 +2,7 @@ package jql
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	clib "github.com/gechr/clib/cli/cobra"
@@ -50,6 +51,63 @@ func NewCommand() *cobra.Command {
 	AddJQLBuilderFlags(build, &builder)
 	boardscope.AddFlags(build)
 	cmd.AddCommand(build)
+	cmd.AddCommand(validateCommand())
+	return cmd
+}
+
+// referenceCommand lists the JQL metadata this instance exposes — every
+// queryable field (including custom fields), function, and reserved word — via
+// GET /jql/autocompletedata. Human output is one "value — displayName" line per
+// field (the headline: discover queryable/custom fields); functions and
+// reserved words ride along in the JSON envelope. Needs a configured profile.
+// validateCommand checks each JQL argument through Jira's parser via
+// POST /jql/parse, reporting per-query errors and warnings. When the parse
+// call succeeds it emits a successful envelope carrying data.queries[].valid —
+// a JQL that fails to parse is a result, not a CLI input error, and is
+// deliberately NOT mapped onto the local flag-validation exit code (that
+// distinction is a separate design call). Consumers branch on
+// data.queries[].valid rather than the exit code. Transport/API failures
+// (auth, 429, 5xx) still surface as ordinary non-zero errors. Needs a
+// configured profile.
+func validateCommand() *cobra.Command {
+	var mode string
+	cmd := &cobra.Command{
+		Use:   "validate QUERY...",
+		Short: "Validate JQL through Jira's parser (per-query errors and warnings)",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			switch mode {
+			case "strict", "warn", "none":
+			default:
+				return fmt.Errorf("validation: --mode must be strict, warn, or none")
+			}
+			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return fmt.Errorf("validation: validate queries Jira and needs a configured profile")
+			}
+			results, resp, err := cmdutil.ServicesForClient(client).JQL().Parse(cmd.Context(), args, mode)
+			if err != nil {
+				return err
+			}
+			out := make([]map[string]any, len(results))
+			for i, r := range results {
+				entry := map[string]any{"query": r.Query, "valid": len(r.Errors) == 0}
+				if len(r.Errors) > 0 {
+					entry["errors"] = r.Errors
+				}
+				if len(r.Warnings) > 0 {
+					entry["warnings"] = r.Warnings
+				}
+				out[i] = entry
+			}
+			return cmdutil.WriteEnvelopeWithResponse(cmd, "jql.validate", map[string]any{"queries": out}, resp)
+		},
+	}
+	cmd.Flags().StringVar(&mode, "mode", "strict", "Validation strictness: strict, warn, or none")
+	clib.Extend(cmd.Flags().Lookup("mode"), clib.FlagExtra{Group: "Validation", Placeholder: "MODE", Enum: []string{"strict", "warn", "none"}})
 	return cmd
 }
 

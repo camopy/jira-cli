@@ -19,6 +19,9 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 # preview without calling Jira
 - `jira issue list --as-jql --output=json` returns the builder output without an API call.
 
+# pagination
+- One page by default (`--limit N`, default 50). `--all` walks every page until `isLast` (bounded: 100 pages / 10 000 issues; a truncated drain adds a `search-truncated` warning). `--unbounded` with `--all` lifts the caps. `/search/jql` returns no reliable total — treat `meta.pagination.isLast` as authoritative. `--all`/`--limit` don't combine with `--count` or `--web`.
+
 # count without fetching issues
 - `jira search jql 'JQL' --count --output=json` returns an estimate in `data.count` via one `/search/approximate-count` call — no issue pages, no reliable-total problem. The count is approximate and `ORDER BY` is ignored. Can't combine with `--fields` / `--full` / `--web`. Use it to size a result set before a heavy fetch.
 
@@ -115,3 +118,4 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 - Then: → `edit_issue`, → `transition_issue`, → `add_comment` on captured keys.
 - Alternative: → `list_issues` for the default-project / board-filtered convenience surface.
 - Reference: → `jql_reference` for operators, keywords, functions, and high-yield recipes.
+- Validate: `jira jql validate 'JQL' --output=json` checks a query through Jira's parser; read `data.queries[].valid` and `.errors[]` (the command exits `0` and `ok:true` even for invalid JQL — a parse failure is a result, not a CLI error). `--mode strict|warn|none`. Needs a configured profile.

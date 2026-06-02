@@ -38,6 +38,10 @@ func (f *ServiceFactory) Search() jira.SearchService {
 	return jira.NewSearchService(f.client)
 }
 
+func (f *ServiceFactory) JQL() jira.JQLService {
+	return jira.NewJQLService(f.client)
+}
+
 func (f *ServiceFactory) Worklog() jira.WorklogService {
 	return jira.NewWorklogService(f.client)
 }
