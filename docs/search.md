@@ -29,7 +29,18 @@ jira search jql 'project = <PROJECT_KEY> AND status = "To Do"'
 jira search jql 'project = <PROJECT_KEY>' --fields key,summary,status
 jira search jql 'key = <ISSUE_KEY>' --full
 jira search jql 'project = <PROJECT_KEY>' --count   # estimate only, no issues fetched
+jira search jql 'project = <PROJECT_KEY>' --all      # walk every page (bounded)
 ```
+
+### Pagination
+
+`/search/jql` is token-paginated and returns no reliable total, so by
+default `search jql` returns one page (`--limit`, default 50). Add
+`--all` to walk every page until the server reports `isLast`. The drain
+is bounded — 100 pages / 10 000 issues — and a truncated result carries
+a `search-truncated` warning in the envelope. Pass `--unbounded` with
+`--all` to lift the caps. `--all`/`--limit` can't combine with `--count`
+(fetches nothing) or `--web`.
 
 ### Count
 

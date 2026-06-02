@@ -59,19 +59,22 @@ func DrainSearch(ctx context.Context, svc SearchService, req *SearchRequest, opt
 		out = append(out, issues...)
 		serverDone := resp == nil || resp.IsLast || resp.NextPageToken == ""
 
-		// Bound checks (skipped under Unbounded).
+		// Bound checks (skipped under Unbounded). max_results is checked first
+		// so the result cap always holds: with a large page size both bounds can
+		// be eligible on the same page, and checking max_pages first would
+		// return more than maxResults issues mislabelled as a page-count stop.
 		if !opts.Unbounded {
-			if info.PagesFetched >= maxPages && !serverDone {
-				info.Truncated = true
-				info.TruncatedReason = "max_pages"
-				return out, info, nil
-			}
 			if len(out) > maxResults || (len(out) == maxResults && !serverDone) {
 				info.Truncated = true
 				info.TruncatedReason = "max_results"
 				if len(out) > maxResults {
 					out = out[:maxResults]
 				}
+				return out, info, nil
+			}
+			if info.PagesFetched >= maxPages && !serverDone {
+				info.Truncated = true
+				info.TruncatedReason = "max_pages"
 				return out, info, nil
 			}
 		}

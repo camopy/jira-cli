@@ -21,10 +21,13 @@ func NewCommand() *cobra.Command {
 }
 
 type searchOptions struct {
-	fields []string
-	full   bool
-	web    bool
-	count  bool
+	fields    []string
+	full      bool
+	web       bool
+	count     bool
+	all       bool
+	limit     int
+	unbounded bool
 }
 
 func searchJQLCommand() *cobra.Command {
@@ -49,13 +52,23 @@ func searchJQLCommand() *cobra.Command {
 				return err
 			}
 			if ok {
-				issues, resp, err := cmdutil.ServicesForClient(client).Search().JQL(cmd.Context(), &jira.SearchRequest{
-					JQL:         args[0],
-					Fields:      fields,
-					ListOptions: jira.ListOptions{MaxResults: 50},
-				})
-				if err != nil {
-					return err
+				svc := cmdutil.ServicesForClient(client).Search()
+				limit := opts.limit
+				if limit <= 0 {
+					limit = 50
+				}
+				req := &jira.SearchRequest{JQL: args[0], Fields: fields, ListOptions: jira.ListOptions{MaxResults: limit}}
+				if opts.all {
+					issues, info, derr := jira.DrainSearch(cmd.Context(), svc, req, jira.DrainOptions{Unbounded: opts.unbounded})
+					if derr != nil {
+						return derr
+					}
+					data := map[string]any{"source": "inline", "jql": args[0], "issues": cmdutil.IssueOutput(issues, detail)}
+					return cmdutil.WriteEnvelopeWithRawWarnings(cmd, "search.jql", data, searchTruncationWarnings(info))
+				}
+				issues, resp, jerr := svc.JQL(cmd.Context(), req)
+				if jerr != nil {
+					return jerr
 				}
 				return cmdutil.WriteEnvelopeWithResponse(cmd, "search.jql", map[string]any{"source": "inline", "jql": args[0], "issues": cmdutil.IssueOutput(issues, detail)}, resp)
 			}
@@ -68,6 +81,7 @@ func searchJQLCommand() *cobra.Command {
 	}
 	addSearchOutputFlags(cmd, &opts)
 	addSearchCountFlag(cmd, &opts)
+	addSearchPaginationFlags(cmd, &opts)
 	return cmd
 }
 
@@ -136,6 +150,45 @@ func addSearchOutputFlags(cmd *cobra.Command, opts *searchOptions) {
 	clib.Extend(cmd.Flags().Lookup("fields"), clib.FlagExtra{Group: "Output", Placeholder: "FIELD", Complete: "predictor=cachefield,comma"})
 	clib.Extend(cmd.Flags().Lookup("full"), clib.FlagExtra{Group: "Output"})
 	clib.Extend(cmd.Flags().Lookup("web"), clib.FlagExtra{Group: "Output"})
+}
+
+// addSearchPaginationFlags attaches --all/--limit/--unbounded. Like --count,
+// they live only on `search jql`, not the shared output flags, so `search
+// saved` doesn't publish flags its runner ignores.
+func addSearchPaginationFlags(cmd *cobra.Command, opts *searchOptions) {
+	cmd.Flags().BoolVar(&opts.all, "all", false, "Walk every page until isLast (bounded; use --unbounded to lift the caps)")
+	cmd.Flags().IntVar(&opts.limit, "limit", 50, "Page size requested from Jira")
+	cmd.Flags().BoolVar(&opts.unbounded, "unbounded", false, "With --all, lift the default 100-page / 10 000-issue caps")
+	// --count fetches nothing and --web opens a browser, so the page controls
+	// are meaningless alongside either.
+	cmd.MarkFlagsMutuallyExclusive("count", "all")
+	cmd.MarkFlagsMutuallyExclusive("count", "limit")
+	cmd.MarkFlagsMutuallyExclusive("web", "all")
+	cmd.MarkFlagsMutuallyExclusive("web", "limit")
+	cmdutil.ExtendPaginationFlags(cmd.Flags())
+	clib.Extend(cmd.Flags().Lookup("unbounded"), clib.FlagExtra{Group: "Pagination"})
+}
+
+// searchTruncationWarnings maps a bounded-drain truncation onto the envelope's
+// warnings[], with a re-run-with---unbounded remediation. nil when the drain
+// reached isLast.
+func searchTruncationWarnings(info jira.DrainInfo) []map[string]any {
+	if !info.Truncated {
+		return nil
+	}
+	limit := 100
+	if info.TruncatedReason == "max_results" {
+		limit = 10_000
+	}
+	return []map[string]any{{
+		"type":          "search-truncated",
+		"resource":      "issues",
+		"reason":        info.TruncatedReason,
+		"limit":         limit,
+		"pages_fetched": info.PagesFetched,
+		"message":       "search truncated by " + info.TruncatedReason + "; re-run with --unbounded to fetch every issue",
+		"remediation":   "Re-run with --unbounded if you need every issue.",
+	}}
 }
 
 // addSearchCountFlag attaches --count. It lives only on `search jql`, not on the
