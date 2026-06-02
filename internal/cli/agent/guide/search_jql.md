@@ -98,7 +98,7 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 **Recover**
 | Symptom | Cause | Next |
 |---|---|---|
-| Exit `3`, `invalid order-by field` | `--order-by` value not on the allow-list (or contains shell metachars like `'updated; DROP TABLE x'`) | Use a vetted field name; see → `jql_reference` |
+| Exit `3`, `invalid order-by field` | `--order-by` value is not a safe identifier — it contains shell/JQL metachars (e.g. `'updated; DROP TABLE x'`). A safe-but-unknown field name is NOT rejected locally; it passes to Jira and comes back as a `400` (see the next row). | Use a vetted field name; see → `jql_reference` |
 | Exit `3` at flag-parse on `--label`/`--type`/`--status` | Unbalanced quotes in the value | Strip the bad quote before re-running |
 | Exit `3`, `same project` on `--key` | One key range crosses projects, e.g. `<PROJECT_KEY>-1:<OTHER_PROJECT_KEY>-100` | Split it into separate ranges: `<PROJECT_KEY>-1:100,<OTHER_PROJECT_KEY>-1:100` |
 | Exit `3`, `issue key expansion exceeds maximum of 1000 keys` | `--key` expanded past the local safety cap | Split the key set into smaller builder/list invocations, or use project/JQL filters for discovery |
