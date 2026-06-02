@@ -53,14 +53,18 @@ func NewCommand() *cobra.Command {
 	return cmd
 }
 
-// AddJQLBuilderFlags attaches the standard JQL filter and sort flags to cmd,
-// writing results into builder.
-func AddJQLBuilderFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
+// AddFilterFlags attaches the JQL filter flags shared by every command that
+// builds a query — every field except assignee/reporter. `issue mine` pins
+// assignee = currentUser() in its runner, so exposing --assignee would fight
+// the pin and --reporter has no place on an assignee-scoped command; those two
+// are the only flags AddJQLBuilderFlags adds on top. Because every other
+// filter is registered here once, a new filter appears on both `issue list`
+// and `issue mine` by construction. Sort and date flags compose via
+// AddSortFlags / AddDateFilterFlags, which both commands also call.
+func AddFilterFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 	cmd.Flags().StringSliceVar(&builder.Projects, "project", nil, "Restrict to Jira project key")
 	cmd.Flags().StringSliceVar(&builder.Keys, "key", nil, "Restrict to issue key, comma list, or range")
 	cmd.Flags().StringSliceVar(&builder.Epics, "epic", nil, "Restrict to issues in epic keys")
-	cmd.Flags().StringVar(&builder.Assignee, "assignee", "", `Restrict by assignee; use "me" for currentUser()`)
-	cmd.Flags().StringVar(&builder.Reporter, "reporter", "", `Restrict by reporter; use "me" for currentUser()`)
 	cmd.Flags().StringSliceVar(&builder.Statuses, "status", nil, `Restrict by status name, category comparator ("<Done", ">=In Progress"), or negation ("!Abandoned")`)
 	cmd.Flags().StringSliceVar(&builder.Priorities, "priority", nil, "Restrict by priority")
 	cmd.Flags().StringSliceVar(&builder.Labels, "label", nil, "Restrict by label")
@@ -85,6 +89,17 @@ func AddJQLBuilderFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 		cmd.Flags().Lookup("type"),
 		clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Complete: "predictor=cacheissuetype,comma"},
 	)
+	clib.Extend(cmd.Flags().Lookup("status"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME"})
+	clib.Extend(cmd.Flags().Lookup("priority"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME"})
+}
+
+// AddJQLBuilderFlags attaches the full JQL builder surface to cmd: the shared
+// filter flags, plus the assignee/reporter filters that `issue mine` omits, and
+// the sort and date flags.
+func AddJQLBuilderFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
+	AddFilterFlags(cmd, builder)
+	cmd.Flags().StringVar(&builder.Assignee, "assignee", "", `Restrict by assignee; use "me" for currentUser()`)
+	cmd.Flags().StringVar(&builder.Reporter, "reporter", "", `Restrict by reporter; use "me" for currentUser()`)
 	clib.Extend(
 		cmd.Flags().Lookup("assignee"),
 		clib.FlagExtra{Group: "Filters", Placeholder: "USER", Enum: []string{"me", "none"}},
@@ -93,8 +108,6 @@ func AddJQLBuilderFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 		cmd.Flags().Lookup("reporter"),
 		clib.FlagExtra{Group: "Filters", Placeholder: "USER", Enum: []string{"me"}},
 	)
-	clib.Extend(cmd.Flags().Lookup("status"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME"})
-	clib.Extend(cmd.Flags().Lookup("priority"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME"})
 	AddSortFlags(cmd, builder)
 	AddDateFilterFlags(cmd, builder)
 }

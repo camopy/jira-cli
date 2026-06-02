@@ -313,15 +313,18 @@ results.
 ## mine
 
 Shows what's assigned to you right now. Equivalent to
-`list --assignee me` with the assignee pinned and a narrower flag
-surface. Add `--status`, `--project`, the date flags (`--updated` /
-`--created` / `--resolved`), `--order-by` / `--desc`, or arbitrary
-`--jql` to narrow and sort further. Like `issue list`, the default
-sort is `updated` descending.
+`list --assignee me` with the assignee pinned. It accepts the same
+filter, sort, and date flags as [`list`](#list) — `--project`,
+`--key`, `--epic`, `--status`, `--priority`, `--label`, `--type`, the
+date flags (`--updated` / `--created` / `--resolved`), `--order-by` /
+`--desc`, and arbitrary `--jql` — except `--assignee` / `--reporter`:
+assignee is pinned to you, and `mine` is about the assignee. Like
+`issue list`, the default sort is `updated` descending.
 
 ```sh
 jira issue mine
-jira issue mine --status "In Progress"
+jira issue mine --status "In Progress" --priority High
+jira issue mine --label regression --type Bug
 jira issue mine --status Done --resolved=-7d --order-by resolved   # recently closed, newest first
 jira issue mine --as-jql --output=json   # print the JQL without calling Jira
 ```
