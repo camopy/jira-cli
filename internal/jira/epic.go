@@ -3,6 +3,8 @@ package jira
 import (
 	"context"
 	"net/http"
+
+	"github.com/matcra587/jira-cli/internal/jql"
 )
 
 type EpicService interface {
@@ -23,7 +25,7 @@ func NewEpicService(client *Client) EpicService {
 
 func (s *epicService) List(ctx context.Context, opts *ListOptions) ([]*Issue, *Response, error) {
 	req := &SearchRequest{
-		JQL: "issuetype=Epic",
+		JQL: jql.EpicListJQL,
 		// Without an explicit Fields list Jira's /search/jql returns only
 		// the keys — callers (epic list, epic board, cache epics) all want
 		// at least summary and status, so request them up front.
@@ -58,7 +60,7 @@ func (s *epicService) RemoveIssue(ctx context.Context, issueKey string) (*Respon
 }
 
 func (s *epicService) IssuesInEpic(ctx context.Context, epicKey string) ([]*Issue, *Response, error) {
-	return NewIssueService(s.client).List(ctx, &IssueListOptions{JQL: "parent=" + JQLValue(epicKey)})
+	return NewIssueService(s.client).List(ctx, &IssueListOptions{JQL: "parent = " + jql.Value(epicKey)})
 }
 
 func StatusCounts(issues []*Issue) map[string]int {

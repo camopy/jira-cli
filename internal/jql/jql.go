@@ -2,6 +2,16 @@
 // structured inputs. It is pure string logic — no cobra, config, or I/O —
 // so the jql/search/issue command layers and shell completion can all share
 // one query builder without import cycles.
+//
+// It is the single composition path: every command builds its query through
+// Build (filters → ORDER BY) or IssueList (raw JQL + filters + ORDER BY); every
+// value is quoted through the one quoter, Value (safe identifier bare,
+// otherwise double-quoted with embedded quotes escaped); and top-level ORDER BY
+// / OR detection goes through the one quote-aware tokenizer (topLevelWordTokens,
+// SplitTopLevelOrderBy). Board scoping composes on top via CombineClauses /
+// ParenthesizeIfTopLevelOR rather than re-implementing any of it. Keep new JQL
+// construction here — command layers must not hand-build clause strings, so the
+// quoting and precedence rules cannot drift per command.
 package jql
 
 import (
@@ -17,6 +27,11 @@ import (
 // requested with no filters and no explicit sort. It is owned here, in the
 // query domain, and consumed by the Jira issue service as its List default.
 const DefaultIssueListJQL = "updated >= -365d ORDER BY updated DESC"
+
+// EpicListJQL selects epics. It is owned here so the epic service (which runs
+// it) and the epic command layer (which echoes it) share one literal and can't
+// drift in spelling or spacing.
+const EpicListJQL = "issuetype = Epic"
 
 // BuildOptions captures the structured filters that compose into a JQL query.
 type BuildOptions struct {
@@ -89,7 +104,7 @@ func (o BuildOptions) filterClauses() ([]string, error) {
 			return
 		}
 		if len(values) == 1 {
-			clauses = append(clauses, field+" = "+jqlValue(values[0]))
+			clauses = append(clauses, field+" = "+Value(values[0]))
 			return
 		}
 		clauses = append(clauses, field+" in ("+joinJQLValues(values)+")")
@@ -236,7 +251,7 @@ func statusFilterClauses(values []string) ([]string, error) {
 			if name == "" {
 				return nil, fmt.Errorf("status filter %q: missing status name after %q", v, "!")
 			}
-			negatives = append(negatives, "status != "+jqlValue(name))
+			negatives = append(negatives, "status != "+Value(name))
 		case statusComparatorPrefix(v) != "":
 			clause, err := statusCategoryComparator(v)
 			if err != nil {
@@ -250,7 +265,7 @@ func statusFilterClauses(values []string) ([]string, error) {
 	switch len(plain) {
 	case 0:
 	case 1:
-		positives = append([]string{"status = " + jqlValue(plain[0])}, positives...)
+		positives = append([]string{"status = " + Value(plain[0])}, positives...)
 	default:
 		positives = append([]string{"status in (" + joinJQLValues(plain) + ")"}, positives...)
 	}
@@ -295,7 +310,7 @@ func statusCategoryComparator(v string) (string, error) {
 		return "", fmt.Errorf("status filter %q matches no status category", v)
 	}
 	if len(cats) == 1 {
-		return "statusCategory = " + jqlValue(cats[0]), nil
+		return "statusCategory = " + Value(cats[0]), nil
 	}
 	return "statusCategory in (" + joinJQLValues(cats) + ")", nil
 }
@@ -512,7 +527,7 @@ func userClause(field, value string) string {
 	case "none", "empty", "unassigned":
 		return field + " is EMPTY"
 	default:
-		return field + " = " + jqlValue(value)
+		return field + " = " + Value(value)
 	}
 }
 
@@ -531,12 +546,17 @@ func CompactStrings(values []string) []string {
 func joinJQLValues(values []string) string {
 	parts := make([]string, 0, len(values))
 	for _, value := range values {
-		parts = append(parts, jqlValue(value))
+		parts = append(parts, Value(value))
 	}
 	return strings.Join(parts, ", ")
 }
 
-func jqlValue(value string) string {
+// Value renders a string as a JQL value: a safe identifier (letters, digits,
+// _ - .) is returned bare; anything else is double-quoted with embedded quotes
+// escaped. It is the one quoter every clause goes through — exported so the few
+// service-layer clauses that can't use the full builder (e.g. a bare
+// "parent = KEY") still quote identically rather than rolling their own.
+func Value(value string) string {
 	value = strings.TrimSpace(value)
 	if isSafeJQLIdentifier(value) {
 		return value

@@ -7,6 +7,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
+	"github.com/matcra587/jira-cli/internal/jql"
 	"github.com/spf13/cobra"
 )
 
@@ -37,10 +38,10 @@ func epicListCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return cmdutil.WriteEnvelopeWithResponse(cmd, "epic.list", map[string]any{"jql": "issuetype = Epic", "epics": epics, "detail": false}, resp)
+				return cmdutil.WriteEnvelopeWithResponse(cmd, "epic.list", map[string]any{"jql": jql.EpicListJQL, "epics": epics, "detail": false}, resp)
 			}
 			return cmdutil.WriteEnvelope(cmd, "epic.list", map[string]any{
-				"jql":    "issuetype = Epic",
+				"jql":    jql.EpicListJQL,
 				"epics":  []any{},
 				"detail": false,
 			})

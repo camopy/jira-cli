@@ -2,7 +2,6 @@ package jira
 
 import (
 	"net/url"
-	"strconv"
 	"strings"
 )
 
@@ -18,10 +17,6 @@ func withQuery(path string, q url.Values) string {
 		return path + "?" + encoded
 	}
 	return path
-}
-
-func JQLValue(value string) string {
-	return strconv.Quote(value)
 }
 
 func joinPathSegments(parts ...string) string {
