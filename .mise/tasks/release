@@ -3,14 +3,17 @@ set -euo pipefail
 
 usage() {
 	cat <<'EOF'
-usage: mise run release -- [--dry-run] <version>
+usage: mise run release -- [--dry-run] <version> [<commit>]
 
 Create and push the semver tag that triggers .github/workflows/release.yml.
 The version may be passed with or without the leading "v".
+<commit> defaults to HEAD; pass an already-pushed commit on main to tag a
+point behind the current tip (e.g. a patch release for an earlier commit).
 
 examples:
   mise run release -- v0.8.1
   mise run release -- --dry-run 0.8.1
+  mise run release -- 0.3.1 42463f7
 EOF
 }
 
@@ -25,12 +28,13 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 	shift
 fi
 
-if [[ $# -ne 1 || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+if [[ $# -lt 1 || $# -gt 2 || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 	usage
 	exit 2
 fi
 
 version="$1"
+ref="${2:-}"
 tag="${version#v}"
 tag="v${tag}"
 
@@ -43,9 +47,17 @@ branch="$(git branch --show-current)"
 
 timeout 60s git fetch --tags origin +refs/heads/main:refs/remotes/origin/main || fail "timed out fetching origin/main and tags"
 
-head_sha="$(git rev-parse HEAD)"
-origin_sha="$(git rev-parse origin/main)"
-[[ "$head_sha" == "$origin_sha" ]] || fail "main must be up to date with origin/main"
+if [[ -z "$ref" ]]; then
+	# Default: tag the current tip, which must match origin/main exactly.
+	target_sha="$(git rev-parse HEAD)"
+	origin_sha="$(git rev-parse origin/main)"
+	[[ "$target_sha" == "$origin_sha" ]] || fail "main must be up to date with origin/main"
+else
+	# Explicit commit: must already be on origin/main, so we only ever tag
+	# pushed history, never a stray local commit.
+	target_sha="$(git rev-parse --verify "${ref}^{commit}" 2>/dev/null)" || fail "cannot resolve commit: ${ref}"
+	git merge-base --is-ancestor "$target_sha" origin/main || fail "commit ${ref} (${target_sha}) is not on origin/main — push it first"
+fi
 
 if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
 	fail "local tag already exists: ${tag}"
@@ -70,12 +82,12 @@ esac
 mise run release:preflight
 
 if ((dry_run)); then
-	echo "dry run: would create annotated tag ${tag} at ${head_sha}"
+	echo "dry run: would create annotated tag ${tag} at ${target_sha}"
 	echo "dry run: would push ${tag} to origin"
 	exit 0
 fi
 
-git tag -a "$tag" -m "$tag"
+git tag -a "$tag" "$target_sha" -m "$tag"
 git push origin "$tag"
 
 echo "release tag pushed: ${tag}"
