@@ -5,6 +5,7 @@ import (
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/matcra587/jira-cli/internal/browser"
+	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -64,7 +65,15 @@ func searchJQLCommand() *cobra.Command {
 						return derr
 					}
 					data := map[string]any{"source": "inline", "jql": args[0], "issues": cmdutil.IssueOutput(issues, detail)}
-					return cmdutil.WriteEnvelopeWithRawWarnings(cmd, "search.jql", data, searchTruncationWarnings(info))
+					// The drain knows its terminal state: the result set is
+					// complete unless a bound truncated it. /search/jql has no
+					// reliable total, so report the count we actually hold.
+					pagination := &cli.Pagination{
+						MaxResults: len(issues),
+						Total:      len(issues),
+						IsLast:     !info.Truncated,
+					}
+					return cmdutil.WriteEnvelopeWithPaginationAndRawWarnings(cmd, "search.jql", data, pagination, searchTruncationWarnings(info))
 				}
 				issues, resp, jerr := svc.JQL(cmd.Context(), req)
 				if jerr != nil {

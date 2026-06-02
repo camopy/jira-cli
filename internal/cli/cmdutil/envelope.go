@@ -94,6 +94,20 @@ func writePlainFailureDiagnostics(stderr io.Writer, command string, data any, er
 // fields outside the cli.Warning struct's Type/Message/Field/Path/etc.
 // surface — see contracts/envelope-shapes.md.
 func WriteEnvelopeWithRawWarnings(cmd *cobra.Command, command string, data any, warnings []map[string]any) error {
+	return writeRawWarningEnvelope(cmd, command, data, warnings, nil)
+}
+
+// WriteEnvelopeWithPaginationAndRawWarnings is WriteEnvelopeWithRawWarnings
+// plus a pagination block in the JSON meta. The bounded --all drain uses it:
+// the drain knows its terminal state (isLast = not truncated, total = the
+// drained count), but has no *jira.Response to derive it from, so the caller
+// builds the pagination directly. Pagination rides only in the JSON envelope,
+// matching the single-page WriteEnvelopeWithResponse path.
+func WriteEnvelopeWithPaginationAndRawWarnings(cmd *cobra.Command, command string, data any, pagination *cli.Pagination, warnings []map[string]any) error {
+	return writeRawWarningEnvelope(cmd, command, data, warnings, pagination)
+}
+
+func writeRawWarningEnvelope(cmd *cobra.Command, command string, data any, warnings []map[string]any, pagination *cli.Pagination) error {
 	for _, cw := range collectedCredentialWarnings(cmd) {
 		warnings = append(warnings, map[string]any{
 			"type":    cw.Type,
@@ -114,13 +128,17 @@ func WriteEnvelopeWithRawWarnings(cmd *cobra.Command, command string, data any, 
 		}
 		return MirrorADFWarningsToStderr(cmd.ErrOrStderr(), RawWarningsToCLI(warnings))
 	}
+	meta := map[string]any{
+		"command":    command,
+		"timestamp":  time.Now().UTC().Format(time.RFC3339),
+		"request_id": cli.NewRequestID(),
+	}
+	if pagination != nil {
+		meta["pagination"] = pagination
+	}
 	body := map[string]any{
-		"ok": true,
-		"meta": map[string]any{
-			"command":    command,
-			"timestamp":  time.Now().UTC().Format(time.RFC3339),
-			"request_id": cli.NewRequestID(),
-		},
+		"ok":       true,
+		"meta":     meta,
 		"data":     data,
 		"errors":   []any{},
 		"warnings": rawWarningsOrEmpty(warnings),
