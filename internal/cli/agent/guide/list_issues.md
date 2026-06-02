@@ -9,6 +9,7 @@ When: a batch of issue keys is needed for downstream per-issue work and the filt
 - Ad-hoc JQL: `--jql 'JQL'`.
 - Known key set: `--key <ISSUE_KEY>,<OTHER_ISSUE_KEY>` or `--key <PROJECT_KEY>-1:10,<OTHER_PROJECT_KEY>-1:12`.
 - Show the JQL that WOULD run without calling Jira: `--as-jql` (local-only preview, no API call).
+- Count matches without fetching issues: `--count` (one `/search/approximate-count` call; returns an estimate in `data.count`, no `data.issues`). Calls Jira, so it needs a configured profile and can't combine with `--as-jql`. Use it to size a result set before a heavy `--detail` read.
 - Restrict to one agile board: `--board <NAME>` (exact case-insensitive) or `--board-id <id>` (numeric escape when names collide).
 - Restrict by date: `--updated` / `--created` / `--resolved`. Value is a signed relative duration (`-7d`), an absolute `YYYY-MM-DD`, a comparator form (`>=2026-01-01`), or an inclusive `..` range (`2026-01-01..2026-02-01`); bare = lower bound. See → `search_jql` for the full grammar.
 - Active tickets on one or more boards: discover board project keys first, then query those projects with `statusCategory != Done`. Use key expansion only after discovery, when you already have a known key set or a deliberate sparse-range probe.
@@ -43,6 +44,7 @@ When: a batch of issue keys is needed for downstream per-issue work and the filt
 > Requires `--output=json`.
 - `data.issues[].key` [string, required] — feed to → `read_issue`, → `edit_issue`, → `transition_issue`, → `add_comment`, etc.
 - `data.issues[]` [object array] — summary set fields by default; full records under `--detail`.
+- `data.count` [int, present only under `--count`] — the approximate match estimate; `data.issues` is absent in this mode.
 - `meta.pagination.startAt` / `.maxResults` / `.total` / `.isLast` [int / int / int / bool] — paginate until `isLast=true`. Treat `isLast` as authoritative; some Jira search responses report `total=0` or omit a reliable total even when rows are present.
 
 **Preconditions**

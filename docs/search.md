@@ -28,7 +28,39 @@ issue payload (`fields=*all`). The two are mutually exclusive.
 jira search jql 'project = <PROJECT_KEY> AND status = "To Do"'
 jira search jql 'project = <PROJECT_KEY>' --fields key,summary,status
 jira search jql 'key = <ISSUE_KEY>' --full
+jira search jql 'project = <PROJECT_KEY>' --count   # estimate only, no issues fetched
 ```
+
+### Count
+
+`--count` returns Jira's *approximate* match count for the query and
+fetches no issues — a fast "how many match?" preview before a heavy
+read. It is a single call to
+[`POST /search/approximate-count`](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/),
+so it needs a configured profile. The count is an estimate (no error
+bound), and the endpoint ignores any `ORDER BY`. Because no issues are
+returned, `--count` can't combine with `--fields`, `--full`, or
+`--web`. The same flag is available on [`issue list`](issues.md#list).
+
+=== "Human"
+
+    The bare number, so it pipes straight into a shell:
+
+    ```text
+    4242
+    ```
+
+=== "JSON"
+
+    ```json
+    {
+      "ok": true,
+      "meta": { "command": "search.count", "timestamp": "…", "request_id": "…" },
+      "data": { "source": "inline", "jql": "project = <PROJECT_KEY>", "count": 4242 },
+      "errors": [],
+      "warnings": []
+    }
+    ```
 
 === "Human"
 

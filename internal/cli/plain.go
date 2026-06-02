@@ -150,6 +150,8 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 		return writeIssueListPlain(logger, data, cfg)
 	case "issue.list.jql", "jql.build":
 		return writeJQLPreviewPlain(logger, data, cfg)
+	case "issue.list.count", "search.count":
+		return writeCountPlain(logger, data, cfg)
 	case "issue.view":
 		return WriteIssueViewPlain(w, command, data, opts...)
 	case "issue.transitions":
@@ -386,6 +388,25 @@ func writeJQLPreviewPlain(logger *clog.Logger, data any, cfg plainConfig) error 
 	}
 	url, _ := m["url"].(string)
 	logger.Info().Parts(clog.PartMessage).Msg(hyperlink(cfg, url, query))
+	return nil
+}
+
+// writeCountPlain renders `--count` output: the bare estimate and nothing
+// else, so it pipes cleanly into a shell. The query that was counted is a
+// diagnostic, restored under --debug like the JQL preview.
+func writeCountPlain(logger *clog.Logger, data any, cfg plainConfig) error {
+	m, ok := data.(map[string]any)
+	if !ok {
+		return writeGenericPlain(logger, "", data)
+	}
+	if cfg.debug {
+		event := logger.Info()
+		for _, field := range plainFields(map[string]any{"jql": m["jql"]}) {
+			event = event.Any(field.key, field.value)
+		}
+		event.Send()
+	}
+	logger.Info().Parts(clog.PartMessage).Msg(fmt.Sprintf("%v", m["count"]))
 	return nil
 }
 

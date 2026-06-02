@@ -343,6 +343,7 @@ type issueListOptions struct {
 	parallelism int
 	detail      bool
 	asJQL       bool
+	count       bool
 	columns     []string
 	tsv         bool
 }
@@ -408,6 +409,18 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 		return err
 	}
 	query = boardscope.ApplyClauseToJQL(query, scope)
+	if opts.count {
+		// --count returns Jira's approximate estimate for the built query and
+		// fetches no issues, so it needs a live client (unlike --as-jql).
+		if !ok {
+			return fmt.Errorf("validation: --count queries Jira for the estimate and needs a configured profile")
+		}
+		count, resp, countErr := cmdutil.ServicesForClient(client).Search().ApproximateCount(cmd.Context(), query)
+		if countErr != nil {
+			return countErr
+		}
+		return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.list.count", map[string]any{"count": count, "jql": query}, resp)
+	}
 	if !ok {
 		return cmdutil.WriteEnvelope(cmd, "issue.list", boardScopedListData(cmd, []map[string]any{}, opts.detail, query, scope, precedence))
 	}

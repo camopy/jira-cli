@@ -24,6 +24,7 @@ type searchOptions struct {
 	fields []string
 	full   bool
 	web    bool
+	count  bool
 }
 
 func searchJQLCommand() *cobra.Command {
@@ -35,6 +36,9 @@ func searchJQLCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.web {
 				return openSearchWeb(cmd, args[0])
+			}
+			if opts.count {
+				return runSearchCount(cmd, args[0])
 			}
 			fields, detail, err := searchOutputFields(opts)
 			if err != nil {
@@ -63,6 +67,7 @@ func searchJQLCommand() *cobra.Command {
 		},
 	}
 	addSearchOutputFlags(cmd, &opts)
+	addSearchCountFlag(cmd, &opts)
 	return cmd
 }
 
@@ -131,6 +136,42 @@ func addSearchOutputFlags(cmd *cobra.Command, opts *searchOptions) {
 	clib.Extend(cmd.Flags().Lookup("fields"), clib.FlagExtra{Group: "Output", Placeholder: "FIELD", Complete: "predictor=cachefield,comma"})
 	clib.Extend(cmd.Flags().Lookup("full"), clib.FlagExtra{Group: "Output"})
 	clib.Extend(cmd.Flags().Lookup("web"), clib.FlagExtra{Group: "Output"})
+}
+
+// addSearchCountFlag attaches --count. It lives only on `search jql`, not on the
+// shared output flags, because `search saved` does not implement count — adding
+// it there would publish a flag the saved runner silently ignores. Must be
+// called after addSearchOutputFlags so the flags it conflicts with exist.
+func addSearchCountFlag(cmd *cobra.Command, opts *searchOptions) {
+	cmd.Flags().BoolVar(&opts.count, "count", false, "Return only the approximate match count, without fetching issues")
+	// --count fetches no issues, so the field/full selectors and the browser
+	// opener are all meaningless alongside it.
+	cmd.MarkFlagsMutuallyExclusive("count", "fields")
+	cmd.MarkFlagsMutuallyExclusive("count", "full")
+	cmd.MarkFlagsMutuallyExclusive("count", "web")
+	clib.Extend(cmd.Flags().Lookup("count"), clib.FlagExtra{Group: "Output"})
+}
+
+// runSearchCount fetches Jira's approximate match count for jqlStr and emits it
+// without retrieving any issues. Unlike `--web` and `--as-jql`-style previews,
+// the count comes from Jira, so a configured profile is required.
+func runSearchCount(cmd *cobra.Command, jqlStr string) error {
+	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("validation: --count queries Jira for the estimate and needs a configured profile")
+	}
+	count, resp, err := cmdutil.ServicesForClient(client).Search().ApproximateCount(cmd.Context(), jqlStr)
+	if err != nil {
+		return err
+	}
+	return cmdutil.WriteEnvelopeWithResponse(cmd, "search.count", map[string]any{
+		"source": "inline",
+		"jql":    jqlStr,
+		"count":  count,
+	}, resp)
 }
 
 // openSearchWeb builds the JQL search URL from the active profile and opens it

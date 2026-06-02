@@ -58,6 +58,9 @@ func TestIssueCommentAndWorklogFlagsPublishClibMetadata(t *testing.T) {
 		{commandPath: "jira issue mine", flagName: "--order-by", group: "Sort", placeholder: "FIELD"},
 		{commandPath: "jira issue mine", flagName: "--desc", group: "Sort"},
 
+		{commandPath: "jira issue list", flagName: "--count", group: "Output"},
+		{commandPath: "jira search jql", flagName: "--count", group: "Output"},
+
 		{commandPath: "jira issue create", flagName: "--dry-run", group: "Safety"},
 		{commandPath: "jira issue create", flagName: "--summary", group: "Fields", placeholder: "TEXT"},
 		{commandPath: "jira issue create", flagName: "--json-input", group: "Input", placeholder: "FILE", valueHint: "file"},

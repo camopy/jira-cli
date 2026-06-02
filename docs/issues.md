@@ -195,9 +195,17 @@ jira issue list --key <PROJECT_KEY>-1:100,<OTHER_PROJECT_KEY>-1:200 -p 15
 jira issue list --project <PROJECT_KEY> --updated=-7d         # changed in the last 7 days
 jira issue list --project <PROJECT_KEY> --created 2026-01-01..2026-02-01
 jira issue list --project <PROJECT_KEY> --as-jql              # show the JQL only
+jira issue list --project <PROJECT_KEY> --count               # estimate match count, fetch nothing
 jira issue list --jql 'project = <PROJECT_KEY> ORDER BY updated DESC'
 jira issue list --board "Engineering" --detail
 ```
+
+`--count` returns Jira's approximate match count for the built query
+and fetches no issues — a fast "how many match?" before a heavy read.
+Human output is the bare number; JSON carries a `count` field. It calls
+Jira (so it needs a configured profile) and can't combine with the
+offline `--as-jql` preview. See [search → `--count`](search.md#count)
+for the endpoint detail; the same flag is on [`search jql`](search.md#search-jql).
 
 Date flags accept a relative window (`-7d`, signed, Jira units
 `w`/`d`/`h`/`m`), an absolute `YYYY-MM-DD`, an explicit comparator

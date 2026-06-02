@@ -19,6 +19,9 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 # preview without calling Jira
 - `jira issue list --as-jql --output=json` returns the builder output without an API call.
 
+# count without fetching issues
+- `jira search jql 'JQL' --count --output=json` returns an estimate in `data.count` via one `/search/approximate-count` call — no issue pages, no reliable-total problem. The count is approximate and `ORDER BY` is ignored. Can't combine with `--fields` / `--full` / `--web`. Use it to size a result set before a heavy fetch.
+
 **Run**
 - Hand JQL: `jira search jql 'assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC' --output=json`
 - Active board-backed projects:
@@ -50,6 +53,7 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 > Requires `--output=json`.
 - `data.issues[].key` [string, required] — feed to → `read_issue`, → `edit_issue`, → `transition_issue`, etc.
 - `data.jql` [string, required on `jql build`] — the constructed JQL string; pipe to `search jql` or pass to `issue list --jql`.
+- `data.count` [int, present only under `--count`] — the approximate match estimate; `data.issues` is absent in this mode.
 - `meta.pagination.startAt` / `.maxResults` / `.total` / `.isLast` [int / int / int / bool] — paginate until `isLast=true`. Treat `isLast` as authoritative; newer Jira search responses can report `total=0` or omit a trustworthy total while still returning rows.
 
 **Behavior**

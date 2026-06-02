@@ -9,6 +9,7 @@ import (
 
 type SearchService interface {
 	JQL(context.Context, *SearchRequest) ([]*Issue, *Response, error)
+	ApproximateCount(context.Context, string) (int, *Response, error)
 }
 
 type searchService struct {
@@ -53,6 +54,30 @@ func (s *searchService) JQL(ctx context.Context, reqBody *SearchRequest) ([]*Iss
 		resp.TokenPage = true
 	}
 	return result.Issues, resp, err
+}
+
+type approximateCountPayload struct {
+	JQL string `json:"jql"`
+}
+
+type approximateCountResult struct {
+	Count int `json:"count"`
+}
+
+// ApproximateCount returns Jira's estimated number of issues matching jql via
+// POST /search/approximate-count, without fetching any issue page. The count
+// is an estimate with no error bound, and the endpoint ignores any ORDER BY.
+func (s *searchService) ApproximateCount(ctx context.Context, jql string) (int, *Response, error) {
+	if strings.TrimSpace(jql) == "" {
+		return 0, nil, errors.New("jql is required")
+	}
+	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("search", "approximate-count"), approximateCountPayload{JQL: jql})
+	if err != nil {
+		return 0, nil, err
+	}
+	var result approximateCountResult
+	resp, err := s.client.Do(req, &result)
+	return result.Count, resp, err
 }
 
 func (r *SearchRequest) payload() searchRequestPayload {
