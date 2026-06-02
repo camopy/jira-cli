@@ -154,6 +154,8 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 		return writeCountPlain(logger, data, cfg)
 	case "jql.validate":
 		return writeValidatePlain(logger, data)
+	case "jql.reference":
+		return writeReferencePlain(logger, data)
 	case "issue.view":
 		return WriteIssueViewPlain(w, command, data, opts...)
 	case "issue.transitions":
@@ -435,6 +437,30 @@ func writeValidatePlain(logger *clog.Logger, data any) error {
 		default:
 			logger.Info().Parts(clog.PartMessage).Msg("OK  " + query)
 		}
+	}
+	return nil
+}
+
+// writeReferencePlain renders `jql reference`: one line per queryable field,
+// "value — displayName", so the field set (including custom fields) is legible
+// and greppable. Functions and reserved words ride along in --output=json.
+func writeReferencePlain(logger *clog.Logger, data any) error {
+	m, ok := data.(map[string]any)
+	if !ok {
+		return writeGenericPlain(logger, "", data)
+	}
+	fields := normalizeMapList(m["fields"])
+	if len(fields) == 0 {
+		return writeGenericPlain(logger, "", data)
+	}
+	for _, f := range fields {
+		value, _ := f["value"].(string)
+		display, _ := f["display_name"].(string)
+		line := value
+		if display != "" {
+			line += " — " + display
+		}
+		logger.Info().Parts(clog.PartMessage).Msg(line)
 	}
 	return nil
 }

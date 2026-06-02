@@ -118,4 +118,5 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 - Then: → `edit_issue`, → `transition_issue`, → `add_comment` on captured keys.
 - Alternative: → `list_issues` for the default-project / board-filtered convenience surface.
 - Reference: → `jql_reference` for operators, keywords, functions, and high-yield recipes.
+- Discover fields: `jira jql reference --output=json` lists the fields (incl. custom fields, with `custom_field_id`), functions, and reserved words THIS instance exposes — use it to find queryable/custom field names before hand-writing JQL. Needs a configured profile.
 - Validate: `jira jql validate 'JQL' --output=json` checks a query through Jira's parser; read `data.queries[].valid` and `.errors[]` (the command exits `0` and `ok:true` even for invalid JQL — a parse failure is a result, not a CLI error). `--mode strict|warn|none`. Needs a configured profile.

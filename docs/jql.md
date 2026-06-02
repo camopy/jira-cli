@@ -9,6 +9,7 @@ it three ways:
 | [`jira jql build`](#build) | Same flag surface, but prints the JQL instead of running it. Useful as a preview, or as a starting point for a saved query. |
 | [`search jql`](search.md#search-jql) | Hand-written JQL when the flag set can't express what you need. |
 | [`jira jql validate`](#validate) | Check a query through Jira's own parser and report errors/warnings. |
+| [`jira jql reference`](#reference) | List the fields (incl. custom fields), functions, and reserved words this instance exposes. |
 
 `jira issue list` starts from a bounded default query:
 
@@ -113,6 +114,56 @@ JQL.
           { "query": "bad =", "valid": false,
             "errors": ["Error in the JQL Query: expecting a value"] }
         ]
+      },
+      "errors": [],
+      "warnings": []
+    }
+    ```
+
+## reference
+
+`jira jql reference` lists the JQL metadata *this* Jira instance exposes
+— every queryable field (including custom fields like `Story Points`),
+every function, and the reserved words — straight from
+[`GET /jql/autocompletedata`](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-jql/#api-rest-api-3-jql-autocompletedata-get).
+Use it to discover what you can actually query — especially custom
+fields, which the builder's flag set doesn't cover. Needs a configured
+profile.
+
+```sh
+jira jql reference                       # human: one field per line
+jira jql reference --output=json | jq '.data.fields[] | select(.custom_field_id)'
+```
+
+=== "Human"
+
+    One `value — displayName` line per field:
+
+    ```text
+    summary — Summary
+    cf[10010] — Story Points
+    ```
+
+=== "JSON"
+
+    `data.fields[]` (with `custom_field_id` on custom fields — Jira's
+    JQL custom-field token, e.g. `cf[10010]`, the same form as `value`,
+    *not* the `customfield_10010` REST selector; treat its presence as
+    the "this is a custom field" marker), `data.functions[]`, and
+    `data.reserved_words[]`.
+
+    ```json
+    {
+      "ok": true,
+      "meta": { "command": "jql.reference", "timestamp": "…", "request_id": "…" },
+      "data": {
+        "fields": [
+          { "value": "summary", "display_name": "Summary" },
+          { "value": "cf[10010]", "display_name": "Story Points",
+            "custom_field_id": "cf[10010]" }
+        ],
+        "functions": [ { "value": "currentUser()", "display_name": "currentUser()" } ],
+        "reserved_words": ["and", "or", "empty"]
       },
       "errors": [],
       "warnings": []

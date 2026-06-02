@@ -52,6 +52,7 @@ func NewCommand() *cobra.Command {
 	boardscope.AddFlags(build)
 	cmd.AddCommand(build)
 	cmd.AddCommand(validateCommand())
+	cmd.AddCommand(referenceCommand())
 	return cmd
 }
 
@@ -60,6 +61,50 @@ func NewCommand() *cobra.Command {
 // GET /jql/autocompletedata. Human output is one "value — displayName" line per
 // field (the headline: discover queryable/custom fields); functions and
 // reserved words ride along in the JSON envelope. Needs a configured profile.
+func referenceCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "reference",
+		Short: "List the JQL fields, functions, and reserved words this instance exposes",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return fmt.Errorf("validation: jql reference queries Jira and needs a configured profile")
+			}
+			ref, resp, err := cmdutil.ServicesForClient(client).JQL().AutocompleteData(cmd.Context())
+			if err != nil {
+				return err
+			}
+			fields := make([]map[string]any, len(ref.Fields))
+			for i, f := range ref.Fields {
+				entry := map[string]any{"value": f.Value, "display_name": f.DisplayName}
+				if f.CustomFieldID != "" {
+					entry["custom_field_id"] = f.CustomFieldID
+				}
+				fields[i] = entry
+			}
+			functions := make([]map[string]any, len(ref.Functions))
+			for i, fn := range ref.Functions {
+				functions[i] = map[string]any{"value": fn.Value, "display_name": fn.DisplayName}
+			}
+			reserved := ref.ReservedWords
+			if reserved == nil {
+				reserved = []string{}
+			}
+			data := map[string]any{
+				"fields":         fields,
+				"functions":      functions,
+				"reserved_words": reserved,
+			}
+			return cmdutil.WriteEnvelopeWithResponse(cmd, "jql.reference", data, resp)
+		},
+	}
+	return cmd
+}
+
 // validateCommand checks each JQL argument through Jira's parser via
 // POST /jql/parse, reporting per-query errors and warnings. When the parse
 // call succeeds it emits a successful envelope carrying data.queries[].valid —

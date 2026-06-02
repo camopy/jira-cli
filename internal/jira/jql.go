@@ -7,9 +7,11 @@ import (
 	"net/http"
 )
 
-// JQLService wraps Jira Cloud's /jql/* endpoints (currently parse/validate).
+// JQLService wraps Jira Cloud's /jql/* endpoints (parse/validate and
+// autocomplete reference data).
 type JQLService interface {
 	Parse(context.Context, []string, string) ([]ParsedQuery, *Response, error)
+	AutocompleteData(context.Context) (JQLReference, *Response, error)
 }
 
 type jqlService struct {
@@ -18,6 +20,68 @@ type jqlService struct {
 
 func NewJQLService(client *Client) JQLService {
 	return &jqlService{client: client}
+}
+
+// JQLReference is the instance's JQL metadata from /jql/autocompletedata: the
+// fields and functions queryable on this Jira (including custom fields) plus
+// the JQL reserved words.
+type JQLReference struct {
+	Fields        []JQLField
+	Functions     []JQLFunction
+	ReservedWords []string
+}
+
+// JQLField is one queryable field. CustomFieldID is set when the field is a
+// custom field, and holds Jira's JQL custom-field token (e.g. cf[10010], the
+// same form as Value) — not the customfield_NNNNN REST selector. Its real use
+// is as a discriminator: present means custom, absent means a system field.
+type JQLField struct {
+	Value         string
+	DisplayName   string
+	CustomFieldID string
+}
+
+// JQLFunction is one JQL function (e.g. currentUser()).
+type JQLFunction struct {
+	Value       string
+	DisplayName string
+}
+
+type jqlReferenceWire struct {
+	VisibleFieldNames []struct {
+		Value       string `json:"value"`
+		DisplayName string `json:"displayName"`
+		Cfid        string `json:"cfid"`
+	} `json:"visibleFieldNames"`
+	VisibleFunctionNames []struct {
+		Value       string `json:"value"`
+		DisplayName string `json:"displayName"`
+	} `json:"visibleFunctionNames"`
+	JqlReservedWords []string `json:"jqlReservedWords"`
+}
+
+// AutocompleteData fetches the instance's JQL reference data via
+// GET /jql/autocompletedata: every visible field (including custom fields),
+// function, and reserved word. Read-only; accessible anonymously on Jira's
+// side, though the CLI still needs a configured profile for the base URL.
+func (s *jqlService) AutocompleteData(ctx context.Context) (JQLReference, *Response, error) {
+	req, err := s.client.NewRequest(ctx, http.MethodGet, RESTPath("jql", "autocompletedata"), nil)
+	if err != nil {
+		return JQLReference{}, nil, err
+	}
+	var wire jqlReferenceWire
+	resp, err := s.client.Do(req, &wire)
+	if err != nil {
+		return JQLReference{}, resp, err
+	}
+	ref := JQLReference{ReservedWords: wire.JqlReservedWords}
+	for _, f := range wire.VisibleFieldNames {
+		ref.Fields = append(ref.Fields, JQLField{Value: f.Value, DisplayName: f.DisplayName, CustomFieldID: f.Cfid})
+	}
+	for _, fn := range wire.VisibleFunctionNames {
+		ref.Functions = append(ref.Functions, JQLFunction{Value: fn.Value, DisplayName: fn.DisplayName})
+	}
+	return ref, resp, nil
 }
 
 // ParsedQuery is the per-query result of a parse/validate call: the query as
