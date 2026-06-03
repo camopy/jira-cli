@@ -68,15 +68,15 @@ func CompletionHandler(globals startup.Globals) complete.Handler {
 		case "cachelabel":
 			emitCachedLabels(completionCacheKey(globals))
 		case "cacheissuetype":
-			emitCachedIssueTypes(completionCacheKey(globals))
+			emitCachedNames(completionCacheKey(globals), "issuetypes")
 		case "cachelinktype":
 			emitCachedLinkTypes(completionCacheKey(globals))
 		case "cacheboard":
 			emitCachedBoards(completionCacheKey(globals))
 		case "cachestatus":
-			emitCachedNamedValues(completionCacheKey(globals), "statuses")
+			emitCachedNames(completionCacheKey(globals), "statuses")
 		case "cachepriority":
-			emitCachedNamedValues(completionCacheKey(globals), "priorities")
+			emitCachedNames(completionCacheKey(globals), "priorities")
 		case "issuekey":
 			// Every command taking an issue key positionally carries the
 			// dynamic-args='issuekey' annotation so a future issue-key
@@ -142,43 +142,45 @@ func emitCachedLabels(profile string) {
 	}
 }
 
-func emitCachedIssueTypes(profile string) {
-	type issuetype struct {
-		Name string `json:"name"`
-	}
-	var types []issuetype
-	if !jql.ReadCacheJSON(profile, "issuetypes", &types) {
-		return
-	}
-	seen := make(map[string]struct{}, len(types))
-	for _, t := range types {
-		if _, dup := seen[t.Name]; dup || t.Name == "" {
-			continue
-		}
-		seen[t.Name] = struct{}{}
-		_, _ = fmt.Fprintln(os.Stdout, cli.SanitizeCompletionField(t.Name))
-	}
+// namedCacheValue is the shape the name-keyed metadata caches share. Statuses
+// and priorities also store an id, but completion filters by name, so only the
+// name is read here.
+type namedCacheValue struct {
+	Name string `json:"name"`
 }
 
-// emitCachedNamedValues emits one candidate per cached {id,name} metadata
-// value for the --status and --priority predictors, as `name\tid`. Shared by
-// the statuses and priorities caches, which have the same flat shape. Null-safe:
-// emits nothing when the cache is missing or malformed so completion never
-// blocks the shell.
-func emitCachedNamedValues(profile, resource string) {
-	var values []struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	}
-	if !jql.ReadCacheJSON(profile, resource, &values) {
-		return
-	}
+// uniqueCachedNames returns the cached names in first-seen order with blanks
+// and duplicates dropped. Jira returns statuses and issue types *per workflow
+// or project*, so the same display name recurs under different ids; a JQL name
+// filter only needs each name once, and offering "To Do" three times is noise.
+func uniqueCachedNames(values []namedCacheValue) []string {
+	out := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
 	for _, v := range values {
 		if v.Name == "" {
 			continue
 		}
-		_, _ = fmt.Fprintf(os.Stdout, "%s\t%s\n",
-			cli.SanitizeCompletionField(v.Name), cli.SanitizeCompletionField(v.ID))
+		if _, dup := seen[v.Name]; dup {
+			continue
+		}
+		seen[v.Name] = struct{}{}
+		out = append(out, v.Name)
+	}
+	return out
+}
+
+// emitCachedNames emits one candidate per unique cached name for the
+// issuetype, status and priority predictors. These all back JQL filters that
+// match by name, so the id is irrelevant and is dropped; the flag's short
+// Terse supplies the completion description. Null-safe: emits nothing when the
+// cache is missing or malformed so completion never blocks the shell.
+func emitCachedNames(profile, resource string) {
+	var values []namedCacheValue
+	if !jql.ReadCacheJSON(profile, resource, &values) {
+		return
+	}
+	for _, name := range uniqueCachedNames(values) {
+		_, _ = fmt.Fprintln(os.Stdout, cli.SanitizeCompletionField(name))
 	}
 }
 

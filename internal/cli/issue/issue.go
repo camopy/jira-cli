@@ -857,9 +857,9 @@ func issueCreateCommand() *cobra.Command {
 	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
 	cmdutil.ExtendFlag(cmd.Flags(), "assignee", clib.FlagExtra{Group: "Fields", Placeholder: "USER", Terse: "assignee", Enum: []string{"me"}, EnumTerse: []string{"current user"}})
 	cmdutil.ExtendFlag(cmd.Flags(), "project", clib.FlagExtra{Group: "Fields", Placeholder: "KEY", Complete: "predictor=cacheproject"})
-	cmdutil.ExtendFlag(cmd.Flags(), "type", clib.FlagExtra{Group: "Fields", Placeholder: "NAME", Complete: "predictor=cacheissuetype"})
+	cmdutil.ExtendFlag(cmd.Flags(), "type", clib.FlagExtra{Group: "Fields", Placeholder: "NAME", Terse: "issue type", Complete: "predictor=cacheissuetype"})
 	cmdutil.ExtendFlag(cmd.Flags(), "parent", clib.FlagExtra{Group: "Fields", Placeholder: "KEY", Complete: "predictor=issuekey"})
-	cmdutil.ExtendFlag(cmd.Flags(), "priority", clib.FlagExtra{Group: "Fields", Placeholder: "NAME", Complete: "predictor=cachepriority"})
+	cmdutil.ExtendFlag(cmd.Flags(), "priority", clib.FlagExtra{Group: "Fields", Placeholder: "NAME", Terse: "priority", Complete: "predictor=cachepriority"})
 	cmdutil.ExtendFlag(cmd.Flags(), "label", clib.FlagExtra{Group: "Fields", Placeholder: "NAME", Complete: "predictor=cachelabel,comma"})
 	return cmd
 }

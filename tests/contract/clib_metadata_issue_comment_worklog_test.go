@@ -27,6 +27,7 @@ type issueCommentWorklogMetadataFlag struct {
 	ValueHint   string   `json:"value_hint"`
 	Enum        []string `json:"enum"`
 	EnumTerse   []string `json:"enum_terse"`
+	Terse       string   `json:"terse"`
 }
 
 type issueCommentWorklogMetadataWant struct {
@@ -38,6 +39,7 @@ type issueCommentWorklogMetadataWant struct {
 	valueHint    string
 	enumContains []string
 	enumTerse    []string
+	terse        string
 }
 
 func TestIssueCommentAndWorklogFlagsPublishClibMetadata(t *testing.T) {
@@ -47,13 +49,13 @@ func TestIssueCommentAndWorklogFlagsPublishClibMetadata(t *testing.T) {
 		{commandPath: "jira issue mine", flagName: "--detail", group: "Output"},
 		{commandPath: "jira issue mine", flagName: "--jql", group: "Filters", placeholder: "JQL"},
 		{commandPath: "jira issue mine", flagName: "--as-jql", group: "Output"},
-		{commandPath: "jira issue mine", flagName: "--status", group: "Filters", placeholder: "NAME", completion: "predictor=cachestatus,comma"},
+		{commandPath: "jira issue mine", flagName: "--status", group: "Filters", placeholder: "NAME", completion: "predictor=cachestatus,comma", terse: "by status"},
 		{commandPath: "jira issue mine", flagName: "--project", group: "Filters", placeholder: "KEY", completion: "predictor=cacheproject,comma"},
 		{commandPath: "jira issue mine", flagName: "--key", group: "Filters", placeholder: "KEY", completion: "predictor=issuekey,comma"},
 		{commandPath: "jira issue mine", flagName: "--epic", group: "Filters", placeholder: "KEY", completion: "predictor=cacheepic,comma"},
-		{commandPath: "jira issue mine", flagName: "--priority", group: "Filters", placeholder: "NAME", completion: "predictor=cachepriority,comma"},
+		{commandPath: "jira issue mine", flagName: "--priority", group: "Filters", placeholder: "NAME", completion: "predictor=cachepriority,comma", terse: "by priority"},
 		{commandPath: "jira issue mine", flagName: "--label", group: "Filters", placeholder: "NAME", completion: "predictor=cachelabel,comma"},
-		{commandPath: "jira issue mine", flagName: "--type", group: "Filters", placeholder: "NAME", completion: "predictor=cacheissuetype,comma"},
+		{commandPath: "jira issue mine", flagName: "--type", group: "Filters", placeholder: "NAME", completion: "predictor=cacheissuetype,comma", terse: "by type"},
 		{commandPath: "jira issue mine", flagName: "--updated", group: "Filters", placeholder: "DATE"},
 		{commandPath: "jira issue mine", flagName: "--created", group: "Filters", placeholder: "DATE"},
 		{commandPath: "jira issue mine", flagName: "--resolved", group: "Filters", placeholder: "DATE"},
@@ -62,12 +64,12 @@ func TestIssueCommentAndWorklogFlagsPublishClibMetadata(t *testing.T) {
 
 		{commandPath: "jira issue list", flagName: "--count", group: "Output"},
 		{commandPath: "jira search jql", flagName: "--count", group: "Output"},
-		{commandPath: "jira jql validate", flagName: "--mode", group: "Validation", placeholder: "MODE", enumContains: []string{"strict", "warn", "none"}, enumTerse: []string{"strictest", "warn, don't fail", "no validation"}},
+		{commandPath: "jira jql validate", flagName: "--mode", group: "Validation", placeholder: "MODE", enumContains: []string{"strict", "warn", "none"}, enumTerse: []string{"strictest", "lenient", "no validation"}},
 		{commandPath: "jira search jql", flagName: "--all", group: "Pagination"},
 		{commandPath: "jira search jql", flagName: "--limit", group: "Pagination", placeholder: "N"},
 		{commandPath: "jira search jql", flagName: "--unbounded", group: "Pagination"},
-		{commandPath: "jira jql build", flagName: "--status", group: "Filters", placeholder: "NAME", completion: "predictor=cachestatus,comma"},
-		{commandPath: "jira jql build", flagName: "--priority", group: "Filters", placeholder: "NAME", completion: "predictor=cachepriority,comma"},
+		{commandPath: "jira jql build", flagName: "--status", group: "Filters", placeholder: "NAME", completion: "predictor=cachestatus,comma", terse: "by status"},
+		{commandPath: "jira jql build", flagName: "--priority", group: "Filters", placeholder: "NAME", completion: "predictor=cachepriority,comma", terse: "by priority"},
 		{commandPath: "jira jql build", flagName: "--assignee", group: "Filters", placeholder: "USER", enumContains: []string{"me", "none"}, enumTerse: []string{"current user", "unassigned"}},
 		{commandPath: "jira jql build", flagName: "--reporter", group: "Filters", placeholder: "USER", enumContains: []string{"me"}, enumTerse: []string{"current user"}},
 		{commandPath: "jira issue list", flagName: "--columns", group: "Output", placeholder: "COLS", enumContains: []string{"key", "summary", "status", "assignee", "priority", "updated"}, enumTerse: []string{"issue key", "title text", "workflow status", "assigned user", "priority level", "last-updated time"}},
@@ -83,7 +85,8 @@ func TestIssueCommentAndWorklogFlagsPublishClibMetadata(t *testing.T) {
 		{commandPath: "jira issue create", flagName: "--summary", group: "Fields", placeholder: "TEXT"},
 		{commandPath: "jira issue create", flagName: "--json-input", group: "Input", placeholder: "FILE", valueHint: "file"},
 		{commandPath: "jira issue create", flagName: "--assignee", group: "Fields", placeholder: "USER", enumContains: []string{"me"}, enumTerse: []string{"current user"}},
-		{commandPath: "jira issue create", flagName: "--priority", group: "Fields", placeholder: "NAME", completion: "predictor=cachepriority"},
+		{commandPath: "jira issue create", flagName: "--priority", group: "Fields", placeholder: "NAME", completion: "predictor=cachepriority", terse: "priority"},
+		{commandPath: "jira issue create", flagName: "--type", group: "Fields", placeholder: "NAME", completion: "predictor=cacheissuetype", terse: "issue type"},
 
 		{commandPath: "jira issue edit", flagName: "--dry-run", group: "Safety"},
 		{commandPath: "jira issue edit", flagName: "--json-input", group: "Input", placeholder: "FILE", valueHint: "file"},
@@ -179,6 +182,9 @@ func requireClibMetadata(t *testing.T, schema issueCommentWorklogMetadataEnvelop
 			if !slices.Contains(flag.Enum, value) {
 				t.Fatalf("%s %s enum = %v, want value %q", want.commandPath, want.flagName, flag.Enum, value)
 			}
+		}
+		if want.terse != "" && flag.Terse != want.terse {
+			t.Fatalf("%s %s terse = %q, want %q", want.commandPath, want.flagName, flag.Terse, want.terse)
 		}
 		if want.enumTerse != nil {
 			if !slices.Equal(flag.EnumTerse, want.enumTerse) {

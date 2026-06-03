@@ -157,7 +157,7 @@ func validateCommand() *cobra.Command {
 		Placeholder: "MODE",
 		Terse:       "validation mode",
 		Enum:        []string{"strict", "warn", "none"},
-		EnumTerse:   []string{"strictest", "warn, don't fail", "no validation"},
+		EnumTerse:   []string{"strictest", "lenient", "no validation"},
 	})
 	return cmd
 }
@@ -196,16 +196,17 @@ func AddFilterFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 	)
 	clib.Extend(
 		cmd.Flags().Lookup("type"),
-		clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Complete: "predictor=cacheissuetype,comma"},
+		clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Terse: "by type", Complete: "predictor=cacheissuetype,comma"},
 	)
 	// Completion offers the plain status/priority names from the per-profile
 	// cache — the common case, and the operand the negation form ("!Abandoned")
 	// also takes. It deliberately does not cover the category-comparator grammar
 	// ("<Done", ">=In Progress"), whose operand is a status *category*, not a
 	// status name; a prefix like "<" simply matches no cached name and offers
-	// nothing rather than a misleading one.
-	clib.Extend(cmd.Flags().Lookup("status"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Complete: "predictor=cachestatus,comma"})
-	clib.Extend(cmd.Flags().Lookup("priority"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Complete: "predictor=cachepriority,comma"})
+	// nothing rather than a misleading one. The predictors emit names only, so
+	// the short Terse (not the long usage) becomes each candidate's description.
+	clib.Extend(cmd.Flags().Lookup("status"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Terse: "by status", Complete: "predictor=cachestatus,comma"})
+	clib.Extend(cmd.Flags().Lookup("priority"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Terse: "by priority", Complete: "predictor=cachepriority,comma"})
 }
 
 // AddJQLBuilderFlags attaches the full JQL builder surface to cmd: the shared

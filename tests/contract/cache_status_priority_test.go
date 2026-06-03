@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -106,8 +107,10 @@ func TestCacheStatusesAndPrioritiesRoundTrip(t *testing.T) {
 	}
 }
 
-// The cachestatus / cachepriority predictors emit `name\tid` per cached value,
-// dropping entries with an empty name so completion never offers a blank.
+// The cachestatus / cachepriority predictors emit one line per unique cached
+// name. The id is dropped (these back name-matched JQL filters) and per-workflow
+// duplicate names collapse to one, so completion never offers "To Do" twice or
+// a blank.
 func TestCacheStatusPriorityPredictors(t *testing.T) {
 	cases := []struct {
 		predictor string
@@ -116,14 +119,17 @@ func TestCacheStatusPriorityPredictors(t *testing.T) {
 		want      []string
 	}{
 		{
+			// Per-workflow duplicates (To Do, In Progress) plus a blank: the
+			// predictor must collapse the dups and drop the blank.
 			"cachestatus", "statuses",
-			`[{"id":"1","name":"To Do"},{"id":"3","name":"In Progress"},{"id":"10001","name":"Done"},{"id":"x","name":""}]`,
-			[]string{"To Do\t1", "In Progress\t3", "Done\t10001"},
+			`[{"id":"1","name":"To Do"},{"id":"3","name":"In Progress"},{"id":"10001","name":"Done"},` +
+				`{"id":"4","name":"To Do"},{"id":"5","name":"In Progress"},{"id":"x","name":""}]`,
+			[]string{"To Do", "In Progress", "Done"},
 		},
 		{
 			"cachepriority", "priorities",
 			`[{"id":"1","name":"Highest"},{"id":"3","name":"Medium"},{"id":"y","name":""}]`,
-			[]string{"Highest\t1", "Medium\t3"},
+			[]string{"Highest", "Medium"},
 		},
 	}
 	for _, tc := range cases {
@@ -140,18 +146,16 @@ func TestCacheStatusPriorityPredictors(t *testing.T) {
 			if err != nil {
 				t.Fatalf("complete %s: %v\n%s", tc.predictor, err, out)
 			}
-			got := string(out)
-			for _, w := range tc.want {
-				if !strings.Contains(got, w) {
-					t.Fatalf("predictor %s missing line %q\n--- got ---\n%s", tc.predictor, w, got)
-				}
+			lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+
+			// Exact set, in order: proves dedup (no repeated name) and that the
+			// id is gone (a name\tid line would not equal the bare name).
+			if !slices.Equal(lines, tc.want) {
+				t.Fatalf("predictor %s = %q, want %q", tc.predictor, lines, tc.want)
 			}
-			// The blank-name entry must be dropped: no emitted line may begin
-			// with a tab (an empty name renders as "\t<id>"). Order-independent,
-			// so a leading or trailing blank is caught either way.
-			for _, line := range strings.Split(strings.TrimRight(got, "\n"), "\n") {
-				if strings.HasPrefix(line, "\t") {
-					t.Fatalf("predictor %s offered a blank name: %q", tc.predictor, line)
+			for _, line := range lines {
+				if line == "" || strings.Contains(line, "\t") {
+					t.Fatalf("predictor %s emitted a blank or tab-bearing line: %q", tc.predictor, line)
 				}
 			}
 		})
