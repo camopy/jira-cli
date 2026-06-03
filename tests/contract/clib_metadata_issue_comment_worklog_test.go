@@ -66,16 +66,19 @@ func TestIssueCommentAndWorklogFlagsPublishClibMetadata(t *testing.T) {
 		{commandPath: "jira search jql", flagName: "--unbounded", group: "Pagination"},
 		{commandPath: "jira jql build", flagName: "--status", group: "Filters", placeholder: "NAME", completion: "predictor=cachestatus,comma"},
 		{commandPath: "jira jql build", flagName: "--priority", group: "Filters", placeholder: "NAME", completion: "predictor=cachepriority,comma"},
+		{commandPath: "jira issue list", flagName: "--columns", group: "Output", placeholder: "COLS", enumContains: []string{"key", "summary", "status", "assignee", "priority", "updated"}},
+		{commandPath: "jira issue mine", flagName: "--columns", group: "Output", placeholder: "COLS", enumContains: []string{"key", "summary", "status", "assignee", "priority", "updated"}},
 
 		{commandPath: "jira issue create", flagName: "--dry-run", group: "Safety"},
 		{commandPath: "jira issue create", flagName: "--summary", group: "Fields", placeholder: "TEXT"},
 		{commandPath: "jira issue create", flagName: "--json-input", group: "Input", placeholder: "FILE", valueHint: "file"},
-		{commandPath: "jira issue create", flagName: "--assignee", group: "Fields", placeholder: "USER"},
+		{commandPath: "jira issue create", flagName: "--assignee", group: "Fields", placeholder: "USER", enumContains: []string{"me"}},
+		{commandPath: "jira issue create", flagName: "--priority", group: "Fields", placeholder: "NAME", completion: "predictor=cachepriority"},
 
 		{commandPath: "jira issue edit", flagName: "--dry-run", group: "Safety"},
 		{commandPath: "jira issue edit", flagName: "--json-input", group: "Input", placeholder: "FILE", valueHint: "file"},
 		{commandPath: "jira issue edit", flagName: "--summary", group: "Fields", placeholder: "TEXT"},
-		{commandPath: "jira issue edit", flagName: "--assignee", group: "Fields", placeholder: "USER"},
+		{commandPath: "jira issue edit", flagName: "--assignee", group: "Fields", placeholder: "USER", enumContains: []string{"me", "none"}},
 
 		{commandPath: "jira issue transition", flagName: "--dry-run", group: "Safety"},
 		{commandPath: "jira issue transition", flagName: "--transition", group: "Transition", placeholder: "STATUS"},
