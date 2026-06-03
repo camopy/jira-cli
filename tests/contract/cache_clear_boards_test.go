@@ -123,7 +123,7 @@ func TestCacheClearRejectsUnknownResource(t *testing.T) {
 	if !strings.Contains(message, `unknown cache resource "bogus"`) {
 		t.Fatalf("error message %q does not name the bad resource", message)
 	}
-	for _, resource := range []string{"labels", "projects", "epics", "fields", "issuetypes", "linktypes", "boards"} {
+	for _, resource := range []string{"labels", "projects", "epics", "fields", "issuetypes", "linktypes", "boards", "statuses", "priorities"} {
 		if !strings.Contains(message, resource) {
 			t.Fatalf("error message %q does not name valid resource %q", message, resource)
 		}

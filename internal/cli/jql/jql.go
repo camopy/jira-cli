@@ -192,8 +192,14 @@ func AddFilterFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 		cmd.Flags().Lookup("type"),
 		clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Complete: "predictor=cacheissuetype,comma"},
 	)
-	clib.Extend(cmd.Flags().Lookup("status"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME"})
-	clib.Extend(cmd.Flags().Lookup("priority"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME"})
+	// Completion offers the plain status/priority names from the per-profile
+	// cache — the common case, and the operand the negation form ("!Abandoned")
+	// also takes. It deliberately does not cover the category-comparator grammar
+	// ("<Done", ">=In Progress"), whose operand is a status *category*, not a
+	// status name; a prefix like "<" simply matches no cached name and offers
+	// nothing rather than a misleading one.
+	clib.Extend(cmd.Flags().Lookup("status"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Complete: "predictor=cachestatus,comma"})
+	clib.Extend(cmd.Flags().Lookup("priority"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Complete: "predictor=cachepriority,comma"})
 }
 
 // AddJQLBuilderFlags attaches the full JQL builder surface to cmd: the shared

@@ -12,6 +12,8 @@ When: a `--project` / `--type` / `--board` / `--label` filter resolves to an une
 - `issuetypes` — visible instance-level issue types and subtask markers. It is not scoped to a project's create screen.
 - `linktypes` — drives `--type` completion on `jira issue link` and pins the canonical names per instance.
 - `boards` — drives `--board` completion; resolves names to project lists for the `project in (...)` JQL clause (see → `discover_board`).
+- `statuses` — drives `--status` completion; instance-wide workflow status names, not scoped to a project's workflow.
+- `priorities` — drives `--priority` completion; instance priority names.
 
 # when to use cache vs live API
 - Multiple writes / repeated reads in the same session → cache.
@@ -22,14 +24,14 @@ When: a `--project` / `--type` / `--board` / `--label` filter resolves to an une
 - Cache is **never auto-refreshed**. Force with `--refresh`, age-gate with `--ttl-minutes N`, or wipe with `jira cache clear`.
 
 **Run**
-- Per-resource prime: `jira cache labels --output=json`, `jira cache projects --output=json`, `jira cache epics --output=json`, `jira cache fields --output=json`, `jira cache issuetypes --output=json`, `jira cache linktypes --output=json`, `jira cache boards --output=json`.
+- Per-resource prime: `jira cache labels --output=json`, `jira cache projects --output=json`, `jira cache epics --output=json`, `jira cache fields --output=json`, `jira cache issuetypes --output=json`, `jira cache linktypes --output=json`, `jira cache boards --output=json`, `jira cache statuses --output=json`, `jira cache priorities --output=json`.
 - Force refresh: `jira cache fields --refresh --output=json`
 - TTL gate (refetch if older than N minutes): `jira cache fields --ttl-minutes 5 --output=json`
 - Wipe one: `jira cache clear labels`
 - Wipe everything for the active profile: `jira cache clear`
 - Valid clear resources: `labels`, `projects`, `epics`, `fields`,
-  `issuetypes`, `linktypes`, `boards`. Unknown names fail before touching the cache
-  with `code=arg_value_invalid`.
+  `issuetypes`, `linktypes`, `boards`, `statuses`, `priorities`. Unknown names fail
+  before touching the cache with `code=arg_value_invalid`.
 - Recommended once-per-session prime for agents:
   ```sh
   jira cache fields     --refresh --output=json   # so you can map customfield_NNNN → name

@@ -22,6 +22,8 @@ stale, or `--refresh` is passed.
 | `epics` | `--epic` completion in the issue create flow |
 | `linktypes` | `--type` completion for [`issue link`](issues.md#link-create) |
 | `boards` | `--board` completion, board-scoped JQL in [`issue list`](issues.md#list) and [`jql build`](jql.md#build) |
+| `statuses` | `--status` completion |
+| `priorities` | `--priority` completion |
 
 Every primer accepts the same two flags:
 
@@ -366,6 +368,25 @@ jira config set profiles.default.default_board "Example board"
 ```
 
 The board name is matched case-insensitively against the cache.
+
+## statuses
+
+```sh
+jira cache statuses --output=json
+```
+
+Returns the instance's workflow statuses (`id`, `name`) from
+`GET /rest/api/3/status`. Drives `--status` completion. The list is
+instance-wide, not scoped to a project's workflow.
+
+## priorities
+
+```sh
+jira cache priorities --output=json
+```
+
+Returns the instance's issue priorities (`id`, `name`) from
+`GET /rest/api/3/priority`. Drives `--priority` completion.
 
 ## clear
 

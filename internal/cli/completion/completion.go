@@ -58,7 +58,7 @@ func CompletionHandler(globals startup.Globals) complete.Handler {
 				_, _ = fmt.Fprintln(os.Stdout, name)
 			}
 		case "cacheresource":
-			for _, r := range []string{"labels", "projects", "epics", "fields", "issuetypes", "linktypes", "boards"} {
+			for _, r := range []string{"labels", "projects", "epics", "fields", "issuetypes", "linktypes", "boards", "statuses", "priorities"} {
 				_, _ = fmt.Fprintln(os.Stdout, r)
 			}
 		case "cacheproject":
@@ -73,6 +73,10 @@ func CompletionHandler(globals startup.Globals) complete.Handler {
 			emitCachedLinkTypes(completionCacheKey(globals))
 		case "cacheboard":
 			emitCachedBoards(completionCacheKey(globals))
+		case "cachestatus":
+			emitCachedNamedValues(completionCacheKey(globals), "statuses")
+		case "cachepriority":
+			emitCachedNamedValues(completionCacheKey(globals), "priorities")
 		case "issuekey":
 			// Every command taking an issue key positionally carries the
 			// dynamic-args='issuekey' annotation so a future issue-key
@@ -153,6 +157,28 @@ func emitCachedIssueTypes(profile string) {
 		}
 		seen[t.Name] = struct{}{}
 		_, _ = fmt.Fprintln(os.Stdout, cli.SanitizeCompletionField(t.Name))
+	}
+}
+
+// emitCachedNamedValues emits one candidate per cached {id,name} metadata
+// value for the --status and --priority predictors, as `name\tid`. Shared by
+// the statuses and priorities caches, which have the same flat shape. Null-safe:
+// emits nothing when the cache is missing or malformed so completion never
+// blocks the shell.
+func emitCachedNamedValues(profile, resource string) {
+	var values []struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if !jql.ReadCacheJSON(profile, resource, &values) {
+		return
+	}
+	for _, v := range values {
+		if v.Name == "" {
+			continue
+		}
+		_, _ = fmt.Fprintf(os.Stdout, "%s\t%s\n",
+			cli.SanitizeCompletionField(v.Name), cli.SanitizeCompletionField(v.ID))
 	}
 }
 
