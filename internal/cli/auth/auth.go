@@ -512,7 +512,7 @@ func authLoginCommand() *cobra.Command {
 	// is not part of this group.
 	cmd.MarkFlagsMutuallyExclusive("secret-stdin", "credential-env")
 	clib.Extend(cmd.Flags().Lookup("profile-name"), clib.FlagExtra{Placeholder: "NAME", Complete: "predictor=profile"})
-	clib.Extend(cmd.Flags().Lookup("backend"), clib.FlagExtra{Placeholder: "BACKEND", Enum: []string{"keyring", "1password"}, EnumDefault: "keyring"})
+	clib.Extend(cmd.Flags().Lookup("backend"), clib.FlagExtra{Placeholder: "BACKEND", Terse: "secret backend", Enum: []string{"keyring", "1password"}, EnumTerse: []string{"OS keychain", "1Password CLI"}, EnumDefault: "keyring"})
 	return cmd
 }
 
@@ -1376,7 +1376,7 @@ func authMigrateCommand() *cobra.Command {
 	cmd.Flags().StringVar(&vault, "vault", "", "1Password vault name")
 	cmd.Flags().StringVar(&item, "item", "", "1Password item name")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview credential migration")
-	clib.Extend(cmd.Flags().Lookup("backend"), clib.FlagExtra{Placeholder: "BACKEND", Enum: []string{"keyring", "1password"}, EnumDefault: "keyring"})
+	clib.Extend(cmd.Flags().Lookup("backend"), clib.FlagExtra{Placeholder: "BACKEND", Terse: "secret backend", Enum: []string{"keyring", "1password"}, EnumTerse: []string{"OS keychain", "1Password CLI"}, EnumDefault: "keyring"})
 	return cmd
 }
 

@@ -152,7 +152,13 @@ func validateCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&mode, "mode", "strict", "Validation strictness: strict, warn, or none")
-	clib.Extend(cmd.Flags().Lookup("mode"), clib.FlagExtra{Group: "Validation", Placeholder: "MODE", Enum: []string{"strict", "warn", "none"}})
+	clib.Extend(cmd.Flags().Lookup("mode"), clib.FlagExtra{
+		Group:       "Validation",
+		Placeholder: "MODE",
+		Terse:       "validation mode",
+		Enum:        []string{"strict", "warn", "none"},
+		EnumTerse:   []string{"strictest", "warn, don't fail", "no validation"},
+	})
 	return cmd
 }
 
@@ -211,11 +217,23 @@ func AddJQLBuilderFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 	cmd.Flags().StringVar(&builder.Reporter, "reporter", "", `Restrict by reporter; use "me" for currentUser()`)
 	clib.Extend(
 		cmd.Flags().Lookup("assignee"),
-		clib.FlagExtra{Group: "Filters", Placeholder: "USER", Enum: []string{"me", "none"}},
+		clib.FlagExtra{
+			Group:       "Filters",
+			Placeholder: "USER",
+			Terse:       "by assignee",
+			Enum:        []string{"me", "none"},
+			EnumTerse:   []string{"current user", "unassigned"},
+		},
 	)
 	clib.Extend(
 		cmd.Flags().Lookup("reporter"),
-		clib.FlagExtra{Group: "Filters", Placeholder: "USER", Enum: []string{"me"}},
+		clib.FlagExtra{
+			Group:       "Filters",
+			Placeholder: "USER",
+			Terse:       "by reporter",
+			Enum:        []string{"me"},
+			EnumTerse:   []string{"current user"},
+		},
 	)
 	AddSortFlags(cmd, builder)
 	AddDateFilterFlags(cmd, builder)
@@ -233,7 +251,9 @@ func AddSortFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 		clib.FlagExtra{
 			Group:       "Sort",
 			Placeholder: "FIELD",
+			Terse:       "sort field",
 			Enum:        []string{"updated", "created", "priority", "status", "key", "summary"},
+			EnumTerse:   []string{"last-updated time", "creation time", "priority level", "workflow status", "issue key", "title text"},
 			EnumDefault: "updated",
 		},
 	)

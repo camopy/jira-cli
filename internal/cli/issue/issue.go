@@ -855,7 +855,7 @@ func issueCreateCommand() *cobra.Command {
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	cmdutil.ExtendFlag(cmd.Flags(), "summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
 	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
-	cmdutil.ExtendFlag(cmd.Flags(), "assignee", clib.FlagExtra{Group: "Fields", Placeholder: "USER", Enum: []string{"me"}})
+	cmdutil.ExtendFlag(cmd.Flags(), "assignee", clib.FlagExtra{Group: "Fields", Placeholder: "USER", Terse: "assignee", Enum: []string{"me"}, EnumTerse: []string{"current user"}})
 	cmdutil.ExtendFlag(cmd.Flags(), "project", clib.FlagExtra{Group: "Fields", Placeholder: "KEY", Complete: "predictor=cacheproject"})
 	cmdutil.ExtendFlag(cmd.Flags(), "type", clib.FlagExtra{Group: "Fields", Placeholder: "NAME", Complete: "predictor=cacheissuetype"})
 	cmdutil.ExtendFlag(cmd.Flags(), "parent", clib.FlagExtra{Group: "Fields", Placeholder: "KEY", Complete: "predictor=issuekey"})
@@ -1225,7 +1225,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
 	cmdutil.ExtendFlag(cmd.Flags(), "summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
-	cmdutil.ExtendFlag(cmd.Flags(), "assignee", clib.FlagExtra{Group: "Fields", Placeholder: "USER", Enum: []string{"me", "none"}})
+	cmdutil.ExtendFlag(cmd.Flags(), "assignee", clib.FlagExtra{Group: "Fields", Placeholder: "USER", Terse: "assignee", Enum: []string{"me", "none"}, EnumTerse: []string{"current user", "unassign"}})
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
 }

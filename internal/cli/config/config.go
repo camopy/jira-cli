@@ -62,9 +62,13 @@ func configThemeCommand() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&name, "name", "", "Theme name")
 	cmd.Flags().StringVar(&path, "path", "", "Theme TOML path")
+	// Theme names are self-describing (dracula, nord, catppuccin-mocha), so a
+	// per-value EnumTerse would just restate the value. A short Terse keeps the
+	// completion description from falling back to the flag usage instead.
 	clib.Extend(cmd.Flags().Lookup("name"), clib.FlagExtra{
 		Group:       "Theme",
 		Placeholder: "NAME",
+		Terse:       "theme name",
 		Enum:        config.ThemeNameValues,
 		EnumDefault: "default",
 	})

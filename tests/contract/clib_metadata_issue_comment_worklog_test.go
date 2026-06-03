@@ -26,6 +26,7 @@ type issueCommentWorklogMetadataFlag struct {
 	Completion  string   `json:"completion"`
 	ValueHint   string   `json:"value_hint"`
 	Enum        []string `json:"enum"`
+	EnumTerse   []string `json:"enum_terse"`
 }
 
 type issueCommentWorklogMetadataWant struct {
@@ -36,6 +37,7 @@ type issueCommentWorklogMetadataWant struct {
 	completion   string
 	valueHint    string
 	enumContains []string
+	enumTerse    []string
 }
 
 func TestIssueCommentAndWorklogFlagsPublishClibMetadata(t *testing.T) {
@@ -55,30 +57,38 @@ func TestIssueCommentAndWorklogFlagsPublishClibMetadata(t *testing.T) {
 		{commandPath: "jira issue mine", flagName: "--updated", group: "Filters", placeholder: "DATE"},
 		{commandPath: "jira issue mine", flagName: "--created", group: "Filters", placeholder: "DATE"},
 		{commandPath: "jira issue mine", flagName: "--resolved", group: "Filters", placeholder: "DATE"},
-		{commandPath: "jira issue mine", flagName: "--order-by", group: "Sort", placeholder: "FIELD"},
+		{commandPath: "jira issue mine", flagName: "--order-by", group: "Sort", placeholder: "FIELD", enumTerse: []string{"last-updated time", "creation time", "priority level", "workflow status", "issue key", "title text"}},
 		{commandPath: "jira issue mine", flagName: "--desc", group: "Sort"},
 
 		{commandPath: "jira issue list", flagName: "--count", group: "Output"},
 		{commandPath: "jira search jql", flagName: "--count", group: "Output"},
-		{commandPath: "jira jql validate", flagName: "--mode", group: "Validation", placeholder: "MODE", enumContains: []string{"strict", "warn", "none"}},
+		{commandPath: "jira jql validate", flagName: "--mode", group: "Validation", placeholder: "MODE", enumContains: []string{"strict", "warn", "none"}, enumTerse: []string{"strictest", "warn, don't fail", "no validation"}},
 		{commandPath: "jira search jql", flagName: "--all", group: "Pagination"},
 		{commandPath: "jira search jql", flagName: "--limit", group: "Pagination", placeholder: "N"},
 		{commandPath: "jira search jql", flagName: "--unbounded", group: "Pagination"},
 		{commandPath: "jira jql build", flagName: "--status", group: "Filters", placeholder: "NAME", completion: "predictor=cachestatus,comma"},
 		{commandPath: "jira jql build", flagName: "--priority", group: "Filters", placeholder: "NAME", completion: "predictor=cachepriority,comma"},
-		{commandPath: "jira issue list", flagName: "--columns", group: "Output", placeholder: "COLS", enumContains: []string{"key", "summary", "status", "assignee", "priority", "updated"}},
-		{commandPath: "jira issue mine", flagName: "--columns", group: "Output", placeholder: "COLS", enumContains: []string{"key", "summary", "status", "assignee", "priority", "updated"}},
+		{commandPath: "jira jql build", flagName: "--assignee", group: "Filters", placeholder: "USER", enumContains: []string{"me", "none"}, enumTerse: []string{"current user", "unassigned"}},
+		{commandPath: "jira jql build", flagName: "--reporter", group: "Filters", placeholder: "USER", enumContains: []string{"me"}, enumTerse: []string{"current user"}},
+		{commandPath: "jira issue list", flagName: "--columns", group: "Output", placeholder: "COLS", enumContains: []string{"key", "summary", "status", "assignee", "priority", "updated"}, enumTerse: []string{"issue key", "title text", "workflow status", "assigned user", "priority level", "last-updated time"}},
+		{commandPath: "jira issue mine", flagName: "--columns", group: "Output", placeholder: "COLS", enumContains: []string{"key", "summary", "status", "assignee", "priority", "updated"}, enumTerse: []string{"issue key", "title text", "workflow status", "assigned user", "priority level", "last-updated time"}},
+
+		{commandPath: "jira auth login", flagName: "--backend", placeholder: "BACKEND", enumContains: []string{"keyring", "1password"}, enumTerse: []string{"OS keychain", "1Password CLI"}},
+		{commandPath: "jira auth migrate", flagName: "--backend", placeholder: "BACKEND", enumContains: []string{"keyring", "1password"}, enumTerse: []string{"OS keychain", "1Password CLI"}},
+		// Self-describing theme names carry a short Terse and deliberately no
+		// EnumTerse; the schema-wide guard below proves that omission is safe.
+		{commandPath: "jira config theme", flagName: "--name", group: "Theme", placeholder: "NAME", enumContains: []string{"default", "dracula", "nord"}},
 
 		{commandPath: "jira issue create", flagName: "--dry-run", group: "Safety"},
 		{commandPath: "jira issue create", flagName: "--summary", group: "Fields", placeholder: "TEXT"},
 		{commandPath: "jira issue create", flagName: "--json-input", group: "Input", placeholder: "FILE", valueHint: "file"},
-		{commandPath: "jira issue create", flagName: "--assignee", group: "Fields", placeholder: "USER", enumContains: []string{"me"}},
+		{commandPath: "jira issue create", flagName: "--assignee", group: "Fields", placeholder: "USER", enumContains: []string{"me"}, enumTerse: []string{"current user"}},
 		{commandPath: "jira issue create", flagName: "--priority", group: "Fields", placeholder: "NAME", completion: "predictor=cachepriority"},
 
 		{commandPath: "jira issue edit", flagName: "--dry-run", group: "Safety"},
 		{commandPath: "jira issue edit", flagName: "--json-input", group: "Input", placeholder: "FILE", valueHint: "file"},
 		{commandPath: "jira issue edit", flagName: "--summary", group: "Fields", placeholder: "TEXT"},
-		{commandPath: "jira issue edit", flagName: "--assignee", group: "Fields", placeholder: "USER", enumContains: []string{"me", "none"}},
+		{commandPath: "jira issue edit", flagName: "--assignee", group: "Fields", placeholder: "USER", enumContains: []string{"me", "none"}, enumTerse: []string{"current user", "unassign"}},
 
 		{commandPath: "jira issue transition", flagName: "--dry-run", group: "Safety"},
 		{commandPath: "jira issue transition", flagName: "--transition", group: "Transition", placeholder: "STATUS"},
@@ -170,9 +180,40 @@ func requireClibMetadata(t *testing.T, schema issueCommentWorklogMetadataEnvelop
 				t.Fatalf("%s %s enum = %v, want value %q", want.commandPath, want.flagName, flag.Enum, value)
 			}
 		}
+		if want.enumTerse != nil {
+			if !slices.Equal(flag.EnumTerse, want.enumTerse) {
+				t.Fatalf("%s %s enum_terse = %v, want %v", want.commandPath, want.flagName, flag.EnumTerse, want.enumTerse)
+			}
+			if len(flag.EnumTerse) != len(flag.Enum) {
+				t.Fatalf("%s %s enum_terse len %d != enum len %d (a value would fall back to the flag usage)", want.commandPath, want.flagName, len(flag.EnumTerse), len(flag.Enum))
+			}
+		}
 		return
 	}
 	t.Fatalf("schema missing flag %s on %s: %+v", want.flagName, want.commandPath, cmd.Flags)
+}
+
+// TestEnumTerseMatchesEnumLength walks every command in the schema and asserts
+// that any flag carrying enum descriptions carries exactly one per enum value.
+// clib pairs Enum and EnumTerse positionally and silently drops all
+// descriptions when the lengths differ, so a mismatched pair would quietly
+// reintroduce the flag-usage noise on every value. This guard fires for any
+// enum flag — including ones nobody remembered to add a per-flag want row for.
+func TestEnumTerseMatchesEnumLength(t *testing.T) {
+	schema := loadIssueCommentWorklogMetadataSchema(t)
+
+	var walk func(cmds []issueCommentWorklogMetadataCommand)
+	walk = func(cmds []issueCommentWorklogMetadataCommand) {
+		for _, cmd := range cmds {
+			for _, flag := range cmd.Flags {
+				if len(flag.EnumTerse) > 0 && len(flag.EnumTerse) != len(flag.Enum) {
+					t.Errorf("%s %s: enum_terse len %d != enum len %d — every value would fall back to the flag usage", cmd.CommandPath, flag.Name, len(flag.EnumTerse), len(flag.Enum))
+				}
+			}
+			walk(cmd.Subcommands)
+		}
+	}
+	walk(schema.Data.Commands)
 }
 
 func findIssueCommentWorklogMetadataCommand(commands []issueCommentWorklogMetadataCommand, path string) (issueCommentWorklogMetadataCommand, bool) {
