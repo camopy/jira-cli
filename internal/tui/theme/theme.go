@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"image/color"
+	"os"
 	"strings"
 	"sync"
 
@@ -22,11 +23,16 @@ var applyOnce sync.Once
 // Theme is the shared clib theme instance.
 var Theme = config.DefaultTheme()
 
-// Resolve returns a clib theme for the given preset name. An empty or
+// Resolve returns a clib theme for the given preset name. The "auto" name
+// detects the terminal background (the TUI always runs on a TTY) and picks
+// clib's light or dark theme so hash-based entity colors contrast. An empty or
 // unrecognized name falls back to the process default, which honors the
-// JIRA_THEME override before the dark built-in. Legacy pre-v0.5 theme names
-// are accepted.
+// JIRA_THEME override before the dark built-in. Legacy pre-v0.5 theme names are
+// accepted.
 func Resolve(name string) *clibtheme.Theme {
+	if config.IsAutoTheme(name) {
+		return config.AutoTheme(os.Stdout)
+	}
 	return config.ThemeForName(name)
 }
 
