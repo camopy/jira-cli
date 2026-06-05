@@ -7,16 +7,19 @@ import (
 	"github.com/gechr/clib/complete"
 	"github.com/gechr/clib/help"
 	"github.com/gechr/clib/theme"
+	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
 // NewHelpRenderer builds the themed clib help renderer used by every command
 // in jira-cli. The JIRA env-prefix is set so that JIRA_NO_COLOR and related
-// variables are honored.
+// variables are honored. config.DefaultTheme resolves the JIRA_THEME override
+// (or the dark built-in), which clib v0.5 no longer does for us after dropping
+// the old theme.Default().
 func NewHelpRenderer() *help.Renderer {
 	theme.SetEnvPrefix("JIRA")
-	th := theme.Default().With(
+	th := config.DefaultTheme().With(
 		theme.WithEnumStyle(theme.EnumStyleHighlightBoth),
 		theme.WithHelpRepeatEllipsisEnabled(true),
 	)

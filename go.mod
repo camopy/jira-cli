@@ -11,10 +11,10 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/agnivade/levenshtein v1.2.1
 	github.com/charmbracelet/x/ansi v0.11.7
-	github.com/gechr/clib v0.4.15
+	github.com/gechr/clib v0.5.1
 	github.com/gechr/clog v0.9.8
 	github.com/gechr/primer v0.0.14
-	github.com/gechr/x v0.0.8
+	github.com/gechr/x v0.0.10
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/knadh/koanf/parsers/toml v0.1.0
 	github.com/knadh/koanf/providers/confmap v1.0.0
@@ -65,6 +65,7 @@ require (
 	github.com/ashanbrown/forbidigo/v2 v2.3.1 // indirect
 	github.com/ashanbrown/makezero/v2 v2.2.1 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
+	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bkielbasa/cyclop v1.2.3 // indirect
@@ -198,6 +199,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moricho/tparallel v0.3.2 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
+	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/nakabonne/nestif v0.3.1 // indirect
 	github.com/nishanths/exhaustive v0.12.0 // indirect
 	github.com/nishanths/predeclared v0.2.2 // indirect

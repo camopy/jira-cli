@@ -128,6 +128,8 @@ github.com/ashanbrown/makezero/v2 v2.2.1 h1:A7uU8dgB1PA9aelTxHMfHIQ8Qev8AB3JLxJU
 github.com/ashanbrown/makezero/v2 v2.2.1/go.mod h1:aEGT/9q3S8DHeE57C88z2a6xydvgx8J5hgXIGWgo0MY=
 github.com/atotto/clipboard v0.1.4 h1:EH0zSVneZPSuFR11BlR9YppQTVDbh5+16AmcJi4g1z4=
 github.com/atotto/clipboard v0.1.4/go.mod h1:ZY9tmq7sm5xIbd9bOK4onWV4S6X0u6GY7Vn0Yu86PYI=
+github.com/aymanbagabas/go-osc52/v2 v2.0.1 h1:HwpRHbFMcZLEVr42D4p7XBqjyuxQH5SMiErDT4WkJ2k=
+github.com/aymanbagabas/go-osc52/v2 v2.0.1/go.mod h1:uYgXzlJ7ZpABp8OJ+exZzJJhRNQ2ASbcXHWsFqH8hp8=
 github.com/aymanbagabas/go-udiff v0.4.1 h1:OEIrQ8maEeDBXQDoGCbbTTXYJMYRCRO1fnodZ12Gv5o=
 github.com/aymanbagabas/go-udiff v0.4.1/go.mod h1:0L9PGwj20lrtmEMeyw4WKJ/TMyDtvAoK9bf2u/mNo3w=
 github.com/bahlo/generic-list-go v0.2.0 h1:5sz/EEAK+ls5wF+NeqDpk5+iNdMDXrh3z3nPnH1Wvgk=
@@ -252,14 +254,14 @@ github.com/fsnotify/fsnotify v1.10.1 h1:b0/UzAf9yR5rhf3RPm9gf3ehBPpf0oZKIjtpKrx5
 github.com/fsnotify/fsnotify v1.10.1/go.mod h1:TLheqan6HD6GBK6PrDWyDPBaEV8LspOxvPSjC+bVfgo=
 github.com/fzipp/gocyclo v0.6.0 h1:lsblElZG7d3ALtGMx9fmxeTKZaLLpU8mET09yN4BBLo=
 github.com/fzipp/gocyclo v0.6.0/go.mod h1:rXPyn8fnlpa0R2csP/31uerbiVBugk5whMdlyaLkLoA=
-github.com/gechr/clib v0.4.15 h1:EIQLLFIlcMUOsu/JvhQkc/UsSwzRAqN5mPGMZU8W1DQ=
-github.com/gechr/clib v0.4.15/go.mod h1:je10ii5Wl264uDoD6ZGdvAMjM65h8g25xmliQImMlYc=
+github.com/gechr/clib v0.5.1 h1:GXVyzFmRbeBTj1pUqvMAw3h/0dddGnbTFVtlMayL91M=
+github.com/gechr/clib v0.5.1/go.mod h1:rFrgYcf7zO84/vhFDiMio4yy8WYj1dc+8wrvcHCLuQQ=
 github.com/gechr/clog v0.9.8 h1:diW9OrQIdTkuHe1HRYwvhE2mZRsAu8o+Iv5+448oGtA=
 github.com/gechr/clog v0.9.8/go.mod h1:+uvk9gL5UmjYCYJD6NQLGvXtT/VNs4XDDsaA4mtQ2KM=
 github.com/gechr/primer v0.0.14 h1:NXRB3/Z6ewmcXrARzVlkBFE1fyo7QHx+RjAAgbO2JLI=
 github.com/gechr/primer v0.0.14/go.mod h1:/VsLCvlHIX+YOgYvmrtMU6GVaGUat41mahTAMoKWqYo=
-github.com/gechr/x v0.0.8 h1:XOWanVzelLv40tZlOFuXqoVNtW2twh8pFu1zBWXov4E=
-github.com/gechr/x v0.0.8/go.mod h1:9Z++QC4BsuE4uur9wlf3hjOeR3zvmiTODTlk93YJnoE=
+github.com/gechr/x v0.0.10 h1:kPrmc7brlEn/m2zkyp0eCB9vsnTHrHSeE2FtDqLQWeU=
+github.com/gechr/x v0.0.10/go.mod h1:7vMgwiKjwPAd+vo74YNv4w5AatKPrRN5OVbOvXcL3x4=
 github.com/ghostiam/protogetter v0.3.20 h1:oW7OPFit2FxZOpmMRPP9FffU4uUpfeE/rEdE1f+MzD0=
 github.com/ghostiam/protogetter v0.3.20/go.mod h1:FjIu5Yfs6FT391m+Fjp3fbAYJ6rkL/J6ySpZBfnODuI=
 github.com/go-critic/go-critic v0.14.3 h1:5R1qH2iFeo4I/RJU8vTezdqs08Egi4u5p6vOESA0pog=
@@ -571,6 +573,8 @@ github.com/moricho/tparallel v0.3.2 h1:odr8aZVFA3NZrNybggMkYO3rgPRcqjeQUlBBFVxKH
 github.com/moricho/tparallel v0.3.2/go.mod h1:OQ+K3b4Ln3l2TZveGCywybl68glfLEwFGqvnjok8b+U=
 github.com/muesli/cancelreader v0.2.2 h1:3I4Kt4BQjOR54NavqnDogx/MIoWBFa0StPA8ELUXHmA=
 github.com/muesli/cancelreader v0.2.2/go.mod h1:3XuTXfFS2VjM+HTLZY9Ak0l6eUKfijIfMUZ4EgX0QYo=
+github.com/muesli/termenv v0.16.0 h1:S5AlUN9dENB57rsbnkPyfdGuWIlkmzJjbFf0Tf5FWUc=
+github.com/muesli/termenv v0.16.0/go.mod h1:ZRfOIKPFDYQoDFF4Olj7/QJbW60Ol/kL1pU3VfY/Cnk=
 github.com/mwitkow/go-conntrack v0.0.0-20161129095857-cc309e4a2223/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
 github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
 github.com/nakabonne/nestif v0.3.1 h1:wm28nZjhQY5HyYPx+weN3Q65k6ilSBxDb8v5S81B81U=

@@ -14,25 +14,20 @@ import (
 
 	"charm.land/lipgloss/v2"
 	clibtheme "github.com/gechr/clib/theme"
+	"github.com/matcra587/jira-cli/internal/config"
 )
 
 var applyOnce sync.Once
 
 // Theme is the shared clib theme instance.
-var Theme = clibtheme.Default()
+var Theme = config.DefaultTheme()
 
 // Resolve returns a clib theme for the given preset name. An empty or
-// unrecognized name returns the clib default (which honors JIRA_THEME /
-// CLIB_THEME env vars before falling back to the built-in default).
+// unrecognized name falls back to the process default, which honors the
+// JIRA_THEME override before the dark built-in. Legacy pre-v0.5 theme names
+// are accepted.
 func Resolve(name string) *clibtheme.Theme {
-	if strings.TrimSpace(name) == "" {
-		return clibtheme.Default()
-	}
-	var th clibtheme.Theme
-	if err := th.UnmarshalText([]byte(name)); err != nil {
-		return clibtheme.Default()
-	}
-	return &th
+	return config.ThemeForName(name)
 }
 
 // Apply resets all derived styles to the given clib theme. Runs at most

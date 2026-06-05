@@ -10,7 +10,8 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/gechr/x/fs"
+	xfilepath "github.com/gechr/x/filepath"
+	xos "github.com/gechr/x/os"
 	"github.com/gechr/x/shell"
 	"github.com/go-viper/mapstructure/v2"
 	koanftoml "github.com/knadh/koanf/parsers/toml"
@@ -161,7 +162,7 @@ func atomicWrite(path string, data []byte) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	if !fs.IsWritableDir(dir) {
+	if !xos.IsWritableDir(dir) {
 		return fmt.Errorf("config directory %q is not writable", dir)
 	}
 	tmp, err := os.CreateTemp(dir, ".atomic-*.tmp")
@@ -194,13 +195,13 @@ func atomicWrite(path string, data []byte) error {
 // target. A path that is not a symlink — including a genuinely new file — is
 // returned unchanged.
 func writeThroughPath(path string) string {
-	if resolved, err := fs.Resolve(path); err == nil {
+	if resolved, err := xfilepath.Resolve(path); err == nil {
 		return resolved
 	}
 	// Resolve failed — e.g. a dangling link whose target is not created yet.
 	// If path is itself a symlink, follow it one level so the write lands on
 	// the declared target rather than clobbering the link.
-	if link, err := fs.IsSymlink(path); err != nil || !link {
+	if link, err := xos.IsSymlink(path); err != nil || !link {
 		return path
 	}
 	dest, err := os.Readlink(path)
@@ -295,7 +296,7 @@ func ensureConfig(path string) error {
 	// Resolve through any symlink so existence is tested — and the seed below
 	// is written — against the link's real target, never the link itself.
 	target := writeThroughPath(path)
-	exists, err := fs.Exists(target)
+	exists, err := xos.Exists(target)
 	if err != nil {
 		return err
 	}

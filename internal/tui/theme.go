@@ -8,22 +8,22 @@ import (
 	"github.com/gechr/primer/key"
 )
 
-var baseTheme = clibtheme.Default()
+var baseTheme = clibtheme.Dark()
 
 func ResolveTheme(name string) *clibtheme.Theme {
 	if strings.TrimSpace(name) == "" {
-		return clibtheme.Default()
+		return clibtheme.Dark()
 	}
 	var th clibtheme.Theme
 	if err := th.UnmarshalText([]byte(name)); err != nil {
-		return clibtheme.Default()
+		return clibtheme.Dark()
 	}
 	return &th
 }
 
 func ApplyTheme(th *clibtheme.Theme) {
 	if th == nil {
-		th = clibtheme.Default()
+		th = clibtheme.Dark()
 	}
 	baseTheme = th
 }

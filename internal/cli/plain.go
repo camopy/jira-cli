@@ -17,6 +17,7 @@ import (
 	termansi "github.com/gechr/x/ansi"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/browser"
+	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -180,7 +181,9 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 func defaultPlainConfig() plainConfig {
 	return plainConfig{
 		termWidth: 100,
-		theme:     clibtheme.Default(),
+		// config.DefaultTheme honors the JIRA_THEME process override and
+		// falls back to the dark built-in, matching help and the TUI.
+		theme: config.DefaultTheme(),
 	}
 }
 

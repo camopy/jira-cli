@@ -11,7 +11,7 @@ import (
 // per-name hash color for an unknown/absent category. Styles are compared by
 // the ANSI they produce for a sample string.
 func TestStatusStyleColorsByCategory(t *testing.T) {
-	theme := clibtheme.Default()
+	theme := clibtheme.Dark()
 	cfg := plainConfig{tty: true, theme: theme}
 	const sample = "Some Status"
 
