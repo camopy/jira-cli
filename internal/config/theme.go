@@ -13,7 +13,19 @@ import (
 // variable drives help, plain output, and the TUI.
 const EnvThemeName = "JIRA_THEME"
 
+// ThemeNameAuto selects clib's light or dark theme by detecting the terminal
+// background, so hash-based entity colors stay readable on either surface. It
+// is opt-in, never the default: background detection misfires silently under
+// tmux, SSH, and container exec — all common developer environments — and a
+// wrong guess is actively worse than the fixed palette, so the default stays
+// dark until detection has a release cycle of field reports. A user whose
+// terminal is misdetected pins "light" or "dark" instead.
+const ThemeNameAuto = "auto"
+
 var ThemeNameValues = []string{
+	"auto",
+	"dark",
+	"light",
 	"default",
 	"plain",
 	"catppuccin-frappe",
@@ -56,9 +68,14 @@ func canonicalThemeName(name string) string {
 	}
 }
 
+// IsAutoTheme reports whether name selects the background-detecting theme.
+func IsAutoTheme(name string) bool {
+	return strings.EqualFold(strings.TrimSpace(name), ThemeNameAuto)
+}
+
 func ValidateThemeName(name string) error {
 	name = strings.TrimSpace(name)
-	if name == "" {
+	if name == "" || IsAutoTheme(name) {
 		return nil
 	}
 	var th clibtheme.Theme
@@ -100,4 +117,22 @@ func ThemeForName(name string) *clibtheme.Theme {
 		return th
 	}
 	return DefaultTheme()
+}
+
+// AutoTheme resolves the opt-in "auto" theme: clib's light or dark theme chosen
+// by the terminal background of out (the stream styled output goes to). The
+// JIRA_THEME override still wins, matching every other resolution path. When
+// there is nothing to detect — out is not a terminal, e.g. --color=always piped
+// into a pager — it falls back to dark: dark matches the convention of every
+// major ANSI CLI (git, ripgrep, bat) and the dark-terminal skew of users who
+// deliberately force color through a pipe.
+func AutoTheme(out *os.File) *clibtheme.Theme {
+	if th := themeFromName(os.Getenv(EnvThemeName)); th != nil {
+		return th
+	}
+	bg, ok := clibtheme.DetectBackground(out)
+	if !ok {
+		bg = clibtheme.BackgroundDark
+	}
+	return clibtheme.DefaultPair().ForBackground(bg)
 }

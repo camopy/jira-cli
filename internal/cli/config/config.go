@@ -29,7 +29,7 @@ func configThemeCommand() *cobra.Command {
 	var name, path string
 	cmd := &cobra.Command{
 		Use:   "theme",
-		Short: "Manage TUI theme configuration",
+		Short: "Manage theme configuration",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))

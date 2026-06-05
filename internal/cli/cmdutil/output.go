@@ -3,6 +3,7 @@ package cmdutil
 import (
 	"os"
 
+	"github.com/gechr/clog"
 	"github.com/gechr/x/terminal"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/config"
@@ -68,8 +69,21 @@ func PlainOptionsForCommand(cmd *cobra.Command) []cli.PlainOption {
 	if parallelism := commandParallelism(cmd); parallelism != defaultParallelism {
 		opts = append(opts, cli.WithPlainThreads(parallelism))
 	}
-	if baseURL := plainBaseURL(cmd); baseURL != "" {
-		opts = append(opts, cli.WithPlainBaseURL(baseURL))
+	// Load the active config once and derive both the base URL (for link
+	// rendering) and the theme from it. On a load error both are simply
+	// omitted, leaving the renderer's defaults.
+	if cfg, err := config.Load(config.WithPath(ConfigPath(cmd))); err == nil {
+		if baseURL := ActiveProfile(cmd, cfg).BaseURL; baseURL != "" {
+			opts = append(opts, cli.WithPlainBaseURL(baseURL))
+		}
+		// The "auto" theme detects the terminal background so hash-based
+		// entity colors stay readable. Detection runs only for "auto" users
+		// with color enabled — never under --color=never or NO_COLOR, where
+		// there is no color to contrast and a terminal query would be pure
+		// waste — so the round-trip never costs anyone else.
+		if config.IsAutoTheme(cfg.Theme.Name) && !clog.ColorsDisabled() {
+			opts = append(opts, cli.WithPlainTheme(config.AutoTheme(os.Stdout)))
+		}
 	}
 	if cmd.Flags().Lookup("columns") != nil {
 		if columns, err := cmd.Flags().GetStringSlice("columns"); err == nil && len(columns) > 0 {
@@ -93,14 +107,4 @@ func commandParallelism(cmd *cobra.Command) int {
 		return defaultParallelism
 	}
 	return value
-}
-
-// plainBaseURL returns the active profile's base URL for plain-mode link
-// rendering, or "" when the config cannot be loaded.
-func plainBaseURL(cmd *cobra.Command) string {
-	cfg, err := config.Load(config.WithPath(ConfigPath(cmd)))
-	if err != nil {
-		return ""
-	}
-	return ActiveProfile(cmd, cfg).BaseURL
 }

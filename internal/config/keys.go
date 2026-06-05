@@ -23,8 +23,8 @@ var topLevelKeys = []KeyDesc{
 	{"default_profile", "Active profile name", nil},
 	{"queries_path", "Saved JQL queries directory", nil},
 	{"editor", "Default external editor command", nil},
-	{"theme.name", "TUI theme name", ThemeNameValues},
-	{"theme.path", "TUI theme TOML path", nil},
+	{"theme.name", "Theme name", ThemeNameValues},
+	{"theme.path", "Theme TOML path", nil},
 	{"tui.refresh_interval", "TUI refresh seconds", nil},
 	{"tui.default_tab", "TUI default tab on launch", []string{"issues", "epics", "search", "activity"}},
 }
