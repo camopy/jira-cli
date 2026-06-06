@@ -34,6 +34,26 @@ func TestAutoThemeValidatesAndIsAdvertised(t *testing.T) {
 	}
 }
 
+// TestThemeNameValuesSourcedFromClib pins that the advertised list is built
+// from clibtheme.Names (a v0.5 preset that was never hand-listed must appear),
+// keeps "auto" first, and retains the back-compat "default" alias.
+func TestThemeNameValuesSourcedFromClib(t *testing.T) {
+	if len(ThemeNameValues) == 0 || ThemeNameValues[0] != "auto" {
+		t.Fatalf("ThemeNameValues[0] = %q, want \"auto\"", ThemeNameValues)
+	}
+	want := map[string]bool{"solarized-dark": false, "solarized-light": false, "default": false}
+	for _, name := range ThemeNameValues {
+		if _, ok := want[name]; ok {
+			want[name] = true
+		}
+	}
+	for name, found := range want {
+		if !found {
+			t.Errorf("ThemeNameValues missing %q", name)
+		}
+	}
+}
+
 // TestAutoThemeFallsBackToDarkOffTerminal pins the DARK fallback: with no
 // terminal to detect (nil out), auto resolves to the dark theme.
 func TestAutoThemeFallsBackToDarkOffTerminal(t *testing.T) {

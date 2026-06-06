@@ -22,26 +22,16 @@ const EnvThemeName = "JIRA_THEME"
 // terminal is misdetected pins "light" or "dark" instead.
 const ThemeNameAuto = "auto"
 
-var ThemeNameValues = []string{
-	"auto",
-	"dark",
-	"light",
-	"default",
-	"plain",
-	"catppuccin-frappe",
-	"catppuccin-latte",
-	"catppuccin-macchiato",
-	"catppuccin-mocha",
-	"dracula",
-	"gruvbox-dark",
-	"gruvbox-light",
-	"monochrome",
-	"monokai",
-	"nord",
-	"one-dark",
-	"synthwave",
-	"solarized",
-	"tokyo-night",
+// ThemeNameValues advertises the selectable theme names for completion and the
+// config-key reference: the opt-in "auto", clib's built-in presets (sourced
+// from clibtheme.Names so the list never drifts from the dependency), and the
+// pre-v0.5 single names kept for back-compat. The legacy names still resolve
+// through canonicalThemeName; listing them keeps existing configs discoverable.
+var ThemeNameValues = themeNameValues()
+
+func themeNameValues() []string {
+	names := append([]string{ThemeNameAuto}, clibtheme.Names()...)
+	return append(names, "default", "plain", "monochrome", "solarized")
 }
 
 // canonicalThemeName rewrites the theme names jira-cli accepted before the clib

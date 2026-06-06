@@ -11,7 +11,7 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/agnivade/levenshtein v1.2.1
 	github.com/charmbracelet/x/ansi v0.11.7
-	github.com/gechr/clib v0.5.1
+	github.com/gechr/clib v0.5.2
 	github.com/gechr/clog v0.9.8
 	github.com/gechr/primer v0.0.14
 	github.com/gechr/x v0.0.10
