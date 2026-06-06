@@ -192,11 +192,23 @@ jira config theme --name catppuccin-mocha
 jira config theme --path ~/my-theme.toml
 ```
 
-Bundled names: `default`, `plain`, `catppuccin-{frappe,latte,macchiato,mocha}`,
-`dracula`, `gruvbox-{dark,light}`, `monochrome`, `monokai`, `nord`,
-`one-dark`, `synthwave`, `solarized`, `tokyo-night`.
+Bundled names: `auto`, `dark`, `light`, `catppuccin-{frappe,latte,macchiato,mocha}`,
+`dracula`, `gruvbox-{dark,light}`, `monochrome-{dark,light}`, `monokai`,
+`nord`, `one-dark`, `plain-{dark,light}`, `synthwave`,
+`solarized-{dark,light}`, `tokyo-night`. The older single names still work:
+`default`, `plain`, and `monochrome` map to the dark variant, and `solarized`
+maps to `solarized-light` (its original palette).
 
-Override per-process with `JIRA_THEME=<name>`.
+`auto` detects the terminal background and picks the matching light or dark
+theme, so hash-coloured fields (status, priority, assignee) stay readable on
+either surface — a fix for light terminals where the dark palette's bright
+colours wash out. Detection needs a real terminal: when output is piped or
+`--color=never`/`NO_COLOR` is set, `auto` falls back to the dark theme and
+runs no detection. If your terminal is misdetected, pin `light` or `dark`
+explicitly. `auto` applies to both one-shot output and the dashboard.
+
+Override per-process with `JIRA_THEME=<name>`, which wins over the configured
+theme (including `auto`).
 
 === "Human"
 
@@ -278,7 +290,7 @@ exit 3). See [ADF](adf.md) for what's lossy.
 | `default_profile` | Profile to use when `--profile` and `JIRA_DEFAULT_PROFILE` are both unset |
 | `queries_path` | Where [`search saved`](search.md#search-saved) looks for `.jql` files |
 | `editor` | Default editor for `issue edit` (per-profile `editor` wins) |
-| `[theme]` | TUI theme; see [`config theme`](#themes) |
+| `[theme]` | Output and TUI theme; see [`config theme`](#themes) |
 | `[tui]` | TUI defaults (`refresh_interval`, `default_tab`, `tabs`) — TUI is experimental |
 | `[aliases]` | User-defined command aliases; managed via [`jira alias`](alias.md) |
 
