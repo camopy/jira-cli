@@ -21,6 +21,7 @@ func TestGlobalsFromArgs(t *testing.T) {
 		{"long profile space", []string{"--profile", "work"}, startup.Globals{Profile: "work"}},
 		{"short profile glued", []string{"-Pwork"}, startup.Globals{Profile: "work"}},
 		{"both", []string{"-P", "work", "--config", "/y", "issue"}, startup.Globals{ConfigPath: "/y", Profile: "work"}},
+		{"output value not mistaken for config or profile", []string{"-o", "json", "-c", "/x"}, startup.Globals{ConfigPath: "/x"}},
 		{"lowercase p no longer selects profile", []string{"-p", "work"}, startup.Globals{}},
 		{"terminator stops scan", []string{"--", "--config", "/x"}, startup.Globals{}},
 		{"trailing valueless config", []string{"--config"}, startup.Globals{}},
@@ -46,6 +47,9 @@ func TestSplitFirstCommandArg(t *testing.T) {
 		{"command after global flag", []string{"--config", "/x", "issue", "list"}, []string{"--config", "/x"}, "issue", []string{"list"}, true},
 		{"bare command", []string{"issue", "list"}, []string{}, "issue", []string{"list"}, true},
 		{"valued global flag before command", []string{"--timeout", "5", "issue", "list"}, []string{"--timeout", "5"}, "issue", []string{"list"}, true},
+		{"short output before command", []string{"-o", "json", "issue", "list"}, []string{"-o", "json"}, "issue", []string{"list"}, true},
+		{"combined short output before command", []string{"-ojson", "issue", "list"}, []string{"-ojson"}, "issue", []string{"list"}, true},
+		{"long output before command", []string{"--output", "json", "issue", "list"}, []string{"--output", "json"}, "issue", []string{"list"}, true},
 		{"only flags no command", []string{"--config", "/x"}, []string{"--config", "/x"}, "", nil, false},
 		{"double dash escapes command", []string{"--", "cmd"}, []string{"--"}, "cmd", []string{}, true},
 	}

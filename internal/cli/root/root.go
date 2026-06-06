@@ -267,7 +267,7 @@ func configureRootFlags(root *cobra.Command) {
 	pf := root.PersistentFlags()
 	pf.StringP("profile", "P", "", "Jira profile name")
 	pf.StringP("config", "c", "", "Config file path")
-	pf.String("output", "auto", "Output mode: auto, human, json, or compact "+
+	pf.StringP("output", "o", "auto", "Output mode: auto, human, json, or compact "+
 		"(compact is the JSON data payload without the envelope — no ok/meta/warnings/errors)")
 	pf.BoolP("interactive", "i", false, "Launch persistent dashboard from root command")
 	pf.BoolP("debug", "d", false, "Enable debug output")

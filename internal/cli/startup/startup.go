@@ -105,6 +105,13 @@ func consumeGlobal(args []string, i *int, globals *Globals) bool {
 		globals.Profile = shortFlagValue(args, i, arg)
 		return true
 	}
+	// -o is --output's shorthand; the preflight ignores the mode but must
+	// still consume its value so the spaced form (-o json) does not leave the
+	// value to be mistaken for the command token.
+	if strings.HasPrefix(arg, "-o") && arg != "-" {
+		_ = shortFlagValue(args, i, arg)
+		return true
+	}
 	return arg == "-i" || arg == "-d"
 }
 

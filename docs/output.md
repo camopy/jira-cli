@@ -1,12 +1,13 @@
 # Output
 
-`jira` has one global output selector, `--output`, with four values:
+`jira` has one global output selector, `--output` (short `-o`), with four
+values:
 
 ```sh
 jira issue list --output=auto
 jira issue list --output=human
-jira issue list --output=json
-jira issue list --output=compact
+jira issue list -o json
+jira issue list -o compact
 ```
 
 ## Modes
