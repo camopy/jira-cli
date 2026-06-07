@@ -21,7 +21,15 @@ func NewCommand() *cobra.Command {
 	build := &cobra.Command{
 		Use:   "build",
 		Short: "Build a JQL query from flags",
-		Args:  cobra.NoArgs,
+		Example: `# Build a query restricted to a project and status
+$ jira jql build --project PROJ --status "In Progress"
+
+# Build a query for your own recently updated issues
+$ jira jql build --assignee me --updated -7d --order-by updated
+
+# Build a query across several issue keys
+$ jira jql build --key PROJ-1,PROJ-2 --label backend`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			scope, precedence, err := boardscope.FromFlags(cmd)
 			if err != nil {
@@ -119,7 +127,12 @@ func validateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "validate QUERY...",
 		Short: "Validate JQL through Jira's parser (per-query errors and warnings)",
-		Args:  cobra.MinimumNArgs(1),
+		Example: `# Validate a single query
+$ jira jql validate "status = Done AND assignee = currentUser()"
+
+# Validate several queries at once with lenient checking
+$ jira jql validate "project = PROJ" "created >= -7d" --mode warn`,
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			switch mode {
 			case "strict", "warn", "none":
@@ -151,7 +164,7 @@ func validateCommand() *cobra.Command {
 			return cmdutil.WriteEnvelopeWithResponse(cmd, "jql.validate", map[string]any{"queries": out}, resp)
 		},
 	}
-	cmd.Flags().StringVar(&mode, "mode", "strict", "Validation strictness: strict, warn, or none")
+	cmd.Flags().StringVar(&mode, "mode", "strict", "Validation strictness")
 	clib.Extend(cmd.Flags().Lookup("mode"), clib.FlagExtra{
 		Group:       "Validation",
 		Placeholder: "MODE",
@@ -172,9 +185,9 @@ func validateCommand() *cobra.Command {
 // AddSortFlags / AddDateFilterFlags, which both commands also call.
 func AddFilterFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 	cmd.Flags().StringSliceVar(&builder.Projects, "project", nil, "Restrict to Jira project key")
-	cmd.Flags().StringSliceVar(&builder.Keys, "key", nil, "Restrict to issue key, comma list, or range")
+	cmd.Flags().StringSliceVar(&builder.Keys, "key", nil, "Restrict to issue key, comma list, or `PROJ-1..PROJ-5` range")
 	cmd.Flags().StringSliceVar(&builder.Epics, "epic", nil, "Restrict to issues in epic keys")
-	cmd.Flags().StringSliceVar(&builder.Statuses, "status", nil, `Restrict by status name, category comparator ("<Done", ">=In Progress"), or negation ("!Abandoned")`)
+	cmd.Flags().StringSliceVar(&builder.Statuses, "status", nil, "Restrict by status: name, category comparator (`<Done`, `>=In Progress`), or negation (`!Abandoned`)")
 	cmd.Flags().StringSliceVar(&builder.Priorities, "priority", nil, "Restrict by priority")
 	cmd.Flags().StringSliceVar(&builder.Labels, "label", nil, "Restrict by label")
 	cmd.Flags().StringSliceVar(&builder.IssueTypes, "type", nil, "Restrict by issue type")
@@ -214,8 +227,8 @@ func AddFilterFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 // the sort and date flags.
 func AddJQLBuilderFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 	AddFilterFlags(cmd, builder)
-	cmd.Flags().StringVar(&builder.Assignee, "assignee", "", `Restrict by assignee; use "me" for currentUser()`)
-	cmd.Flags().StringVar(&builder.Reporter, "reporter", "", `Restrict by reporter; use "me" for currentUser()`)
+	cmd.Flags().StringVar(&builder.Assignee, "assignee", "", "Restrict by assignee; use `me` for the current user")
+	cmd.Flags().StringVar(&builder.Reporter, "reporter", "", "Restrict by reporter; use `me` for the current user")
 	clib.Extend(
 		cmd.Flags().Lookup("assignee"),
 		clib.FlagExtra{
@@ -267,11 +280,14 @@ func AddSortFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 // once. Each value is a relative duration (-7d), an absolute date (2026-01-01),
 // a comparator form (>=2026-01-01), or an A..B range — see jql.BuildOptions.
 func AddDateFilterFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
-	cmd.Flags().StringVar(&builder.Updated, "updated", "", "Filter by updated date: -7d, 2026-01-01, >=2026-01-01, or A..B range")
-	cmd.Flags().StringVar(&builder.Created, "created", "", "Filter by created date (same value grammar as --updated)")
-	cmd.Flags().StringVar(&builder.Resolved, "resolved", "", "Filter by resolved date (same value grammar as --updated)")
+	cmd.Flags().StringVar(&builder.Updated, "updated", "", "Filter by updated date: `-7d`, `2026-01-01`, `>=2026-01-01`, or `A..B` range")
+	cmd.Flags().StringVar(&builder.Created, "created", "", "Filter by created date (same grammar as `--updated`)")
+	cmd.Flags().StringVar(&builder.Resolved, "resolved", "", "Filter by resolved date (same grammar as `--updated`)")
+	// "Filters/Dates" renders the three date flags as a blank-line-separated
+	// cluster at the foot of the Filters section, so the timeframe controls read
+	// as a unit rather than interleaving with the project/status/label filters.
 	for _, name := range []string{"updated", "created", "resolved"} {
-		clib.Extend(cmd.Flags().Lookup(name), clib.FlagExtra{Group: "Filters", Placeholder: "DATE"})
+		clib.Extend(cmd.Flags().Lookup(name), clib.FlagExtra{Group: "Filters/Dates", Placeholder: "DATE"})
 	}
 }
 

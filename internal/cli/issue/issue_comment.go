@@ -68,6 +68,11 @@ func commentListCommand() *cobra.Command {
 		Short:       "List comments on an issue",
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		Args:        cobra.MinimumNArgs(1),
+		Example: `# List the most recent comments on an issue
+$ jira issue comment list PROJ-123
+
+# Walk every page of comments
+$ jira issue comment list PROJ-123 --all`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {
@@ -349,6 +354,14 @@ func commentAddCommand() *cobra.Command {
 		Short:       "Add a comment to an issue",
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		Args:        cobra.MinimumNArgs(1),
+		Example: `# Add a Markdown comment to an issue
+$ jira issue comment add PROJ-123 --body-markdown "Deployed to staging."
+
+# Add a comment from a native ADF JSON file
+$ jira issue comment add PROJ-123 --json-input ./comment.json
+
+# Restrict a comment to a Jira role
+$ jira issue comment add PROJ-123 --body-markdown "Internal note." --visibility-role Developers`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {
@@ -577,6 +590,11 @@ func commentEditCommand() *cobra.Command {
 		Short:       "Edit an existing comment",
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		Args:        cobra.ExactArgs(2),
+		Example: `# Replace a comment body with new Markdown
+$ jira issue comment edit PROJ-123 10042 --body-markdown "Updated: rollout complete."
+
+# Remove a comment's visibility restriction
+$ jira issue comment edit PROJ-123 10042 --body-markdown "Now public." --clear-visibility`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCommentEdit(cmd, args[0], args[1], flags)
 		},
@@ -671,6 +689,11 @@ func commentDeleteCommand() *cobra.Command {
 		Short:       "Delete a comment",
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		Args:        cobra.ExactArgs(2),
+		Example: `# Preview deleting a comment
+$ jira issue comment delete PROJ-123 10042 --dry-run
+
+# Delete a comment without an interactive prompt
+$ jira issue comment delete PROJ-123 10042 --force`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			noInput := cmdutil.NoInputRequested(cmd)
 			if dryRun {
@@ -712,7 +735,7 @@ func commentDeleteCommand() *cobra.Command {
 			}, resp)
 		},
 	}
-	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive delete under --no-input / non-TTY")
+	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive delete under `--no-input` / non-TTY")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without calling Jira")
 	cmdutil.ExtendForceFlag(cmd.Flags())
 	cmdutil.ExtendDryRunFlag(cmd.Flags())

@@ -46,6 +46,11 @@ func boardsListCommand() *cobra.Command {
 		Use:   "list",
 		Short: "List the boards visible to this profile",
 		Args:  cobra.NoArgs,
+		Example: `# List boards (serves from cache, primes on first run)
+$ jira boards list
+
+# Re-prime from the server before listing
+$ jira boards list --refresh`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {

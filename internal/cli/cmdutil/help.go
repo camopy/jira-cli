@@ -2,6 +2,7 @@ package cmdutil
 
 import (
 	"slices"
+	"sort"
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/gechr/clib/complete"
@@ -31,53 +32,102 @@ func NewHelpRenderer() *help.Renderer {
 func StandardHelpSections(cmd *cobra.Command) []help.Section {
 	sections := clib.SectionsWithOptions(clib.WithSubcommandOptional())(cmd)
 	if cmd == nil || !cmd.Runnable() || !cmd.HasSubCommands() || helpSectionsContainFlags(sections) {
-		return moveOutputSectionLast(sections)
+		return orderFlagGroups(sections)
 	}
 
 	flagSections := runnableParentFlagSections(cmd)
 	if len(flagSections) == 0 {
-		return moveOutputSectionLast(sections)
+		return orderFlagGroups(sections)
 	}
 	markUsageWithOptions(sections)
-	return moveOutputSectionLast(append(sections, flagSections...))
+	return orderFlagGroups(append(sections, flagSections...))
 }
 
-// moveOutputSectionLast reorders the flag sections so the "Output" group is the
-// last domain group. clib renders groups in first-seen registration order,
-// which otherwise places Output wherever its first flag happened to be
-// declared (e.g. before "Filters"). Output is re-inserted just before the
-// trailing generic "Options"/"Global Options" block so it reads last among the
-// command's own groups while the conventional -h/--help line stays at the very
-// bottom.
-func moveOutputSectionLast(sections []help.Section) []help.Section {
-	idx := -1
+// flagGroupRank orders flag groups by the user's task flow: choose the target
+// and payload, shape and guard the operation, choose output, then leave
+// operational tuning and inherited Cobra options at the bottom. clib otherwise
+// renders groups in first-seen registration order, which leaks the order flags
+// happened to be declared in.
+var flagGroupRank = map[string]int{
+	"Filters":       1,
+	"Fields":        2,
+	"Input":         3,
+	"User":          4,
+	"Dashboard":     5,
+	"Link":          6,
+	"Transition":    7,
+	"Worklog":       8,
+	"Visibility":    9,
+	"Sort":          10,
+	"Pagination":    11,
+	"Safety":        12,
+	"Validation":    13,
+	"ADF":           14,
+	"Output":        15,
+	"Cache":         16,
+	"Configuration": 17,
+	"Theme":         18,
+	"Runtime":       19,
+	"Execution":     20,
+	// Inherited/global flag blocks always render last.
+	"Options":        98,
+	"Global Options": 99,
+}
+
+// unrankedGroupRank places any group not named in flagGroupRank just before the
+// global Options block, so a newly added group surfaces near the bottom (and
+// is obviously unranked) rather than landing mid-flow.
+const unrankedGroupRank = 90
+
+func groupRank(title string) int {
+	if r, ok := flagGroupRank[title]; ok {
+		return r
+	}
+	return unrankedGroupRank
+}
+
+// orderFlagGroups sorts the flag-group sections into the canonical task-flow
+// order (flagGroupRank) while leaving structural sections — Usage, Examples,
+// subcommand lists — exactly where they are. Only sections that carry a flag
+// group are reordered; each sorted section is slotted back into a position a
+// flag group already occupied, so non-flag sections never move.
+func orderFlagGroups(sections []help.Section) []help.Section {
+	var slots []int
 	for i := range sections {
-		if sections[i].Title == "Output" {
-			idx = i
-			break
+		if sectionHasFlagGroup(sections[i]) {
+			slots = append(slots, i)
 		}
 	}
-	if idx == -1 {
+	if len(slots) < 2 {
 		return sections
 	}
-	target := sections[idx]
-	out := slices.Delete(slices.Clone(sections), idx, idx+1)
-	insertAt := len(out)
-	for i := range out {
-		if out[i].Title == "Options" || out[i].Title == "Global Options" {
-			insertAt = i
-			break
+	picked := make([]help.Section, len(slots))
+	for j, i := range slots {
+		picked[j] = sections[i]
+	}
+	sort.SliceStable(picked, func(a, b int) bool {
+		return groupRank(picked[a].Title) < groupRank(picked[b].Title)
+	})
+	out := slices.Clone(sections)
+	for j, i := range slots {
+		out[i] = picked[j]
+	}
+	return out
+}
+
+func sectionHasFlagGroup(section help.Section) bool {
+	for _, content := range section.Content {
+		if _, ok := content.(help.FlagGroup); ok {
+			return true
 		}
 	}
-	return slices.Insert(out, insertAt, target)
+	return false
 }
 
 func helpSectionsContainFlags(sections []help.Section) bool {
 	for _, section := range sections {
-		for _, content := range section.Content {
-			if _, ok := content.(help.FlagGroup); ok {
-				return true
-			}
+		if sectionHasFlagGroup(section) {
+			return true
 		}
 	}
 	return false

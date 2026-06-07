@@ -64,6 +64,11 @@ func issueAttachmentListCommand() *cobra.Command {
 		Short:       "List attachments on an issue",
 		Args:        cobra.MinimumNArgs(1),
 		Annotations: issueKeyArg,
+		Example: `# List attachments on an issue
+$ jira issue attachment list PROJ-123
+
+# Return every attachment regardless of the page size
+$ jira issue attachment list PROJ-123 --all`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {
@@ -95,8 +100,8 @@ func issueAttachmentListCommand() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().IntVar(&limit, "limit", 50, "Page size (max attachments returned without --all)")
-	cmd.Flags().BoolVar(&all, "all", false, "Return every attachment regardless of --limit")
+	cmd.Flags().IntVar(&limit, "limit", 50, "Page size (max attachments returned without `--all`)")
+	cmd.Flags().BoolVar(&all, "all", false, "Return every attachment regardless of `--limit`")
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	cmdutil.ExtendPaginationFlags(cmd.Flags())
 	return cmd
@@ -134,10 +139,15 @@ func issueAttachmentAddCommand() *cobra.Command {
 	var dryRun bool
 	var parallelism int
 	cmd := &cobra.Command{
-		Use:         "add KEY... [--file PATH ...] [PATH ...]",
+		Use:         "add KEY... [PATH...]",
 		Short:       "Upload one or more attachments to an issue",
 		Args:        cobra.MinimumNArgs(1),
 		Annotations: issueKeyArg,
+		Example: `# Attach a file to an issue
+$ jira issue attachment add PROJ-123 ./report.pdf
+
+# Attach several files via repeated --file
+$ jira issue attachment add PROJ-123 --file ./report.pdf --file ./logs.txt`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, paths, err := attachmentAddKeysAndPaths(args, files)
 			if err != nil {
@@ -338,6 +348,8 @@ func issueAttachmentDeleteCommand() *cobra.Command {
 		Short:       "Delete an attachment from an issue",
 		Args:        cobra.ExactArgs(2),
 		Annotations: issueKeyArg,
+		Example: `# Delete an attachment by id without a prompt
+$ jira issue attachment delete PROJ-123 10500 --force`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			key, attachmentID := args[0], args[1]
 			if dryRun {
@@ -378,7 +390,7 @@ func issueAttachmentDeleteCommand() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive removal under --no-input / non-TTY")
+	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive removal under `--no-input` / non-TTY")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without deleting")
 	cmdutil.ExtendForceFlag(cmd.Flags())
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
@@ -393,6 +405,11 @@ func issueAttachmentDownloadCommand() *cobra.Command {
 		Short:       "Download an attachment from an issue",
 		Args:        cobra.ExactArgs(2),
 		Annotations: issueKeyArg,
+		Example: `# Download an attachment to the current directory
+$ jira issue attachment download PROJ-123 10500
+
+# Download to a specific path, overwriting if it exists
+$ jira issue attachment download PROJ-123 10500 --to ./report.pdf --force`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			key, attachmentID := args[0], args[1]
 			mode, target := resolveDownloadMode(output)

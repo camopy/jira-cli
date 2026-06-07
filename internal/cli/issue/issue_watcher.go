@@ -54,6 +54,8 @@ func issueWatchCommand() *cobra.Command {
 		Short:       "Start watching an issue (alias for watchers add --user me)",
 		Args:        cobra.MinimumNArgs(1),
 		Annotations: issueKeyArg,
+		Example: `# Start watching an issue
+$ jira issue watch PROJ-123`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {
@@ -67,7 +69,7 @@ func issueWatchCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Local preview only — does not contact Jira")
 	cmd.Flags().BoolVar(&noReadback, "no-readback", false, "Skip the post-mutation GET")
-	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve --user against Jira (read-only); use with --dry-run")
+	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve `--user` against Jira (read-only); use with `--dry-run`")
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	cmdutil.ExtendWatcherValidationFlags(cmd.Flags())
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
@@ -84,6 +86,8 @@ func issueUnwatchCommand() *cobra.Command {
 		Short:       "Stop watching an issue (alias for watchers remove --user me)",
 		Args:        cobra.MinimumNArgs(1),
 		Annotations: issueKeyArg,
+		Example: `# Stop watching an issue
+$ jira issue unwatch PROJ-123`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {
@@ -97,7 +101,7 @@ func issueUnwatchCommand() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Local preview only — does not contact Jira")
 	cmd.Flags().BoolVar(&noReadback, "no-readback", false, "Skip the post-mutation GET")
-	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve --user against Jira (read-only); use with --dry-run")
+	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve `--user` against Jira (read-only); use with `--dry-run`")
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	cmdutil.ExtendWatcherValidationFlags(cmd.Flags())
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
@@ -123,10 +127,12 @@ type watcherMutationArgs struct {
 func watcherListCommand() *cobra.Command {
 	var parallelism int
 	cmd := &cobra.Command{
-		Use:           "list KEY...",
-		Short:         "List watchers on an issue",
-		Args:          cobra.MinimumNArgs(1),
-		Annotations:   issueKeyArg,
+		Use:         "list KEY...",
+		Short:       "List watchers on an issue",
+		Args:        cobra.MinimumNArgs(1),
+		Annotations: issueKeyArg,
+		Example: `# List the watchers on an issue
+$ jira issue watchers list PROJ-123`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -187,10 +193,15 @@ func watcherAddCommand() *cobra.Command {
 	var dryRun, noReadback, validateRemote bool
 	var parallelism int
 	cmd := &cobra.Command{
-		Use:           "add KEY...",
-		Short:         "Add a watcher to an issue",
-		Args:          cobra.MinimumNArgs(1),
-		Annotations:   issueKeyArg,
+		Use:         "add KEY...",
+		Short:       "Add a watcher to an issue",
+		Args:        cobra.MinimumNArgs(1),
+		Annotations: issueKeyArg,
+		Example: `# Add yourself as a watcher
+$ jira issue watchers add PROJ-123 --user me
+
+# Add a watcher by account id
+$ jira issue watchers add PROJ-123 --user accountId:5b10ac8d82e05b22cc7d4ef5`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -210,7 +221,7 @@ func watcherAddCommand() *cobra.Command {
 	cmd.Flags().StringVar(&user, "user", "", "User identifier (me / accountId:<id> / email)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Local preview only — does not contact Jira")
 	cmd.Flags().BoolVar(&noReadback, "no-readback", false, "Skip the post-mutation GET")
-	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve --user against Jira (read-only); use with --dry-run")
+	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve `--user` against Jira (read-only); use with `--dry-run`")
 	cmdutil.ExtendWatcherUserFlag(cmd.Flags())
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	cmdutil.ExtendWatcherValidationFlags(cmd.Flags())
@@ -225,10 +236,15 @@ func watcherRemoveCommand() *cobra.Command {
 	var dryRun, noReadback, validateRemote bool
 	var parallelism int
 	cmd := &cobra.Command{
-		Use:           "remove KEY...",
-		Short:         "Remove a watcher from an issue",
-		Args:          cobra.MinimumNArgs(1),
-		Annotations:   issueKeyArg,
+		Use:         "remove KEY...",
+		Short:       "Remove a watcher from an issue",
+		Args:        cobra.MinimumNArgs(1),
+		Annotations: issueKeyArg,
+		Example: `# Remove yourself as a watcher
+$ jira issue watchers remove PROJ-123 --user me
+
+# Remove a watcher by account id
+$ jira issue watchers remove PROJ-123 --user accountId:5b10ac8d82e05b22cc7d4ef5`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -248,7 +264,7 @@ func watcherRemoveCommand() *cobra.Command {
 	cmd.Flags().StringVar(&user, "user", "", "User identifier (me / accountId:<id> / email)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Local preview only — does not contact Jira")
 	cmd.Flags().BoolVar(&noReadback, "no-readback", false, "Skip the post-mutation GET")
-	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve --user against Jira (read-only); use with --dry-run")
+	cmd.Flags().BoolVar(&validateRemote, "validate-remote", false, "Resolve `--user` against Jira (read-only); use with `--dry-run`")
 	cmdutil.ExtendWatcherUserFlag(cmd.Flags())
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	cmdutil.ExtendWatcherValidationFlags(cmd.Flags())

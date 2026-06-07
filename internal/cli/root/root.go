@@ -267,13 +267,13 @@ func configureRootFlags(root *cobra.Command) {
 	pf := root.PersistentFlags()
 	pf.StringP("profile", "P", "", "Jira profile name")
 	pf.StringP("config", "c", "", "Config file path")
-	pf.StringP("output", "o", "auto", "Output mode: auto, human, json, or compact "+
-		"(compact is the JSON data payload without the envelope — no ok/meta/warnings/errors)")
+	pf.StringP("output", "o", "auto", "Output mode; "+
+		"`compact` is the JSON data without the envelope (drops ok/meta/warnings/errors)")
 	pf.BoolP("interactive", "i", false, "Launch persistent dashboard from root command")
 	pf.BoolP("debug", "d", false, "Enable debug output")
-	pf.Bool("no-input", false, "Disable interactive prompts (implied off a TTY or in an agent; pass --no-input=false to force prompts)")
+	pf.Bool("no-input", false, "Disable interactive prompts (implied off a TTY or in an agent; pass `--no-input=false` to force prompts)")
 	pf.Duration("timeout", 0, "Whole-invocation deadline (e.g. 30s, 2m); 0 disables it")
-	pf.String("color", "auto", `Color mode: "auto", "always", or "never"`)
+	pf.String("color", "auto", "Color mode; `auto` emits color only to a terminal")
 	// ADF strict/best-effort selection — mutually exclusive;
 	// internal/cli/adfmode reads them ahead of env/profile/default.
 	pf.Bool("adf-strict", false, "Treat lossy ADF conversions as errors")
@@ -309,6 +309,7 @@ func configureRootFlags(root *cobra.Command) {
 	clib.Extend(pf.Lookup("no-input"), clib.FlagExtra{Group: "Runtime", Terse: "disable prompts"})
 	clib.Extend(pf.Lookup("color"), clib.FlagExtra{
 		Group:       "Output",
+		Placeholder: "MODE",
 		Enum:        []string{"auto", "always", "never"},
 		EnumTerse:   []string{"detect terminal", "force color", "no color"},
 		EnumDefault: "auto",

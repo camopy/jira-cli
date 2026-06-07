@@ -53,6 +53,11 @@ Default action — no sub-command:
     Cloners — KEY clones --to (or "is cloned by", per direction)`,
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		Args:        cobra.ArbitraryArgs,
+		Example: `# Mark one issue as blocking another
+$ jira issue link PROJ-123 --to PROJ-456 --type Blocks
+
+# Relate two issues
+$ jira issue link PROJ-123 --to PROJ-456 --type Relates`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return cmd.Help()
@@ -177,6 +182,8 @@ func issueLinkListCommand() *cobra.Command {
 		Short:       "List the links on an issue (inward + outward)",
 		Args:        cobra.MinimumNArgs(1),
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
+		Example: `# List every link on an issue
+$ jira issue link list PROJ-123`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {
@@ -234,6 +241,8 @@ func issueLinkDeleteCommand() *cobra.Command {
 		Short:       "Remove an issue link by id",
 		Args:        cobra.ExactArgs(2),
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
+		Example: `# Remove a link by its global id without a prompt
+$ jira issue link delete PROJ-123 10001 --force`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			noInput := cmdutil.NoInputRequested(cmd)
 			key, linkID := args[0], args[1]
@@ -277,7 +286,7 @@ func issueLinkDeleteCommand() *cobra.Command {
 			}, resp)
 		},
 	}
-	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive removal (required under --no-input)")
+	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive removal (required under `--no-input`)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without removing the link")
 	cmdutil.ExtendForceFlag(cmd.Flags())
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
@@ -299,6 +308,11 @@ func issueLinkTypesCommand() *cobra.Command {
 		Use:   "types",
 		Short: "Show the configured link types in this Jira instance",
 		Args:  cobra.NoArgs,
+		Example: `# Show the configured link types
+$ jira issue link types
+
+# Force a refresh past the cache
+$ jira issue link types --refresh`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {

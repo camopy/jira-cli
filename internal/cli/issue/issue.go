@@ -30,22 +30,34 @@ import (
 // NewCommand returns the `issue` verb and all its sub-commands.
 func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("issue", "Work with Jira issues", "resources")
-	cmd.AddCommand(issueListCommand())
-	cmd.AddCommand(issueMineCommand())
-	cmd.AddCommand(issueViewCommand())
-	cmd.AddCommand(issueCreateCommand())
-	cmd.AddCommand(issueEditCommand())
-	cmd.AddCommand(issueTransitionCommand())
-	cmd.AddCommand(issueCommentGroup())
-	cmd.AddCommand(IssueAttachmentCommand())
-	cmd.AddCommand(issueLinkSubCommand())
-	cmd.AddCommand(issueWebLinkCommand())
-	for _, mk := range WatcherCommands {
-		cmd.AddCommand(mk())
+	// Group the subcommands so `jira issue --help` reads as a task flow rather
+	// than one flat list: what to read, what to change, and the metadata around
+	// an issue (comments, links, attachments, watchers).
+	cmd.AddGroup(
+		&cobra.Group{ID: "read", Title: "Read"},
+		&cobra.Group{ID: "write", Title: "Write"},
+		&cobra.Group{ID: "manage", Title: "Manage"},
+	)
+	add := func(group string, sub *cobra.Command) {
+		sub.GroupID = group
+		cmd.AddCommand(sub)
 	}
-	cmd.AddCommand(destructiveIssueCommand("clone", "Clone an issue"))
-	cmd.AddCommand(destructiveIssueCommand("move", "Move an issue"))
-	cmd.AddCommand(destructiveIssueCommand("delete", "Delete an issue"))
+	add("read", issueListCommand())
+	add("read", issueMineCommand())
+	add("read", issueViewCommand())
+	add("write", issueCreateCommand())
+	add("write", issueEditCommand())
+	add("write", issueTransitionCommand())
+	add("write", destructiveIssueCommand("clone", "Clone an issue"))
+	add("write", destructiveIssueCommand("move", "Move an issue"))
+	add("write", destructiveIssueCommand("delete", "Delete an issue"))
+	add("manage", issueCommentGroup())
+	add("manage", issueLinkSubCommand())
+	add("manage", issueWebLinkCommand())
+	add("manage", IssueAttachmentCommand())
+	for _, mk := range WatcherCommands {
+		add("manage", mk())
+	}
 	return cmd
 }
 
@@ -56,15 +68,20 @@ func issueMineCommand() *cobra.Command {
 	var opts issueListOptions
 	cmd := &cobra.Command{
 		Use:   "mine",
-		Short: `List issues assigned to you (alias for "issue list --assignee me")`,
-		Args:  cobra.NoArgs,
+		Short: "List issues assigned to you (alias for `issue list --assignee me`)",
+		Example: `# List issues assigned to you
+$ jira issue mine
+
+# List your open issues in a project, newest first
+$ jira issue mine --project PROJ --status '!Done' --order-by created`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts.builder.Assignee = "me"
 			return runIssueList(cmd, opts)
 		},
 	}
 	cmd.Flags().BoolVar(&opts.detail, "detail", false, "Fetch full issue records")
-	cmd.Flags().StringVar(&opts.jqlQuery, "jql", "", "Add custom JQL clauses (combined with assignee = currentUser())")
+	cmd.Flags().StringVar(&opts.jqlQuery, "jql", "", "Add custom JQL clauses (combined with `assignee = currentUser()`)")
 	cmd.Flags().BoolVar(&opts.asJQL, "as-jql", false, "Print the built JQL without calling Jira")
 	// Share `issue list`'s filter surface minus assignee/reporter: assignee is
 	// pinned to currentUser() in RunE above, so the two cannot drift.
@@ -84,7 +101,15 @@ func issueViewCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "view KEY...",
 		Short: "View issue details",
-		Args:  cobra.MinimumNArgs(1),
+		Example: `# View a single issue
+$ jira issue view PROJ-123
+
+# View several issues, four requests at a time
+$ jira issue view PROJ-1 PROJ-2 PROJ-3 --parallelism 4
+
+# Open an issue in the browser instead of printing it
+$ jira issue view PROJ-123 --web`,
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {
@@ -131,7 +156,9 @@ func NewOpenCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "open KEY",
 		Short: "Open an issue in a browser",
-		Args:  cobra.ExactArgs(1),
+		Example: `# Open an issue in your browser
+$ jira open PROJ-123`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {
@@ -639,7 +666,15 @@ func issueCreateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create an issue",
-		Args:  cobra.NoArgs,
+		Example: `# Create a task in a project
+$ jira issue create --project PROJ --type Task --summary "Fix the build"
+
+# Create a bug assigned to you with a label
+$ jira issue create --project PROJ --type Bug --summary "Crash on startup" --assignee me --label regression
+
+# Preview the create payload without submitting
+$ jira issue create --project PROJ --type Task --summary "Draft" --dry-run`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			noInput := cmdutil.NoInputRequested(cmd)
 			payload := map[string]any{"summary": summary}
@@ -846,7 +881,7 @@ func issueCreateCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
 	cmd.Flags().StringVar(&summary, "summary", "", "Issue summary")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read issue create payload from JSON file")
-	cmd.Flags().StringVar(&assignee, "assignee", "", `Assign on creation: "me", an email, or a Jira account ID`)
+	cmd.Flags().StringVar(&assignee, "assignee", "", "Assign on creation: `me`, an email, or a Jira account ID")
 	cmd.Flags().StringVar(&project, "project", "", "Project key (overrides the profile default)")
 	cmd.Flags().StringVar(&issueType, "type", "", "Issue type name (overrides the profile default)")
 	cmd.Flags().StringVar(&parent, "parent", "", "Parent issue key (for a subtask or epic child)")
@@ -1062,14 +1097,20 @@ func issueEditCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "edit KEY...",
 		Short: "Edit an issue",
-		Long: `Edit a Jira issue.
+		Long: "Edit a Jira issue.\n\n" +
+			"With no field flags, opens the configured external editor on the issue\n" +
+			"description (kubectl-style). Use `--summary` / `--assignee` / `--json-input`\n" +
+			"for headless or single-field edits.\n\n" +
+			"In headless mode (`--no-input`), at least one field flag MUST be provided\n" +
+			"— there is no editor to open and silent no-ops are validation errors.",
+		Example: `# Replace an issue summary
+$ jira issue edit PROJ-123 --summary "Updated title"
 
-With no field flags, opens the configured external editor on the issue
-description (kubectl-style). Use --summary / --assignee / --json-input
-for headless or single-field edits.
+# Reassign an issue to yourself
+$ jira issue edit PROJ-123 --assignee me
 
-In headless mode (--no-input), at least one field flag MUST be provided
-— there is no editor to open and silent no-ops are validation errors.`,
+# Apply the same field change to several issues at once
+$ jira issue edit PROJ-1 PROJ-2 --assignee none`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
@@ -1221,7 +1262,7 @@ In headless mode (--no-input), at least one field flag MUST be provided
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read issue edit payload from JSON file")
 	cmd.Flags().StringVar(&summary, "summary", "", "Replace the issue summary")
-	cmd.Flags().StringVar(&assignee, "assignee", "", `Set assignee: "me", "none"/"unassigned", an email, or a Jira account ID`)
+	cmd.Flags().StringVar(&assignee, "assignee", "", "Set assignee: `me`, `none`/`unassigned`, an email, or a Jira account ID")
 	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
 	cmdutil.ExtendFlag(cmd.Flags(), "summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
@@ -1385,13 +1426,12 @@ func issueTransitionCommand() *cobra.Command {
 	returnCmd := &cobra.Command{
 		Use:   "transition KEY... [STATUS]",
 		Short: "Transition an issue to a new status",
-		Long: `Move one or more issues to a new workflow status.
-
-Give the target status as a trailing argument — its name (e.g. "In Progress")
-or a numeric transition id: jira issue transition KEY "In Progress". A name is
-resolved against the issue's available transitions at runtime. With no status
-argument the available transitions are listed instead. The --transition <id>
-flag is still accepted.`,
+		Long: "Move one or more issues to a new workflow status.\n\n" +
+			"Give the target status as a trailing argument — its name (e.g. `In Progress`)\n" +
+			"or a numeric transition id: `jira issue transition KEY \"In Progress\"`. A name is\n" +
+			"resolved against the issue's available transitions at runtime. With no status\n" +
+			"argument the available transitions are listed instead. The `--transition` flag\n" +
+			"is still accepted.",
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target, keyArgs := splitTransitionTarget(args, transitionID)
@@ -1632,7 +1672,11 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   name + " KEY...",
 		Short: short,
-		Args:  cobra.MinimumNArgs(1),
+		Example: "# Preview the change without applying it\n" +
+			"$ jira issue " + name + " PROJ-123 --dry-run\n\n" +
+			"# Apply the change non-interactively\n" +
+			"$ jira issue " + name + " PROJ-123 --force",
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {

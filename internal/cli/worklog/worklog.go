@@ -22,7 +22,15 @@ func worklogAddCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add KEY...",
 		Short: "Add a worklog",
-		Args:  cobra.MinimumNArgs(1),
+		Example: `# Log time against an issue
+$ jira worklog add PROJ-123 --time-spent 2h30m
+
+# Log time with a comment
+$ jira worklog add PROJ-123 --time-spent 1h --comment-markdown "Pairing session"
+
+# Preview a worklog without submitting it
+$ jira worklog add PROJ-123 --time-spent 45m --dry-run`,
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {
@@ -134,7 +142,7 @@ func worklogAddCommand() *cobra.Command {
 			}, pipeOut.Warnings)
 		},
 	}
-	cmd.Flags().StringVar(&timeSpent, "time-spent", "", "Human-readable time spent")
+	cmd.Flags().StringVar(&timeSpent, "time-spent", "", "Human-readable time spent [example: 2h30m]")
 	cmd.Flags().StringVar(&started, "started", "", "Worklog start timestamp")
 	cmd.Flags().StringVar(&commentMarkdown, "comment-markdown", "", "Worklog comment as Markdown")
 	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read worklog payload from JSON file")
@@ -213,7 +221,12 @@ func worklogListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list KEY...",
 		Short: "List worklogs",
-		Args:  cobra.MinimumNArgs(1),
+		Example: `# List the worklogs on an issue
+$ jira worklog list PROJ-123
+
+# List worklogs across several issues
+$ jira worklog list PROJ-1 PROJ-2 PROJ-3`,
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {

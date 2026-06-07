@@ -118,9 +118,17 @@ func epicAddCommand() *cobra.Command {
 	var dryRun bool
 	var parallelism int
 	cmd := &cobra.Command{
-		Use:         "add ISSUE_KEY... EPIC_KEY",
-		Short:       "Add an issue to an epic",
-		Args:        cobra.MinimumNArgs(2),
+		Use:   "add ISSUE_KEY... EPIC_KEY",
+		Short: "Add an issue to an epic",
+		Args:  cobra.MinimumNArgs(2),
+		Example: `# Add a single issue to an epic
+$ jira epic add PROJ-123 PROJ-100
+
+# Add several issues to an epic at once
+$ jira epic add PROJ-123 PROJ-124 PROJ-125 PROJ-100
+
+# Preview the change without submitting it
+$ jira epic add PROJ-123 PROJ-100 --dry-run`,
 		Annotations: epicIssueKeyArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			epicKey := args[len(args)-1]
@@ -195,9 +203,14 @@ func epicRemoveCommand() *cobra.Command {
 	var dryRun bool
 	var parallelism int
 	cmd := &cobra.Command{
-		Use:         "remove ISSUE_KEY...",
-		Short:       "Remove an issue from its epic",
-		Args:        cobra.MinimumNArgs(1),
+		Use:   "remove ISSUE_KEY...",
+		Short: "Remove an issue from its epic",
+		Args:  cobra.MinimumNArgs(1),
+		Example: `# Remove a single issue from its epic
+$ jira epic remove PROJ-123
+
+# Remove several issues from their epics at once
+$ jira epic remove PROJ-123 PROJ-124 PROJ-125`,
 		Annotations: epicIssueKeyArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})

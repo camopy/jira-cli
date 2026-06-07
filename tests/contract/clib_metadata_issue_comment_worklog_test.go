@@ -56,9 +56,9 @@ func TestIssueCommentAndWorklogFlagsPublishClibMetadata(t *testing.T) {
 		{commandPath: "jira issue mine", flagName: "--priority", group: "Filters", placeholder: "NAME", completion: "predictor=cachepriority,comma", terse: "by priority"},
 		{commandPath: "jira issue mine", flagName: "--label", group: "Filters", placeholder: "NAME", completion: "predictor=cachelabel,comma"},
 		{commandPath: "jira issue mine", flagName: "--type", group: "Filters", placeholder: "NAME", completion: "predictor=cacheissuetype,comma", terse: "by type"},
-		{commandPath: "jira issue mine", flagName: "--updated", group: "Filters", placeholder: "DATE"},
-		{commandPath: "jira issue mine", flagName: "--created", group: "Filters", placeholder: "DATE"},
-		{commandPath: "jira issue mine", flagName: "--resolved", group: "Filters", placeholder: "DATE"},
+		{commandPath: "jira issue mine", flagName: "--updated", group: "Filters/Dates", placeholder: "DATE"},
+		{commandPath: "jira issue mine", flagName: "--created", group: "Filters/Dates", placeholder: "DATE"},
+		{commandPath: "jira issue mine", flagName: "--resolved", group: "Filters/Dates", placeholder: "DATE"},
 		{commandPath: "jira issue mine", flagName: "--order-by", group: "Sort", placeholder: "FIELD", enumTerse: []string{"last-updated time", "creation time", "priority level", "workflow status", "issue key", "title text"}},
 		{commandPath: "jira issue mine", flagName: "--desc", group: "Sort"},
 

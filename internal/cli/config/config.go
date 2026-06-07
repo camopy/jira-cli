@@ -30,7 +30,15 @@ func configThemeCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "theme",
 		Short: "Manage theme configuration",
-		Args:  cobra.NoArgs,
+		Example: `# Show the current theme configuration
+$ jira config theme
+
+# Set a built-in theme by name
+$ jira config theme --name dracula
+
+# Load a theme from a TOML file
+$ jira config theme --path ./my-theme.toml`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
@@ -91,7 +99,12 @@ func configInitCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Create initial configuration",
-		Args:  cobra.NoArgs,
+		Example: `# Create the initial config file for the default profile
+$ jira config init --base-url https://acme.atlassian.net --email me@example.com
+
+# Create config under a named profile
+$ jira config init --profile work --base-url https://acme.atlassian.net --email me@example.com`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			profile := cmdutil.RequestedProfile(cmd)
 			if profile == "" {
@@ -184,8 +197,10 @@ func configProfileCommand() *cobra.Command {
 
 func configGetCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:               "get KEY",
-		Short:             "Show a configuration value",
+		Use:   "get KEY",
+		Short: "Show a configuration value",
+		Example: `# Read a configuration value
+$ jira config get theme.name`,
 		Args:              cobra.ExactArgs(1),
 		Annotations:       map[string]string{"clib": "dynamic-args='configkey'"},
 		ValidArgsFunction: completeConfigKeys,
@@ -205,8 +220,10 @@ func configGetCommand() *cobra.Command {
 
 func configSetCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:               "set KEY VALUE",
-		Short:             "Set a configuration value",
+		Use:   "set KEY VALUE",
+		Short: "Set a configuration value",
+		Example: `# Set a configuration value
+$ jira config set theme.name dracula`,
 		Args:              cobra.ExactArgs(2),
 		Annotations:       map[string]string{"clib": "dynamic-args='configkey,configvalue'"},
 		ValidArgsFunction: completeConfigSetArgs,

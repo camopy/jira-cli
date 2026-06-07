@@ -36,7 +36,15 @@ func searchJQLCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "jql QUERY",
 		Short: "Run a JQL query",
-		Args:  cobra.ExactArgs(1),
+		Example: `# Run a JQL query and print the matching issues
+$ jira search jql "status = Done AND assignee = currentUser()"
+
+# Select only the fields you need
+$ jira search jql "project = PROJ" --fields summary,status
+
+# Return just the approximate match count
+$ jira search jql "project = PROJ" --count`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.web {
 				return openSearchWeb(cmd, args[0])
@@ -99,7 +107,12 @@ func searchSavedCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "saved NAME",
 		Short: "Run a saved JQL query",
-		Args:  cobra.ExactArgs(1),
+		Example: `# Run a saved query by name
+$ jira search saved my-open-bugs
+
+# Run a saved query and select only the fields you need
+$ jira search saved my-open-bugs --fields summary,status`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fields, detail, err := searchOutputFields(opts)
 			if err != nil {
@@ -152,8 +165,8 @@ func searchSavedCommand() *cobra.Command {
 }
 
 func addSearchOutputFlags(cmd *cobra.Command, opts *searchOptions) {
-	cmd.Flags().StringSliceVar(&opts.fields, "fields", nil, "Issue fields to request from Jira (comma-separated)")
-	cmd.Flags().BoolVar(&opts.full, "full", false, `Request Jira's full issue payload with fields ["*all"]`)
+	cmd.Flags().StringSliceVar(&opts.fields, "fields", nil, "Issue fields to request from Jira, comma-separated [example: summary,status,assignee]")
+	cmd.Flags().BoolVar(&opts.full, "full", false, "Request Jira's full issue payload (`*all` fields)")
 	cmd.Flags().BoolVar(&opts.web, "web", false, "Open the query in a browser instead of printing results")
 	cmd.MarkFlagsMutuallyExclusive("fields", "full")
 	clib.Extend(cmd.Flags().Lookup("fields"), clib.FlagExtra{Group: "Output", Placeholder: "FIELD", Complete: "predictor=cachefield,comma"})
@@ -165,9 +178,9 @@ func addSearchOutputFlags(cmd *cobra.Command, opts *searchOptions) {
 // they live only on `search jql`, not the shared output flags, so `search
 // saved` doesn't publish flags its runner ignores.
 func addSearchPaginationFlags(cmd *cobra.Command, opts *searchOptions) {
-	cmd.Flags().BoolVar(&opts.all, "all", false, "Walk every page until isLast (bounded; use --unbounded to lift the caps)")
+	cmd.Flags().BoolVar(&opts.all, "all", false, "Walk every page until `isLast` (bounded; use `--unbounded` to lift the caps)")
 	cmd.Flags().IntVar(&opts.limit, "limit", 50, "Page size requested from Jira")
-	cmd.Flags().BoolVar(&opts.unbounded, "unbounded", false, "With --all, lift the default 100-page / 10 000-issue caps")
+	cmd.Flags().BoolVar(&opts.unbounded, "unbounded", false, "With `--all`, lift the default 100-page / 10 000-issue caps")
 	// --count fetches nothing and --web opens a browser, so the page controls
 	// are meaningless alongside either.
 	cmd.MarkFlagsMutuallyExclusive("count", "all")

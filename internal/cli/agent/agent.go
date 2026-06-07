@@ -75,7 +75,7 @@ func agentSchemaCommand() *cobra.Command {
 		Use:   "schema",
 		Short: "Output the CLI command schema as JSON",
 		Long: "Emits the full command tree, flag signatures, and per-command output " +
-			"schemas for AI agent consumption. Use --output=compact for the JSON " +
+			"schemas for AI agent consumption. Use `--output=compact` for the JSON " +
 			"data payload without the envelope.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

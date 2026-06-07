@@ -20,13 +20,21 @@ func issueListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List issues",
-		Args:  cobra.NoArgs,
+		Example: `# List open issues in a project, most recently updated first
+$ jira issue list --project PROJ --status '!Done'
+
+# List your in-progress bugs updated in the last week
+$ jira issue list --assignee me --type Bug --status "In Progress" --updated -7d
+
+# Count matching issues from a custom JQL query
+$ jira issue list --jql "status = Done AND assignee = currentUser()" --count`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runIssueList(cmd, opts)
 		},
 	}
 	cmd.Flags().BoolVar(&opts.detail, "detail", false, "Fetch full issue records")
-	cmd.Flags().StringVar(&opts.jqlQuery, "jql", "", "Run a custom JQL query for the issue list")
+	cmd.Flags().StringVar(&opts.jqlQuery, "jql", "", "Run a custom JQL query for the issue list [example: status = Done AND assignee = currentUser()]")
 	cmd.Flags().BoolVar(&opts.asJQL, "as-jql", false, "Print the built JQL query without calling Jira")
 	cmd.Flags().BoolVar(&opts.count, "count", false, "Return only the approximate match count, without fetching issues")
 	clijql.AddJQLBuilderFlags(cmd, &opts.builder)

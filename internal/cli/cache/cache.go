@@ -488,6 +488,14 @@ func cacheBoardsCommand() *cobra.Command {
 		Use:   "boards",
 		Short: "Cache and print the visible Jira agile boards",
 		Args:  cobra.NoArgs,
+		Example: `# Prime the boards cache (uses the cache if fresh)
+$ jira cache boards
+
+# Force a re-fetch even when the cache is still fresh
+$ jira cache boards --refresh
+
+# Walk every page, ignoring the default 100-page cap
+$ jira cache boards --unbounded`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
@@ -598,10 +606,15 @@ func emitCachedBoardsEnvelope(cmd *cobra.Command, profileName string, entry cach
 
 func cacheClearCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:         "clear [resource]",
-		Short:       "Remove cached data (a single resource, or the whole profile)",
-		Long:        `With no argument, removes every cache file under the active profile. With a resource name (labels, projects, epics, …), removes just that file.`,
-		Args:        cobra.MaximumNArgs(1),
+		Use:   "clear [resource]",
+		Short: "Remove cached data (a single resource, or the whole profile)",
+		Long:  "With no argument, removes every cache file under the active profile. With a resource name (`labels`, `projects`, `epics`, …), removes just that file.",
+		Args:  cobra.MaximumNArgs(1),
+		Example: `# Clear every cached resource for the active profile
+$ jira cache clear
+
+# Clear just the cached boards
+$ jira cache clear boards`,
 		Annotations: map[string]string{"clib": "dynamic-args='cacheresource'"},
 		ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 			if len(args) > 0 {

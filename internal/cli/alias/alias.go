@@ -47,15 +47,19 @@ func aliasSetCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "set NAME EXPANSION...",
 		Short: "Create a shortcut for a jira command",
-		Long: `Create a shortcut for a jira command.
+		Example: `# Alias "mine" to list issues assigned to you
+$ jira alias set mine "issue list --assignee me"
 
-The stored expansion is parsed back to an argv with POSIX shell grammar.
-When EXPANSION reaches ` + "`jira alias set`" + ` as a single shell-quoted
-string, it is stored verbatim. When EXPANSION arrives as multiple argv
-tokens, each token is quoted before storage so the round trip remains
-faithful. A hand-edited config alias must follow the same grammar: an
-unquoted '#' starts a comment and everything after it is dropped. Quote a
-literal '#' (e.g. "'#tag'") to keep it.`,
+# Store a multi-word expansion as a single quoted string
+$ jira alias set bugs "search jql 'type = Bug AND status = Open'"`,
+		Long: "Create a shortcut for a jira command.\n\n" +
+			"The stored expansion is parsed back to an argv with POSIX shell grammar. " +
+			"When EXPANSION reaches `jira alias set` as a single shell-quoted " +
+			"string, it is stored verbatim. When EXPANSION arrives as multiple argv " +
+			"tokens, each token is quoted before storage so the round trip remains " +
+			"faithful. A hand-edited config alias must follow the same grammar: an " +
+			"unquoted `#` starts a comment and everything after it is dropped. Quote a " +
+			"literal `#` (e.g. `'#tag'`) to keep it.",
 		Args: cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := strings.TrimSpace(args[0])
@@ -87,6 +91,8 @@ func aliasDeleteCommand() *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		Annotations:       map[string]string{"clib": "dynamic-args='alias'"},
 		ValidArgsFunction: completeAliasNames,
+		Example: `# Delete the "mine" alias
+$ jira alias delete mine`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
@@ -108,6 +114,11 @@ func aliasImportCommand() *cobra.Command {
 		Use:   "import [FILENAME|-]",
 		Short: "Import aliases from a YAML file",
 		Args:  cobra.MaximumNArgs(1),
+		Example: `# Import aliases from a YAML file
+$ jira alias import aliases.yaml
+
+# Import from stdin, overwriting any existing aliases
+$ jira alias import - --clobber`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filename := "-"
 			if len(args) > 0 {
