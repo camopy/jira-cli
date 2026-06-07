@@ -35,14 +35,17 @@ func TestAutoThemeValidatesAndIsAdvertised(t *testing.T) {
 }
 
 // TestThemeNameValuesSourcedFromClib pins that the advertised list is built
-// from clibtheme.Names (a v0.5 preset that was never hand-listed must appear),
-// keeps "auto" first, and retains the back-compat "default" alias.
+// from clibtheme.Names (a v0.5 preset that was never hand-listed must appear)
+// and keeps "auto" first.
 func TestThemeNameValuesSourcedFromClib(t *testing.T) {
 	if len(ThemeNameValues) == 0 || ThemeNameValues[0] != "auto" {
 		t.Fatalf("ThemeNameValues[0] = %q, want \"auto\"", ThemeNameValues)
 	}
-	want := map[string]bool{"solarized-dark": false, "solarized-light": false, "default": false}
+	want := map[string]bool{"solarized-dark": false, "solarized-light": false}
 	for _, name := range ThemeNameValues {
+		if name == "default" {
+			t.Fatalf("ThemeNameValues advertises legacy name %q: %v", name, ThemeNameValues)
+		}
 		if _, ok := want[name]; ok {
 			want[name] = true
 		}
@@ -72,10 +75,8 @@ func TestAutoThemeHonoursEnvOverride(t *testing.T) {
 	}
 }
 
-// TestAdvertisedThemeNamesValidate guards against the clib v0.5 rename: every
-// name jira-cli advertises (and that users may already have in config.toml)
-// must keep validating. Before the legacy-name shim, "default", "plain",
-// "monochrome", and "solarized" failed here.
+// TestAdvertisedThemeNamesValidate guards that every name jira-cli advertises
+// is accepted by clib.
 func TestAdvertisedThemeNamesValidate(t *testing.T) {
 	for _, name := range ThemeNameValues {
 		if err := ValidateThemeName(name); err != nil {
@@ -84,20 +85,19 @@ func TestAdvertisedThemeNamesValidate(t *testing.T) {
 	}
 }
 
-// TestLegacyThemeNamesMapToExactVariant pins each pre-v0.5 name to the v0.5
-// theme that reproduces its old palette. "solarized" in particular must map to
-// the light variant (its base01 comment color), not dark.
-func TestLegacyThemeNamesMapToExactVariant(t *testing.T) {
-	cases := map[string]string{
-		"default":    "dark",
-		"plain":      "plain-dark",
-		"monochrome": "monochrome-dark",
-		"solarized":  "solarized-light",
-	}
-	for legacy, want := range cases {
-		if got := ThemeForName(legacy).String(); got != want {
-			t.Errorf("ThemeForName(%q) = %q, want %q", legacy, got, want)
+func TestLegacyThemeNamesDoNotValidate(t *testing.T) {
+	for _, name := range []string{"default", "plain", "monochrome", "solarized"} {
+		if err := ValidateThemeName(name); err == nil {
+			t.Errorf("ValidateThemeName(%q) error = nil, want validation error", name)
 		}
+	}
+}
+
+func TestConfigValidateToleratesUnknownThemeName(t *testing.T) {
+	cfg := Defaults()
+	cfg.Theme.Name = "no-such-theme"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() rejected unknown theme.name: %v", err)
 	}
 }
 
@@ -112,7 +112,6 @@ func TestDefaultThemeHonoursEnvOverride(t *testing.T) {
 	}{
 		{"unset falls back to dark", "", "dark"},
 		{"explicit current name", "nord", "nord"},
-		{"legacy name still honored", "default", "dark"},
 		{"invalid name falls back to dark", "no-such-theme", "dark"},
 	}
 	for _, tc := range tests {

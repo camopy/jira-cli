@@ -79,7 +79,7 @@ func TestIssueCommentAndWorklogFlagsPublishClibMetadata(t *testing.T) {
 		{commandPath: "jira auth migrate", flagName: "--backend", placeholder: "BACKEND", enumContains: []string{"keyring", "1password"}, enumTerse: []string{"OS keychain", "1Password CLI"}},
 		// Self-describing theme names carry a short Terse and deliberately no
 		// EnumTerse; the schema-wide guard below proves that omission is safe.
-		{commandPath: "jira config theme", flagName: "--name", group: "Theme", placeholder: "NAME", enumContains: []string{"default", "dracula", "nord"}},
+		{commandPath: "jira config theme", flagName: "--name", group: "Theme", placeholder: "NAME", enumContains: []string{"auto", "dark", "nord"}},
 
 		{commandPath: "jira issue create", flagName: "--dry-run", group: "Safety"},
 		{commandPath: "jira issue create", flagName: "--summary", group: "Fields", placeholder: "TEXT"},

@@ -22,67 +22,43 @@ const EnvThemeName = "JIRA_THEME"
 // terminal is misdetected pins "light" or "dark" instead.
 const ThemeNameAuto = "auto"
 
-// ThemeNameValues advertises the selectable theme names for completion and the
-// config-key reference: the opt-in "auto", clib's built-in presets (sourced
-// from clibtheme.Names so the list never drifts from the dependency), and the
-// pre-v0.5 single names kept for back-compat. The legacy names still resolve
-// through canonicalThemeName; listing them keeps existing configs discoverable.
-var ThemeNameValues = themeNameValues()
-
-func themeNameValues() []string {
-	names := append([]string{ThemeNameAuto}, clibtheme.Names()...)
-	return append(names, "default", "plain", "monochrome", "solarized")
-}
-
-// canonicalThemeName rewrites the theme names jira-cli accepted before the clib
-// v0.5 upgrade to the names v0.5 understands. v0.5 split several single themes
-// into explicit light/dark variants and dropped the "default" alias; without
-// this a config carrying one of these names — including "default", the value
-// fresh installs have written for years — would fail to load. Each target
-// reproduces the exact palette the old name resolved to, verified against clib
-// v0.4.15: "default" is Dark, "solarized" is solarized-light (its base01
-// comment color), and "plain"/"monochrome" render identically on either
-// background. Current and unknown names pass through untouched.
-func canonicalThemeName(name string) string {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "default":
-		return "dark"
-	case "plain":
-		return "plain-dark"
-	case "monochrome":
-		return "monochrome-dark"
-	case "solarized":
-		return "solarized-light"
-	default:
-		return name
-	}
-}
+// ThemeNameValues advertises the selectable theme names: the opt-in "auto" plus
+// clib's built-in presets, sourced from clibtheme.Names so the list always
+// matches the dependency. Names resolve straight through clib — there is no
+// jira-cli-specific aliasing.
+var ThemeNameValues = append([]string{ThemeNameAuto}, clibtheme.Names()...)
 
 // IsAutoTheme reports whether name selects the background-detecting theme.
 func IsAutoTheme(name string) bool {
 	return strings.EqualFold(strings.TrimSpace(name), ThemeNameAuto)
 }
 
+// ValidateThemeName reports whether name is a theme clib accepts (or "auto").
+// It is the write-time gate for `config theme --name`; config load deliberately
+// does not call it, so a theme name that clib later renames degrades to the
+// dark fallback at render rather than blocking every command.
 func ValidateThemeName(name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" || IsAutoTheme(name) {
 		return nil
 	}
 	var th clibtheme.Theme
-	if err := th.UnmarshalText([]byte(canonicalThemeName(name))); err != nil {
-		return fmt.Errorf("theme.name: %w", err)
+	if th.UnmarshalText([]byte(name)) != nil {
+		// Build the message from ThemeNameValues, not clib's UnmarshalText
+		// error: clib's valid-list omits "auto", which jira-cli accepts.
+		return fmt.Errorf("theme.name: unknown theme %q (valid: %s)", name, strings.Join(ThemeNameValues, ", "))
 	}
 	return nil
 }
 
-// themeFromName resolves a single theme name, accepting legacy pre-v0.5 names.
-// It returns nil for an empty or unrecognized name so callers can fall back.
+// themeFromName resolves a single theme name. It returns nil for an empty or
+// unrecognized name so callers fall back to the dark default.
 func themeFromName(name string) *clibtheme.Theme {
 	if strings.TrimSpace(name) == "" {
 		return nil
 	}
 	var th clibtheme.Theme
-	if th.UnmarshalText([]byte(canonicalThemeName(name))) != nil {
+	if th.UnmarshalText([]byte(name)) != nil {
 		return nil
 	}
 	return &th
@@ -100,8 +76,7 @@ func DefaultTheme() *clibtheme.Theme {
 }
 
 // ThemeForName resolves an explicit theme name (e.g. config theme.name),
-// falling back to DefaultTheme when the name is empty or unrecognized. Legacy
-// pre-v0.5 names are accepted.
+// falling back to DefaultTheme when the name is empty or unrecognized.
 func ThemeForName(name string) *clibtheme.Theme {
 	if th := themeFromName(name); th != nil {
 		return th

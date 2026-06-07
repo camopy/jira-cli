@@ -46,13 +46,16 @@ func TestConfigThemePublishesClibMetadata(t *testing.T) {
 	if name == nil {
 		t.Fatalf("schema missing --name flag: %+v", cmd.Flags)
 	}
-	if name.Group != "Theme" || name.Placeholder != "NAME" || name.EnumDefault != "default" {
-		t.Fatalf("--name metadata = %+v, want Theme group, NAME placeholder, default enum", *name)
+	if name.Group != "Theme" || name.Placeholder != "NAME" || name.EnumDefault != "auto" {
+		t.Fatalf("--name metadata = %+v, want Theme group, NAME placeholder, auto enum", *name)
 	}
-	for _, want := range []string{"default", "dracula", "tokyo-night"} {
+	for _, want := range []string{"auto", "dark", "tokyo-night"} {
 		if !slices.Contains(name.Enum, want) {
 			t.Fatalf("--name enum = %v, want %q", name.Enum, want)
 		}
+	}
+	if slices.Contains(name.Enum, "default") {
+		t.Fatalf("--name enum advertises legacy theme name \"default\": %v", name.Enum)
 	}
 
 	path := findConfigThemeSchemaFlag(cmd.Flags, "--path")

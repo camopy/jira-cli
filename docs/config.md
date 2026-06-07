@@ -195,9 +195,9 @@ jira config theme --path ~/my-theme.toml
 Bundled names: `auto`, `dark`, `light`, `catppuccin-{frappe,latte,macchiato,mocha}`,
 `dracula`, `gruvbox-{dark,light}`, `monochrome-{dark,light}`, `monokai`,
 `nord`, `one-dark`, `plain-{dark,light}`, `synthwave`,
-`solarized-{dark,light}`, `tokyo-night`. The older single names still work:
-`default`, `plain`, and `monochrome` map to the dark variant, and `solarized`
-maps to `solarized-light` (its original palette).
+`solarized-{dark,light}`, `tokyo-night` — the set clib provides. Setting an
+unknown name is rejected; a name already in a config that clib no longer knows
+(e.g. a pre-v0.5 `default`) is tolerated on load and falls back to `dark`.
 
 `auto` detects the terminal background and picks the matching light or dark
 theme, so hash-coloured fields (status, priority, assignee) stay readable on

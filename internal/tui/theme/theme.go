@@ -27,8 +27,7 @@ var Theme = config.DefaultTheme()
 // detects the terminal background (the TUI always runs on a TTY) and picks
 // clib's light or dark theme so hash-based entity colors contrast. An empty or
 // unrecognized name falls back to the process default, which honors the
-// JIRA_THEME override before the dark built-in. Legacy pre-v0.5 theme names are
-// accepted.
+// JIRA_THEME override before the dark built-in.
 func Resolve(name string) *clibtheme.Theme {
 	if config.IsAutoTheme(name) {
 		return config.AutoTheme(os.Stdout)

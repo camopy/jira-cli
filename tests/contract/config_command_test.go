@@ -138,6 +138,97 @@ func TestConfigThemeRejectsUnknownPreset(t *testing.T) {
 	}
 }
 
+func TestConfigThemeRejectsLegacyPresetName(t *testing.T) {
+	bin := buildJiraBinary(t)
+	path := filepath.Join(t.TempDir(), "config.toml")
+	before := []byte(`default_profile = "default"
+
+[[profiles]]
+name = "default"
+auth_type = "token"
+
+[theme]
+name = "dark"
+`)
+	if err := os.WriteFile(path, before, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	cmd := exec.Command(bin, "--config", path, "--output=json", "config", "theme", "--name", "default")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("config theme accepted legacy preset:\n%s", out)
+	}
+	if !strings.Contains(string(out), "unknown theme") {
+		t.Fatalf("error did not explain unknown theme:\n%s", out)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if !bytes.Equal(after, before) {
+		t.Fatalf("config theme with legacy preset mutated config.toml\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
+
+func TestConfigSetRejectsLegacyThemeName(t *testing.T) {
+	bin := buildJiraBinary(t)
+	path := filepath.Join(t.TempDir(), "config.toml")
+	before := []byte(`default_profile = "default"
+
+[[profiles]]
+name = "default"
+auth_type = "token"
+
+[theme]
+name = "dark"
+`)
+	if err := os.WriteFile(path, before, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	cmd := exec.Command(bin, "--config", path, "--output=json", "config", "set", "theme.name", "default")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("config set accepted legacy theme.name:\n%s", out)
+	}
+	if !strings.Contains(string(out), "unknown theme") {
+		t.Fatalf("error did not explain unknown theme:\n%s", out)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if !bytes.Equal(after, before) {
+		t.Fatalf("config set with legacy theme.name mutated config.toml\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
+
+func TestReadOnlyCommandToleratesUnknownThemeName(t *testing.T) {
+	bin := buildJiraBinary(t)
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte(`default_profile = "default"
+
+[[profiles]]
+name = "default"
+auth_type = "token"
+
+[theme]
+name = "no-such-theme"
+`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	cmd := exec.Command(bin, "--config", path, "--output=json", "config", "profile")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("config profile rejected unknown theme.name: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "default") {
+		t.Fatalf("profile output = %q", out)
+	}
+}
+
 // A read-only command pointed at a missing explicit --config must not
 // create that file on disk: an explicit-path typo is a hard error, not a
 // silent default-config write.

@@ -258,6 +258,12 @@ func (c *Config) Set(key, value string) error {
 		c.Editor = value
 		return nil
 	case "theme.name":
+		// Validate on the way in: an unrecognized name set here is a user typo
+		// to reject, but config load tolerates a stale name (it falls back to
+		// dark) so an upstream rename never blocks a command.
+		if err := ValidateThemeName(value); err != nil {
+			return err
+		}
 		c.Theme.Name = value
 		return nil
 	case "theme.path":

@@ -38,6 +38,12 @@ func configThemeCommand() *cobra.Command {
 			}
 			changed := false
 			if cmd.Flags().Changed("name") {
+				// Validate here, not in cfg.Validate(): config load tolerates an
+				// unrecognized theme.name (it falls back to dark), but setting one
+				// should reject a typo up front.
+				if err := config.ValidateThemeName(name); err != nil {
+					return err
+				}
 				cfg.Theme.Name = name
 				changed = true
 			}
@@ -70,7 +76,7 @@ func configThemeCommand() *cobra.Command {
 		Placeholder: "NAME",
 		Terse:       "theme name",
 		Enum:        config.ThemeNameValues,
-		EnumDefault: "default",
+		EnumDefault: "auto",
 	})
 	clib.Extend(cmd.Flags().Lookup("path"), clib.FlagExtra{
 		Group:       "Theme",

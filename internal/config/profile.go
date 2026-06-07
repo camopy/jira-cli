@@ -159,9 +159,10 @@ func (c *Config) Validate() error {
 	if _, ok := seen[c.DefaultProfile]; !ok {
 		return fmt.Errorf("default profile %q is not defined", c.DefaultProfile)
 	}
-	if err := ValidateThemeName(c.Theme.Name); err != nil {
-		return err
-	}
+	// theme.name is deliberately not validated here. It is cosmetic and resolves
+	// with a dark fallback when unrecognized, so an upstream rename must not make
+	// config load — and therefore every command — fail. The write path
+	// (`config theme --name`) validates before saving.
 	return nil
 }
 

@@ -36,6 +36,7 @@ type clibMetadataFlagWant struct {
 	valueHint    string
 	completion   string
 	enumContains []string
+	enumExcludes []string
 }
 
 func TestClibMetadataForHighValueCommands(t *testing.T) {
@@ -55,7 +56,8 @@ func TestClibMetadataForHighValueCommands(t *testing.T) {
 	requireClibCommandFlag(t, schema, "jira config theme", "--name", clibMetadataFlagWant{
 		group:        "Theme",
 		placeholder:  "NAME",
-		enumContains: []string{"default", "dracula", "tokyo-night"},
+		enumContains: []string{"auto", "dark", "tokyo-night"},
+		enumExcludes: []string{"default"},
 	})
 	requireClibCommandFlag(t, schema, "jira config theme", "--path", clibMetadataFlagWant{group: "Theme", placeholder: "PATH", valueHint: "file"})
 
@@ -110,6 +112,11 @@ func requireClibMetadataFlag(t *testing.T, flags []clibMetadataSchemaFlag, name 
 		for _, value := range want.enumContains {
 			if !slices.Contains(flag.Enum, value) {
 				t.Fatalf("%s enum = %v, want value %q", name, flag.Enum, value)
+			}
+		}
+		for _, value := range want.enumExcludes {
+			if slices.Contains(flag.Enum, value) {
+				t.Fatalf("%s enum = %v, must not contain %q", name, flag.Enum, value)
 			}
 		}
 		return
