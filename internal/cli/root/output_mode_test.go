@@ -23,7 +23,7 @@ func TestTTYCommandsDefaultToHumanClogOutput(t *testing.T) {
 	if strings.Contains(got, `"meta"`) || strings.Contains(got, `"errors"`) {
 		t.Fatalf("TTY default command output should be human data, not JSON envelope:\n%s", got)
 	}
-	if !strings.Contains(got, "listed issues") || !strings.Contains(got, "count=0") {
+	if !strings.Contains(got, "Listed issues") || !strings.Contains(got, "count=0") {
 		t.Fatalf("TTY default command output should use clog rich data rendering:\n%s", got)
 	}
 }
@@ -149,7 +149,7 @@ func TestIssueListPlainOutputHidesJQLUnlessDebug(t *testing.T) {
 	if strings.Contains(stdout.String(), "jql=") {
 		t.Fatalf("issue list plain output leaked JQL without debug:\n%s", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "listed issues") || !strings.Contains(stdout.String(), "count=0") || !strings.Contains(stdout.String(), "detail=false") || strings.Contains(stdout.String(), "No issues") || strings.Contains(stdout.String(), "issues=") {
+	if !strings.Contains(stdout.String(), "Listed issues") || !strings.Contains(stdout.String(), "count=0") || !strings.Contains(stdout.String(), "detail=false") || strings.Contains(stdout.String(), "No issues") || strings.Contains(stdout.String(), "issues=") {
 		t.Fatalf("issue list plain output did not render a clog issue-list result:\n%s", stdout.String())
 	}
 

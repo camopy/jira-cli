@@ -1,11 +1,13 @@
 package me
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 // NewCommand returns the `me` command: a short alias for the identity
@@ -26,7 +28,12 @@ func NewCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for me")
 			}
-			user, _, err := cmdutil.ServicesForClient(client).User().Myself(cmd.Context())
+			var user *jira.CurrentUser
+			err = cmdutil.Spin(cmd, "me", func(ctx context.Context) error {
+				var spinErr error
+				user, _, spinErr = cmdutil.ServicesForClient(client).User().Myself(ctx)
+				return spinErr
+			})
 			if err != nil {
 				return err
 			}

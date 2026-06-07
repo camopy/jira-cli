@@ -87,7 +87,7 @@ func TestIssueViewPlainRendersMultiKeySummary(t *testing.T) {
 			t.Fatalf("multi-key issue view fell back to generic output %q:\n%s", forbidden, got)
 		}
 	}
-	for _, want := range []string{"viewed issues", "succeeded=1", "failed=1", "threads=2", "PROJ-1", "Readable issue", "Done", "Medium"} {
+	for _, want := range []string{"Viewed issues", "succeeded=1", "failed=1", "threads=2", "PROJ-1", "Readable issue", "Done", "Medium"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("multi-key issue view output missing %q:\n%s", want, got)
 		}

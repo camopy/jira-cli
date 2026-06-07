@@ -26,7 +26,7 @@ func WriteIssueViewPlain(w io.Writer, command string, data any, opts ...PlainOpt
 		if results == nil {
 			return writeGenericPlain(logger, messageForCommand(command), data)
 		}
-		return writeIssueViewManyPlain(logger, results, cfg)
+		return writeIssueViewManyPlain(logger, command, results, cfg)
 	}
 	issue := mapFromAny(m["issue"])
 	if len(issue) == 0 {
@@ -67,7 +67,7 @@ func WriteIssueViewPlain(w io.Writer, command string, data any, opts ...PlainOpt
 	return nil
 }
 
-func writeIssueViewManyPlain(logger *clog.Logger, results []map[string]any, cfg plainConfig) error {
+func writeIssueViewManyPlain(logger *clog.Logger, command string, results []map[string]any, cfg plainConfig) error {
 	successes := make([]map[string]any, 0, len(results))
 	failureCount := 0
 	for _, result := range results {
@@ -91,7 +91,7 @@ func writeIssueViewManyPlain(logger *clog.Logger, results []map[string]any, cfg 
 	if cfg.threads > 0 {
 		event = event.Int("threads", cfg.threads)
 	}
-	event.Msg("viewed issues")
+	event.Msg(SentenceCase(VerbFor(command).PastPlural()))
 	rows, err := issueRows(successes, cfg)
 	if err != nil {
 		return err
@@ -128,7 +128,7 @@ func WriteIssueViewFailureDiagnostics(w io.Writer, data any, errorsOut []Error) 
 		event = event.Int("omitted", omitted)
 	}
 	event = event.Str("hint", "use --output=json for full per-key errors")
-	event.Msg("failed keys")
+	event.Msg(failedKeysSummary)
 	return nil
 }
 

@@ -77,7 +77,7 @@ func TestProbeRemoteAuthHonorsProfileTimeout(t *testing.T) {
 
 	done := make(chan map[string]any, 1)
 	go func() {
-		done <- probeRemoteAuth(cmd, profile, "")
+		done <- probeRemoteAuth(cmd.Context(), cmd, profile, "")
 	}()
 
 	select {

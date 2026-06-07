@@ -123,8 +123,12 @@ func runCommentList(cmd *cobra.Command, key string, limit int, all bool) error {
 	if !ok {
 		return fmt.Errorf("jira base URL is required for issue.comment.list")
 	}
-	result, err := commentListEnvelopeData(cmd.Context(), cmdutil.ServicesForClient(client).Comment(), key, limit, all)
-	if err != nil {
+	var result commentListReadResult
+	if err := cmdutil.Spin(cmd, "issue.comment.list", func(ctx context.Context) error {
+		var listErr error
+		result, listErr = commentListEnvelopeData(ctx, cmdutil.ServicesForClient(client).Comment(), key, limit, all)
+		return listErr
+	}); err != nil {
 		return err
 	}
 	return writeEnvelopeWithCommentWarnings(cmd, "issue.comment.list", result.Data, result.Warnings)
@@ -158,7 +162,7 @@ func commentListEnvelopeData(ctx context.Context, svc jira.CommentService, key s
 		rateLimitHit = drained.RateLimitHit
 	} else {
 		comments, resp, err := svc.List(ctx, key, &jira.ListCommentsOptions{
-			ListOptions: jira.ListOptions{MaxResults: pageSize}, //nolint:gocritic // pagination-exempt: single-page request, no cursor follow-up.
+			ListOptions: jira.ListOptions{MaxResults: pageSize},
 		})
 		if err != nil {
 			return commentListReadResult{}, err
@@ -442,15 +446,17 @@ func runCommentAddKeys(cmd *cobra.Command, keys []string, flags commentAddFlags)
 	var (
 		comment *jira.Comment
 		resp    *jira.Response
-		addErr  error
 	)
-	if vis.Mode == jira.VisibilityReplace {
-		comment, resp, addErr = svc.AddWithVisibility(cmd.Context(), key, body, vis)
-	} else {
-		comment, resp, addErr = svc.Add(cmd.Context(), key, body)
-	}
-	if addErr != nil {
+	if err := cmdutil.Spin(cmd, "issue.comment.add", func(ctx context.Context) error {
+		var addErr error
+		if vis.Mode == jira.VisibilityReplace {
+			comment, resp, addErr = svc.AddWithVisibility(ctx, key, body, vis)
+		} else {
+			comment, resp, addErr = svc.Add(ctx, key, body)
+		}
 		return addErr
+	}); err != nil {
+		return err
 	}
 	return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.comment.add", map[string]any{
 		"issue":   key,
@@ -658,8 +664,15 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 	if !ok {
 		return fmt.Errorf("jira base URL is required for issue.comment.edit")
 	}
-	comment, resp, err := cmdutil.ServicesForClient(client).Comment().Edit(cmd.Context(), key, commentID, &jira.CommentBody{ADF: submitDoc}, vis)
-	if err != nil {
+	var (
+		comment *jira.Comment
+		resp    *jira.Response
+	)
+	if err := cmdutil.Spin(cmd, "issue.comment.edit", func(ctx context.Context) error {
+		var editErr error
+		comment, resp, editErr = cmdutil.ServicesForClient(client).Comment().Edit(ctx, key, commentID, &jira.CommentBody{ADF: submitDoc}, vis)
+		return editErr
+	}); err != nil {
 		return err
 	}
 	return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.comment.edit", map[string]any{
@@ -725,8 +738,12 @@ $ jira issue comment delete PROJ-123 10042 --force`,
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.comment.delete")
 			}
-			resp, err := cmdutil.ServicesForClient(client).Comment().Delete(cmd.Context(), args[0], args[1])
-			if err != nil {
+			var resp *jira.Response
+			if err := cmdutil.Spin(cmd, "issue.comment.delete", func(ctx context.Context) error {
+				var delErr error
+				resp, delErr = cmdutil.ServicesForClient(client).Comment().Delete(ctx, args[0], args[1])
+				return delErr
+			}); err != nil {
 				return err
 			}
 			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.comment.delete", map[string]any{

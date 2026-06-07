@@ -1,6 +1,7 @@
 package jql
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cache"
 	"github.com/matcra587/jira-cli/internal/cli/boardscope"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/jql"
 	"github.com/spf13/cobra"
 )
@@ -82,8 +84,15 @@ func referenceCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("validation: jql reference queries Jira and needs a configured profile")
 			}
-			ref, resp, err := cmdutil.ServicesForClient(client).JQL().AutocompleteData(cmd.Context())
-			if err != nil {
+			var (
+				ref  jira.JQLReference
+				resp *jira.Response
+			)
+			if err := cmdutil.Spin(cmd, "jql.reference", func(ctx context.Context) error {
+				var e error
+				ref, resp, e = cmdutil.ServicesForClient(client).JQL().AutocompleteData(ctx)
+				return e
+			}); err != nil {
 				return err
 			}
 			fields := make([]map[string]any, len(ref.Fields))

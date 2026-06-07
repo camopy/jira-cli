@@ -1,6 +1,7 @@
 package search
 
 import (
+	"context"
 	"fmt"
 
 	clib "github.com/gechr/clib/cli/cobra"
@@ -68,9 +69,17 @@ $ jira search jql "project = PROJ" --count`,
 				}
 				req := &jira.SearchRequest{JQL: args[0], Fields: fields, ListOptions: jira.ListOptions{MaxResults: limit}}
 				if opts.all {
-					issues, info, derr := jira.DrainSearch(cmd.Context(), svc, req, jira.DrainOptions{Unbounded: opts.unbounded})
-					if derr != nil {
-						return derr
+					var (
+						issues []*jira.Issue
+						info   jira.DrainInfo
+					)
+					err = cmdutil.Spin(cmd, "search.jql", func(ctx context.Context) error {
+						var spinErr error
+						issues, info, spinErr = jira.DrainSearch(ctx, svc, req, jira.DrainOptions{Unbounded: opts.unbounded})
+						return spinErr
+					})
+					if err != nil {
+						return err
 					}
 					data := map[string]any{"source": "inline", "jql": args[0], "issues": cmdutil.IssueOutput(issues, detail)}
 					// The drain knows its terminal state: the result set is
@@ -83,11 +92,19 @@ $ jira search jql "project = PROJ" --count`,
 					}
 					return cmdutil.WriteEnvelopeWithPaginationAndRawWarnings(cmd, "search.jql", data, pagination, searchTruncationWarnings(info))
 				}
-				issues, resp, jerr := svc.JQL(cmd.Context(), req)
-				if jerr != nil {
-					return jerr
+				var (
+					found2 []*jira.Issue
+					resp   *jira.Response
+				)
+				err = cmdutil.Spin(cmd, "search.jql", func(ctx context.Context) error {
+					var spinErr error
+					found2, resp, spinErr = svc.JQL(ctx, req)
+					return spinErr
+				})
+				if err != nil {
+					return err
 				}
-				return cmdutil.WriteEnvelopeWithResponse(cmd, "search.jql", map[string]any{"source": "inline", "jql": args[0], "issues": cmdutil.IssueOutput(issues, detail)}, resp)
+				return cmdutil.WriteEnvelopeWithResponse(cmd, "search.jql", map[string]any{"source": "inline", "jql": args[0], "issues": cmdutil.IssueOutput(found2, detail)}, resp)
 			}
 			return cmdutil.WriteEnvelope(cmd, "search.jql", map[string]any{
 				"source": "inline",
@@ -137,16 +154,20 @@ $ jira search saved my-open-bugs --fields summary,status`,
 			issues := any([]any{})
 			var resp *jira.Response
 			if hasClient {
-				found, response, err := cmdutil.ServicesForClient(client).Search().JQL(cmd.Context(), &jira.SearchRequest{
-					JQL:         query.JQL,
-					Fields:      fields,
-					ListOptions: jira.ListOptions{MaxResults: 50},
+				var found []*jira.Issue
+				err = cmdutil.Spin(cmd, "search.jql", func(ctx context.Context) error {
+					var spinErr error
+					found, resp, spinErr = cmdutil.ServicesForClient(client).Search().JQL(ctx, &jira.SearchRequest{
+						JQL:         query.JQL,
+						Fields:      fields,
+						ListOptions: jira.ListOptions{MaxResults: 50},
+					})
+					return spinErr
 				})
 				if err != nil {
 					return err
 				}
 				issues = cmdutil.IssueOutput(found, detail)
-				resp = response
 			}
 			data := map[string]any{
 				"source":      "saved",
@@ -238,7 +259,15 @@ func runSearchCount(cmd *cobra.Command, jqlStr string) error {
 	if !ok {
 		return fmt.Errorf("validation: --count queries Jira for the estimate and needs a configured profile")
 	}
-	count, resp, err := cmdutil.ServicesForClient(client).Search().ApproximateCount(cmd.Context(), jqlStr)
+	var (
+		count int
+		resp  *jira.Response
+	)
+	err = cmdutil.Spin(cmd, "search.count", func(ctx context.Context) error {
+		var spinErr error
+		count, resp, spinErr = cmdutil.ServicesForClient(client).Search().ApproximateCount(ctx, jqlStr)
+		return spinErr
+	})
 	if err != nil {
 		return err
 	}

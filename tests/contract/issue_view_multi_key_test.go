@@ -163,7 +163,7 @@ func TestIssueViewMultipleKeysHumanOutputSummarizesPartialFailure(t *testing.T) 
 		t.Fatalf("human stdout should not include failed-key diagnostics:\nstdout=%s\nstderr=%s", stdout.String(), stderr.String())
 	}
 	if !strings.Contains(stderr.String(), "ERR") ||
-		!strings.Contains(stderr.String(), "failed keys") ||
+		!strings.Contains(stderr.String(), "Failed keys") ||
 		!strings.Contains(stderr.String(), "keys=PROJ-2") ||
 		!strings.Contains(stderr.String(), "total=2") ||
 		!strings.Contains(stderr.String(), "succeeded=1") ||
@@ -211,7 +211,7 @@ func TestIssueViewMultipleKeysHumanOutputBoundsFailedKeyDiagnostics(t *testing.T
 	}
 	gotErr := stderr.String()
 	for _, want := range []string{
-		"failed keys",
+		"Failed keys",
 		"ERR",
 		"PROJ-2",
 		"shown=5",

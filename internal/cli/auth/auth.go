@@ -92,8 +92,12 @@ $ jira auth whoami --save`,
 			if !ok {
 				return fmt.Errorf("jira base URL is required for auth.whoami")
 			}
-			user, _, err := cmdutil.ServicesForClient(client).User().Myself(cmd.Context())
-			if err != nil {
+			var user *jira.CurrentUser
+			if err := cmdutil.Spin(cmd, "auth.whoami", func(ctx context.Context) error {
+				var e error
+				user, _, e = cmdutil.ServicesForClient(client).User().Myself(ctx)
+				return e
+			}); err != nil {
 				return err
 			}
 			data := map[string]any{
@@ -971,7 +975,15 @@ $ jira auth status --project PROJ`,
 					entry["error"] = cred.Error
 				}
 				if !noProbe && cred.Valid && profile.BaseURL != "" {
-					remote := probeRemoteAuth(cmd, profile, projectKey)
+					var remote map[string]any
+					// One spinner around the whole remote probe — Myself plus
+					// MyPermissions are several requests but one "checking" step.
+					if err := cmdutil.Spin(cmd, "auth.status", func(ctx context.Context) error {
+						remote = probeRemoteAuth(ctx, cmd, profile, projectKey)
+						return nil
+					}); err != nil {
+						return err
+					}
 					entry["remote"] = remote
 					if !remoteAuthValid(remote) {
 						entry["valid"] = false
@@ -1005,13 +1017,15 @@ $ jira auth status --project PROJ`,
 // needs". Returns a map suitable for inclusion in the auth.status
 // envelope. Never errors — every failure becomes a structured field so
 // the user can see what went wrong without rerunning anything.
-func probeRemoteAuth(cmd *cobra.Command, profile config.Profile, projectKey string) map[string]any {
+func probeRemoteAuth(ctx context.Context, cmd *cobra.Command, profile config.Profile, projectKey string) map[string]any {
 	out := map[string]any{"site": profile.BaseURL}
 
 	// Route the probe through the same client constructor normal commands
 	// use, so the per-profile request timeout and an mTLS client certificate
 	// both apply to the probe's live calls rather than silently defaulting.
-	client, _, ok, err := cmdutil.JiraClientForProfile(cmd, profile)
+	// JiraClientForProfile only builds the client; the probe ctx is applied to
+	// the live Myself / MyPermissions calls below, not to construction.
+	client, _, ok, err := cmdutil.JiraClientForProfile(cmd, profile) //nolint:contextcheck // constructor takes no request context; ctx drives the probe calls below
 	if err != nil {
 		out["error"] = config.SanitizeCredentialError(err)
 		return out
@@ -1025,7 +1039,7 @@ func probeRemoteAuth(cmd *cobra.Command, profile config.Profile, projectKey stri
 	// /myself reveals scope-level auth issues (granular tokens missing
 	// read:user/group/avatar/application-role 4-scope union).
 	myselfOut := map[string]any{}
-	if me, resp, err := user.Myself(cmd.Context()); err != nil {
+	if me, resp, err := user.Myself(ctx); err != nil {
 		myselfOut["ok"] = false
 		myselfOut["status"] = httpStatusOf(resp)
 		myselfOut["error"] = err.Error()
@@ -1046,7 +1060,7 @@ func probeRemoteAuth(cmd *cobra.Command, profile config.Profile, projectKey stri
 		"ADD_COMMENTS", "WORK_ON_ISSUES", "TRANSITION_ISSUES", "LINK_ISSUES",
 	}
 	permsOut := map[string]any{}
-	if pr, resp, err := user.MyPermissions(cmd.Context(), projectKey, keys); err != nil {
+	if pr, resp, err := user.MyPermissions(ctx, projectKey, keys); err != nil {
 		permsOut["ok"] = false
 		permsOut["status"] = httpStatusOf(resp)
 		permsOut["error"] = err.Error()

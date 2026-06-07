@@ -34,7 +34,13 @@ func epicListCommand() *cobra.Command {
 				return err
 			}
 			if ok {
-				epics, resp, err := cmdutil.ServicesForClient(client).Epic().List(cmd.Context(), &jira.ListOptions{MaxResults: 50})
+				var epics []*jira.Issue
+				var resp *jira.Response
+				err = cmdutil.Spin(cmd, "epic.list", func(ctx context.Context) error {
+					var spinErr error
+					epics, resp, spinErr = cmdutil.ServicesForClient(client).Epic().List(ctx, &jira.ListOptions{MaxResults: 50})
+					return spinErr
+				})
 				if err != nil {
 					return err
 				}
@@ -66,7 +72,12 @@ func epicBoardCommand() *cobra.Command {
 				})
 			}
 			service := cmdutil.ServicesForClient(client).Epic()
-			epics, _, err := service.List(cmd.Context(), &jira.ListOptions{MaxResults: 50})
+			var epics []*jira.Issue
+			err = cmdutil.Spin(cmd, "epic.list", func(ctx context.Context) error {
+				var spinErr error
+				epics, _, spinErr = service.List(ctx, &jira.ListOptions{MaxResults: 50})
+				return spinErr
+			})
 			if err != nil {
 				return err
 			}
@@ -87,7 +98,12 @@ func epicBoardCommand() *cobra.Command {
 						status = *epic.Fields.Status.Name
 					}
 				}
-				children, _, err := service.IssuesInEpic(cmd.Context(), key)
+				var children []*jira.Issue
+				err = cmdutil.Spin(cmd, "epic.board", func(ctx context.Context) error {
+					var spinErr error
+					children, _, spinErr = service.IssuesInEpic(ctx, key)
+					return spinErr
+				})
 				if err != nil {
 					return err
 				}
@@ -145,7 +161,12 @@ $ jira epic add PROJ-123 PROJ-100 --dry-run`,
 					return err
 				}
 				if ok {
-					resp, err := cmdutil.ServicesForClient(client).Epic().AddIssue(cmd.Context(), epicKey, keys[0])
+					var resp *jira.Response
+					err = cmdutil.Spin(cmd, "epic.add", func(ctx context.Context) error {
+						var spinErr error
+						resp, spinErr = cmdutil.ServicesForClient(client).Epic().AddIssue(ctx, epicKey, keys[0])
+						return spinErr
+					})
 					if err != nil {
 						return err
 					}
@@ -226,7 +247,12 @@ $ jira epic remove PROJ-123 PROJ-124 PROJ-125`,
 					return err
 				}
 				if ok {
-					resp, err := cmdutil.ServicesForClient(client).Epic().RemoveIssue(cmd.Context(), keys[0])
+					var resp *jira.Response
+					err = cmdutil.Spin(cmd, "epic.remove", func(ctx context.Context) error {
+						var spinErr error
+						resp, spinErr = cmdutil.ServicesForClient(client).Epic().RemoveIssue(ctx, keys[0])
+						return spinErr
+					})
 					if err != nil {
 						return err
 					}

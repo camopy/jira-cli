@@ -209,57 +209,45 @@ func writeGenericPlain(logger *clog.Logger, message string, data any) error {
 	return nil
 }
 
+// completionMessageCommands lists the commands whose human/plain output ends
+// with a past-tense confirmation line. The phrase itself comes from the verb
+// registry (VerbFor.Pastf), so the spinner, the debug lifecycle, and this
+// completion message all read one source of truth and can never disagree.
+//
+// Commands absent from this set emit no message line: a fallback derived from
+// the command name just restates what the user typed (and auth.token /
+// auth.whoami carry their result in data fields), so the renderer drops it and
+// lets the data speak.
+var completionMessageCommands = map[string]bool{
+	"issue.list":       true,
+	"issue.view":       true,
+	"issue.create":     true,
+	"issue.edit":       true,
+	"issue.clone":      true,
+	"issue.move":       true,
+	"issue.delete":     true,
+	"issue.transition": true,
+	"issue.comment":    true,
+	"epic.list":        true,
+	"epic.board":       true,
+	"search.jql":       true,
+	"search.saved":     true,
+	"worklog.add":      true,
+	"worklog.list":     true,
+	"auth.login":       true,
+	"auth.status":      true,
+	"auth.logout":      true,
+	"auth.switch":      true,
+	"schema":           true,
+}
+
 func messageForCommand(command string) string {
-	switch command {
-	case "issue.list":
-		return "listed issues"
-	case "issue.view":
-		return "viewed issue"
-	case "issue.create":
-		return "created issue"
-	case "issue.edit":
-		return "edited issue"
-	case "issue.clone":
-		return "cloned issue"
-	case "issue.move":
-		return "moved issue"
-	case "issue.delete":
-		return "deleted issue"
-	case "issue.transition":
-		return "transitioned issue"
-	case "issue.comment":
-		return "commented on issue"
-	case "epic.list":
-		return "listed epics"
-	case "epic.board":
-		return "rendered epic board"
-	case "search.jql", "search.saved":
-		return "searched issues"
-	case "worklog.add":
-		return "added worklog"
-	case "worklog.list":
-		return "listed worklogs"
-	case "auth.login":
-		return "logged in"
-	case "auth.status":
-		return "checked auth"
-	case "auth.logout":
-		return "logged out"
-	case "auth.switch":
-		return "switched profile"
-	case "schema":
-		return "rendered schema"
-	case "auth.token", "auth.whoami":
-		// The command's own data fields (valid, source, account) carry
-		// the result. A message line here would only echo the command
-		// the user just typed, so the renderer drops it.
-		return ""
-	default:
-		// No curated result message: a fallback derived from the command
-		// name just restates what the user typed, so drop the message
-		// line and let the data fields speak.
+	if !completionMessageCommands[command] {
 		return ""
 	}
+	// The completion line is user-facing, so it is Sentence-cased; the verb
+	// registry stays lower case for the structured debug lifecycle.
+	return SentenceCase(VerbFor(command).Pastf())
 }
 
 type plainField struct {
@@ -324,17 +312,18 @@ func writePlainLine(fields *[]plainField, key string, value any) {
 }
 
 func writeIssueListPlain(logger *clog.Logger, data any, cfg plainConfig) error {
+	msg := messageForCommand("issue.list")
 	m, ok := data.(map[string]any)
 	if !ok {
-		return writeGenericPlain(logger, "listed issues", data)
+		return writeGenericPlain(logger, msg, data)
 	}
 	rawIssues, detail, jql, ok := issueListPlainData(m)
 	if !ok {
-		return writeGenericPlain(logger, "listed issues", data)
+		return writeGenericPlain(logger, msg, data)
 	}
 	issues, ok := normalizeIssueRows(rawIssues)
 	if !ok {
-		return writeGenericPlain(logger, "listed issues", data)
+		return writeGenericPlain(logger, msg, data)
 	}
 	if cfg.tsv {
 		return writeIssueTSV(logger, issues, cfg)
@@ -348,7 +337,7 @@ func writeIssueListPlain(logger *clog.Logger, data any, cfg plainConfig) error {
 	if jql != "" && cfg.debug {
 		event = event.Str("jql", jql)
 	}
-	event.Msg("listed issues")
+	event.Msg(msg)
 	if len(issues) == 0 {
 		return nil
 	}
@@ -1080,16 +1069,17 @@ func normalizeMapList(v any) []map[string]any {
 // block: identity, credential, and live permission grid. Replaces the
 // generic key=value dump that mashed everything onto one line.
 func writeAuthStatusPlain(logger *clog.Logger, data any, cfg plainConfig) error {
+	authMsg := messageForCommand("auth.status")
 	m, ok := data.(map[string]any)
 	if !ok {
-		return writeGenericPlain(logger, "checked auth", data)
+		return writeGenericPlain(logger, authMsg, data)
 	}
 	active, _ := m["active_profile"].(string)
 	profiles := normalizeMapList(m["profiles"])
 	if len(profiles) == 0 {
 		// nothing to render — fall back to the generic dump so we at least
 		// surface the envelope shape.
-		return writeGenericPlain(logger, "checked auth", data)
+		return writeGenericPlain(logger, authMsg, data)
 	}
 
 	th := cfg.theme

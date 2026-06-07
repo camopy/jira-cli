@@ -181,7 +181,7 @@ func TestFanOutKeysProgressMatchesFanOut(t *testing.T) {
 			err error
 		)
 		if useProgress {
-			res, err = FanOutKeysProgress(context.Background(), "Working", keys, 2, fn)
+			res, err = FanOutKeysProgress(context.Background(), "issue.view", keys, 2, fn)
 		} else {
 			res, err = FanOutKeys(context.Background(), keys, 2, fn)
 		}
@@ -208,7 +208,7 @@ func TestFanOutKeysProgressMatchesFanOut(t *testing.T) {
 
 func TestFanOutKeysProgressStaysSilentInNonTTY(t *testing.T) {
 	stdout, stderr := captureProcessOutput(t, func() {
-		_, err := FanOutKeysProgress(context.Background(), "Working", []string{"A-1", "A-2", "A-3"}, 2, func(_ context.Context, key string) (string, error) {
+		_, err := FanOutKeysProgress(context.Background(), "issue.view", []string{"A-1", "A-2", "A-3"}, 2, func(_ context.Context, key string) (string, error) {
 			return key, nil
 		})
 		if err != nil {
@@ -221,7 +221,7 @@ func TestFanOutKeysProgressStaysSilentInNonTTY(t *testing.T) {
 }
 
 func TestFanOutKeysProgressDelegatesForTrivialInputs(t *testing.T) {
-	res, err := FanOutKeysProgress(context.Background(), "Working", []string{"A-1"}, 1, func(_ context.Context, key string) (string, error) {
+	res, err := FanOutKeysProgress(context.Background(), "issue.view", []string{"A-1"}, 1, func(_ context.Context, key string) (string, error) {
 		return key + "-v", nil
 	})
 	if err != nil || len(res) != 1 || res[0].Value != "A-1-v" {
@@ -229,13 +229,13 @@ func TestFanOutKeysProgressDelegatesForTrivialInputs(t *testing.T) {
 	}
 
 	var nilCtx context.Context
-	if _, err := FanOutKeysProgress(nilCtx, "Working", []string{"A-1", "A-2"}, 1, func(context.Context, string) (string, error) {
+	if _, err := FanOutKeysProgress(nilCtx, "issue.view", []string{"A-1", "A-2"}, 1, func(context.Context, string) (string, error) {
 		return "", nil
 	}); err == nil || err.Error() != "context must not be nil" {
 		t.Fatalf("nil ctx: err = %v, want %q", err, "context must not be nil")
 	}
 
-	if _, err := FanOutKeysProgress[string](context.Background(), "Working", []string{"A-1", "A-2"}, 1, nil); err == nil || err.Error() != "fanout function must not be nil" {
+	if _, err := FanOutKeysProgress[string](context.Background(), "issue.view", []string{"A-1", "A-2"}, 1, nil); err == nil || err.Error() != "fanout function must not be nil" {
 		t.Fatalf("nil fn: err = %v, want %q", err, "fanout function must not be nil")
 	}
 }

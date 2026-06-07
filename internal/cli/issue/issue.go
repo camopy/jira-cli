@@ -180,8 +180,15 @@ func runIssueViewSingle(cmd *cobra.Command, key string) error {
 		return err
 	}
 	if ok {
-		issue, resp, err := cmdutil.ServicesForClient(client).Issue().Get(cmd.Context(), key, issueViewGetOptions())
-		if err != nil {
+		var (
+			issue *jira.Issue
+			resp  *jira.Response
+		)
+		if err := cmdutil.Spin(cmd, "issue.view", func(ctx context.Context) error {
+			var e error
+			issue, resp, e = cmdutil.ServicesForClient(client).Issue().Get(ctx, key, issueViewGetOptions())
+			return e
+		}); err != nil {
 			return err
 		}
 		// ADF render-loss warnings describe what the HUMAN renderer drops when
@@ -227,7 +234,7 @@ func runIssueViewMany(cmd *cobra.Command, keys []string, parallelism int) error 
 	}
 
 	service := cmdutil.ServicesForClient(client).Issue()
-	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "Fetching issues", keys, parallelism, func(ctx context.Context, key string) (*jira.Issue, error) {
+	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "issue.view", keys, parallelism, func(ctx context.Context, key string) (*jira.Issue, error) {
 		issue, _, err := service.Get(ctx, key, issueViewGetOptions())
 		return issue, err
 	})
@@ -443,9 +450,16 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 		if !ok {
 			return fmt.Errorf("validation: --count queries Jira for the estimate and needs a configured profile")
 		}
-		count, resp, countErr := cmdutil.ServicesForClient(client).Search().ApproximateCount(cmd.Context(), query)
-		if countErr != nil {
+		var (
+			count int
+			resp  *jira.Response
+		)
+		if err := cmdutil.Spin(cmd, "issue.list.count", func(ctx context.Context) error {
+			var countErr error
+			count, resp, countErr = cmdutil.ServicesForClient(client).Search().ApproximateCount(ctx, query)
 			return countErr
+		}); err != nil {
+			return err
 		}
 		return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.list.count", map[string]any{"count": count, "jql": query}, resp)
 	}
@@ -477,13 +491,20 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 			parallelism: opts.parallelism,
 		})
 	}
-	issues, resp, err := service.List(cmd.Context(), &jira.IssueListOptions{
-		ListOptions: jira.ListOptions{MaxResults: 50},
-		JQL:         query,
-		Fields:      fields,
-		Expand:      expand,
-	})
-	if err != nil {
+	var (
+		issues []*jira.Issue
+		resp   *jira.Response
+	)
+	if err := cmdutil.Spin(cmd, "issue.list", func(ctx context.Context) error {
+		var listErr error
+		issues, resp, listErr = service.List(ctx, &jira.IssueListOptions{
+			ListOptions: jira.ListOptions{MaxResults: 50},
+			JQL:         query,
+			Fields:      fields,
+			Expand:      expand,
+		})
+		return listErr
+	}); err != nil {
 		return err
 	}
 	issueData := cmdutil.IssueOutput(issues, opts.detail)
@@ -511,7 +532,7 @@ type issueListKeyChunkFailure struct {
 }
 
 func runIssueListKeyChunks(cmd *cobra.Command, in issueListKeyChunkInputs) error {
-	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "Fetching issues", in.keyChunks, in.parallelism, func(ctx context.Context, keyExpr string) ([]*jira.Issue, error) {
+	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "issue.list", in.keyChunks, in.parallelism, func(ctx context.Context, keyExpr string) ([]*jira.Issue, error) {
 		builder := in.builder
 		builder.Keys = []string{keyExpr}
 		query, err := jql.IssueList(in.opts.jqlQuery, builder)
@@ -872,8 +893,15 @@ $ jira issue create --project PROJ --type Task --summary "Draft" --dry-run`,
 				Summary: cmdutil.StringFromAny(submitFields["summary"]),
 				Fields:  submitFields,
 			}
-			issue, resp, err := cmdutil.ServicesForClient(client).Issue().Create(cmd.Context(), req)
-			if err != nil {
+			var (
+				issue *jira.Issue
+				resp  *jira.Response
+			)
+			if err := cmdutil.Spin(cmd, "issue.create", func(ctx context.Context) error {
+				var e error
+				issue, resp, e = cmdutil.ServicesForClient(client).Issue().Create(ctx, req)
+				return e
+			}); err != nil {
 				return err
 			}
 			return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.create", map[string]any{"issue": issue, "dry_run": false}, resp, pipeOut.Warnings)
@@ -1242,8 +1270,15 @@ $ jira issue edit PROJ-1 PROJ-2 --assignee none`,
 				submitFields = map[string]any{}
 			}
 			if !dryRun {
-				issue, resp, err := cmdutil.ServicesForClient(editClient).Issue().Update(cmd.Context(), keys[0], &jira.IssueUpdateRequest{Fields: submitFields})
-				if err != nil {
+				var (
+					issue *jira.Issue
+					resp  *jira.Response
+				)
+				if err := cmdutil.Spin(cmd, "issue.edit", func(ctx context.Context) error {
+					var e error
+					issue, resp, e = cmdutil.ServicesForClient(editClient).Issue().Update(ctx, keys[0], &jira.IssueUpdateRequest{Fields: submitFields})
+					return e
+				}); err != nil {
 					return err
 				}
 				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.edit", map[string]any{
@@ -1293,7 +1328,7 @@ func runIssueEditMany(cmd *cobra.Command, keys []string, parallelism int, in iss
 		}
 		service = cmdutil.ServicesForClient(editClient).Issue()
 	}
-	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "Editing issues", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "issue.edit", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		editIn := pipeline.MutationInput{
 			Mode:         cmdutil.ADFModeFor(cmd, true),
 			Fields:       cmdutil.CopyAnyMap(in.Fields),
@@ -1348,8 +1383,12 @@ func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
 		return fmt.Errorf("jira base URL is required for issue.edit --edit")
 	}
 	issueService := cmdutil.ServicesForClient(client).Issue()
-	issue, _, err := issueService.Get(cmd.Context(), key, &jira.IssueGetOptions{})
-	if err != nil {
+	var issue *jira.Issue
+	if err := cmdutil.Spin(cmd, "issue.view", func(ctx context.Context) error {
+		var e error
+		issue, _, e = issueService.Get(ctx, key, &jira.IssueGetOptions{})
+		return e
+	}); err != nil {
 		return err
 	}
 	doc := adf.Document{Type: "doc", Version: 1}
@@ -1408,8 +1447,15 @@ func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
 			"fields":  submitFields,
 		}, pipeOut.Warnings)
 	}
-	updatedIssue, resp, err := issueService.Update(cmd.Context(), key, &jira.IssueUpdateRequest{Fields: submitFields})
-	if err != nil {
+	var (
+		updatedIssue *jira.Issue
+		resp         *jira.Response
+	)
+	if err := cmdutil.Spin(cmd, "issue.edit", func(ctx context.Context) error {
+		var e error
+		updatedIssue, resp, e = issueService.Update(ctx, key, &jira.IssueUpdateRequest{Fields: submitFields})
+		return e
+	}); err != nil {
 		return err
 	}
 	return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.edit", map[string]any{
@@ -1455,7 +1501,7 @@ func issueTransitionCommand() *cobra.Command {
 					return fmt.Errorf("jira base URL is required for issue.transitions")
 				}
 				service := cmdutil.ServicesForClient(client).Issue()
-				results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "Fetching transitions", keys, parallelism, func(ctx context.Context, key string) ([]*jira.Transition, error) {
+				results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "issue.transitions", keys, parallelism, func(ctx context.Context, key string) ([]*jira.Transition, error) {
 					transitions, _, err := service.Transitions(ctx, key)
 					return transitions, err
 				})
@@ -1493,8 +1539,15 @@ func issueTransitionCommand() *cobra.Command {
 				if !ok {
 					return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", map[string]any{"issue": key, "dry_run": dryRun}, pipeOut.Warnings)
 				}
-				transitions, resp, err := cmdutil.ServicesForClient(client).Issue().Transitions(cmd.Context(), key)
-				if err != nil {
+				var (
+					transitions []*jira.Transition
+					resp        *jira.Response
+				)
+				if err := cmdutil.Spin(cmd, "issue.transitions", func(ctx context.Context) error {
+					var e error
+					transitions, resp, e = cmdutil.ServicesForClient(client).Issue().Transitions(ctx, key)
+					return e
+				}); err != nil {
 					return err
 				}
 				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transitions", map[string]any{"issue": key, "transitions": transitions}, resp, pipeOut.Warnings)
@@ -1503,12 +1556,21 @@ func issueTransitionCommand() *cobra.Command {
 				return fmt.Errorf("jira base URL is required for issue.transition")
 			}
 			service := cmdutil.ServicesForClient(client).Issue()
-			id, err := resolveTransitionID(cmd.Context(), service, key, target)
-			if err != nil {
-				return err
-			}
-			resp, err := service.Transition(cmd.Context(), key, &jira.TransitionRequest{ID: id})
-			if err != nil {
+			// resolveTransitionID makes its own metadata fetch, so wrap it and
+			// the apply in one spin — they are a single "Transitioning" operation.
+			var (
+				id   string
+				resp *jira.Response
+			)
+			if err := cmdutil.Spin(cmd, "issue.transition", func(ctx context.Context) error {
+				var e error
+				id, e = resolveTransitionID(ctx, service, key, target)
+				if e != nil {
+					return e
+				}
+				resp, e = service.Transition(ctx, key, &jira.TransitionRequest{ID: id})
+				return e
+			}); err != nil {
 				return err
 			}
 			return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transition", map[string]any{"issue": key, "transition": id, "dry_run": false}, resp, pipeOut.Warnings)
@@ -1646,7 +1708,7 @@ func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, 
 	service := cmdutil.ServicesForClient(client).Issue()
 	// Resolve the target per issue: the same status name can map to
 	// different transition ids across issues in different workflow states.
-	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "Transitioning issues", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "issue.transition", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		id, err := resolveTransitionID(ctx, service, key, target)
 		if err != nil {
 			return nil, err
@@ -1782,15 +1844,18 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 				service := cmdutil.ServicesForClient(client).Issue()
 				var resp *jira.Response
 				var issue *jira.Issue
-				switch name {
-				case "delete":
-					resp, err = service.Delete(cmd.Context(), keys[0], &jira.IssueDeleteOptions{DeleteSubtasks: deleteSubtasks})
-				case "clone":
-					issue, resp, err = service.Clone(cmd.Context(), keys[0], &jira.IssueCloneRequest{Fields: submitFields})
-				case "move":
-					issue, resp, err = service.Move(cmd.Context(), keys[0], &jira.IssueMoveRequest{Fields: submitFields})
-				}
-				if err != nil {
+				if err := cmdutil.Spin(cmd, "issue."+name, func(ctx context.Context) error {
+					var e error
+					switch name {
+					case "delete":
+						resp, e = service.Delete(ctx, keys[0], &jira.IssueDeleteOptions{DeleteSubtasks: deleteSubtasks})
+					case "clone":
+						issue, resp, e = service.Clone(ctx, keys[0], &jira.IssueCloneRequest{Fields: submitFields})
+					case "move":
+						issue, resp, e = service.Move(ctx, keys[0], &jira.IssueMoveRequest{Fields: submitFields})
+					}
+					return e
+				}); err != nil {
 					return err
 				}
 				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue."+name, map[string]any{"issue": keys[0], "result": issue, "dry_run": false}, resp, pipeOut.Warnings)
@@ -1843,7 +1908,7 @@ func runDestructiveIssueMany(
 		}
 		service = cmdutil.ServicesForClient(client).Issue()
 	}
-	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), strings.ToUpper(name[:1])+name[1:]+" issues", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "issue."+name, keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		destructiveIn := pipeline.MutationInput{
 			Mode:   cmdutil.ADFModeFor(cmd, true),
 			Fields: cmdutil.CopyAnyMap(in.Fields),
@@ -1987,10 +2052,14 @@ func issueWebLinkCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.weblink")
 			}
-			resp, err := cmdutil.ServicesForClient(client).Issue().AddRemoteLink(cmd.Context(), keys[0], &jira.RemoteLinkRequest{
-				URL: url, Title: title,
-			})
-			if err != nil {
+			var resp *jira.Response
+			if err := cmdutil.Spin(cmd, "issue.weblink", func(ctx context.Context) error {
+				var e error
+				resp, e = cmdutil.ServicesForClient(client).Issue().AddRemoteLink(ctx, keys[0], &jira.RemoteLinkRequest{
+					URL: url, Title: title,
+				})
+				return e
+			}); err != nil {
 				return err
 			}
 			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.weblink", map[string]any{
@@ -2030,7 +2099,7 @@ func runIssueWebLinkMany(cmd *cobra.Command, keys []string, parallelism int, in 
 		return fmt.Errorf("jira base URL is required for issue.weblink")
 	}
 	service := cmdutil.ServicesForClient(client).Issue()
-	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "Adding web links", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "issue.weblink", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		if _, err := service.AddRemoteLink(ctx, key, &jira.RemoteLinkRequest{URL: in.URL, Title: in.Title}); err != nil {
 			return nil, err
 		}

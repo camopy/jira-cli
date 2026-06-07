@@ -149,8 +149,15 @@ $ jira issue watchers list PROJ-123`,
 			}
 			service := cmdutil.ServicesForClient(client).Watcher()
 			if len(keys) == 1 {
-				watchers, resp, err := service.List(cmd.Context(), keys[0])
-				if err != nil {
+				var (
+					watchers *jira.WatchersResponse
+					resp     *jira.Response
+				)
+				if err := cmdutil.Spin(cmd, "issue.watchers.list", func(ctx context.Context) error {
+					var e error
+					watchers, resp, e = service.List(ctx, keys[0])
+					return e
+				}); err != nil {
 					return err
 				}
 				return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.watchers.list", watcherListEnvelopeData(watchers), resp)
@@ -315,8 +322,12 @@ func runWatcherMutationMany(
 	if !ok {
 		return fmt.Errorf("jira base URL is required for %s", command)
 	}
-	accountID, err := cmdutil.ServicesForClient(client).User().ResolveUser(cmd.Context(), args.UserIdent)
-	if err != nil {
+	var accountID string
+	if err := cmdutil.Spin(cmd, "user.resolve", func(ctx context.Context) error {
+		var e error
+		accountID, e = cmdutil.ServicesForClient(client).User().ResolveUser(ctx, args.UserIdent)
+		return e
+	}); err != nil {
 		return handleResolveErr(cmd, command, err)
 	}
 	watcherSvc := cmdutil.ServicesForClient(client).Watcher()
@@ -353,9 +364,17 @@ func watcherDryRunPreviewMany(cmd *cobra.Command, command string, keys []string,
 		}
 		userSvc := cmdutil.ServicesForClient(client).User()
 		if id, ok := accountIDFromIdentifier(args.UserIdent); ok {
-			accountID, err = userSvc.ResolveAccountID(cmd.Context(), id)
+			err = cmdutil.Spin(cmd, "user.resolve", func(ctx context.Context) error {
+				var e error
+				accountID, e = userSvc.ResolveAccountID(ctx, id)
+				return e
+			})
 		} else {
-			accountID, err = userSvc.ResolveUser(cmd.Context(), args.UserIdent)
+			err = cmdutil.Spin(cmd, "user.resolve", func(ctx context.Context) error {
+				var e error
+				accountID, e = userSvc.ResolveUser(ctx, args.UserIdent)
+				return e
+			})
 		}
 		if err != nil {
 			return handleResolveErr(cmd, command, err)
@@ -400,16 +419,24 @@ func runWatcherAdd(cmd *cobra.Command, args watcherMutationArgs) error {
 	// Resolve the user first — bailing on a not-found / ambiguous query
 	// before the pre-state readback avoids a wasted /watchers GET on the
 	// unhappy path.
-	accountID, err := user.ResolveUser(cmd.Context(), args.UserIdent)
-	if err != nil {
+	var accountID string
+	if err := cmdutil.Spin(cmd, "user.resolve", func(ctx context.Context) error {
+		var e error
+		accountID, e = user.ResolveUser(ctx, args.UserIdent)
+		return e
+	}); err != nil {
 		return handleResolveErr(cmd, "issue.watchers.add", err)
 	}
 
 	// Capture pre-state when readback is requested so we can populate
 	// `was_already_watching` in the envelope .
 	watcherSvc := cmdutil.ServicesForClient(client).Watcher()
-	data, err := watcherAddData(cmd.Context(), watcherSvc, accountID, args)
-	if err != nil {
+	var data map[string]any
+	if err := cmdutil.Spin(cmd, "issue.watchers.add", func(ctx context.Context) error {
+		var e error
+		data, e = watcherAddData(ctx, watcherSvc, accountID, args)
+		return e
+	}); err != nil {
 		return err
 	}
 	return cmdutil.WriteEnvelope(cmd, "issue.watchers.add", data)
@@ -459,14 +486,22 @@ func runWatcherRemove(cmd *cobra.Command, args watcherMutationArgs) error {
 	}
 	user := cmdutil.ServicesForClient(client).User()
 
-	accountID, err := user.ResolveUser(cmd.Context(), args.UserIdent)
-	if err != nil {
+	var accountID string
+	if err := cmdutil.Spin(cmd, "user.resolve", func(ctx context.Context) error {
+		var e error
+		accountID, e = user.ResolveUser(ctx, args.UserIdent)
+		return e
+	}); err != nil {
 		return handleResolveErr(cmd, "issue.watchers.remove", err)
 	}
 
 	watcherSvc := cmdutil.ServicesForClient(client).Watcher()
-	data, err := watcherRemoveData(cmd.Context(), watcherSvc, accountID, args)
-	if err != nil {
+	var data map[string]any
+	if err := cmdutil.Spin(cmd, "issue.watchers.remove", func(ctx context.Context) error {
+		var e error
+		data, e = watcherRemoveData(ctx, watcherSvc, accountID, args)
+		return e
+	}); err != nil {
 		return err
 	}
 	return cmdutil.WriteEnvelope(cmd, "issue.watchers.remove", data)
@@ -565,15 +600,16 @@ func watcherDryRunPreview(cmd *cobra.Command, command string, args watcherMutati
 		return fmt.Errorf("jira base URL is required for %s --validate-remote", command)
 	}
 	userSvc := cmdutil.ServicesForClient(client).User()
-	var (
-		accountID string
-		rerr      error
-	)
-	if id, ok := accountIDFromIdentifier(args.UserIdent); ok {
-		accountID, rerr = userSvc.ResolveAccountID(cmd.Context(), id)
-	} else {
-		accountID, rerr = userSvc.ResolveUser(cmd.Context(), args.UserIdent)
-	}
+	var accountID string
+	rerr := cmdutil.Spin(cmd, "user.resolve", func(ctx context.Context) error {
+		var e error
+		if id, ok := accountIDFromIdentifier(args.UserIdent); ok {
+			accountID, e = userSvc.ResolveAccountID(ctx, id)
+		} else {
+			accountID, e = userSvc.ResolveUser(ctx, args.UserIdent)
+		}
+		return e
+	})
 	if rerr != nil {
 		return handleResolveErr(cmd, command, rerr)
 	}

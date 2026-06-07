@@ -33,7 +33,7 @@ func TestIssueListTSVDefaultColumns(t *testing.T) {
 	}
 	got := buf.String()
 
-	if strings.Contains(got, "listed issues") {
+	if strings.Contains(got, "Listed issues") {
 		t.Fatalf("TSV output should omit the human status line:\n%s", got)
 	}
 	if strings.Contains(got, "\x1b[") {

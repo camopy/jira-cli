@@ -7,6 +7,7 @@
 package boards
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -128,7 +129,12 @@ func readOrPrimeBoardsCache(cmd *cobra.Command, client *jira.Client, cacheProfil
 	if !hasClient {
 		return jira.BoardsCacheFile{}, time.Time{}, false, cacheSourceState, fmt.Errorf("jira base URL is required for boards.list")
 	}
-	file, _, err := cmdutil.PrimeBoards(cmd.Context(), client, ttlMinutes, unbounded)
+	var file jira.BoardsCacheFile
+	err := cmdutil.Spin(cmd, "boards.list", func(ctx context.Context) error {
+		var spinErr error
+		file, _, spinErr = cmdutil.PrimeBoards(ctx, client, ttlMinutes, unbounded)
+		return spinErr
+	})
 	if err != nil {
 		return jira.BoardsCacheFile{}, time.Time{}, false, cacheSourceState, err
 	}

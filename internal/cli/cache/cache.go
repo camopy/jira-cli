@@ -52,18 +52,47 @@ func cacheLabelsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cmdutil.CacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "labels", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			ttl := time.Duration(ttlMinutes) * time.Minute
+			cacheSourceState := cmdutil.CacheStateRefresh
+			var (
+				data      json.RawMessage
+				fromCache bool
+				fetchedAt time.Time
+			)
+			if !refresh {
+				entry, present, stale, readErr := cache.Read(cmdutil.CacheKeyForProfile(cmd, profile), "labels", ttl)
+				switch {
+				case readErr != nil:
+					cacheSourceState = cmdutil.CacheStateMalformed
+				case present && !stale:
+					data, fromCache, fetchedAt, cacheSourceState = entry.Data, true, entry.FetchedAt, cmdutil.CacheStateFresh
+				case present && stale:
+					cacheSourceState = cmdutil.CacheStateStale
+				default:
+					cacheSourceState = cmdutil.CacheStateMissing
+				}
+			}
+			if !fromCache {
 				if !ok {
-					return nil, fmt.Errorf("jira base URL is required for cache.labels")
+					return fmt.Errorf("jira base URL is required for cache.labels")
 				}
-				labels, _, err := cmdutil.ServicesForClient(client).Label().List(cmd.Context(), nil)
+				err = cmdutil.Spin(cmd, "cache.labels", func(ctx context.Context) error {
+					labels, _, spinErr := cmdutil.ServicesForClient(client).Label().List(ctx, nil)
+					if spinErr != nil {
+						return spinErr
+					}
+					data, spinErr = cmdutil.MarshalNonNilSlice(labels)
+					return spinErr
+				})
 				if err != nil {
-					return nil, err
+					return err
 				}
-				return cmdutil.MarshalNonNilSlice(labels)
-			})
-			if err != nil {
-				return err
+				var entry cache.Entry
+				entry, err = cache.Write(cmdutil.CacheKeyForProfile(cmd, profile), "labels", data)
+				if err != nil {
+					return err
+				}
+				fromCache, fetchedAt = false, entry.FetchedAt
 			}
 			var labels []string
 			if err := json.Unmarshal(data, &labels); err != nil {
@@ -98,18 +127,47 @@ func cacheProjectsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cmdutil.CacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "projects", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			ttl := time.Duration(ttlMinutes) * time.Minute
+			cacheSourceState := cmdutil.CacheStateRefresh
+			var (
+				data      json.RawMessage
+				fromCache bool
+				fetchedAt time.Time
+			)
+			if !refresh {
+				entry, present, stale, readErr := cache.Read(cmdutil.CacheKeyForProfile(cmd, profile), "projects", ttl)
+				switch {
+				case readErr != nil:
+					cacheSourceState = cmdutil.CacheStateMalformed
+				case present && !stale:
+					data, fromCache, fetchedAt, cacheSourceState = entry.Data, true, entry.FetchedAt, cmdutil.CacheStateFresh
+				case present && stale:
+					cacheSourceState = cmdutil.CacheStateStale
+				default:
+					cacheSourceState = cmdutil.CacheStateMissing
+				}
+			}
+			if !fromCache {
 				if !ok {
-					return nil, fmt.Errorf("jira base URL is required for cache.projects")
+					return fmt.Errorf("jira base URL is required for cache.projects")
 				}
-				projects, _, err := cmdutil.ServicesForClient(client).Project(0).List(cmd.Context(), nil)
+				err = cmdutil.Spin(cmd, "cache.projects", func(ctx context.Context) error {
+					projects, _, spinErr := cmdutil.ServicesForClient(client).Project(0).List(ctx, nil)
+					if spinErr != nil {
+						return spinErr
+					}
+					data, spinErr = cmdutil.MarshalNonNilSlice(projects)
+					return spinErr
+				})
 				if err != nil {
-					return nil, err
+					return err
 				}
-				return cmdutil.MarshalNonNilSlice(projects)
-			})
-			if err != nil {
-				return err
+				var entry cache.Entry
+				entry, err = cache.Write(cmdutil.CacheKeyForProfile(cmd, profile), "projects", data)
+				if err != nil {
+					return err
+				}
+				fromCache, fetchedAt = false, entry.FetchedAt
 			}
 			var projects []jira.ProjectSummary
 			if err := json.Unmarshal(data, &projects); err != nil {
@@ -152,14 +210,44 @@ func cacheEpicsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cmdutil.CacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "epics", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
-				if !ok {
-					return nil, fmt.Errorf("jira base URL is required for cache.epics")
+			ttl := time.Duration(ttlMinutes) * time.Minute
+			cacheSourceState := cmdutil.CacheStateRefresh
+			var (
+				data      json.RawMessage
+				fromCache bool
+				fetchedAt time.Time
+			)
+			if !refresh {
+				entry, present, stale, readErr := cache.Read(cmdutil.CacheKeyForProfile(cmd, profile), "epics", ttl)
+				switch {
+				case readErr != nil:
+					cacheSourceState = cmdutil.CacheStateMalformed
+				case present && !stale:
+					data, fromCache, fetchedAt, cacheSourceState = entry.Data, true, entry.FetchedAt, cmdutil.CacheStateFresh
+				case present && stale:
+					cacheSourceState = cmdutil.CacheStateStale
+				default:
+					cacheSourceState = cmdutil.CacheStateMissing
 				}
-				return fetchEpicsForCache(cmd.Context(), client)
-			})
-			if err != nil {
-				return err
+			}
+			if !fromCache {
+				if !ok {
+					return fmt.Errorf("jira base URL is required for cache.epics")
+				}
+				err = cmdutil.Spin(cmd, "cache.epics", func(ctx context.Context) error {
+					var spinErr error
+					data, spinErr = fetchEpicsForCache(ctx, client)
+					return spinErr
+				})
+				if err != nil {
+					return err
+				}
+				var entry cache.Entry
+				entry, err = cache.Write(cmdutil.CacheKeyForProfile(cmd, profile), "epics", data)
+				if err != nil {
+					return err
+				}
+				fromCache, fetchedAt = false, entry.FetchedAt
 			}
 			var epics []cacheEpic
 			if err := json.Unmarshal(data, &epics); err != nil {
@@ -226,14 +314,44 @@ func cacheFieldsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cmdutil.CacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "fields", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
-				if !ok {
-					return nil, fmt.Errorf("jira base URL is required for cache.fields")
+			ttl := time.Duration(ttlMinutes) * time.Minute
+			cacheSourceState := cmdutil.CacheStateRefresh
+			var (
+				data      json.RawMessage
+				fromCache bool
+				fetchedAt time.Time
+			)
+			if !refresh {
+				entry, present, stale, readErr := cache.Read(cmdutil.CacheKeyForProfile(cmd, profile), "fields", ttl)
+				switch {
+				case readErr != nil:
+					cacheSourceState = cmdutil.CacheStateMalformed
+				case present && !stale:
+					data, fromCache, fetchedAt, cacheSourceState = entry.Data, true, entry.FetchedAt, cmdutil.CacheStateFresh
+				case present && stale:
+					cacheSourceState = cmdutil.CacheStateStale
+				default:
+					cacheSourceState = cmdutil.CacheStateMissing
 				}
-				return fetchFieldsForCache(cmd.Context(), client)
-			})
-			if err != nil {
-				return err
+			}
+			if !fromCache {
+				if !ok {
+					return fmt.Errorf("jira base URL is required for cache.fields")
+				}
+				err = cmdutil.Spin(cmd, "cache.fields", func(ctx context.Context) error {
+					var spinErr error
+					data, spinErr = fetchFieldsForCache(ctx, client)
+					return spinErr
+				})
+				if err != nil {
+					return err
+				}
+				var entry cache.Entry
+				entry, err = cache.Write(cmdutil.CacheKeyForProfile(cmd, profile), "fields", data)
+				if err != nil {
+					return err
+				}
+				fromCache, fetchedAt = false, entry.FetchedAt
 			}
 			var fields []cacheField
 			if err := json.Unmarshal(data, &fields); err != nil {
@@ -297,14 +415,44 @@ func cacheIssueTypesCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cmdutil.CacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "issuetypes", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
-				if !ok {
-					return nil, fmt.Errorf("jira base URL is required for cache.issuetypes")
+			ttl := time.Duration(ttlMinutes) * time.Minute
+			cacheSourceState := cmdutil.CacheStateRefresh
+			var (
+				data      json.RawMessage
+				fromCache bool
+				fetchedAt time.Time
+			)
+			if !refresh {
+				entry, present, stale, readErr := cache.Read(cmdutil.CacheKeyForProfile(cmd, profile), "issuetypes", ttl)
+				switch {
+				case readErr != nil:
+					cacheSourceState = cmdutil.CacheStateMalformed
+				case present && !stale:
+					data, fromCache, fetchedAt, cacheSourceState = entry.Data, true, entry.FetchedAt, cmdutil.CacheStateFresh
+				case present && stale:
+					cacheSourceState = cmdutil.CacheStateStale
+				default:
+					cacheSourceState = cmdutil.CacheStateMissing
 				}
-				return fetchIssueTypesForCache(cmd.Context(), client)
-			})
-			if err != nil {
-				return err
+			}
+			if !fromCache {
+				if !ok {
+					return fmt.Errorf("jira base URL is required for cache.issuetypes")
+				}
+				err = cmdutil.Spin(cmd, "cache.issuetypes", func(ctx context.Context) error {
+					var spinErr error
+					data, spinErr = fetchIssueTypesForCache(ctx, client)
+					return spinErr
+				})
+				if err != nil {
+					return err
+				}
+				var entry cache.Entry
+				entry, err = cache.Write(cmdutil.CacheKeyForProfile(cmd, profile), "issuetypes", data)
+				if err != nil {
+					return err
+				}
+				fromCache, fetchedAt = false, entry.FetchedAt
 			}
 			var types []cacheIssueType
 			if err := json.Unmarshal(data, &types); err != nil {
@@ -378,14 +526,44 @@ func cacheNamedValueCommand(resource, short, path string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cmdutil.CacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), resource, time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
-				if !ok {
-					return nil, fmt.Errorf("jira base URL is required for cache.%s", resource)
+			ttl := time.Duration(ttlMinutes) * time.Minute
+			cacheSourceState := cmdutil.CacheStateRefresh
+			var (
+				data      json.RawMessage
+				fromCache bool
+				fetchedAt time.Time
+			)
+			if !refresh {
+				entry, present, stale, readErr := cache.Read(cmdutil.CacheKeyForProfile(cmd, profile), resource, ttl)
+				switch {
+				case readErr != nil:
+					cacheSourceState = cmdutil.CacheStateMalformed
+				case present && !stale:
+					data, fromCache, fetchedAt, cacheSourceState = entry.Data, true, entry.FetchedAt, cmdutil.CacheStateFresh
+				case present && stale:
+					cacheSourceState = cmdutil.CacheStateStale
+				default:
+					cacheSourceState = cmdutil.CacheStateMissing
 				}
-				return fetchNamedValuesForCache(cmd.Context(), client, path)
-			})
-			if err != nil {
-				return err
+			}
+			if !fromCache {
+				if !ok {
+					return fmt.Errorf("jira base URL is required for cache.%s", resource)
+				}
+				err = cmdutil.Spin(cmd, "cache."+resource, func(ctx context.Context) error {
+					var spinErr error
+					data, spinErr = fetchNamedValuesForCache(ctx, client, path)
+					return spinErr
+				})
+				if err != nil {
+					return err
+				}
+				var entry cache.Entry
+				entry, err = cache.Write(cmdutil.CacheKeyForProfile(cmd, profile), resource, data)
+				if err != nil {
+					return err
+				}
+				fromCache, fetchedAt = false, entry.FetchedAt
 			}
 			var values []cacheNamedValue
 			if err := json.Unmarshal(data, &values); err != nil {
@@ -442,18 +620,47 @@ func cacheLinkTypesCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, fromCache, fetchedAt, cacheSourceState, err := cmdutil.CacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "linktypes", time.Duration(ttlMinutes)*time.Minute, refresh, func() (json.RawMessage, error) {
+			ttl := time.Duration(ttlMinutes) * time.Minute
+			cacheSourceState := cmdutil.CacheStateRefresh
+			var (
+				data      json.RawMessage
+				fromCache bool
+				fetchedAt time.Time
+			)
+			if !refresh {
+				entry, present, stale, readErr := cache.Read(cmdutil.CacheKeyForProfile(cmd, profile), "linktypes", ttl)
+				switch {
+				case readErr != nil:
+					cacheSourceState = cmdutil.CacheStateMalformed
+				case present && !stale:
+					data, fromCache, fetchedAt, cacheSourceState = entry.Data, true, entry.FetchedAt, cmdutil.CacheStateFresh
+				case present && stale:
+					cacheSourceState = cmdutil.CacheStateStale
+				default:
+					cacheSourceState = cmdutil.CacheStateMissing
+				}
+			}
+			if !fromCache {
 				if !ok {
-					return nil, fmt.Errorf("jira base URL is required for cache.linktypes")
+					return fmt.Errorf("jira base URL is required for cache.linktypes")
 				}
-				types, _, err := cmdutil.ServicesForClient(client).IssueLinkType().List(cmd.Context())
+				err = cmdutil.Spin(cmd, "cache.linktypes", func(ctx context.Context) error {
+					types, _, spinErr := cmdutil.ServicesForClient(client).IssueLinkType().List(ctx)
+					if spinErr != nil {
+						return spinErr
+					}
+					data, spinErr = cmdutil.MarshalNonNilSlice(types)
+					return spinErr
+				})
 				if err != nil {
-					return nil, err
+					return err
 				}
-				return cmdutil.MarshalNonNilSlice(types)
-			})
-			if err != nil {
-				return err
+				var entry cache.Entry
+				entry, err = cache.Write(cmdutil.CacheKeyForProfile(cmd, profile), "linktypes", data)
+				if err != nil {
+					return err
+				}
+				fromCache, fetchedAt = false, entry.FetchedAt
 			}
 			var types []jira.IssueLinkType
 			if err := json.Unmarshal(data, &types); err != nil {
@@ -524,7 +731,16 @@ $ jira cache boards --unbounded`,
 				return fmt.Errorf("jira base URL is required for cache.boards")
 			}
 
-			file, entry, warnings, err := cmdutil.PrimeAndCacheBoards(cmd.Context(), cmdutil.CacheKeyForProfile(cmd, profile), client, ttlMinutes, unbounded)
+			var (
+				file     jira.BoardsCacheFile
+				entry    cache.Entry
+				warnings []map[string]any
+			)
+			err = cmdutil.Spin(cmd, "cache.boards", func(ctx context.Context) error {
+				var spinErr error
+				file, entry, warnings, spinErr = cmdutil.PrimeAndCacheBoards(ctx, cmdutil.CacheKeyForProfile(cmd, profile), client, ttlMinutes, unbounded)
+				return spinErr
+			})
 			if err != nil {
 				return err
 			}

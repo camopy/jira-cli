@@ -69,7 +69,7 @@ func WriteKeyedResultsFailureDiagnostics(w io.Writer, data any, errorsOut []Erro
 	if omitted > 0 {
 		event = event.Int("omitted", omitted)
 	}
-	event.Str("hint", "use --output=json for full per-key errors").Msg("failed keys")
+	event.Str("hint", "use --output=json for full per-key errors").Msg(failedKeysSummary)
 	return nil
 }
 
@@ -114,6 +114,12 @@ func keyedResultCounts(data any, failureKeys int) (int, int, int) {
 }
 
 const failedKeysPlainLimit = 5
+
+// failedKeysSummary labels the bounded failed-key diagnostics block shared by
+// the keyed-results and multi-key issue-view renderers. It is a UI heading over
+// a count of failed keys, not an operation verb, so it lives here rather than in
+// the verb registry.
+const failedKeysSummary = "Failed keys"
 
 func shownFailureKeys(keys []string) ([]string, int) {
 	limit := failedKeysPlainLimit

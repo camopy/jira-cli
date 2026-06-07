@@ -28,9 +28,14 @@ linters:
     - sqlclosecheck
     - nolintlint
 
-  # Policy-heavy linters such as gocritic, revive, unparam, and wrapcheck are
+    # gocritic is enabled ONLY to run our ruleguard rule (see settings below);
+    # all its tag-grouped style/diagnostic checks stay off, so it adds no noise.
+    - gocritic
+
+  # Policy-heavy linters such as revive, unparam, and wrapcheck are
   # intentionally deferred until the first-pass implementation is cleaned up
-  # enough for those checks to be useful instead of noisy.
+  # enough for those checks to be useful instead of noisy. gocritic is on but
+  # scoped to ruleguard only.
 
   settings:
     depguard:
@@ -51,10 +56,16 @@ linters:
               desc: "deprecated since Go 1.16; use io and os packages"
 
     gocritic:
-      enabled-tags:
-        - diagnostic
-        - performance
-        - style
+      # gocritic is enabled solely to run the custom ruleguard rule. disable-all
+      # turns off every built-in check (the team deferred gocritic's style /
+      # diagnostic checks as noisy); only ruleguard is re-enabled.
+      disable-all: true
+      enabled-checks:
+        - ruleguard
+      settings:
+        ruleguard:
+          failOn: all
+          rules: "ruleguard/rules.go"
 
     gosec:
       includes:
@@ -107,6 +118,12 @@ linters:
         linters:
           - gosec
         text: "G101|G204|G304|G306"
+      # The ruleguard blocking-call rule targets production command code. Test
+      # files legitimately call local stores (e.g. credential keyring .Get) with
+      # cmd.Context() and never render a spinner, so exempt them.
+      - path: '_test\.go$'
+        linters:
+          - gocritic
       - path: '(^|.*/)internal/(cli/stdin/stdin|editor/roundtrip)\.go$'
         linters:
           - gosec

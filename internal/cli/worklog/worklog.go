@@ -123,7 +123,13 @@ $ jira worklog add PROJ-123 --time-spent 45m --dry-run`,
 					return err
 				}
 				if ok {
-					worklog, resp, err := cmdutil.ServicesForClient(client).Worklog().Add(cmd.Context(), key, &jira.WorklogAddRequest{TimeSpentSeconds: seconds, Started: started, Comment: comment})
+					var worklog *jira.Worklog
+					var resp *jira.Response
+					err = cmdutil.Spin(cmd, "worklog.add", func(ctx context.Context) error {
+						var spinErr error
+						worklog, resp, spinErr = cmdutil.ServicesForClient(client).Worklog().Add(ctx, key, &jira.WorklogAddRequest{TimeSpentSeconds: seconds, Started: started, Comment: comment})
+						return spinErr
+					})
 					if err != nil {
 						return err
 					}
@@ -239,7 +245,13 @@ $ jira worklog list PROJ-1 PROJ-2 PROJ-3`,
 			if ok {
 				service := cmdutil.ServicesForClient(client).Worklog()
 				if len(keys) == 1 {
-					worklogs, resp, err := service.List(cmd.Context(), keys[0], &jira.ListOptions{MaxResults: 50})
+					var worklogs []*jira.Worklog
+					var resp *jira.Response
+					err = cmdutil.Spin(cmd, "worklog.list", func(ctx context.Context) error {
+						var spinErr error
+						worklogs, resp, spinErr = service.List(ctx, keys[0], &jira.ListOptions{MaxResults: 50})
+						return spinErr
+					})
 					if err != nil {
 						return err
 					}

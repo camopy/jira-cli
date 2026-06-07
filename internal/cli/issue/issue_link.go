@@ -89,10 +89,14 @@ $ jira issue link PROJ-123 --to PROJ-456 --type Relates`,
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.link")
 			}
-			resp, err := cmdutil.ServicesForClient(client).IssueLink().Create(cmd.Context(), &jira.IssueLinkRequest{
-				Type: linkType, InwardIssue: keys[0], OutwardIssue: to,
-			})
-			if err != nil {
+			var resp *jira.Response
+			if err := cmdutil.Spin(cmd, "issue.link", func(ctx context.Context) error {
+				var e error
+				resp, e = cmdutil.ServicesForClient(client).IssueLink().Create(ctx, &jira.IssueLinkRequest{
+					Type: linkType, InwardIssue: keys[0], OutwardIssue: to,
+				})
+				return e
+			}); err != nil {
 				return err
 			}
 			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.link", map[string]any{
@@ -198,8 +202,12 @@ $ jira issue link list PROJ-123`,
 			}
 			service := cmdutil.ServicesForClient(client).IssueLink()
 			if len(keys) == 1 {
-				links, _, err := service.List(cmd.Context(), keys[0])
-				if err != nil {
+				var links []jira.IssueLinkView
+				if err := cmdutil.Spin(cmd, "issue.link.list", func(ctx context.Context) error {
+					var e error
+					links, _, e = service.List(ctx, keys[0])
+					return e
+				}); err != nil {
 					return err
 				}
 				return cmdutil.WriteEnvelope(cmd, "issue.link.list", issueLinkListData(keys[0], links))
@@ -271,8 +279,12 @@ $ jira issue link delete PROJ-123 10001 --force`,
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.link.delete")
 			}
-			resp, err := cmdutil.ServicesForClient(client).IssueLink().Delete(cmd.Context(), linkID)
-			if err != nil {
+			var resp *jira.Response
+			if err := cmdutil.Spin(cmd, "issue.link.delete", func(ctx context.Context) error {
+				var e error
+				resp, e = cmdutil.ServicesForClient(client).IssueLink().Delete(ctx, linkID)
+				return e
+			}); err != nil {
 				return err
 			}
 			// data.link_id MUST echo the supplied id verbatim
@@ -352,8 +364,12 @@ $ jira issue link types --refresh`,
 // and returns the JSON-encoded slice. Reused by the cache primer
 // command in cache.go.
 func fetchLinkTypesForCache(cmd *cobra.Command, client *jira.Client) (json.RawMessage, error) {
-	types, _, err := cmdutil.ServicesForClient(client).IssueLinkType().List(cmd.Context())
-	if err != nil {
+	var types []jira.IssueLinkType
+	if err := cmdutil.Spin(cmd, "issue.link.types", func(ctx context.Context) error {
+		var e error
+		types, _, e = cmdutil.ServicesForClient(client).IssueLinkType().List(ctx)
+		return e
+	}); err != nil {
 		return nil, err
 	}
 	return cmdutil.MarshalNonNilSlice(types)

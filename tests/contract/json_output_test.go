@@ -56,7 +56,7 @@ func TestOutputModesApplyToGenericCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("search --plain error = %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), "INF") || !strings.Contains(string(out), `jql="project = PROJ"`) || !strings.Contains(string(out), "searched issues") {
+	if !strings.Contains(string(out), "INF") || !strings.Contains(string(out), `jql="project = PROJ"`) || !strings.Contains(string(out), "Searched issues") {
 		t.Fatalf("search --plain output = %s", out)
 	}
 

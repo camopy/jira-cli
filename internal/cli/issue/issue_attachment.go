@@ -82,8 +82,12 @@ $ jira issue attachment list PROJ-123 --all`,
 				return fmt.Errorf("jira base URL is required for issue.attachment.list")
 			}
 			if len(keys) == 1 {
-				attachments, _, err := service.List(cmd.Context(), keys[0])
-				if err != nil {
+				var attachments []jira.Attachment
+				if err := cmdutil.Spin(cmd, "issue.attachment.list", func(ctx context.Context) error {
+					var e error
+					attachments, _, e = service.List(ctx, keys[0])
+					return e
+				}); err != nil {
 					return err
 				}
 				return cmdutil.WriteEnvelope(cmd, "issue.attachment.list", attachmentListEnvelopeData(attachments, limit, all))
@@ -195,8 +199,12 @@ $ jira issue attachment add PROJ-123 --file ./report.pdf --file ./logs.txt`,
 				return err
 			}
 			defer closeFiles()
-			uploaded, _, err := service.Add(cmd.Context(), keys[0], fileSources)
-			if err != nil {
+			var uploaded []jira.Attachment
+			if err := cmdutil.Spin(cmd, "issue.attachment.add", func(ctx context.Context) error {
+				var e error
+				uploaded, _, e = service.Add(ctx, keys[0], fileSources)
+				return e
+			}); err != nil {
 				return err
 			}
 			rows := make([]map[string]any, 0, len(uploaded))
@@ -381,7 +389,10 @@ $ jira issue attachment delete PROJ-123 10500 --force`,
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.attachment.delete")
 			}
-			if _, err := service.Delete(cmd.Context(), attachmentID); err != nil {
+			if err := cmdutil.Spin(cmd, "issue.attachment.delete", func(ctx context.Context) error {
+				_, e := service.Delete(ctx, attachmentID)
+				return e
+			}); err != nil {
 				return err
 			}
 			return cmdutil.WriteEnvelope(cmd, "issue.attachment.delete", map[string]any{
@@ -438,8 +449,13 @@ $ jira issue attachment download PROJ-123 10500 --to ./report.pdf --force`,
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.attachment.download")
 			}
-			body, resp, err := service.Download(cmd.Context(), attachmentID)
-			if err != nil {
+			var body io.ReadCloser
+			var resp *jira.Response
+			if err := cmdutil.Spin(cmd, "issue.attachment.download", func(ctx context.Context) error {
+				var e error
+				body, resp, e = service.Download(ctx, attachmentID)
+				return e
+			}); err != nil {
 				return err
 			}
 			defer func() { _ = body.Close() }()

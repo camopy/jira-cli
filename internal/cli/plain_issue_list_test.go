@@ -41,7 +41,7 @@ func TestIssueListPlainTableUsesPrimerFlexLinksAndStyles(t *testing.T) {
 
 	got := buf.String()
 	stripped := ansi.Strip(got)
-	for _, want := range []string{"INF", "listed issues", "KEY", "SUMMARY", "STATUS", "ASSIGNEE", "PRIORITY", "SAM1-7", "In Progress", "Riley Chen", "High"} {
+	for _, want := range []string{"INF", "Listed issues", "KEY", "SUMMARY", "STATUS", "ASSIGNEE", "PRIORITY", "SAM1-7", "In Progress", "Riley Chen", "High"} {
 		if !strings.Contains(stripped, want) {
 			t.Fatalf("plain issue list missing %q:\n%s", want, got)
 		}
@@ -88,7 +88,7 @@ func TestIssueListPlainDetailRendersFullIssuesAsTable(t *testing.T) {
 	}
 
 	got := buf.String()
-	for _, want := range []string{"listed issues", "KEY", "SUMMARY", "ASSIGNEE", "SAM1-7", "Create wallet integration", "Riley Chen"} {
+	for _, want := range []string{"Listed issues", "KEY", "SUMMARY", "ASSIGNEE", "SAM1-7", "Create wallet integration", "Riley Chen"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("detail issue list missing %q:\n%s", want, got)
 		}
@@ -114,7 +114,7 @@ func TestIssueListPlainShowsParallelWhenNonDefault(t *testing.T) {
 		t.Fatalf("WriteCommandPlain() error = %v", err)
 	}
 	got := buf.String()
-	for _, want := range []string{"listed issues", "count=0", "threads=4"} {
+	for _, want := range []string{"Listed issues", "count=0", "threads=4"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("issue list output missing %q:\n%s", want, got)
 		}

@@ -5,10 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/gechr/clog"
 	"github.com/gechr/clog/fx"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 // KeyResult carries one per-key read result while preserving the original key.
@@ -18,21 +22,59 @@ type KeyResult[T any] struct {
 	Err   error
 }
 
-// FanOutKeysProgress runs FanOutKeys while showing a determinate progress bar
-// as keys complete. The bar mirrors the auth-login spinner's gating:
-// NonTTYSilent suppresses it whenever stderr is not a terminal — piped,
-// redirected, or captured by an agent — and clog writes status to stderr, so a
-// stdout JSON envelope stays clean even under --output=json. A single key, or a
-// fanout the bar cannot meaningfully track, simply falls through to FanOutKeys.
+// FanOutKeysProgress runs FanOutKeys with user feedback for the operation named
+// by op (a cli.VerbFor key like "issue.delete"): a determinate progress bar
+// while keys complete, plus a per-key debug lifecycle that records each key's
+// elapsed time and, on failure, the HTTP status and reason as fields:
+//
+//	DBG Deleting issue key=ABC-1
+//	DBG Deleted issue key=ABC-1 time=210ms
+//	DBG Failed to delete issue key=ABC-2 time=95ms status=404 reason="..."
+//
+// The bar mirrors the auth-login spinner's gating: NonTTYSilent suppresses it
+// whenever stderr is not a terminal — piped, redirected, or captured by an
+// agent — and clog writes status to stderr, so a stdout JSON envelope stays
+// clean even under --output=json. The debug lines surface only under --debug. A
+// single key gets the debug lifecycle but no bar.
 func FanOutKeysProgress[T any](
 	ctx context.Context,
-	label string,
+	op string,
 	keys []string,
 	parallelism int,
 	fn func(context.Context, string) (T, error),
 ) ([]KeyResult[T], error) {
-	if ctx == nil || fn == nil || len(keys) <= 1 {
+	if ctx == nil || fn == nil {
 		return FanOutKeys(ctx, keys, parallelism, fn)
+	}
+
+	verb := cli.VerbFor(op)
+	logger := clog.Ctx(ctx)
+	// traced wraps a per-key call with the debug lifecycle, keeping the timing
+	// and field-shaping in one place for both the single- and multi-key paths.
+	traced := func(ctx context.Context, key string) (T, error) {
+		logger.Debug().Str("key", key).Msg(verb.Gerundf())
+		start := time.Now()
+		value, err := fn(ctx, key)
+		elapsed := time.Since(start)
+		if err != nil {
+			event := logger.Debug().Str("key", key).Duration("time", elapsed)
+			var apiErr *jira.APIError
+			if errors.As(err, &apiErr) {
+				event = event.Int("status", apiErr.StatusCode)
+			}
+			event.AnErr("reason", err).Msg(verb.Failuref())
+		} else {
+			logger.Debug().Str("key", key).Duration("time", elapsed).Msg(verb.Pastf())
+		}
+		return value, err
+	}
+
+	// A single key never warrants a bar, and under --debug the per-key debug
+	// lifecycle narrates progress — an animated bar sharing stderr with those
+	// verbose lines would only strand its redraw frames between them. In both
+	// cases run the traced fan-out without a bar.
+	if len(keys) <= 1 || clog.IsVerbose() {
+		return FanOutKeys(ctx, keys, parallelism, traced)
 	}
 
 	var (
@@ -42,11 +84,13 @@ func FanOutKeysProgress[T any](
 	)
 	// SetProgress stores to an atomic, so reporting from the parallel workers is
 	// race-free; the bar reads the latest count on each animation frame.
-	waitErr := clog.Bar(label, len(keys)).
+	// The bar label is user-facing UI, so it is Sentence-cased; the per-key
+	// debug lifecycle in traced stays lower case as a structured log.
+	waitErr := clog.Bar(cli.SentenceCase(verb.GerundPlural()), len(keys)).
 		NonTTYSilent(true).
 		Progress(ctx, func(ctx context.Context, u *fx.Update) error {
 			tracked := func(ctx context.Context, key string) (T, error) {
-				value, err := fn(ctx, key)
+				value, err := traced(ctx, key)
 				u.SetProgress(int(done.Add(1)))
 				return value, err
 			}
