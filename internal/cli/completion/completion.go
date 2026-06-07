@@ -3,6 +3,7 @@ package completion
 import (
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/gechr/clib/complete"
@@ -16,6 +17,53 @@ import (
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
+// predictorEmitter writes the completion candidates for one predictor kind.
+type predictorEmitter func(globals startup.Globals, args []string)
+
+// completionEmitters is the single source of truth for dynamic completion.
+// Its keys are every predictor CompletionHandler implements; its values do the
+// emitting. A flag's `Complete: "predictor=X"` or a command's
+// `dynamic-args='X'` with no key here ships a silently-empty completion — the
+// gap that left `--fields` dead. Because dispatch and the published key set are
+// the same map, they cannot drift; the guard test TestDeclaredPredictorsAreHandled
+// checks every predictor declared across the command tree against these keys.
+var completionEmitters = map[string]predictorEmitter{
+	"profile":       func(g startup.Globals, _ []string) { emitProfiles(g) },
+	"configkey":     func(g startup.Globals, _ []string) { emitConfigKeys(g) },
+	"configvalue":   func(_ startup.Globals, args []string) { emitConfigValues(args) },
+	"alias":         func(g startup.Globals, _ []string) { emitAliases(g) },
+	"cacheresource": func(_ startup.Globals, _ []string) { emitCacheResources() },
+	"cachefield":    func(g startup.Globals, _ []string) { emitCachedFields(completionCacheKey(g)) },
+	"cacheproject":  func(g startup.Globals, _ []string) { emitCachedProjects(completionCacheKey(g)) },
+	"cacheepic":     func(g startup.Globals, _ []string) { emitCachedEpics(completionCacheKey(g)) },
+	"cachelabel":    func(g startup.Globals, _ []string) { emitCachedLabels(completionCacheKey(g)) },
+	"cacheissuetype": func(g startup.Globals, _ []string) {
+		emitCachedNames(completionCacheKey(g), "issuetypes")
+	},
+	"cachelinktype": func(g startup.Globals, _ []string) { emitCachedLinkTypes(completionCacheKey(g)) },
+	"cacheboard":    func(g startup.Globals, _ []string) { emitCachedBoards(completionCacheKey(g)) },
+	"cachestatus":   func(g startup.Globals, _ []string) { emitCachedNames(completionCacheKey(g), "statuses") },
+	"cachepriority": func(g startup.Globals, _ []string) { emitCachedNames(completionCacheKey(g), "priorities") },
+	// issuekey has no cache yet: every command taking a KEY positionally carries
+	// dynamic-args='issuekey' so the predictor is wired, but until an issue-key
+	// cache lands it emits nothing and the shell falls back to free-form input.
+	"issuekey": func(startup.Globals, []string) {},
+}
+
+// HandledPredictors is the sorted set of predictor names completionEmitters
+// implements. Sourced from the map, so the dispatch and this published list can
+// never disagree.
+var HandledPredictors = sortedPredictorNames()
+
+func sortedPredictorNames() []string {
+	out := make([]string, 0, len(completionEmitters))
+	for name := range completionEmitters {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // CompletionHandler dispatches dynamic completion requests routed through
 // `--@complete=<kind>` (clib's predictor mechanism). The shell completion
 // script invokes `jira --@complete=foo -- arg1 arg2` for positional args;
@@ -23,70 +71,56 @@ import (
 //
 // Each predictor name corresponds either to a flag's
 // `clib.FlagExtra{Complete: "predictor=foo"}` or to an entry in a command's
-// `Annotations["clib"]` `dynamic-args='foo,bar'` list.
+// `Annotations["clib"]` `dynamic-args='foo,bar'` list. Unknown kinds emit
+// nothing, leaving the shell to fall back to free-form input.
 func CompletionHandler(globals startup.Globals) complete.Handler {
-	return func(shell, kind string, args []string) {
-		_ = shell
-		switch kind {
-		case "profile":
-			cfg, err := config.Load(config.WithPath(globals.ConfigPath))
-			if err != nil {
-				return
-			}
-			for _, p := range cfg.Profiles {
-				_, _ = fmt.Fprintln(os.Stdout, p.Name)
-			}
-		case "configkey":
-			cfg, _ := config.Load(config.WithPath(globals.ConfigPath))
-			for _, k := range config.Keys(cfg) {
-				_, _ = fmt.Fprintf(os.Stdout, "%s\t%s\n", k.Name, k.Description)
-			}
-		case "configvalue":
-			// args[0] is the key the user has typed in arg 0 of `config set`.
-			if len(args) == 0 {
-				return
-			}
-			for _, choice := range config.KeyChoices(args[0]) {
-				_, _ = fmt.Fprintln(os.Stdout, choice)
-			}
-		case "alias":
-			cfg, err := config.Load(config.WithPath(globals.ConfigPath))
-			if err != nil {
-				return
-			}
-			for name := range cfg.Aliases {
-				_, _ = fmt.Fprintln(os.Stdout, name)
-			}
-		case "cacheresource":
-			for _, r := range []string{"labels", "projects", "epics", "fields", "issuetypes", "linktypes", "boards", "statuses", "priorities"} {
-				_, _ = fmt.Fprintln(os.Stdout, r)
-			}
-		case "cacheproject":
-			emitCachedProjects(completionCacheKey(globals))
-		case "cacheepic":
-			emitCachedEpics(completionCacheKey(globals))
-		case "cachelabel":
-			emitCachedLabels(completionCacheKey(globals))
-		case "cacheissuetype":
-			emitCachedNames(completionCacheKey(globals), "issuetypes")
-		case "cachelinktype":
-			emitCachedLinkTypes(completionCacheKey(globals))
-		case "cacheboard":
-			emitCachedBoards(completionCacheKey(globals))
-		case "cachestatus":
-			emitCachedNames(completionCacheKey(globals), "statuses")
-		case "cachepriority":
-			emitCachedNames(completionCacheKey(globals), "priorities")
-		case "issuekey":
-			// Every command taking an issue key positionally carries the
-			// dynamic-args='issuekey' annotation so a future issue-key
-			// cache layer can plug in here without further command-level
-			// changes. Until the cache lands, the predictor returns empty
-			// so the shell falls back to free-form input.
-			return
-		default:
-			return
+	return func(_, kind string, args []string) {
+		if emit, ok := completionEmitters[kind]; ok {
+			emit(globals, args)
 		}
+	}
+}
+
+func emitProfiles(globals startup.Globals) {
+	cfg, err := config.Load(config.WithPath(globals.ConfigPath))
+	if err != nil {
+		return
+	}
+	for _, p := range cfg.Profiles {
+		_, _ = fmt.Fprintln(os.Stdout, p.Name)
+	}
+}
+
+func emitConfigKeys(globals startup.Globals) {
+	cfg, _ := config.Load(config.WithPath(globals.ConfigPath))
+	for _, k := range config.Keys(cfg) {
+		_, _ = fmt.Fprintf(os.Stdout, "%s\t%s\n", k.Name, k.Description)
+	}
+}
+
+func emitConfigValues(args []string) {
+	// args[0] is the key the user has typed in arg 0 of `config set`.
+	if len(args) == 0 {
+		return
+	}
+	for _, choice := range config.KeyChoices(args[0]) {
+		_, _ = fmt.Fprintln(os.Stdout, choice)
+	}
+}
+
+func emitAliases(globals startup.Globals) {
+	cfg, err := config.Load(config.WithPath(globals.ConfigPath))
+	if err != nil {
+		return
+	}
+	for name := range cfg.Aliases {
+		_, _ = fmt.Fprintln(os.Stdout, name)
+	}
+}
+
+func emitCacheResources() {
+	for _, r := range []string{"labels", "projects", "epics", "fields", "issuetypes", "linktypes", "boards", "statuses", "priorities"} {
+		_, _ = fmt.Fprintln(os.Stdout, r)
 	}
 }
 
@@ -104,6 +138,29 @@ func completionCacheKey(globals startup.Globals) string {
 		return cmdutil.CacheKeyFromStartup(globals, nil, "default")
 	}
 	return cmdutil.CacheKeyFromStartup(globals, cfg, cfg.DefaultProfile)
+}
+
+// emitCachedFields emits one candidate per cached Jira field for the
+// `--fields` predictor. The candidate is the field id (what Jira's search
+// API expects, e.g. `summary` or `customfield_10010`); the display name
+// rides along as the completion description. Null-safe: emits nothing when
+// the cache is missing or malformed so completion never blocks the shell.
+func emitCachedFields(profile string) {
+	type field struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	var fields []field
+	if !jql.ReadCacheJSON(profile, "fields", &fields) {
+		return
+	}
+	for _, f := range fields {
+		if f.ID == "" {
+			continue
+		}
+		_, _ = fmt.Fprintf(os.Stdout, "%s\t%s\n",
+			cli.SanitizeCompletionField(f.ID), cli.SanitizeCompletionField(f.Name))
+	}
 }
 
 func emitCachedProjects(profile string) {
