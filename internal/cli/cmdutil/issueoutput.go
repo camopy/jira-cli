@@ -49,6 +49,9 @@ func IssueSummary(issue *jira.Issue) map[string]any {
 		if status.StatusCategory != nil && status.StatusCategory.Key != nil {
 			summary["status_category"] = *status.StatusCategory.Key
 		}
+		if status.StatusCategory != nil && status.StatusCategory.ColorName != nil {
+			summary["status_color"] = *status.StatusCategory.ColorName
+		}
 	}
 	if user := issue.Fields.Assignee; user != nil {
 		summary["assignee"] = AssigneeSummary(user)

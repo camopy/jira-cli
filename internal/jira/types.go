@@ -58,10 +58,13 @@ type Status struct {
 
 // StatusCategory is the workflow bucket a status belongs to. Key is one of
 // "new", "indeterminate", or "done" — stable across projects and used to
-// color statuses by category in human output.
+// color statuses by category in human output. ColorName is Jira's own color
+// designation for the category ("blue-gray", "yellow", "green", "medium-gray"),
+// preferred over Key when coloring so the badge matches the Jira UI.
 type StatusCategory struct {
-	Key  *string `json:"key,omitempty"`
-	Name *string `json:"name,omitempty"`
+	Key       *string `json:"key,omitempty"`
+	Name      *string `json:"name,omitempty"`
+	ColorName *string `json:"colorName,omitempty"`
 }
 
 type Priority struct {

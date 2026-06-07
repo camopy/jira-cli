@@ -27,18 +27,31 @@ func TestIssueSummaryAlwaysIncludesSpecKeys(t *testing.T) {
 func TestIssueSummaryStatusCategory(t *testing.T) {
 	withCat := IssueSummary(&jira.Issue{Fields: &jira.IssueFields{
 		Status: &jira.Status{
-			Name:           jira.String("Done"),
-			StatusCategory: &jira.StatusCategory{Key: jira.String("done")},
+			Name: jira.String("Done"),
+			StatusCategory: &jira.StatusCategory{
+				Key:       jira.String("done"),
+				ColorName: jira.String("green"),
+			},
 		},
 	}})
 	if withCat["status_category"] != "done" {
 		t.Fatalf("status_category = %#v, want \"done\"", withCat["status_category"])
+	}
+	// status_color carries Jira's own color designation when present, used to
+	// match the badge to the Jira UI.
+	if withCat["status_color"] != "green" {
+		t.Fatalf("status_color = %#v, want \"green\"", withCat["status_color"])
 	}
 	withoutCat := IssueSummary(&jira.Issue{Fields: &jira.IssueFields{
 		Status: &jira.Status{Name: jira.String("Open")},
 	}})
 	if withoutCat["status_category"] != "" {
 		t.Fatalf("status_category = %#v, want empty string", withoutCat["status_category"])
+	}
+	// Absent colorName leaves status_color unset rather than empty, keeping the
+	// envelope free of a meaningless field.
+	if _, ok := withoutCat["status_color"]; ok {
+		t.Fatalf("status_color = %#v, want absent", withoutCat["status_color"])
 	}
 }
 

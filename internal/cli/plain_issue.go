@@ -44,7 +44,7 @@ func WriteIssueViewPlain(w io.Writer, command string, data any, opts ...PlainOpt
 	logger.Info().Parts(clog.PartMessage).Msg(style.bold(header))
 
 	// The single-issue view renders status as plain text by design; category
-	// coloring is scoped to the issue-list table (see statusStyle), where
+	// coloring is scoped to the issue-list table (see statusPillCell), where
 	// scanning many rows makes color worthwhile.
 	status := nestedString(fields, "status", "name")
 	priority := nestedString(fields, "priority", "name")

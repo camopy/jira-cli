@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	ansi "github.com/charmbracelet/x/ansi"
 	clibtheme "github.com/gechr/clib/theme"
 	"github.com/gechr/clog"
 	"github.com/gechr/primer/table"
@@ -527,13 +528,14 @@ func issueListPlainData(data map[string]any) (rawIssues any, detail bool, jql st
 }
 
 type issueTableRow struct {
-	Key       string
-	Summary   string
-	Status    string
-	StatusCat string
-	Assignee  string
-	Priority  string
-	Updated   string
+	Key         string
+	Summary     string
+	Status      string
+	StatusCat   string
+	StatusColor string
+	Assignee    string
+	Priority    string
+	Updated     string
 }
 
 // issueColumn defines one selectable issue-list column: its flag name, table
@@ -572,7 +574,7 @@ var issueColumnDefs = []issueColumn{
 		header: "STATUS",
 		text:   func(r issueTableRow) string { return r.Status },
 		cell: func(r issueTableRow, cfg plainConfig, _ *table.RenderContext) table.Cell {
-			return styledCell(statusStyle(cfg, r.Status, r.StatusCat), r.Status)
+			return statusPillCell(cfg, r.Status, r.StatusCat, r.StatusColor)
 		},
 	},
 	{
@@ -649,13 +651,14 @@ func buildIssueRows(issues []map[string]any) []issueTableRow {
 	rows := make([]issueTableRow, 0, len(issues))
 	for _, issue := range issues {
 		rows = append(rows, issueTableRow{
-			Key:       formatHumanField(issue["key"]),
-			Summary:   formatHumanField(issue["summary"]),
-			Status:    formatHumanField(issue["status"]),
-			StatusCat: formatHumanField(issue["status_category"]),
-			Assignee:  formatAssignee(issue["assignee"]),
-			Priority:  formatHumanField(issue["priority"]),
-			Updated:   formatHumanField(issue["updated"]),
+			Key:         formatHumanField(issue["key"]),
+			Summary:     formatHumanField(issue["summary"]),
+			Status:      formatHumanField(issue["status"]),
+			StatusCat:   formatHumanField(issue["status_category"]),
+			StatusColor: formatHumanField(issue["status_color"]),
+			Assignee:    formatAssignee(issue["assignee"]),
+			Priority:    formatHumanField(issue["priority"]),
+			Updated:     formatHumanField(issue["updated"]),
 		})
 	}
 	return rows
@@ -755,26 +758,127 @@ func styledCell(style lipgloss.Style, text string) table.Cell {
 	return table.StyledCell(style.Render(text), text)
 }
 
-// statusStyle colors a status by its workflow category (the stable
-// new/indeterminate/done key) so e.g. every done-category status reads green,
-// mirroring Jira's own category colors. An unknown or absent category falls
-// back to a per-name hash color.
-func statusStyle(cfg plainConfig, status, category string) lipgloss.Style {
+// statusPillCell renders a status as a filled badge ("pill") colored by its
+// workflow category, mirroring Jira's own status colors. Jira defines four
+// global status categories — new, indeterminate, done, and an undefined
+// fallback — and every status a tenant creates, however it is named, inherits
+// one of them, so the color space stays fixed regardless of the workflow. Off
+// a TTY or without a color theme the status renders as bare text.
+func statusPillCell(cfg plainConfig, status, category, colorName string) table.Cell {
+	if status == "" {
+		return table.TextCell("")
+	}
+	if !cfg.tty || cfg.theme == nil {
+		return table.TextCell(status)
+	}
+	// The label carries its own surrounding spaces: StyledCell sizes the column
+	// from its second argument, not the styled string, so the padding has to be
+	// in the measured text or the column would be one space too narrow on each
+	// side and the fill would overflow.
+	label := " " + status + " "
+	return table.StyledCell(statusPill(cfg, status, category, colorName).Render(label), label)
+}
+
+// statusPill builds the badge style for a status: a category-derived color as
+// the fill, a contrasting foreground, bold. The pill sets both background and
+// foreground, so it reads on any terminal background.
+func statusPill(cfg plainConfig, status, category, colorName string) lipgloss.Style {
 	if !cfg.tty || cfg.theme == nil {
 		return lipgloss.NewStyle()
 	}
-	switch normalizeStyleKey(category) {
-	case "done":
-		return foregroundStyle(cfg.theme.Green)
-	case "indeterminate":
-		return foregroundStyle(cfg.theme.Yellow)
-	case "new":
-		return foregroundStyle(cfg.theme.Blue)
-	default:
-		return hashStyle(cfg.theme, "status:"+status)
+	bg := statusFill(cfg.theme, status, category, colorName)
+	if bg == nil {
+		return lipgloss.NewStyle()
 	}
+	return lipgloss.NewStyle().Background(bg).Foreground(pillForeground(bg)).Bold(true)
 }
 
+// statusFill picks the pill background. Jira's own color designation
+// (statusCategory.colorName) is preferred so the badge matches the Jira UI;
+// when it is absent or unrecognized the stable category key is used; failing
+// both, a per-name hash keeps distinct statuses distinguishable. Each maps to a
+// theme color rather than a fixed hex, so the badge still tracks the active
+// theme.
+func statusFill(theme *clibtheme.Theme, status, category, colorName string) color.Color {
+	switch normalizeStyleKey(colorName) {
+	case "green":
+		return themeColor(theme.Green)
+	case "yellow":
+		return themeColor(theme.Yellow)
+	case "blue-gray", "blue-grey", "blue":
+		return themeColor(theme.Blue)
+	case "medium-gray", "medium-grey", "gray", "grey":
+		// The theme carries no neutral color (Dim is a faint attribute, not a
+		// fill), so use the terminal's own grey slot for Jira's grey categories.
+		return ansi.BrightBlack
+	}
+	switch normalizeStyleKey(category) {
+	case "done":
+		return themeColor(theme.Green)
+	case "indeterminate":
+		return themeColor(theme.Yellow)
+	case "new":
+		return themeColor(theme.Blue)
+	}
+	return colorOrNil(hashStyle(theme, "status:"+status).GetForeground())
+}
+
+var (
+	pillTextDark  = lipgloss.Color("#1c1c1c")
+	pillTextLight = lipgloss.Color("#f5f5f5")
+)
+
+// pillForeground picks near-black or near-white text for legibility on the pill
+// fill. A 16-color fill is judged by its palette index, not its RGBA: the
+// nominal RGB of a basic ANSI color understates how brightly a terminal renders
+// it (basic green and yellow report as dark olive/green yet display bright), so
+// green, yellow, cyan and white — and their bright variants — take dark text
+// while the darker red, blue and magenta take light. Any other color
+// (256-palette or truecolour, including the entity-hash fallback for an unknown
+// category) is judged by its Rec. 601 luma.
+func pillForeground(bg color.Color) color.Color {
+	if basic, ok := bg.(ansi.BasicColor); ok {
+		switch basic {
+		case ansi.Green, ansi.Yellow, ansi.Cyan, ansi.White,
+			ansi.BrightGreen, ansi.BrightYellow, ansi.BrightCyan, ansi.BrightWhite:
+			return pillTextDark
+		default:
+			return pillTextLight
+		}
+	}
+	r, g, b, _ := bg.RGBA() // channels 0..0xffff, alpha-premultiplied
+	if (299*r+587*g+114*b)/1000 > 0x7fff {
+		return pillTextDark
+	}
+	return pillTextLight
+}
+
+// themeColor returns the foreground color of an optional theme style, or nil
+// when the style is unset, so a pill can fall back to bare text.
+func themeColor(s *lipgloss.Style) color.Color {
+	if s == nil {
+		return nil
+	}
+	return colorOrNil(s.GetForeground())
+}
+
+// colorOrNil maps lipgloss's "no color" sentinel to nil so callers can treat
+// an unset color uniformly.
+func colorOrNil(c color.Color) color.Color {
+	if c == nil {
+		return nil
+	}
+	if _, ok := c.(lipgloss.NoColor); ok {
+		return nil
+	}
+	return c
+}
+
+// priorityStyle colors a priority on Jira's scale: red for high and highest,
+// orange for medium, blue for low and lowest. It uses the theme's semantic
+// colors so it tracks the active theme, and bolds the most urgent level to keep
+// it distinct from high. An unrecognized priority falls back to a per-name hash
+// color.
 func priorityStyle(cfg plainConfig, priority string) lipgloss.Style {
 	if !cfg.tty || cfg.theme == nil {
 		return lipgloss.NewStyle()
@@ -783,13 +887,11 @@ func priorityStyle(cfg plainConfig, priority string) lipgloss.Style {
 	case "blocker", "critical", "highest", "p0", "p1":
 		return foregroundStyle(cfg.theme.Red).Bold(true)
 	case "high", "p2":
-		return foregroundStyle(cfg.theme.Orange).Bold(true)
+		return foregroundStyle(cfg.theme.Red)
 	case "medium", "normal", "p3":
-		return foregroundStyle(cfg.theme.Yellow)
-	case "low", "p4":
-		return foregroundStyle(cfg.theme.Green)
-	case "lowest", "trivial", "p5":
-		return dimStyle(cfg)
+		return foregroundStyle(cfg.theme.Orange)
+	case "low", "p4", "lowest", "trivial", "p5":
+		return foregroundStyle(cfg.theme.Blue)
 	default:
 		return hashStyle(cfg.theme, "priority:"+priority)
 	}
