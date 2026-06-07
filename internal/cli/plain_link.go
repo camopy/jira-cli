@@ -3,11 +3,11 @@ package cli
 import (
 	"io"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/gechr/clog"
 	termansi "github.com/gechr/x/ansi"
+	"github.com/gechr/x/human"
 )
 
 func WriteLinkListPlain(w io.Writer, command string, data any, opts ...PlainOption) error {
@@ -27,7 +27,7 @@ func WriteLinkListPlain(w io.Writer, command string, data any, opts ...PlainOpti
 	key, _ := m["key"].(string)
 	header := style.bold("Links on " + key)
 	if count := len(links); count > 0 {
-		header += style.dim("  (" + plainPluralize(count, "link", "links") + ")")
+		header += style.dim("  (" + human.Pluralize(count, "link", "links") + ")")
 	}
 	logger.Info().Parts(clog.PartMessage).Msg(header)
 
@@ -157,11 +157,4 @@ func truncate(s string, n int) string {
 		return ""
 	}
 	return termansi.Truncate(s, n, "…")
-}
-
-func plainPluralize(n int, singular, plural string) string {
-	if n == 1 {
-		return "1 " + singular
-	}
-	return strconv.Itoa(n) + " " + plural
 }

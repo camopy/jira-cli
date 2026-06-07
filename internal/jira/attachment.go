@@ -9,6 +9,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strings"
+
+	xstrings "github.com/gechr/x/strings"
 )
 
 const maxAttachmentUploadBytes = 100 << 20
@@ -81,7 +83,7 @@ func NewAttachmentService(client *Client) AttachmentService {
 // REST surface — attachments come back under the issue body when
 // requested via the `fields` selector.
 func (s *attachmentService) List(ctx context.Context, key string) ([]Attachment, *Response, error) {
-	if strings.TrimSpace(key) == "" {
+	if xstrings.IsBlank(key) {
 		return nil, nil, errors.New("attachment list: issue key is required")
 	}
 	path := RESTPath("issue", key) + "?fields=attachment"
@@ -109,7 +111,7 @@ func (s *attachmentService) List(ctx context.Context, key string) ([]Attachment,
 // room to swap to io.Pipe without changing callers when a real-world
 // large-file regression surfaces.
 func (s *attachmentService) Add(ctx context.Context, key string, files []FileSource) ([]Attachment, *Response, error) {
-	if strings.TrimSpace(key) == "" {
+	if xstrings.IsBlank(key) {
 		return nil, nil, errors.New("attachment add: issue key is required")
 	}
 	if len(files) == 0 {
@@ -120,7 +122,7 @@ func (s *attachmentService) Add(ctx context.Context, key string, files []FileSou
 	writer := multipart.NewWriter(&body)
 	var total int64
 	for i, f := range files {
-		if strings.TrimSpace(f.Name) == "" {
+		if xstrings.IsBlank(f.Name) {
 			return nil, nil, fmt.Errorf("attachment add: file %d has empty name", i)
 		}
 		if f.Reader == nil {
@@ -179,7 +181,7 @@ func (s *attachmentService) Add(ctx context.Context, key string, files []FileSou
 // not nested under the issue (data-model.md cross-entity constraint).
 // Returns 204 No Content on success.
 func (s *attachmentService) Delete(ctx context.Context, attachmentID string) (*Response, error) {
-	if strings.TrimSpace(attachmentID) == "" {
+	if xstrings.IsBlank(attachmentID) {
 		return nil, errors.New("attachment delete: attachment id is required")
 	}
 	req, err := s.client.NewRequest(ctx, http.MethodDelete, RESTPath("attachment", attachmentID), nil)
@@ -198,7 +200,7 @@ func (s *attachmentService) Delete(ctx context.Context, attachmentID string) (*R
 // body for JSON unmarshalling; we need the unread body to stream into
 // the caller's destination.
 func (s *attachmentService) Download(ctx context.Context, attachmentID string) (io.ReadCloser, *Response, error) {
-	if strings.TrimSpace(attachmentID) == "" {
+	if xstrings.IsBlank(attachmentID) {
 		return nil, nil, errors.New("attachment download: attachment id is required")
 	}
 	req, err := s.client.NewRawRequest(ctx, http.MethodGet, RESTPath("attachment", "content", attachmentID), nil)

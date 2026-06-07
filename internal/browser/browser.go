@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	xstrings "github.com/gechr/x/strings"
 )
 
 // IssueURL returns the /browse/<key> URL for an issue, or "" when either the
@@ -43,7 +45,7 @@ func trimBase(baseURL string) string {
 // The URL must be built by the IssueURL/SearchURL helpers (callers never pass
 // unvalidated input straight through).
 func Open(ctx context.Context, rawURL string) error {
-	if strings.TrimSpace(rawURL) == "" {
+	if xstrings.IsBlank(rawURL) {
 		return fmt.Errorf("browser: empty URL")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)

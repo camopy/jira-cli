@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
@@ -528,7 +528,7 @@ func buildCommentBody(cmd *cobra.Command, markdown, jsonInput string, noInput bo
 	// Empty/missing body: prefer the explicit "body is required" wording so
 	// the validation error surfaces consistently. The --no-input rider still
 	// appears when the caller passed neither flag *and* opted out of prompts.
-	if strings.TrimSpace(markdown) == "" && jsonInput == "" {
+	if xstrings.IsBlank(markdown) && jsonInput == "" {
 		switch {
 		case markdownSet:
 			return adf.Document{}, nil, fmt.Errorf("validation: comment body is required: --body-markdown is empty")
@@ -559,7 +559,7 @@ func buildCommentBody(cmd *cobra.Command, markdown, jsonInput string, noInput bo
 		}
 		return parsed, nil, nil
 	}
-	if strings.TrimSpace(markdown) == "" {
+	if xstrings.IsBlank(markdown) {
 		return adf.Document{}, nil, fmt.Errorf("validation: comment body is required: --body-markdown is empty")
 	}
 	doc, warnings, err := adf.FromMarkdownLossy(markdown)

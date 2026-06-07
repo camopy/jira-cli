@@ -20,6 +20,7 @@ import (
 	"strings"
 	"unicode"
 
+	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/issuekey"
 )
 
@@ -59,7 +60,7 @@ func (o BuildOptions) Build() (string, error) {
 		return "", err
 	}
 
-	if len(clauses) == 0 && strings.TrimSpace(o.OrderBy) == "" && !o.Descending {
+	if len(clauses) == 0 && xstrings.IsBlank(o.OrderBy) && !o.Descending {
 		return DefaultIssueListJQL, nil
 	}
 	if len(clauses) == 0 {
@@ -369,7 +370,7 @@ func IssueList(raw string, builder BuildOptions) (string, error) {
 	if len(clauses) == 0 {
 		return query + orderBy, nil
 	}
-	if strings.TrimSpace(query) == "" {
+	if xstrings.IsBlank(query) {
 		return strings.Join(clauses, " AND ") + orderBy, nil
 	}
 	clauses = append(clauses, parenthesizeJQL(query))

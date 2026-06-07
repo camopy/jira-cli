@@ -10,6 +10,8 @@ import (
 
 	"github.com/gechr/clog"
 	termansi "github.com/gechr/x/ansi"
+	"github.com/gechr/x/human"
+	xstrings "github.com/gechr/x/strings"
 )
 
 // WriteBoardListPlain renders the `boards.list` envelope's data block
@@ -41,7 +43,7 @@ func WriteBoardListPlain(w io.Writer, command string, data any, opts ...PlainOpt
 		source = "cache"
 	}
 	fetchedAt, _ := m["fetched_at"].(string)
-	header := style.bold("Boards") + style.dim("  ("+plainPluralize(len(rows), "board", "boards")+", source: "+source)
+	header := style.bold("Boards") + style.dim("  ("+human.Pluralize(len(rows), "board", "boards")+", source: "+source)
 	if fetchedAt != "" {
 		header += style.dim(", fetched_at: " + fetchedAt)
 	}
@@ -68,7 +70,7 @@ func WriteBoardListPlain(w io.Writer, command string, data any, opts ...PlainOpt
 func boardPlainLine(m map[string]any, style authPlainStyle) string {
 	idStr := boardIDString(m["id"])
 	name, _ := m["name"].(string)
-	if strings.TrimSpace(name) == "" {
+	if xstrings.IsBlank(name) {
 		name = "(unnamed)"
 	}
 	typeName, _ := m["type"].(string)

@@ -8,6 +8,8 @@ import (
 	"os"
 	"strings"
 	"sync"
+
+	xstrings "github.com/gechr/x/strings"
 )
 
 var ErrCredentialNotFound = errors.New("credential not found")
@@ -573,7 +575,7 @@ var ErrCredentialEmpty = errors.New("credential is empty")
 // blank credential is an error, not a stored value.
 func ReadSecret(raw string) (string, error) {
 	secret := strings.TrimRight(raw, "\r\n")
-	if strings.TrimSpace(secret) == "" {
+	if xstrings.IsBlank(secret) {
 		return "", &CredentialError{
 			Type:    ErrorTypeValidation,
 			ErrCode: ErrorCodeCredentialEmpty,

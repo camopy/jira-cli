@@ -82,8 +82,10 @@ func TestSaveAtomicConcurrentRace(t *testing.T) {
 	close(stop)
 	readerWG.Wait()
 
-	// No leftover temp files in the directory.
-	entries, err := filepath.Glob(filepath.Join(dir, ".atomic-*.tmp"))
+	// No leftover temp files in the directory. xos.AtomicWrite names its temp
+	// ".<base>.*", so glob every hidden entry and require none survive a Save;
+	// the config file itself is not dot-prefixed, so any match is a stray temp.
+	entries, err := filepath.Glob(filepath.Join(dir, ".*"))
 	if err != nil {
 		t.Fatalf("glob: %v", err)
 	}

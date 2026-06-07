@@ -14,6 +14,7 @@ import (
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/spf13/cobra"
 
+	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/cache"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
@@ -111,7 +112,7 @@ func FromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
 		}
 		scope.Precedence = precedenceFlag
 		return scope, precedenceFlag, nil
-	case boardNameSet && strings.TrimSpace(boardName) == "":
+	case boardNameSet && xstrings.IsBlank(boardName):
 		// `--board ""` explicitly suppresses any default. precedence "none".
 		return jira.BoardScope{}, precedenceNone, nil
 	case boardNameSet:

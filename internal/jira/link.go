@@ -5,7 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"sort"
-	"strings"
+
+	xstrings "github.com/gechr/x/strings"
 )
 
 type IssueLinkService interface {
@@ -37,7 +38,7 @@ func NewIssueLinkService(client *Client) IssueLinkService {
 }
 
 func (s *issueLinkService) List(ctx context.Context, key string) ([]IssueLinkView, *Response, error) {
-	if strings.TrimSpace(key) == "" {
+	if xstrings.IsBlank(key) {
 		return nil, nil, errors.New("issue link list: key is required")
 	}
 	req, err := s.client.NewRequest(ctx, http.MethodGet, RESTPath("issue", key)+"?fields=issuelinks", nil)
@@ -75,7 +76,7 @@ func (s *issueLinkService) Create(ctx context.Context, reqBody *IssueLinkRequest
 }
 
 func (s *issueLinkService) Delete(ctx context.Context, linkID string) (*Response, error) {
-	if strings.TrimSpace(linkID) == "" {
+	if xstrings.IsBlank(linkID) {
 		return nil, errors.New("issue link delete: linkID is required")
 	}
 	req, err := s.client.NewRequest(ctx, http.MethodDelete, RESTPath("issueLink", linkID), nil)

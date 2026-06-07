@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	xstrings "github.com/gechr/x/strings"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
@@ -38,7 +39,7 @@ func FromMarkdownLossy(markdown string) (Document, []Warning, error) {
 			doc.Content = append(doc.Content, node)
 		}
 	}
-	if len(doc.Content) == 0 && strings.TrimSpace(markdown) != "" && len(conv.warnings) == 0 {
+	if len(doc.Content) == 0 && !xstrings.IsBlank(markdown) && len(conv.warnings) == 0 {
 		doc.Content = append(doc.Content, Node{Type: "paragraph", Content: []Node{{Type: "text", Text: strings.TrimSpace(markdown)}}})
 	}
 	return doc, conv.warnings, nil

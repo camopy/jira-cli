@@ -13,6 +13,7 @@ import (
 	"charm.land/huh/v2"
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/gechr/clog"
+	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
@@ -229,7 +230,7 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 			// metadata. Require baseURL at minimum; profileName
 			// defaults are reasonable but baseURL is the load-bearing
 			// piece a profile needs.
-			if noInput && strings.TrimSpace(baseURL) == "" {
+			if noInput && xstrings.IsBlank(baseURL) {
 				return fmt.Errorf("validation: --no-input requires --base-url (or --json-input with base_url)")
 			}
 			// Trim and validate the profile name on every path. The
@@ -355,7 +356,7 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 			// the account email as the username. Storing a token without an
 			// email yields a credential that can never authenticate, so refuse
 			// it before any network call or storage — even under --skip-verify.
-			if credential != "" && strings.TrimSpace(profile.Email) == "" {
+			if credential != "" && xstrings.IsBlank(profile.Email) {
 				return fmt.Errorf("validation: an account email is required to store a Jira Cloud API token; pass --email")
 			}
 			// The token is about to be sent over the network (verification) and
@@ -810,7 +811,7 @@ func authLoginHuhOptions(options []authLoginOption) []huh.Option[string] {
 
 func requiredString(message string) func(string) error {
 	return func(value string) error {
-		if strings.TrimSpace(value) == "" {
+		if xstrings.IsBlank(value) {
 			return errors.New(message)
 		}
 		return nil
@@ -846,14 +847,14 @@ func validateSecretBackend(value string) error {
 // no-ops for other backends. The interactive form binds these and the headless
 // command body calls them, so the two input paths share one rule.
 func validateOnePasswordVault(backend config.SecretBackend, value string) error {
-	if backend == config.SecretBackendOnePassword && strings.TrimSpace(value) == "" {
+	if backend == config.SecretBackendOnePassword && xstrings.IsBlank(value) {
 		return errors.New("1Password backend requires a vault")
 	}
 	return nil
 }
 
 func validateOnePasswordItem(backend config.SecretBackend, value string) error {
-	if backend == config.SecretBackendOnePassword && strings.TrimSpace(value) == "" {
+	if backend == config.SecretBackendOnePassword && xstrings.IsBlank(value) {
 		return errors.New("1Password backend requires an item")
 	}
 	return nil
@@ -869,11 +870,11 @@ func authLoginPreseedProfile(cfg *config.Config, requestedProfile, profileName s
 	name := profileName
 	if !profileNameChanged {
 		switch {
-		case strings.TrimSpace(requestedProfile) != "":
+		case !xstrings.IsBlank(requestedProfile):
 			name = strings.TrimSpace(requestedProfile)
-		case strings.TrimSpace(cfg.DefaultProfile) != "":
+		case !xstrings.IsBlank(cfg.DefaultProfile):
 			name = strings.TrimSpace(cfg.DefaultProfile)
-		case strings.TrimSpace(name) == "":
+		case xstrings.IsBlank(name):
 			name = "default"
 		}
 	}
@@ -1074,7 +1075,7 @@ func remoteAuthValid(remote map[string]any) bool {
 	if remote == nil {
 		return true
 	}
-	if errText, _ := remote["error"].(string); strings.TrimSpace(errText) != "" {
+	if errText, _ := remote["error"].(string); !xstrings.IsBlank(errText) {
 		return false
 	}
 	for _, key := range []string{"myself", "permissions"} {
@@ -1096,13 +1097,13 @@ func authStatusErrors(profiles []map[string]any) []cli.Error {
 		name, _ := profile["profile"].(string)
 		errMsg, _ := profile["error"].(string)
 		errorMessages := make([]string, 0, 2)
-		if strings.TrimSpace(errMsg) != "" {
+		if !xstrings.IsBlank(errMsg) {
 			errorMessages = append(errorMessages, errMsg)
 		}
 		msg := "profile " + name + " is not authenticated"
 		hint := "run `jira auth login --profile-name " + name + "` with a current Jira API token"
 		if remote, _ := profile["remote"].(map[string]any); remote != nil {
-			if remoteErr, _ := remote["error"].(string); strings.TrimSpace(remoteErr) != "" {
+			if remoteErr, _ := remote["error"].(string); !xstrings.IsBlank(remoteErr) {
 				if strings.TrimSpace(remoteErr) != strings.TrimSpace(errMsg) {
 					errorMessages = append(errorMessages, remoteErr)
 				}
@@ -1137,7 +1138,7 @@ func authStatusErrors(profiles []map[string]any) []cli.Error {
 }
 
 func authStatusHint(fields map[string]any, fallback string) string {
-	if hint, _ := fields["hint"].(string); strings.TrimSpace(hint) != "" {
+	if hint, _ := fields["hint"].(string); !xstrings.IsBlank(hint) {
 		return hint
 	}
 	return fallback

@@ -165,27 +165,11 @@ func atomicWrite(path string, data []byte) error {
 	if !xos.IsWritableDir(dir) {
 		return fmt.Errorf("config directory %q is not writable", dir)
 	}
-	tmp, err := os.CreateTemp(dir, ".atomic-*.tmp")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	defer func() {
-		// Best-effort cleanup when rename below fails.
-		_ = os.Remove(tmpName)
-	}()
-	if err := os.Chmod(tmpName, 0o600); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, path)
+	// Resolve symlinks and check the directory here, then let xos.AtomicWrite
+	// own the temp-file, fsync and rename; the write-through wrapper keeps the
+	// symlink-target semantics while the library owns the durable-rename
+	// mechanics.
+	return xos.AtomicWrite(path, data, 0o600)
 }
 
 // writeThroughPath resolves path so an atomic temp-file+rename rewrites a

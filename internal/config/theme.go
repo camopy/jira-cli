@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	clibtheme "github.com/gechr/clib/theme"
+	xstrings "github.com/gechr/x/strings"
 )
 
 // EnvThemeName overrides the default theme process-wide. It matches the prefix
@@ -54,7 +55,7 @@ func ValidateThemeName(name string) error {
 // themeFromName resolves a single theme name. It returns nil for an empty or
 // unrecognized name so callers fall back to the dark default.
 func themeFromName(name string) *clibtheme.Theme {
-	if strings.TrimSpace(name) == "" {
+	if xstrings.IsBlank(name) {
 		return nil
 	}
 	var th clibtheme.Theme

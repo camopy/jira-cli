@@ -12,6 +12,7 @@ import (
 
 	"charm.land/huh/v2"
 	clib "github.com/gechr/clib/cli/cobra"
+	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/browser"
 	"github.com/matcra587/jira-cli/internal/cli"
@@ -409,7 +410,7 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 		}
 		profile := cmdutil.ActiveProfile(cmd, cfg)
 		builder := opts.builder
-		if !scopeActive && strings.TrimSpace(opts.jqlQuery) == "" {
+		if !scopeActive && xstrings.IsBlank(opts.jqlQuery) {
 			builder = issueListBuilderWithProfileDefaults(builder, profile)
 		}
 		query, err := jql.IssueList(opts.jqlQuery, builder)
@@ -428,7 +429,7 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 		return err
 	}
 	builder := opts.builder
-	if !scopeActive && strings.TrimSpace(opts.jqlQuery) == "" {
+	if !scopeActive && xstrings.IsBlank(opts.jqlQuery) {
 		builder = issueListBuilderWithProfileDefaults(builder, profile)
 	}
 	query, err := jql.IssueList(opts.jqlQuery, builder)

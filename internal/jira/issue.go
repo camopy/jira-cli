@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/jql"
 )
@@ -178,7 +179,7 @@ func (s *issueService) List(ctx context.Context, opts *IssueListOptions) ([]*Iss
 	if len(body.Fields) == 0 {
 		body.Fields = DefaultIssueListFields()
 	}
-	if strings.TrimSpace(body.JQL) == "" {
+	if xstrings.IsBlank(body.JQL) {
 		body.JQL = jql.DefaultIssueListJQL
 	}
 	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("search", "jql"), body.payload())
@@ -213,7 +214,7 @@ func (s *issueService) Get(ctx context.Context, key string, opts *IssueGetOption
 }
 
 func (s *issueService) Create(ctx context.Context, reqBody *IssueCreateRequest) (*Issue, *Response, error) {
-	if reqBody == nil || strings.TrimSpace(reqBody.Summary) == "" {
+	if reqBody == nil || xstrings.IsBlank(reqBody.Summary) {
 		return nil, nil, errors.New("summary is required")
 	}
 	if reqBody.DryRun {

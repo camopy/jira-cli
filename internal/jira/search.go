@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+
+	xstrings "github.com/gechr/x/strings"
 )
 
 type SearchService interface {
@@ -68,7 +70,7 @@ type approximateCountResult struct {
 // POST /search/approximate-count, without fetching any issue page. The count
 // is an estimate with no error bound, and the endpoint ignores any ORDER BY.
 func (s *searchService) ApproximateCount(ctx context.Context, jql string) (int, *Response, error) {
-	if strings.TrimSpace(jql) == "" {
+	if xstrings.IsBlank(jql) {
 		return 0, nil, errors.New("jql is required")
 	}
 	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("search", "approximate-count"), approximateCountPayload{JQL: jql})

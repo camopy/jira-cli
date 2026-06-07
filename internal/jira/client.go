@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gechr/clog"
+	xstrings "github.com/gechr/x/strings"
 )
 
 const (
@@ -199,7 +200,7 @@ func WithBaseURL(raw string) Option {
 }
 
 func parseClientBaseURL(raw string) (*url.URL, error) {
-	if strings.TrimSpace(raw) == "" {
+	if xstrings.IsBlank(raw) {
 		return nil, fmt.Errorf("jira client: base URL is required")
 	}
 	u, err := url.Parse(strings.TrimSpace(raw))

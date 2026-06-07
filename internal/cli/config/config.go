@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
@@ -148,10 +149,10 @@ $ jira config init --profile work --base-url https://acme.atlassian.net --email 
 
 func missingConfigInitRequiredFlags(baseURL, email string) []string {
 	var missing []string
-	if strings.TrimSpace(baseURL) == "" {
+	if xstrings.IsBlank(baseURL) {
 		missing = append(missing, "base-url")
 	}
-	if strings.TrimSpace(email) == "" {
+	if xstrings.IsBlank(email) {
 		missing = append(missing, "email")
 	}
 	return missing

@@ -40,7 +40,7 @@ func WriteAttachmentListPlain(w io.Writer, command string, data any, opts ...Pla
 			count = t
 		}
 	}
-	header := style.bold("Attachments") + style.dim("  ("+attachmentPlainPluralize(count, "attachment", "attachments")+")")
+	header := style.bold("Attachments") + style.dim("  ("+human.Pluralize(count, "attachment", "attachments")+")")
 	logger.Info().Parts(clog.PartMessage).Msg(header)
 
 	if len(rows) == 0 {
@@ -137,14 +137,4 @@ func attachmentHumanCreatedFrom(ts string, now time.Time) string {
 		return human.FormatTimeAgoCompactFrom(t, now)
 	}
 	return ts
-}
-
-// attachmentPlainPluralize is a local copy of the helper from
-// plain_link.go. Duplicated to keep the renderer self-contained when
-// future cleanup moves all `Write*Plain` files to a shared helper file.
-func attachmentPlainPluralize(n int, singular, plural string) string {
-	if n == 1 {
-		return fmt.Sprintf("%d %s", n, singular)
-	}
-	return fmt.Sprintf("%d %s", n, plural)
 }

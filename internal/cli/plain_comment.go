@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/gechr/clog"
+	"github.com/gechr/x/human"
+	xstrings "github.com/gechr/x/strings"
 )
 
 // WriteCommentListPlain renders the `data` payload from `comment list` as
@@ -54,7 +56,7 @@ func WriteCommentListPlain(w io.Writer, command string, data any, opts ...PlainO
 
 	header := style.bold("Comments")
 	if count := len(comments); count > 0 {
-		header += style.dim("  (" + plainPluralize(count, "comment", "comments") + ")")
+		header += style.dim("  (" + human.Pluralize(count, "comment", "comments") + ")")
 	}
 	logger.Info().Parts(clog.PartMessage).Msg(header)
 
@@ -77,7 +79,7 @@ func commentPlainLine(c map[string]any, style authPlainStyle) string {
 
 	authorName := "(unknown)"
 	if author, ok := c["author"].(map[string]any); ok {
-		if n, ok := author["display_name"].(string); ok && strings.TrimSpace(n) != "" {
+		if n, ok := author["display_name"].(string); ok && !xstrings.IsBlank(n) {
 			authorName = n
 		}
 	}

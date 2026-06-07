@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/cache"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
@@ -120,7 +121,7 @@ func PrimeBoards(ctx context.Context, client *jira.Client, ttlMinutes int, unbou
 			clean.Name = &n
 		}
 		if clean.ID == nil || *clean.ID <= 0 ||
-			clean.Name == nil || strings.TrimSpace(*clean.Name) == "" {
+			clean.Name == nil || xstrings.IsBlank(*clean.Name) {
 			droppedRecords++
 			continue
 		}

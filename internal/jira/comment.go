@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
 )
 
@@ -160,12 +161,12 @@ func ParseVisibilityChange(flags VisibilityFlags) (VisibilityChange, error) {
 	}
 	switch {
 	case flags.RoleSet:
-		if strings.TrimSpace(flags.Role) == "" {
+		if xstrings.IsBlank(flags.Role) {
 			return VisibilityChange{}, errors.New("validation: --visibility-role requires a non-empty role name")
 		}
 		return VisibilityChange{Mode: VisibilityReplace, Type: "role", Value: flags.Role}, nil
 	case flags.GroupSet:
-		if strings.TrimSpace(flags.Group) == "" {
+		if xstrings.IsBlank(flags.Group) {
 			return VisibilityChange{}, errors.New("validation: --visibility-group requires a non-empty group name")
 		}
 		return VisibilityChange{Mode: VisibilityReplace, Type: "group", Value: flags.Group}, nil

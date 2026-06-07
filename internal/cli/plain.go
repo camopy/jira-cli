@@ -15,6 +15,8 @@ import (
 	"github.com/gechr/clog"
 	"github.com/gechr/primer/table"
 	termansi "github.com/gechr/x/ansi"
+	"github.com/gechr/x/human"
+	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/browser"
 	"github.com/matcra587/jira-cli/internal/config"
@@ -374,7 +376,7 @@ func writeJQLPreviewPlain(logger *clog.Logger, data any, cfg plainConfig) error 
 		return writeGenericPlain(logger, "", data)
 	}
 	query, _ := m["jql"].(string)
-	if strings.TrimSpace(query) == "" {
+	if xstrings.IsBlank(query) {
 		return writeGenericPlain(logger, "", data)
 	}
 	if cfg.debug {
@@ -805,7 +807,7 @@ func priorityStyle(cfg plainConfig, priority string) lipgloss.Style {
 }
 
 func assigneeStyle(cfg plainConfig, assignee string) lipgloss.Style {
-	if strings.TrimSpace(assignee) == "" {
+	if xstrings.IsBlank(assignee) {
 		return dimStyle(cfg)
 	}
 	if !cfg.tty {
@@ -822,7 +824,7 @@ func dimStyle(cfg plainConfig) lipgloss.Style {
 }
 
 func hashStyle(theme *clibtheme.Theme, key string) lipgloss.Style {
-	if theme == nil || len(theme.EntityColors) == 0 || strings.TrimSpace(key) == "" {
+	if theme == nil || len(theme.EntityColors) == 0 || xstrings.IsBlank(key) {
 		return lipgloss.NewStyle()
 	}
 	h := fnv.New32a()
@@ -858,7 +860,7 @@ func formatAssignee(value any) string {
 		return jiraUserName(v)
 	case map[string]any:
 		for _, key := range []string{"displayName", "display_name", "name", "emailAddress", "email", "accountId", "account_id"} {
-			if s, ok := v[key].(string); ok && strings.TrimSpace(s) != "" {
+			if s, ok := v[key].(string); ok && !xstrings.IsBlank(s) {
 				return s
 			}
 		}
@@ -867,13 +869,13 @@ func formatAssignee(value any) string {
 }
 
 func jiraUserName(user jira.User) string {
-	if user.DisplayName != nil && strings.TrimSpace(*user.DisplayName) != "" {
+	if user.DisplayName != nil && !xstrings.IsBlank(*user.DisplayName) {
 		return *user.DisplayName
 	}
-	if user.EmailAddress != nil && strings.TrimSpace(*user.EmailAddress) != "" {
+	if user.EmailAddress != nil && !xstrings.IsBlank(*user.EmailAddress) {
 		return *user.EmailAddress
 	}
-	if user.AccountID != nil && strings.TrimSpace(*user.AccountID) != "" {
+	if user.AccountID != nil && !xstrings.IsBlank(*user.AccountID) {
 		return *user.AccountID
 	}
 	return ""
@@ -881,7 +883,7 @@ func jiraUserName(user jira.User) string {
 
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
+		if !xstrings.IsBlank(value) {
 			return value
 		}
 	}
@@ -1004,7 +1006,7 @@ func plainFieldValue(value any) any {
 		if rv.Len() == 0 {
 			return "[]"
 		}
-		return "[" + plainPluralize(rv.Len(), "item", "items") + "]"
+		return "[" + human.Pluralize(rv.Len(), "item", "items") + "]"
 	case rv.IsValid() && rv.Kind() == reflect.Map:
 		if rv.Len() == 0 {
 			return "{}"

@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/gechr/clog"
+	"github.com/gechr/x/human"
+	xstrings "github.com/gechr/x/strings"
 )
 
 // WriteWatcherListPlain renders the `issue.watchers.list` envelope for
@@ -35,7 +37,7 @@ func WriteWatcherListPlain(w io.Writer, command string, data any, opts ...PlainO
 	} else {
 		count = len(watchers)
 	}
-	header := style.bold("Watchers") + style.dim("  ("+plainPluralize(count, "watcher", "watchers")+")")
+	header := style.bold("Watchers") + style.dim("  ("+human.Pluralize(count, "watcher", "watchers")+")")
 	if isWatching, _ := m["is_watching"].(bool); isWatching {
 		header += "  " + style.emph("(you are watching)")
 	}
@@ -65,7 +67,7 @@ func watcherPlainLine(m map[string]any, style authPlainStyle) string {
 	accountID, _ := m["account_id"].(string)
 	email, _ := m["email_address"].(string)
 	emailDisplay := email
-	if strings.TrimSpace(emailDisplay) == "" {
+	if xstrings.IsBlank(emailDisplay) {
 		emailDisplay = "(hidden)"
 	}
 
