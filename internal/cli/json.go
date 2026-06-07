@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gechr/clog"
+	clogtheme "github.com/gechr/clog/theme"
 )
 
 // Envelope is the machine-readable JSON output contract. ok is always
@@ -134,20 +135,24 @@ func WarningFrom(src WarningSource) Warning {
 // WriteEnvelope serializes a full JSON envelope to w. A clog encode or
 // write failure is surfaced to the caller rather than silently dropped.
 func WriteEnvelope(w io.Writer, env Envelope) error {
-	return writeJSON(w, env, clog.JSONFlat, clog.ColorNever)
+	return writeJSON(w, env, clog.JSONFlat, clog.ColorNever, nil)
 }
 
 // WriteCompact serializes the JSON data payload to w without the
 // envelope wrapper. A clog encode or write failure is surfaced to the
 // caller rather than silently dropped.
 func WriteCompact(w io.Writer, data any) error {
-	return writeJSON(w, data, clog.JSONFlat, clog.ColorNever)
+	return writeJSON(w, data, clog.JSONFlat, clog.ColorNever, nil)
 }
 
 // WriteHumanJSON serializes JSON through clog's pretty printer for
 // endpoints whose human mode still has a structured JSON contract.
-func WriteHumanJSON(w io.Writer, data any) error {
-	return writeJSON(w, data, clog.JSONPretty, clog.ColorAuto)
+// printTheme, when non-nil, retints the syntax highlighting to match the
+// user's resolved theme and terminal background, so highlighted JSON stays
+// readable on a light terminal just as entity colors do; nil keeps clog's
+// built-in dark palette.
+func WriteHumanJSON(w io.Writer, data any, printTheme *clogtheme.Theme) error {
+	return writeJSON(w, data, clog.JSONPretty, clog.ColorAuto, printTheme)
 }
 
 // writeJSON encodes data through clog's JSON printer in the given mode.
@@ -159,13 +164,17 @@ func WriteHumanJSON(w io.Writer, data any) error {
 // so the envelope's key structure is always preserved verbatim. Don't conflate
 // the two: enabling key flattening would silently reshape the machine envelope
 // that agents and the slack-cli sibling depend on.
-func writeJSON(w io.Writer, data any, mode clog.JSONPrintMode, color clog.ColorMode) error {
+func writeJSON(w io.Writer, data any, mode clog.JSONPrintMode, color clog.ColorMode, printTheme *clogtheme.Theme) error {
 	ew := &errWriter{w: w}
 	out := io.Writer(ew)
 	if _, ok := w.(interface{ Fd() uintptr }); ok {
 		out = fdErrFile{errWriter: ew}
 	}
-	clog.New(clog.NewOutput(out, color)).Print().Mode(mode).JSON(data)
+	logger := clog.New(clog.NewOutput(out, color))
+	if printTheme != nil {
+		logger.SetPrintTheme(printTheme)
+	}
+	logger.Print().Mode(mode).JSON(data)
 	return ew.err
 }
 

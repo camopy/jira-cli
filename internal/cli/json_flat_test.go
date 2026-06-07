@@ -36,7 +36,7 @@ func TestWriteHumanJSONEmitsPrettyJSON(t *testing.T) {
 		"ok":   true,
 		"data": map[string]any{"key": "ABC-1"},
 	}
-	if err := cli.WriteHumanJSON(&buf, data); err != nil {
+	if err := cli.WriteHumanJSON(&buf, data, nil); err != nil {
 		t.Fatalf("WriteHumanJSON: %v", err)
 	}
 	got := buf.String()

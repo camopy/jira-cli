@@ -3,12 +3,32 @@ package cmdutil
 import (
 	"os"
 
+	clibtheme "github.com/gechr/clib/theme"
 	"github.com/gechr/clog"
+	clogtheme "github.com/gechr/clog/theme"
 	"github.com/gechr/x/terminal"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/spf13/cobra"
 )
+
+// HumanJSONPrintTheme resolves clog's print theme for human-mode JSON so its
+// syntax highlighting follows the same light/dark decision as hash-based entity
+// colors. It mirrors the resolution in PlainOptionsForCommand exactly —
+// JIRA_THEME wins, the "auto" theme detects the terminal background — so
+// highlighted JSON and entity colors never disagree about the background.
+func HumanJSONPrintTheme(cmd *cobra.Command) *clogtheme.Theme {
+	th := config.DefaultTheme()
+	if cfg, err := config.Load(config.WithPath(ConfigPath(cmd))); err == nil {
+		if config.IsAutoTheme(cfg.Theme.Name) && !clog.ColorsDisabled() {
+			th = config.AutoTheme(os.Stdout)
+		}
+	}
+	if th.Background == clibtheme.BackgroundLight {
+		return clogtheme.Light()
+	}
+	return clogtheme.Dark()
+}
 
 // resolvedOutputMode returns the output mode resolved by PersistentPreRunE
 // from the --output flag and terminal/agent detection. It is the single

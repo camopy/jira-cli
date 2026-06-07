@@ -70,7 +70,7 @@ func WriteSchema(cmd *cobra.Command) error {
 		Warnings: []cli.Warning{},
 	}
 	if cmdutil.UseHumanJSONOutput(cmd) {
-		return cli.WriteHumanJSON(cmd.OutOrStdout(), env)
+		return cli.WriteHumanJSON(cmd.OutOrStdout(), env, cmdutil.HumanJSONPrintTheme(cmd))
 	}
 	if cmdutil.UsePlainOutput(cmd) {
 		return cli.WritePlain(cmd.OutOrStdout(), data)

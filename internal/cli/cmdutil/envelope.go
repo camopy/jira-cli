@@ -144,7 +144,7 @@ func writeRawWarningEnvelope(cmd *cobra.Command, command string, data any, warni
 		"warnings": rawWarningsOrEmpty(warnings),
 	}
 	if UseHumanJSONOutput(cmd) {
-		return cli.WriteHumanJSON(cmd.OutOrStdout(), body)
+		return cli.WriteHumanJSON(cmd.OutOrStdout(), body, HumanJSONPrintTheme(cmd))
 	}
 	enc := json.NewEncoder(cmd.OutOrStdout())
 	return enc.Encode(body)
@@ -312,7 +312,7 @@ func WriteEnvelopeWithResponseAndWarnings(cmd *cobra.Command, command string, da
 
 func writeEnvelopeJSON(cmd *cobra.Command, w io.Writer, env cli.Envelope) error {
 	if UseHumanJSONOutput(cmd) {
-		return cli.WriteHumanJSON(w, env)
+		return cli.WriteHumanJSON(w, env, HumanJSONPrintTheme(cmd))
 	}
 	return cli.WriteEnvelope(w, env)
 }
