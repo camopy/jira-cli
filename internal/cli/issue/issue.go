@@ -227,7 +227,7 @@ func runIssueViewMany(cmd *cobra.Command, keys []string, parallelism int) error 
 	}
 
 	service := cmdutil.ServicesForClient(client).Issue()
-	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (*jira.Issue, error) {
+	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "Fetching issues", keys, parallelism, func(ctx context.Context, key string) (*jira.Issue, error) {
 		issue, _, err := service.Get(ctx, key, issueViewGetOptions())
 		return issue, err
 	})
@@ -511,7 +511,7 @@ type issueListKeyChunkFailure struct {
 }
 
 func runIssueListKeyChunks(cmd *cobra.Command, in issueListKeyChunkInputs) error {
-	results, err := cmdutil.FanOutKeys(cmd.Context(), in.keyChunks, in.parallelism, func(ctx context.Context, keyExpr string) ([]*jira.Issue, error) {
+	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "Fetching issues", in.keyChunks, in.parallelism, func(ctx context.Context, keyExpr string) ([]*jira.Issue, error) {
 		builder := in.builder
 		builder.Keys = []string{keyExpr}
 		query, err := jql.IssueList(in.opts.jqlQuery, builder)
@@ -1293,7 +1293,7 @@ func runIssueEditMany(cmd *cobra.Command, keys []string, parallelism int, in iss
 		}
 		service = cmdutil.ServicesForClient(editClient).Issue()
 	}
-	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "Editing issues", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		editIn := pipeline.MutationInput{
 			Mode:         cmdutil.ADFModeFor(cmd, true),
 			Fields:       cmdutil.CopyAnyMap(in.Fields),
@@ -1455,7 +1455,7 @@ func issueTransitionCommand() *cobra.Command {
 					return fmt.Errorf("jira base URL is required for issue.transitions")
 				}
 				service := cmdutil.ServicesForClient(client).Issue()
-				results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) ([]*jira.Transition, error) {
+				results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "Fetching transitions", keys, parallelism, func(ctx context.Context, key string) ([]*jira.Transition, error) {
 					transitions, _, err := service.Transitions(ctx, key)
 					return transitions, err
 				})
@@ -1646,7 +1646,7 @@ func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, 
 	service := cmdutil.ServicesForClient(client).Issue()
 	// Resolve the target per issue: the same status name can map to
 	// different transition ids across issues in different workflow states.
-	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "Transitioning issues", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		id, err := resolveTransitionID(ctx, service, key, target)
 		if err != nil {
 			return nil, err
@@ -1843,7 +1843,7 @@ func runDestructiveIssueMany(
 		}
 		service = cmdutil.ServicesForClient(client).Issue()
 	}
-	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), strings.ToUpper(name[:1])+name[1:]+" issues", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		destructiveIn := pipeline.MutationInput{
 			Mode:   cmdutil.ADFModeFor(cmd, true),
 			Fields: cmdutil.CopyAnyMap(in.Fields),
@@ -2030,7 +2030,7 @@ func runIssueWebLinkMany(cmd *cobra.Command, keys []string, parallelism int, in 
 		return fmt.Errorf("jira base URL is required for issue.weblink")
 	}
 	service := cmdutil.ServicesForClient(client).Issue()
-	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "Adding web links", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		if _, err := service.AddRemoteLink(ctx, key, &jira.RemoteLinkRequest{URL: in.URL, Title: in.Title}); err != nil {
 			return nil, err
 		}

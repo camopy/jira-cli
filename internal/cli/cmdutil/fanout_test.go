@@ -165,6 +165,81 @@ func BenchmarkFanOutKeys(b *testing.B) {
 	}
 }
 
+func TestFanOutKeysProgressMatchesFanOut(t *testing.T) {
+	keys := []string{"A-1", "A-2", "A-3", "A-4"}
+	run := func(useProgress bool) ([]KeyResult[string], int) {
+		var calls atomic.Int64
+		fn := func(_ context.Context, key string) (string, error) {
+			calls.Add(1)
+			if key == "A-3" {
+				return "", errors.New("boom")
+			}
+			return key + "-value", nil
+		}
+		var (
+			res []KeyResult[string]
+			err error
+		)
+		if useProgress {
+			res, err = FanOutKeysProgress(context.Background(), "Working", keys, 2, fn)
+		} else {
+			res, err = FanOutKeys(context.Background(), keys, 2, fn)
+		}
+		if err != nil {
+			t.Fatalf("top-level error = %v (useProgress=%v)", err, useProgress)
+		}
+		return res, int(calls.Load())
+	}
+
+	base, baseCalls := run(false)
+	prog, progCalls := run(true)
+	if baseCalls != len(keys) || progCalls != len(keys) {
+		t.Fatalf("fn call counts base=%d prog=%d, want %d", baseCalls, progCalls, len(keys))
+	}
+	if len(base) != len(prog) {
+		t.Fatalf("result lengths differ: base=%d prog=%d", len(base), len(prog))
+	}
+	for i := range base {
+		if base[i].Key != prog[i].Key || base[i].Value != prog[i].Value || (base[i].Err == nil) != (prog[i].Err == nil) {
+			t.Fatalf("result %d differs: base=%+v prog=%+v", i, base[i], prog[i])
+		}
+	}
+}
+
+func TestFanOutKeysProgressStaysSilentInNonTTY(t *testing.T) {
+	stdout, stderr := captureProcessOutput(t, func() {
+		_, err := FanOutKeysProgress(context.Background(), "Working", []string{"A-1", "A-2", "A-3"}, 2, func(_ context.Context, key string) (string, error) {
+			return key, nil
+		})
+		if err != nil {
+			t.Fatalf("FanOutKeysProgress() error = %v", err)
+		}
+	})
+	if stdout != "" || stderr != "" {
+		t.Fatalf("progress bar leaked output in non-TTY: stdout=%q stderr=%q", stdout, stderr)
+	}
+}
+
+func TestFanOutKeysProgressDelegatesForTrivialInputs(t *testing.T) {
+	res, err := FanOutKeysProgress(context.Background(), "Working", []string{"A-1"}, 1, func(_ context.Context, key string) (string, error) {
+		return key + "-v", nil
+	})
+	if err != nil || len(res) != 1 || res[0].Value != "A-1-v" {
+		t.Fatalf("single-key delegate: res=%+v err=%v", res, err)
+	}
+
+	var nilCtx context.Context
+	if _, err := FanOutKeysProgress(nilCtx, "Working", []string{"A-1", "A-2"}, 1, func(context.Context, string) (string, error) {
+		return "", nil
+	}); err == nil || err.Error() != "context must not be nil" {
+		t.Fatalf("nil ctx: err = %v, want %q", err, "context must not be nil")
+	}
+
+	if _, err := FanOutKeysProgress[string](context.Background(), "Working", []string{"A-1", "A-2"}, 1, nil); err == nil || err.Error() != "fanout function must not be nil" {
+		t.Fatalf("nil fn: err = %v, want %q", err, "fanout function must not be nil")
+	}
+}
+
 func captureProcessOutput(t *testing.T, fn func()) (string, string) {
 	t.Helper()
 	origStdout := os.Stdout

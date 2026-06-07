@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 
+	"github.com/gechr/clog"
+	"github.com/gechr/clog/fx"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -13,6 +16,50 @@ type KeyResult[T any] struct {
 	Key   string
 	Value T
 	Err   error
+}
+
+// FanOutKeysProgress runs FanOutKeys while showing a determinate progress bar
+// as keys complete. The bar mirrors the auth-login spinner's gating:
+// NonTTYSilent suppresses it whenever stderr is not a terminal — piped,
+// redirected, or captured by an agent — and clog writes status to stderr, so a
+// stdout JSON envelope stays clean even under --output=json. A single key, or a
+// fanout the bar cannot meaningfully track, simply falls through to FanOutKeys.
+func FanOutKeysProgress[T any](
+	ctx context.Context,
+	label string,
+	keys []string,
+	parallelism int,
+	fn func(context.Context, string) (T, error),
+) ([]KeyResult[T], error) {
+	if ctx == nil || fn == nil || len(keys) <= 1 {
+		return FanOutKeys(ctx, keys, parallelism, fn)
+	}
+
+	var (
+		results []KeyResult[T]
+		fanErr  error
+		done    atomic.Int64
+	)
+	// SetProgress stores to an atomic, so reporting from the parallel workers is
+	// race-free; the bar reads the latest count on each animation frame.
+	waitErr := clog.Bar(label, len(keys)).
+		NonTTYSilent(true).
+		Progress(ctx, func(ctx context.Context, u *fx.Update) error {
+			tracked := func(ctx context.Context, key string) (T, error) {
+				value, err := fn(ctx, key)
+				u.SetProgress(int(done.Add(1)))
+				return value, err
+			}
+			results, fanErr = FanOutKeys(ctx, keys, parallelism, tracked)
+			return fanErr
+		}).
+		Silent()
+	// Progress returns the task's error verbatim; it is the same fanErr, so
+	// either is correct to return.
+	if waitErr != nil {
+		return results, waitErr
+	}
+	return results, fanErr
 }
 
 // FanOutKeys runs fn for each key with bounded concurrency and returns results
