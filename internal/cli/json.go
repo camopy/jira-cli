@@ -150,6 +150,15 @@ func WriteHumanJSON(w io.Writer, data any) error {
 	return writeJSON(w, data, clog.JSONPretty, clog.ColorAuto)
 }
 
+// writeJSON encodes data through clog's JSON printer in the given mode.
+//
+// A note on the mode, because the names invite a dangerous mix-up:
+// clog.JSONFlat here is a JSONPrintMode meaning "no indentation, one line" —
+// it does NOT flatten keys. clog separately has style.JSONModeFlat, which
+// dot-flattens nested keys (a -> {b} becomes "a.b"); jira-cli never sets it,
+// so the envelope's key structure is always preserved verbatim. Don't conflate
+// the two: enabling key flattening would silently reshape the machine envelope
+// that agents and the slack-cli sibling depend on.
 func writeJSON(w io.Writer, data any, mode clog.JSONPrintMode, color clog.ColorMode) error {
 	ew := &errWriter{w: w}
 	out := io.Writer(ew)
