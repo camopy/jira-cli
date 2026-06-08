@@ -30,17 +30,17 @@ Markdown converts faithfully for: paragraphs, headings, **bold** / *italic* /
 blockquotes, horizontal rules, and tables. If your message is only these,
 `--body-markdown` is fine and saves you hand-writing ADF.
 
-Markdown **cannot express** — author these as native ADF:
+Markdown **cannot express** — these have no Markdown spelling, so the converter
+omits them entirely. Author them as native ADF (every one is in the supported
+set below):
 
-- mentions (`@user`, needs an `accountId`), dates (need a timestamp), status
-  lozenges, emoji nodes
-- panels (info / note / warning), expand / collapse blocks
-- media / inline attachments, task lists, decision lists, layout columns
-- the `underline`, `subsup`, and `textColor` marks
+- `mention` (`@user`, needs an `accountId`), `date` (needs a timestamp),
+  `status` lozenges, `emoji`, `inlineCard`
+- `panel` (info / note / success / warning / error)
+- the `underline`, `subsup`, `textColor`, and `backgroundColor` marks
 
-Anything in that list has no Markdown spelling, so the converter omits it
-entirely — the data is lost in translation, not flagged inline. Reach for it
-and you must send ADF.
+The data is lost in translation, not flagged inline — reach for any of these and
+you must send ADF.
 
 Safety net, not a substitute: on mutation submit ADF-strict is the default, so a
 Markdown body whose conversion *degrades a recognised construct* fails with
@@ -49,6 +49,25 @@ But strict mode only catches lossy steps the converter sees — content Markdown
 can't represent at all never enters the pipeline to be caught. Prefer ADF up
 front for any rich body; use `--dry-run` to confirm the exact doc before
 committing.
+
+### The full supported set
+
+These are every node and mark the CLI can author, validate, and submit — the
+complete menu when you build ADF by hand. `jira agent adf-matrix --output=json`
+is the machine-readable source of truth (per-row capabilities and the official
+spec URL); each shape is documented in the sections below. Anything not on this
+list is out of the MVP set: on author/submit it is rejected (strict) or carried
+through opaquely (best-effort) — see *Opaque preservation* — so do not rely on
+nodes such as `expand`, `mediaSingle`, `taskList`, `decisionList`, or `layout`.
+
+- **Structure:** `doc` (root), `paragraph`, `heading` (level 1-6), `text`,
+  `hardBreak`, `rule`
+- **Lists:** `bulletList`, `orderedList`, `listItem`
+- **Blocks:** `blockquote`, `codeBlock`, `panel`
+- **Tables:** `table`, `tableRow`, `tableHeader`, `tableCell`
+- **Inline nodes:** `mention`, `emoji`, `date`, `status`, `inlineCard`
+- **Marks:** `strong`, `em`, `strike`, `code`, `link`, `underline`, `subsup`,
+  `textColor`, `backgroundColor`
 
 ### Block nodes
 
