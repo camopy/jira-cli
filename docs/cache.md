@@ -13,28 +13,63 @@ Each `jira cache <resource>` command primes the matching `<resource>.json`,
 reading from disk when fresh and refetching from Jira when missing,
 stale, or `--refresh` is passed.
 
-| Resource | What it powers |
-|----------|----------------|
-| `projects` | `--project` completion, project-key validation on create/edit |
-| `fields` | `customfield_*` resolution in the ADF field map, `--field` completion |
-| `issuetypes` | `--type` completion, type validation on create/move |
-| `labels` | `--label` completion |
-| `epics` | `--epic` completion in the issue create flow |
-| `linktypes` | `--type` completion for [`issue link`](issues.md#link-create) |
-| `boards` | `--board` completion, board-scoped JQL in [`issue list`](issues.md#list) and [`jql build`](jql.md#build) |
-| `statuses` | `--status` completion |
-| `priorities` | `--priority` completion |
+| Resource | What it powers | Default TTL |
+|----------|----------------|-------------|
+| `labels` | `--label` completion | 1 hour |
+| `epics` | `--epic` completion in the issue create flow | 4 hours |
+| `projects` | `--project` completion | 7 days |
+| `fields` | `customfield_*` resolution in the ADF field map, `--field` completion | 14 days |
+| `boards` | `--board` completion, board-scoped JQL in [`issue list`](issues.md#list) and [`jql build`](jql.md#build) | 28 days |
+| `issuetypes` | `--type` completion (the instance-wide type list) | 30 days |
+| `statuses` | `--status` completion | 30 days |
+| `linktypes` | `--type` completion for [`issue link`](issues.md#link-create) | 90 days |
+| `priorities` | `--priority` completion | 90 days |
 
 Every primer accepts the same two flags:
 
 *   `--refresh` forces a fetch even when the cache is fresh.
-*   `--ttl-minutes <n>` overrides the freshness window before automatic
-  refresh.
+*   `--ttl-minutes <n>` overrides the resource's default freshness
+  window for this call.
 
 The envelope shape is consistent across resources: an `ok: true` /
 data block carrying `count`, `fetched_at`, `from_cache`,
-`cache_state` (`missing` / `fresh` / `stale` / `refresh`), `profile`,
-and the resource's payload field.
+`cache_state` (`missing` / `fresh` / `stale` / `malformed` / `refresh`
+/ `empty`), `profile`, and the resource's payload field.
+
+## Freshness and invalidation
+
+Each resource has its own default freshness window — its TTL, listed in
+the table above. The windows run long because completion never blocks on
+a network call: it reads whatever is cached and falls back to empty. A
+stale cache therefore only skews autocomplete — a board you just created
+stays invisible, a label you just deleted lingers — until the next
+refresh; completion never reaches for the network to correct it. (Create,
+edit, and move validation is separate: it queries Jira's live create /
+edit screens, so it is never served by this cache.) Resources that churn
+(labels, epics) keep short windows; admin-managed schema (issue types,
+statuses, link types, priorities) runs to weeks or months.
+
+A cached resource counts as a miss — and is refetched on the next
+freshness-sensitive read — when any of these hold:
+
+*   the cache file is absent;
+*   its JSON is malformed;
+*   it is older than the resource's TTL, *and* the caller asked for
+    fresh data (completion ignores age, so a long TTL never makes
+    autocomplete reach for the network);
+*   its on-disk schema version no longer matches the running binary — a
+    CLI upgrade that changes the cached shape invalidates old entries
+    rather than mis-parsing them;
+*   you pass `--refresh` or `--force`, or run `cache clear`;
+*   the `(profile, base_url, config_path)` tuple changes — a different
+    profile or site reads a different cache namespace.
+
+Age alone never triggers a *background* refetch — there is no daemon, and
+completion never makes a surprise network call. Refetching happens only
+when you run a command that reads with freshness intent: any primer (or
+[`cache refresh`](#refresh)) refetches when its cached read misses —
+absent, malformed, or past TTL — and `--refresh` / `--force` refetches
+even when the cache is still fresh.
 
 !!! note "Human output shape"
 
@@ -299,7 +334,7 @@ jira cache boards --refresh --unbounded --output=json
 === "Human"
 
     ```text
-    INF ℹ️ boards_count=3 cache_empty=false cache_source_state=fresh cache_state=fresh fetched_at=… from_cache=true primed=true profile=default truncated=false ttl_seconds=3600
+    INF ℹ️ boards_count=3 cache_empty=false cache_source_state=fresh cache_state=fresh fetched_at=… from_cache=true primed=true profile=default truncated=false ttl_seconds=2419200
     ```
 
 === "JSON"
@@ -319,7 +354,7 @@ jira cache boards --refresh --unbounded --output=json
         "profile": "default",
         "truncated": false,
         "truncated_reason": "",
-        "ttl_seconds": 3600
+        "ttl_seconds": 2419200
       },
       "errors": [],
       "warnings": []
@@ -399,6 +434,102 @@ jira cache priorities --output=json
 
 Returns the instance's issue priorities (`id`, `name`) from
 `GET /rest/api/3/priority`. Drives `--priority` completion.
+
+## refresh
+
+`cache refresh` primes several resources in one pass. With no argument it
+covers every resource; pass names to limit it. By default it is
+TTL-gated — a resource still inside its window is reported `fresh` and
+left untouched — and `--force` refetches everything.
+
+```sh
+jira cache refresh                       # every stale resource
+jira cache refresh --force               # everything, ignoring freshness
+jira cache refresh boards labels         # just these two
+jira cache refresh -p 4 --output=json    # up to four at a time
+```
+
+Resources are fetched with bounded concurrency: `-p` / `--parallelism`
+defaults to `1` (sequential — the rate-limit-safe default); raise it
+(up to 16) to fetch in parallel. `--ttl-minutes <n>` overrides every
+resource's window for the run, and `--unbounded` lifts the boards page
+cap. One resource failing does not abort the rest — the envelope keeps
+the successes in `data.results`, lists the failures in `errors[]`, and
+exits with the highest per-resource failure code.
+
+The output is the shared multi-key shape used by the batch issue
+commands: a per-resource `results[]` keyed by resource name, each
+carrying `status` (`fresh` / `refreshed`), `from_cache`, `count`,
+`fetched_at`, and `duration_ms`, plus `succeeded` / `failed` totals.
+
+=== "Human"
+
+    A summary line, then one block per successful resource — including
+    the `fresh` ones it skipped:
+
+    ```text
+    INF ℹ️ total=2 succeeded=2 failed=0
+    statuses
+    INF ℹ️ count=3 duration_ms=0 fetched_at=… from_cache=false status=refreshed
+    priorities
+    INF ℹ️ count=3 duration_ms=0 fetched_at=… from_cache=true status=fresh
+    ```
+
+    On partial failure, successes stay on stdout and a bounded
+    failed-key summary goes to stderr (exit non-zero):
+
+    ```text
+    INF ℹ️ total=2 succeeded=1 failed=1
+    statuses
+    INF ℹ️ count=3 duration_ms=0 fetched_at=… from_cache=false status=refreshed
+    ERR ❌ Failed keys total=2 succeeded=1 failed=1 reason="jira not found" keys=fields shown=1 hint="use --output=json for full per-key errors"
+    ```
+
+=== "JSON"
+
+    ```json
+    {
+      "ok": true,
+      "meta": { "command": "cache.refresh", "timestamp": "…", "request_id": "…" },
+      "data": {
+        "results": [
+          { "key": "statuses", "ok": true, "data": { "count": 3, "duration_ms": 0, "fetched_at": "…", "from_cache": false, "status": "refreshed" } },
+          { "key": "priorities", "ok": true, "data": { "count": 3, "duration_ms": 0, "fetched_at": "…", "from_cache": true, "status": "fresh" } }
+        ],
+        "succeeded": 2,
+        "failed": 0
+      },
+      "errors": [],
+      "warnings": []
+    }
+    ```
+
+    A partial failure sets `ok: false`, drops the failing resource's
+    `data` for an `error`, mirrors it into top-level `errors[]`, and
+    carries `meta.exit_code`:
+
+    ```json
+    {
+      "ok": false,
+      "meta": { "command": "cache.refresh", "exit_code": 2, "timestamp": "…", "request_id": "…" },
+      "data": {
+        "results": [
+          { "key": "statuses", "ok": true, "data": { "count": 3, "duration_ms": 0, "fetched_at": "…", "from_cache": false, "status": "refreshed" } },
+          { "key": "fields", "ok": false, "error": { "type": "not_found", "code": "jira_not_found", "http_status": 404, "provider": "jira", "retryable": false } }
+        ],
+        "succeeded": 1,
+        "failed": 1
+      },
+      "errors": [
+        { "type": "not_found", "code": "jira_not_found", "http_status": 404, "provider": "jira", "retryable": false }
+      ],
+      "warnings": []
+    }
+    ```
+
+Unknown resource names are rejected up front with
+`code=arg_value_invalid` (exit 3), before any fetch — the same
+validation as [`cache clear`](#unknown-resource).
 
 ## clear
 
@@ -485,8 +616,10 @@ valid set:
 
 Multiple agents or CI runners hitting the same Jira tenant should not
 all `cache <resource> --refresh` at once. Jira rate-limits per-token,
-and a fleet-wide synchronised refresh is the fastest way to trip a
-429.
+and a fleet-wide synchronised refresh is the fastest way to trip a 429.
+Within a single run, prefer [`cache refresh`](#refresh) over a shell
+loop of per-resource primers: it keeps concurrency bounded (`-p`,
+default sequential) and reports per-resource status in one envelope.
 
 !!! warning "Common mistake"
 

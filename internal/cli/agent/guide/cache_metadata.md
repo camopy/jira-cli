@@ -21,12 +21,15 @@ When: a `--project` / `--type` / `--board` / `--label` filter resolves to an une
 - Create-screen discovery is not exposed here yet. `jira cache issuetypes` has no `--project` filter and cannot tell whether `Story` is valid for project `<PROJECT_KEY>`; use Jira's create dialog or the live create response until a createmeta surface exists.
 
 # refresh signal
-- Cache is **never auto-refreshed**. Force with `--refresh`, age-gate with `--ttl-minutes N`, or wipe with `jira cache clear`.
+- Cache is **never auto-refreshed** in the background. Each resource has its own default freshness window (labels ~1h, epics ~4h, schema like fields/statuses/priorities ~weeks-to-months) — a read past that window only refetches when the caller asks for fresh data, so completion never makes a surprise network call. Force with `--refresh`, age-gate with `--ttl-minutes N`, prime many at once with `jira cache refresh`, or wipe with `jira cache clear`.
+- A CLI upgrade that changes a cached shape invalidates the old entry automatically: a schema-version mismatch is treated as absent, so the next freshness-sensitive read (any primer or `jira cache refresh`) refetches it and you never parse a stale shape. Completion reads return empty on a mismatch rather than refetching.
 
 **Run**
 - Per-resource prime: `jira cache labels --output=json`, `jira cache projects --output=json`, `jira cache epics --output=json`, `jira cache fields --output=json`, `jira cache issuetypes --output=json`, `jira cache linktypes --output=json`, `jira cache boards --output=json`, `jira cache statuses --output=json`, `jira cache priorities --output=json`.
 - Force refresh: `jira cache fields --refresh --output=json`
 - TTL gate (refetch if older than N minutes): `jira cache fields --ttl-minutes 5 --output=json`
+- Prime everything in one call (TTL-gated; add `--force` to ignore freshness): `jira cache refresh --output=json`
+- Prime a subset with bounded concurrency: `jira cache refresh fields projects issuetypes -p 3 --output=json`
 - Wipe one: `jira cache clear labels`
 - Wipe everything for the active profile: `jira cache clear`
 - Valid clear resources: `labels`, `projects`, `epics`, `fields`,
@@ -73,6 +76,11 @@ Envelope shape (using `linktypes` as an example):
   }
 }
 ```
+
+`jira cache refresh` uses the shared multi-key shape instead, not the per-resource envelope above:
+- `data.results[]` — one row per resource: `{key, ok, data:{status, from_cache, count, fetched_at, duration_ms}}`; `status` is `fresh` (skipped, still in window) or `refreshed` (refetched). A failed resource has `ok:false` and an `error` instead of `data`.
+- `data.succeeded` / `data.failed` [int] — totals.
+- Partial failure → top-level `ok:false`, failures mirrored into `errors[]`, `meta.exit_code` set to the highest per-resource failure code; successes are retained in `data.results`.
 
 **Preconditions**
 - Per-profile cache lives under `${XDG_CACHE_HOME:-~/.cache}/jira-cli/<profile>/`. Each subcommand prints the data AND writes it to disk.
