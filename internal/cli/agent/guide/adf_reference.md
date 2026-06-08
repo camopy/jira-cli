@@ -13,6 +13,43 @@ Every ADF doc starts with the root:
 { "type": "doc", "version": 1, "content": [ /* block nodes */ ] }
 ```
 
+### Markdown vs native ADF — which to send
+
+Body flags come in two forms: native ADF via `--json-input` (the `description`
+/ comment / `*_markdown`-free payload), and the Markdown convenience
+(`--body-markdown`, or a `*_markdown` key in a JSON payload). They are not
+equivalent.
+
+**Default to native ADF.** It is the canonical wire format and round-trips
+without loss. Build the ADF doc directly whenever the content is more than
+plain prose — the Markdown path converts client-side through a limited grammar
+and silently drops anything outside it.
+
+Markdown converts faithfully for: paragraphs, headings, **bold** / *italic* /
+`code` / ~~strike~~ / links, bullet and ordered lists, fenced code blocks,
+blockquotes, horizontal rules, and tables. If your message is only these,
+`--body-markdown` is fine and saves you hand-writing ADF.
+
+Markdown **cannot express** — author these as native ADF:
+
+- mentions (`@user`, needs an `accountId`), dates (need a timestamp), status
+  lozenges, emoji nodes
+- panels (info / note / warning), expand / collapse blocks
+- media / inline attachments, task lists, decision lists, layout columns
+- the `underline`, `subsup`, and `textColor` marks
+
+Anything in that list has no Markdown spelling, so the converter omits it
+entirely — the data is lost in translation, not flagged inline. Reach for it
+and you must send ADF.
+
+Safety net, not a substitute: on mutation submit ADF-strict is the default, so a
+Markdown body whose conversion *degrades a recognised construct* fails with
+exit 3 rather than degrading silently (see *ADF strict vs best-effort* below).
+But strict mode only catches lossy steps the converter sees — content Markdown
+can't represent at all never enters the pipeline to be caught. Prefer ADF up
+front for any rich body; use `--dry-run` to confirm the exact doc before
+committing.
+
 ### Block nodes
 
 ```json
