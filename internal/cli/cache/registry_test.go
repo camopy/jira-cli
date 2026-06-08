@@ -18,7 +18,7 @@ func TestRegistryCoversEveryPrimerSubcommand(t *testing.T) {
 	subs := map[string]bool{}
 	for _, c := range NewCommand().Commands() {
 		name := strings.Fields(c.Use)[0]
-		if name == "clear" {
+		if name == "clear" || name == "refresh" {
 			continue
 		}
 		subs[name] = true
@@ -37,7 +37,7 @@ func TestRegistryCoversEveryPrimerSubcommand(t *testing.T) {
 func TestRegistryTTLMatchesFlagDefaults(t *testing.T) {
 	for _, c := range NewCommand().Commands() {
 		name := strings.Fields(c.Use)[0]
-		if name == "clear" {
+		if name == "clear" || name == "refresh" {
 			continue
 		}
 		f := c.Flags().Lookup("ttl-minutes")

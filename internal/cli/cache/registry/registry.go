@@ -97,6 +97,17 @@ func TTLMinutesFor(name string) int {
 	return 60
 }
 
+// ByName returns the registry resource with the given name and whether it was
+// found.
+func ByName(name string) (Resource, bool) {
+	for _, r := range Registry {
+		if r.Name == name {
+			return r, true
+		}
+	}
+	return Resource{}, false
+}
+
 func fetchLabelsForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
 	labels, _, err := cmdutil.ServicesForClient(client).Label().List(ctx, nil)
 	if err != nil {

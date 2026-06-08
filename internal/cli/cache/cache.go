@@ -40,6 +40,7 @@ func NewCommand() *cobra.Command {
 		}
 		cmd.AddCommand(newCachePrimerCommand(r))
 	}
+	cmd.AddCommand(cacheRefreshCommand())
 	cmd.AddCommand(cacheClearCommand())
 	return cmd
 }
