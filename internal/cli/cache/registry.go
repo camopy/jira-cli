@@ -43,20 +43,30 @@ func (r Resource) Key() string {
 // primer factory, and (later) the refresh-all runner all derive from it, so a
 // new resource is one entry here rather than scattered edits.
 //
-// Every TTL is 60 minutes today, matching the historical per-command default;
-// the per-resource TTL ladder is a separate, deliberate change. boards has a
-// nil Fetch: its bespoke command carries truncation + per-board project
-// metadata the generic factory cannot express.
+// The per-resource TTL ladder runs long because no consumer blocks on
+// staleness and a re-fetch is one --refresh away, so the only cost of a long
+// TTL is a brand-new value staying invisible to autocomplete until the next
+// refresh. User-generated resources (labels, epics) stay short; admin/config
+// resources (statuses, priorities, link types, …) run weeks-to-months. The
+// schema-version check ([[cache.SchemaVersion]]) handles shape changes
+// separately, so age never risks a mis-parse. boards has a nil Fetch: its
+// bespoke command carries truncation + per-board project metadata the generic
+// factory cannot express.
+const (
+	ttlHour = 60
+	ttlDay  = 24 * ttlHour
+)
+
 var Registry = []Resource{
-	{Name: "labels", Short: "Cache and print the global Jira label list", TTLMinutes: 60, Fetch: fetchLabelsForCache},
-	{Name: "projects", Short: "Cache and print the visible Jira project list", TTLMinutes: 60, Fetch: fetchProjectsForCache},
-	{Name: "epics", Short: "Cache and print the visible epic list", TTLMinutes: 60, Fetch: fetchEpicsForCache},
-	{Name: "fields", Short: "Cache and print the visible Jira field list", TTLMinutes: 60, Fetch: fetchFieldsForCache},
-	{Name: "issuetypes", Short: "Cache and print the visible Jira issue-type list", TTLMinutes: 60, Fetch: fetchIssueTypesForCache},
-	{Name: "linktypes", Short: "Cache and print the configured issue-link types", EnvelopeKey: "link_types", TTLMinutes: 60, Fetch: fetchLinkTypesForCache},
-	{Name: "boards", Short: "Cache and print the visible Jira agile boards", TTLMinutes: 60, Fetch: nil},
-	{Name: "statuses", Short: "Cache and print the visible Jira status list", TTLMinutes: 60, Fetch: fetchStatusesForCache},
-	{Name: "priorities", Short: "Cache and print the visible Jira priority list", TTLMinutes: 60, Fetch: fetchPrioritiesForCache},
+	{Name: "labels", Short: "Cache and print the global Jira label list", TTLMinutes: ttlHour, Fetch: fetchLabelsForCache},
+	{Name: "projects", Short: "Cache and print the visible Jira project list", TTLMinutes: 7 * ttlDay, Fetch: fetchProjectsForCache},
+	{Name: "epics", Short: "Cache and print the visible epic list", TTLMinutes: 4 * ttlHour, Fetch: fetchEpicsForCache},
+	{Name: "fields", Short: "Cache and print the visible Jira field list", TTLMinutes: 14 * ttlDay, Fetch: fetchFieldsForCache},
+	{Name: "issuetypes", Short: "Cache and print the visible Jira issue-type list", TTLMinutes: 30 * ttlDay, Fetch: fetchIssueTypesForCache},
+	{Name: "linktypes", Short: "Cache and print the configured issue-link types", EnvelopeKey: "link_types", TTLMinutes: 90 * ttlDay, Fetch: fetchLinkTypesForCache},
+	{Name: "boards", Short: "Cache and print the visible Jira agile boards", TTLMinutes: 28 * ttlDay, Fetch: nil},
+	{Name: "statuses", Short: "Cache and print the visible Jira status list", TTLMinutes: 30 * ttlDay, Fetch: fetchStatusesForCache},
+	{Name: "priorities", Short: "Cache and print the visible Jira priority list", TTLMinutes: 90 * ttlDay, Fetch: fetchPrioritiesForCache},
 }
 
 // ResourceNames returns the resource names in registry order.
