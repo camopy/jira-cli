@@ -12,27 +12,28 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/cache"
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/cache/registry"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 // cacheClearResources is the set `cache clear` accepts. It derives from the
-// resource Registry so the list cannot drift from the primer subcommands.
-var cacheClearResources = ResourceNames()
+// resource registry so the list cannot drift from the primer subcommands.
+var cacheClearResources = registry.ResourceNames()
 
 // NewCommand groups per-resource cache primers + housekeeping. Every primer
 // fetches its resource, writes the JSON-encoded list under a
 // config/site/profile cache namespace, and emits the list as the envelope's
 // data so agents (and completion functions) can pipe it. The subcommands are
-// generated from the resource Registry — the single source of truth — except
+// generated from the resource registry — the single source of truth — except
 // boards, whose Fetch is nil because its envelope carries truncation and
 // per-board project metadata the generic primer cannot express.
 //
 // Reads are cheap (single file) — see `internal/cache` for the format.
 func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("cache", "Prime / inspect the local Jira metadata cache", "agent")
-	for _, r := range Registry {
+	for _, r := range registry.Registry {
 		if r.Fetch == nil {
 			cmd.AddCommand(cacheBoardsCommand())
 			continue
@@ -48,7 +49,7 @@ func NewCommand() *cobra.Command {
 // identical across every flat-list resource (labels, projects, epics, fields,
 // issuetypes, linktypes, statuses, priorities); only the resource identity
 // and its Fetch vary, both carried by the registry entry.
-func newCachePrimerCommand(r Resource) *cobra.Command {
+func newCachePrimerCommand(r registry.Resource) *cobra.Command {
 	var refresh bool
 	var ttlMinutes int
 	cmd := &cobra.Command{
@@ -134,161 +135,10 @@ func decodeCacheList(data json.RawMessage) ([]json.RawMessage, error) {
 	return items, nil
 }
 
-func fetchLabelsForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
-	labels, _, err := cmdutil.ServicesForClient(client).Label().List(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	return cmdutil.MarshalNonNilSlice(labels)
-}
-
-func fetchProjectsForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
-	projects, _, err := cmdutil.ServicesForClient(client).Project(0).List(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	return cmdutil.MarshalNonNilSlice(projects)
-}
-
-// cacheEpic is the agent-friendly subset stored on disk. Distinct from
-// jira.Epic to avoid the shape-fragility risk of caching internal types.
-type cacheEpic struct {
-	Key     string `json:"key"`
-	Summary string `json:"summary"`
-	Status  string `json:"status"`
-}
-
-func fetchEpicsForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
-	issues, _, err := cmdutil.ServicesForClient(client).Epic().List(ctx, &jira.ListOptions{MaxResults: 200})
-	if err != nil {
-		return nil, err
-	}
-	out := make([]cacheEpic, 0, len(issues))
-	for _, iss := range issues {
-		e := cacheEpic{}
-		if iss != nil && iss.Key != nil {
-			e.Key = *iss.Key
-		}
-		if iss != nil && iss.Fields != nil {
-			if iss.Fields.Summary != nil {
-				e.Summary = *iss.Fields.Summary
-			}
-			if iss.Fields.Status != nil && iss.Fields.Status.Name != nil {
-				e.Status = *iss.Fields.Status.Name
-			}
-		}
-		out = append(out, e)
-	}
-	return cmdutil.MarshalNonNilSlice(out)
-}
-
-// cacheField is the agent-friendly subset of a Jira field. ID is the
-// stable customfield_xxxxx identifier; name is the display label.
-type cacheField struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Type string `json:"type,omitempty"`
-}
-
-func fetchFieldsForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
-	req, err := client.NewRequest(ctx, "GET", "rest/api/3/field", nil)
-	if err != nil {
-		return nil, err
-	}
-	var raw []struct {
-		ID     string `json:"id"`
-		Name   string `json:"name"`
-		Schema struct {
-			Type string `json:"type"`
-		} `json:"schema"`
-	}
-	if _, err := client.Do(req, &raw); err != nil {
-		return nil, err
-	}
-	out := make([]cacheField, 0, len(raw))
-	for _, f := range raw {
-		out = append(out, cacheField{ID: f.ID, Name: f.Name, Type: f.Schema.Type})
-	}
-	return cmdutil.MarshalNonNilSlice(out)
-}
-
-// cacheIssueType is the cached subset of a project's issue-type schema.
-type cacheIssueType struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Subtask bool   `json:"subtask"`
-}
-
-func fetchIssueTypesForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
-	req, err := client.NewRequest(ctx, "GET", "rest/api/3/issuetype", nil)
-	if err != nil {
-		return nil, err
-	}
-	var raw []struct {
-		ID      string `json:"id"`
-		Name    string `json:"name"`
-		Subtask bool   `json:"subtask"`
-	}
-	if _, err := client.Do(req, &raw); err != nil {
-		return nil, err
-	}
-	out := make([]cacheIssueType, 0, len(raw))
-	for _, t := range raw {
-		out = append(out, cacheIssueType{ID: t.ID, Name: t.Name, Subtask: t.Subtask})
-	}
-	return cmdutil.MarshalNonNilSlice(out)
-}
-
-func fetchLinkTypesForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
-	types, _, err := cmdutil.ServicesForClient(client).IssueLinkType().List(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return cmdutil.MarshalNonNilSlice(types)
-}
-
-// cacheNamedValue is the cached subset of a workflow status or priority:
-// the name completion offers and the id for the shell tooltip.
-type cacheNamedValue struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
-func fetchStatusesForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
-	return fetchNamedValuesForCache(ctx, client, "rest/api/3/status")
-}
-
-func fetchPrioritiesForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
-	return fetchNamedValuesForCache(ctx, client, "rest/api/3/priority")
-}
-
-// fetchNamedValuesForCache fills the cache for a flat {id,name} Jira metadata
-// list (statuses, priorities). Both endpoints return an unpaginated array, so
-// one GET fills the cache that completion reads for --status and --priority.
-func fetchNamedValuesForCache(ctx context.Context, client *jira.Client, path string) (json.RawMessage, error) {
-	req, err := client.NewRequest(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-	var raw []cacheNamedValue
-	if _, err := client.Do(req, &raw); err != nil {
-		return nil, err
-	}
-	out := make([]cacheNamedValue, 0, len(raw))
-	for _, v := range raw {
-		if v.Name == "" {
-			continue
-		}
-		out = append(out, cacheNamedValue{ID: v.ID, Name: v.Name})
-	}
-	return cmdutil.MarshalNonNilSlice(out)
-}
-
 // cacheBoardsCommand primes the per-profile boards cache so completion
 // and the `--board` resolver can serve names without hitting the wire.
-// Default TTL 60 minutes. Mirrors the generic primer's flag surface;
-// rendering differs because the envelope carries truncation + per-board
-// project metadata.
+// Mirrors the generic primer's flag surface; rendering differs because the
+// envelope carries truncation + per-board project metadata.
 func cacheBoardsCommand() *cobra.Command {
 	var refresh, unbounded bool
 	var ttlMinutes int
@@ -360,7 +210,7 @@ $ jira cache boards --unbounded`,
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
-	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", TTLMinutesFor("boards"), "Freshness window before automatic refresh")
+	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", registry.TTLMinutesFor("boards"), "Freshness window before automatic refresh")
 	cmd.Flags().BoolVar(&unbounded, "unbounded", false, "Walk every page (disables the default 100-page / 10 000-board cap)")
 	cmdutil.ExtendRefreshFlags(cmd.Flags())
 	// No --dry-run: the cache primer's whole purpose is a live fetch

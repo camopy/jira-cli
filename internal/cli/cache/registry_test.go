@@ -4,6 +4,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/matcra587/jira-cli/internal/cli/cache/registry"
 )
 
 // The registry is the single source of truth for cacheable resources. These
@@ -21,7 +23,7 @@ func TestRegistryCoversEveryPrimerSubcommand(t *testing.T) {
 		}
 		subs[name] = true
 	}
-	for _, r := range Registry {
+	for _, r := range registry.Registry {
 		if !subs[r.Name] {
 			t.Errorf("registry resource %q has no `cache %s` subcommand", r.Name, r.Name)
 		}
@@ -43,7 +45,7 @@ func TestRegistryTTLMatchesFlagDefaults(t *testing.T) {
 			t.Errorf("`cache %s` has no --ttl-minutes flag", name)
 			continue
 		}
-		if want := strconv.Itoa(TTLMinutesFor(name)); f.DefValue != want {
+		if want := strconv.Itoa(registry.TTLMinutesFor(name)); f.DefValue != want {
 			t.Errorf("`cache %s` --ttl-minutes default %s != registry %s", name, f.DefValue, want)
 		}
 	}
