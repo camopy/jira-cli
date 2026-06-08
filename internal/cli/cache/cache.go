@@ -21,33 +21,39 @@ import (
 // resource Registry so the list cannot drift from the primer subcommands.
 var cacheClearResources = ResourceNames()
 
-// NewCommand groups per-resource cache primers + housekeeping. Each
-// subcommand fetches the resource, writes the JSON-encoded list under a
+// NewCommand groups per-resource cache primers + housekeeping. Every primer
+// fetches its resource, writes the JSON-encoded list under a
 // config/site/profile cache namespace, and emits the list as the envelope's
-// data so agents (and completion functions) can pipe it.
+// data so agents (and completion functions) can pipe it. The subcommands are
+// generated from the resource Registry — the single source of truth — except
+// boards, whose Fetch is nil because its envelope carries truncation and
+// per-board project metadata the generic primer cannot express.
 //
 // Reads are cheap (single file) — see `internal/cache` for the format.
 func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("cache", "Prime / inspect the local Jira metadata cache", "agent")
-	cmd.AddCommand(cacheLabelsCommand())
-	cmd.AddCommand(cacheProjectsCommand())
-	cmd.AddCommand(cacheEpicsCommand())
-	cmd.AddCommand(cacheFieldsCommand())
-	cmd.AddCommand(cacheIssueTypesCommand())
-	cmd.AddCommand(cacheLinkTypesCommand())
-	cmd.AddCommand(cacheBoardsCommand())
-	cmd.AddCommand(cacheStatusesCommand())
-	cmd.AddCommand(cachePrioritiesCommand())
+	for _, r := range Registry {
+		if r.Fetch == nil {
+			cmd.AddCommand(cacheBoardsCommand())
+			continue
+		}
+		cmd.AddCommand(newCachePrimerCommand(r))
+	}
 	cmd.AddCommand(cacheClearCommand())
 	return cmd
 }
 
-func cacheLabelsCommand() *cobra.Command {
+// newCachePrimerCommand builds the `cache <name>` primer for a registry
+// resource. The read-then-fetch flow, envelope shape, and flag surface are
+// identical across every flat-list resource (labels, projects, epics, fields,
+// issuetypes, linktypes, statuses, priorities); only the resource identity
+// and its Fetch vary, both carried by the registry entry.
+func newCachePrimerCommand(r Resource) *cobra.Command {
 	var refresh bool
 	var ttlMinutes int
 	cmd := &cobra.Command{
-		Use:   "labels",
-		Short: "Cache and print the global Jira label list",
+		Use:   r.Name,
+		Short: r.Short,
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
@@ -62,7 +68,7 @@ func cacheLabelsCommand() *cobra.Command {
 				fetchedAt time.Time
 			)
 			if !refresh {
-				entry, present, stale, readErr := cache.Read(cmdutil.CacheKeyForProfile(cmd, profile), "labels", ttl)
+				entry, present, stale, readErr := cache.Read(cmdutil.CacheKeyForProfile(cmd, profile), r.Name, ttl)
 				switch {
 				case readErr != nil:
 					cacheSourceState = cmdutil.CacheStateMalformed
@@ -76,120 +82,72 @@ func cacheLabelsCommand() *cobra.Command {
 			}
 			if !fromCache {
 				if !ok {
-					return fmt.Errorf("jira base URL is required for cache.labels")
+					return fmt.Errorf("jira base URL is required for cache.%s", r.Name)
 				}
-				err = cmdutil.Spin(cmd, "cache.labels", func(ctx context.Context) error {
-					labels, _, spinErr := cmdutil.ServicesForClient(client).Label().List(ctx, nil)
-					if spinErr != nil {
-						return spinErr
-					}
-					data, spinErr = cmdutil.MarshalNonNilSlice(labels)
+				err = cmdutil.Spin(cmd, "cache."+r.Name, func(ctx context.Context) error {
+					var spinErr error
+					data, spinErr = r.Fetch(ctx, client)
 					return spinErr
 				})
 				if err != nil {
 					return err
 				}
 				var entry cache.Entry
-				entry, err = cache.Write(cmdutil.CacheKeyForProfile(cmd, profile), "labels", data)
+				entry, err = cache.Write(cmdutil.CacheKeyForProfile(cmd, profile), r.Name, data)
 				if err != nil {
 					return err
 				}
 				fromCache, fetchedAt = false, entry.FetchedAt
 			}
-			var labels []string
-			if err := json.Unmarshal(data, &labels); err != nil {
-				return fmt.Errorf("cache.labels: decode cached payload: %w", err)
+			items, err := decodeCacheList(data)
+			if err != nil {
+				return fmt.Errorf("cache.%s: decode cached payload: %w", r.Name, err)
 			}
 			envelopeData := map[string]any{
 				"profile":    profile.Name,
-				"labels":     labels,
-				"count":      len(labels),
+				r.Key():      items,
+				"count":      len(items),
 				"from_cache": fromCache,
 				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
 			}
-			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(labels))
-			return cmdutil.WriteEnvelope(cmd, "cache.labels", envelopeData)
+			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(items))
+			return cmdutil.WriteEnvelope(cmd, "cache."+r.Name, envelopeData)
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
-	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
+	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", r.TTLMinutes, "Freshness window before automatic refresh")
 	cmdutil.ExtendRefreshFlags(cmd.Flags())
 	return cmd
 }
 
-func cacheProjectsCommand() *cobra.Command {
-	var refresh bool
-	var ttlMinutes int
-	cmd := &cobra.Command{
-		Use:   "projects",
-		Short: "Cache and print the visible Jira project list",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
-			if err != nil {
-				return err
-			}
-			ttl := time.Duration(ttlMinutes) * time.Minute
-			cacheSourceState := cmdutil.CacheStateRefresh
-			var (
-				data      json.RawMessage
-				fromCache bool
-				fetchedAt time.Time
-			)
-			if !refresh {
-				entry, present, stale, readErr := cache.Read(cmdutil.CacheKeyForProfile(cmd, profile), "projects", ttl)
-				switch {
-				case readErr != nil:
-					cacheSourceState = cmdutil.CacheStateMalformed
-				case present && !stale:
-					data, fromCache, fetchedAt, cacheSourceState = entry.Data, true, entry.FetchedAt, cmdutil.CacheStateFresh
-				case present && stale:
-					cacheSourceState = cmdutil.CacheStateStale
-				default:
-					cacheSourceState = cmdutil.CacheStateMissing
-				}
-			}
-			if !fromCache {
-				if !ok {
-					return fmt.Errorf("jira base URL is required for cache.projects")
-				}
-				err = cmdutil.Spin(cmd, "cache.projects", func(ctx context.Context) error {
-					projects, _, spinErr := cmdutil.ServicesForClient(client).Project(0).List(ctx, nil)
-					if spinErr != nil {
-						return spinErr
-					}
-					data, spinErr = cmdutil.MarshalNonNilSlice(projects)
-					return spinErr
-				})
-				if err != nil {
-					return err
-				}
-				var entry cache.Entry
-				entry, err = cache.Write(cmdutil.CacheKeyForProfile(cmd, profile), "projects", data)
-				if err != nil {
-					return err
-				}
-				fromCache, fetchedAt = false, entry.FetchedAt
-			}
-			var projects []jira.ProjectSummary
-			if err := json.Unmarshal(data, &projects); err != nil {
-				return fmt.Errorf("cache.projects: decode cached payload: %w", err)
-			}
-			envelopeData := map[string]any{
-				"profile":    profile.Name,
-				"projects":   projects,
-				"count":      len(projects),
-				"from_cache": fromCache,
-				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
-			}
-			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(projects))
-			return cmdutil.WriteEnvelope(cmd, "cache.projects", envelopeData)
-		},
+// decodeCacheList splits a cached JSON array into its elements, each kept as
+// raw bytes. The primer emits this []json.RawMessage rather than the bare
+// json.RawMessage so the value is a slice of elements, not a slice of bytes:
+// the JSON envelope still marshals each element verbatim, but the human/plain
+// renderer — which summarizes a slice as "[N items]" by its reflect length —
+// counts items, not bytes. len(items) is also the envelope count.
+func decodeCacheList(data json.RawMessage) ([]json.RawMessage, error) {
+	var items []json.RawMessage
+	if err := json.Unmarshal(data, &items); err != nil {
+		return nil, err
 	}
-	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
-	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
-	cmdutil.ExtendRefreshFlags(cmd.Flags())
-	return cmd
+	return items, nil
+}
+
+func fetchLabelsForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
+	labels, _, err := cmdutil.ServicesForClient(client).Label().List(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	return cmdutil.MarshalNonNilSlice(labels)
+}
+
+func fetchProjectsForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
+	projects, _, err := cmdutil.ServicesForClient(client).Project(0).List(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	return cmdutil.MarshalNonNilSlice(projects)
 }
 
 // cacheEpic is the agent-friendly subset stored on disk. Distinct from
@@ -198,78 +156,6 @@ type cacheEpic struct {
 	Key     string `json:"key"`
 	Summary string `json:"summary"`
 	Status  string `json:"status"`
-}
-
-func cacheEpicsCommand() *cobra.Command {
-	var refresh bool
-	var ttlMinutes int
-	cmd := &cobra.Command{
-		Use:   "epics",
-		Short: "Cache and print the visible epic list",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
-			if err != nil {
-				return err
-			}
-			ttl := time.Duration(ttlMinutes) * time.Minute
-			cacheSourceState := cmdutil.CacheStateRefresh
-			var (
-				data      json.RawMessage
-				fromCache bool
-				fetchedAt time.Time
-			)
-			if !refresh {
-				entry, present, stale, readErr := cache.Read(cmdutil.CacheKeyForProfile(cmd, profile), "epics", ttl)
-				switch {
-				case readErr != nil:
-					cacheSourceState = cmdutil.CacheStateMalformed
-				case present && !stale:
-					data, fromCache, fetchedAt, cacheSourceState = entry.Data, true, entry.FetchedAt, cmdutil.CacheStateFresh
-				case present && stale:
-					cacheSourceState = cmdutil.CacheStateStale
-				default:
-					cacheSourceState = cmdutil.CacheStateMissing
-				}
-			}
-			if !fromCache {
-				if !ok {
-					return fmt.Errorf("jira base URL is required for cache.epics")
-				}
-				err = cmdutil.Spin(cmd, "cache.epics", func(ctx context.Context) error {
-					var spinErr error
-					data, spinErr = fetchEpicsForCache(ctx, client)
-					return spinErr
-				})
-				if err != nil {
-					return err
-				}
-				var entry cache.Entry
-				entry, err = cache.Write(cmdutil.CacheKeyForProfile(cmd, profile), "epics", data)
-				if err != nil {
-					return err
-				}
-				fromCache, fetchedAt = false, entry.FetchedAt
-			}
-			var epics []cacheEpic
-			if err := json.Unmarshal(data, &epics); err != nil {
-				return fmt.Errorf("cache.epics: decode cached payload: %w", err)
-			}
-			envelopeData := map[string]any{
-				"profile":    profile.Name,
-				"epics":      epics,
-				"count":      len(epics),
-				"from_cache": fromCache,
-				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
-			}
-			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(epics))
-			return cmdutil.WriteEnvelope(cmd, "cache.epics", envelopeData)
-		},
-	}
-	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
-	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
-	cmdutil.ExtendRefreshFlags(cmd.Flags())
-	return cmd
 }
 
 func fetchEpicsForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
@@ -304,78 +190,6 @@ type cacheField struct {
 	Type string `json:"type,omitempty"`
 }
 
-func cacheFieldsCommand() *cobra.Command {
-	var refresh bool
-	var ttlMinutes int
-	cmd := &cobra.Command{
-		Use:   "fields",
-		Short: "Cache and print the visible Jira field list",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
-			if err != nil {
-				return err
-			}
-			ttl := time.Duration(ttlMinutes) * time.Minute
-			cacheSourceState := cmdutil.CacheStateRefresh
-			var (
-				data      json.RawMessage
-				fromCache bool
-				fetchedAt time.Time
-			)
-			if !refresh {
-				entry, present, stale, readErr := cache.Read(cmdutil.CacheKeyForProfile(cmd, profile), "fields", ttl)
-				switch {
-				case readErr != nil:
-					cacheSourceState = cmdutil.CacheStateMalformed
-				case present && !stale:
-					data, fromCache, fetchedAt, cacheSourceState = entry.Data, true, entry.FetchedAt, cmdutil.CacheStateFresh
-				case present && stale:
-					cacheSourceState = cmdutil.CacheStateStale
-				default:
-					cacheSourceState = cmdutil.CacheStateMissing
-				}
-			}
-			if !fromCache {
-				if !ok {
-					return fmt.Errorf("jira base URL is required for cache.fields")
-				}
-				err = cmdutil.Spin(cmd, "cache.fields", func(ctx context.Context) error {
-					var spinErr error
-					data, spinErr = fetchFieldsForCache(ctx, client)
-					return spinErr
-				})
-				if err != nil {
-					return err
-				}
-				var entry cache.Entry
-				entry, err = cache.Write(cmdutil.CacheKeyForProfile(cmd, profile), "fields", data)
-				if err != nil {
-					return err
-				}
-				fromCache, fetchedAt = false, entry.FetchedAt
-			}
-			var fields []cacheField
-			if err := json.Unmarshal(data, &fields); err != nil {
-				return fmt.Errorf("cache.fields: decode cached payload: %w", err)
-			}
-			envelopeData := map[string]any{
-				"profile":    profile.Name,
-				"fields":     fields,
-				"count":      len(fields),
-				"from_cache": fromCache,
-				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
-			}
-			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(fields))
-			return cmdutil.WriteEnvelope(cmd, "cache.fields", envelopeData)
-		},
-	}
-	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
-	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
-	cmdutil.ExtendRefreshFlags(cmd.Flags())
-	return cmd
-}
-
 func fetchFieldsForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
 	req, err := client.NewRequest(ctx, "GET", "rest/api/3/field", nil)
 	if err != nil {
@@ -405,78 +219,6 @@ type cacheIssueType struct {
 	Subtask bool   `json:"subtask"`
 }
 
-func cacheIssueTypesCommand() *cobra.Command {
-	var refresh bool
-	var ttlMinutes int
-	cmd := &cobra.Command{
-		Use:   "issuetypes",
-		Short: "Cache and print the visible Jira issue-type list",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
-			if err != nil {
-				return err
-			}
-			ttl := time.Duration(ttlMinutes) * time.Minute
-			cacheSourceState := cmdutil.CacheStateRefresh
-			var (
-				data      json.RawMessage
-				fromCache bool
-				fetchedAt time.Time
-			)
-			if !refresh {
-				entry, present, stale, readErr := cache.Read(cmdutil.CacheKeyForProfile(cmd, profile), "issuetypes", ttl)
-				switch {
-				case readErr != nil:
-					cacheSourceState = cmdutil.CacheStateMalformed
-				case present && !stale:
-					data, fromCache, fetchedAt, cacheSourceState = entry.Data, true, entry.FetchedAt, cmdutil.CacheStateFresh
-				case present && stale:
-					cacheSourceState = cmdutil.CacheStateStale
-				default:
-					cacheSourceState = cmdutil.CacheStateMissing
-				}
-			}
-			if !fromCache {
-				if !ok {
-					return fmt.Errorf("jira base URL is required for cache.issuetypes")
-				}
-				err = cmdutil.Spin(cmd, "cache.issuetypes", func(ctx context.Context) error {
-					var spinErr error
-					data, spinErr = fetchIssueTypesForCache(ctx, client)
-					return spinErr
-				})
-				if err != nil {
-					return err
-				}
-				var entry cache.Entry
-				entry, err = cache.Write(cmdutil.CacheKeyForProfile(cmd, profile), "issuetypes", data)
-				if err != nil {
-					return err
-				}
-				fromCache, fetchedAt = false, entry.FetchedAt
-			}
-			var types []cacheIssueType
-			if err := json.Unmarshal(data, &types); err != nil {
-				return fmt.Errorf("cache.issuetypes: decode cached payload: %w", err)
-			}
-			envelopeData := map[string]any{
-				"profile":    profile.Name,
-				"issuetypes": types,
-				"count":      len(types),
-				"from_cache": fromCache,
-				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
-			}
-			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(types))
-			return cmdutil.WriteEnvelope(cmd, "cache.issuetypes", envelopeData)
-		},
-	}
-	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
-	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
-	cmdutil.ExtendRefreshFlags(cmd.Flags())
-	return cmd
-}
-
 func fetchIssueTypesForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
 	req, err := client.NewRequest(ctx, "GET", "rest/api/3/issuetype", nil)
 	if err != nil {
@@ -497,6 +239,14 @@ func fetchIssueTypesForCache(ctx context.Context, client *jira.Client) (json.Raw
 	return cmdutil.MarshalNonNilSlice(out)
 }
 
+func fetchLinkTypesForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
+	types, _, err := cmdutil.ServicesForClient(client).IssueLinkType().List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return cmdutil.MarshalNonNilSlice(types)
+}
+
 // cacheNamedValue is the cached subset of a workflow status or priority:
 // the name completion offers and the id for the shell tooltip.
 type cacheNamedValue struct {
@@ -504,90 +254,17 @@ type cacheNamedValue struct {
 	Name string `json:"name"`
 }
 
-func cacheStatusesCommand() *cobra.Command {
-	return cacheNamedValueCommand("statuses", "Cache and print the visible Jira status list", "rest/api/3/status")
+func fetchStatusesForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
+	return fetchNamedValuesForCache(ctx, client, "rest/api/3/status")
 }
 
-func cachePrioritiesCommand() *cobra.Command {
-	return cacheNamedValueCommand("priorities", "Cache and print the visible Jira priority list", "rest/api/3/priority")
+func fetchPrioritiesForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
+	return fetchNamedValuesForCache(ctx, client, "rest/api/3/priority")
 }
 
-// cacheNamedValueCommand builds a cache subcommand for a flat {id,name} Jira
-// metadata list (statuses, priorities). Both endpoints return an unpaginated
-// array, so one GET fills the cache that completion reads for --status and
-// --priority. Default TTL 60 minutes.
-func cacheNamedValueCommand(resource, short, path string) *cobra.Command {
-	var refresh bool
-	var ttlMinutes int
-	cmd := &cobra.Command{
-		Use:   resource,
-		Short: short,
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
-			if err != nil {
-				return err
-			}
-			ttl := time.Duration(ttlMinutes) * time.Minute
-			cacheSourceState := cmdutil.CacheStateRefresh
-			var (
-				data      json.RawMessage
-				fromCache bool
-				fetchedAt time.Time
-			)
-			if !refresh {
-				entry, present, stale, readErr := cache.Read(cmdutil.CacheKeyForProfile(cmd, profile), resource, ttl)
-				switch {
-				case readErr != nil:
-					cacheSourceState = cmdutil.CacheStateMalformed
-				case present && !stale:
-					data, fromCache, fetchedAt, cacheSourceState = entry.Data, true, entry.FetchedAt, cmdutil.CacheStateFresh
-				case present && stale:
-					cacheSourceState = cmdutil.CacheStateStale
-				default:
-					cacheSourceState = cmdutil.CacheStateMissing
-				}
-			}
-			if !fromCache {
-				if !ok {
-					return fmt.Errorf("jira base URL is required for cache.%s", resource)
-				}
-				err = cmdutil.Spin(cmd, "cache."+resource, func(ctx context.Context) error {
-					var spinErr error
-					data, spinErr = fetchNamedValuesForCache(ctx, client, path)
-					return spinErr
-				})
-				if err != nil {
-					return err
-				}
-				var entry cache.Entry
-				entry, err = cache.Write(cmdutil.CacheKeyForProfile(cmd, profile), resource, data)
-				if err != nil {
-					return err
-				}
-				fromCache, fetchedAt = false, entry.FetchedAt
-			}
-			var values []cacheNamedValue
-			if err := json.Unmarshal(data, &values); err != nil {
-				return fmt.Errorf("cache.%s: decode cached payload: %w", resource, err)
-			}
-			envelopeData := map[string]any{
-				"profile":    profile.Name,
-				resource:     values,
-				"count":      len(values),
-				"from_cache": fromCache,
-				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
-			}
-			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(values))
-			return cmdutil.WriteEnvelope(cmd, "cache."+resource, envelopeData)
-		},
-	}
-	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
-	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
-	cmdutil.ExtendRefreshFlags(cmd.Flags())
-	return cmd
-}
-
+// fetchNamedValuesForCache fills the cache for a flat {id,name} Jira metadata
+// list (statuses, priorities). Both endpoints return an unpaginated array, so
+// one GET fills the cache that completion reads for --status and --priority.
 func fetchNamedValuesForCache(ctx context.Context, client *jira.Client, path string) (json.RawMessage, error) {
 	req, err := client.NewRequest(ctx, "GET", path, nil)
 	if err != nil {
@@ -607,87 +284,9 @@ func fetchNamedValuesForCache(ctx context.Context, client *jira.Client, path str
 	return cmdutil.MarshalNonNilSlice(out)
 }
 
-// cacheLinkTypesCommand primes the per-profile cache of issue-link
-// types so completion and the `jira issue link types` command can
-// resolve names without round-tripping. Default TTL 60 minutes.
-func cacheLinkTypesCommand() *cobra.Command {
-	var refresh bool
-	var ttlMinutes int
-	cmd := &cobra.Command{
-		Use:   "linktypes",
-		Short: "Cache and print the configured issue-link types",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
-			if err != nil {
-				return err
-			}
-			ttl := time.Duration(ttlMinutes) * time.Minute
-			cacheSourceState := cmdutil.CacheStateRefresh
-			var (
-				data      json.RawMessage
-				fromCache bool
-				fetchedAt time.Time
-			)
-			if !refresh {
-				entry, present, stale, readErr := cache.Read(cmdutil.CacheKeyForProfile(cmd, profile), "linktypes", ttl)
-				switch {
-				case readErr != nil:
-					cacheSourceState = cmdutil.CacheStateMalformed
-				case present && !stale:
-					data, fromCache, fetchedAt, cacheSourceState = entry.Data, true, entry.FetchedAt, cmdutil.CacheStateFresh
-				case present && stale:
-					cacheSourceState = cmdutil.CacheStateStale
-				default:
-					cacheSourceState = cmdutil.CacheStateMissing
-				}
-			}
-			if !fromCache {
-				if !ok {
-					return fmt.Errorf("jira base URL is required for cache.linktypes")
-				}
-				err = cmdutil.Spin(cmd, "cache.linktypes", func(ctx context.Context) error {
-					types, _, spinErr := cmdutil.ServicesForClient(client).IssueLinkType().List(ctx)
-					if spinErr != nil {
-						return spinErr
-					}
-					data, spinErr = cmdutil.MarshalNonNilSlice(types)
-					return spinErr
-				})
-				if err != nil {
-					return err
-				}
-				var entry cache.Entry
-				entry, err = cache.Write(cmdutil.CacheKeyForProfile(cmd, profile), "linktypes", data)
-				if err != nil {
-					return err
-				}
-				fromCache, fetchedAt = false, entry.FetchedAt
-			}
-			var types []jira.IssueLinkType
-			if err := json.Unmarshal(data, &types); err != nil {
-				return fmt.Errorf("cache.linktypes: decode cached payload: %w", err)
-			}
-			envelopeData := map[string]any{
-				"profile":    profile.Name,
-				"link_types": types,
-				"count":      len(types),
-				"from_cache": fromCache,
-				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
-			}
-			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(types))
-			return cmdutil.WriteEnvelope(cmd, "cache.linktypes", envelopeData)
-		},
-	}
-	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
-	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
-	cmdutil.ExtendRefreshFlags(cmd.Flags())
-	return cmd
-}
-
 // cacheBoardsCommand primes the per-profile boards cache so completion
 // and the `--board` resolver can serve names without hitting the wire.
-// Default TTL 60 minutes. Mirrors cacheLinkTypesCommand's flag surface;
+// Default TTL 60 minutes. Mirrors the generic primer's flag surface;
 // rendering differs because the envelope carries truncation + per-board
 // project metadata.
 func cacheBoardsCommand() *cobra.Command {
@@ -761,7 +360,7 @@ $ jira cache boards --unbounded`,
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
-	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
+	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", TTLMinutesFor("boards"), "Freshness window before automatic refresh")
 	cmd.Flags().BoolVar(&unbounded, "unbounded", false, "Walk every page (disables the default 100-page / 10 000-board cap)")
 	cmdutil.ExtendRefreshFlags(cmd.Flags())
 	// No --dry-run: the cache primer's whole purpose is a live fetch
