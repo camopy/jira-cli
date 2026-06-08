@@ -17,7 +17,9 @@ import (
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
-var cacheClearResources = []string{"labels", "projects", "epics", "fields", "issuetypes", "linktypes", "boards", "statuses", "priorities"}
+// cacheClearResources is the set `cache clear` accepts. It derives from the
+// resource Registry so the list cannot drift from the primer subcommands.
+var cacheClearResources = ResourceNames()
 
 // NewCommand groups per-resource cache primers + housekeeping. Each
 // subcommand fetches the resource, writes the JSON-encoded list under a
