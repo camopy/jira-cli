@@ -6,7 +6,7 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 
 # output mode
 - TTY humans: `--output=human` (or omit; `auto` picks `human` on a TTY).
-- Automation: `--output=json` (full envelope) for parsing; `--output=compact` for the JSON `data` payload only, one line, jq-friendly.
+- Automation: `--output=json` (full envelope) for parsing; `--output=compact` for the JSON `data` payload only, one line, jq-friendly. Compact drops every `null`-valued key recursively to stay token-lean — an absent key means the value was null, while `json` keeps the full schema (nulls included). `false`, `0`, and empty arrays/objects are kept either way.
 - Agent harnesses: `auto` resolves to `compact` when an agent env var is set.
 - There is no separate raw REST passthrough mode — `json` and `compact` cover every machine-consumption need. Some command payloads preserve Jira objects under command-specific keys, such as `data.issue` for `issue view`.
 
@@ -86,7 +86,7 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
   | `auto`           | Detect: TTY → human, pipe → json, agent → compact                              |
   | `human`          | Force human-friendly clog rich text                                            |
   | `json`           | Force the full structured envelope on stdout for success                       |
-  | `compact`        | Force the JSON `data` payload only — no `ok`/`meta`/`warnings`/`errors`        |
+  | `compact`        | Force the JSON `data` payload only — no `ok`/`meta`/`warnings`/`errors`; null-valued keys dropped |
 
 - In `--output=human` mode, `warnings[]` mirrors to stderr as clog `WRN` lines so stdout stays clean for piping.
 - In `--output=json` and `--output=compact`, failures write the full error envelope to stdout — the same stream as success — with `ok:false` and a non-zero exit. Parse one stream regardless of outcome; no human diagnostic line is printed to break the parse.

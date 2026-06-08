@@ -17,11 +17,17 @@ jira issue list -o compact
 | `auto` | TTY without an agent → human; non-TTY → JSON envelope; detected agent → compact JSON. |
 | `human` | Force `clog` rich text regardless of TTY state. |
 | `json` | Full envelope on stdout with `ok`, `meta`, `data`, `errors[]`, `warnings[]`. |
-| `compact` | The envelope's `data` payload only, no wrapper. |
+| `compact` | The envelope's `data` payload only, no wrapper, with null-valued keys dropped. |
 
 Under `auto`, JSON / compact JSON is selected when stdout is not a TTY or when
 jira detects an agent / CI environment (e.g. `CLAUDECODE`, `CURSOR_TERMINAL`,
 `AGENT=amp`, `GITHUB_ACTIONS`, `CI`).
+
+`compact` is the lean, token-economical view for agents: it emits only the
+`data` payload and drops every `null`-valued key, recursively. An absent key
+therefore means the value was null. Empty arrays and objects, `false`, and `0`
+are kept — they carry meaning. `json` keeps the full, stable schema (nulls
+included) for consumers that rely on a fixed shape.
 
 ```mermaid
 flowchart LR

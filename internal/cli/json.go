@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -139,10 +141,60 @@ func WriteEnvelope(w io.Writer, env Envelope) error {
 }
 
 // WriteCompact serializes the JSON data payload to w without the
-// envelope wrapper. A clog encode or write failure is surfaced to the
-// caller rather than silently dropped.
+// envelope wrapper, with null-valued keys dropped recursively so the
+// agent-facing payload stays lean. json and human modes keep the full,
+// stable schema; compact is the deliberately lossy, token-economical
+// view, so in compact an absent key means the value was null. A clog
+// encode or write failure is surfaced to the caller rather than silently
+// dropped.
 func WriteCompact(w io.Writer, data any) error {
-	return writeJSON(w, data, clog.JSONFlat, clog.ColorNever, nil)
+	return writeJSON(w, stripNulls(data), clog.JSONFlat, clog.ColorNever, nil)
+}
+
+// stripNulls returns data with every null-valued map entry removed,
+// recursively. It normalizes the value through encoding/json first so
+// typed structs, maps, and slices are all handled the same way. Empty
+// arrays and objects are kept — an empty collection is meaningful, a null
+// is not. On any marshal/decode error the original data is returned
+// unchanged, so compact never fails closed on a serializable payload.
+func stripNulls(data any) any {
+	if data == nil {
+		return data
+	}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return data
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var generic any
+	if err := dec.Decode(&generic); err != nil {
+		return data
+	}
+	return pruneNulls(generic)
+}
+
+// pruneNulls walks a generic JSON value (the shape produced by
+// json.Decode into any) and deletes null-valued keys at every depth.
+func pruneNulls(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, val := range t {
+			if val == nil {
+				delete(t, k)
+				continue
+			}
+			t[k] = pruneNulls(val)
+		}
+		return t
+	case []any:
+		for i, val := range t {
+			t[i] = pruneNulls(val)
+		}
+		return t
+	default:
+		return v
+	}
 }
 
 // WriteHumanJSON serializes JSON through clog's pretty printer for

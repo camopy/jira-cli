@@ -15,7 +15,7 @@ When: a batch of issue keys is needed for downstream per-issue work and the filt
 - Active tickets on one or more boards: discover board project keys first, then query those projects with `statusCategory != Done`. Use key expansion only after discovery, when you already have a known key set or a deliberate sparse-range probe.
 
 # field set
-- Default summary set per row: `key, summary, status, assignee, priority, updated`.
+- Default summary set per row: `key, summary, status, status_category, status_color, assignee, priority, updated`. `status_category` is Jira's workflow bucket (`new`, `indeterminate`, or `done`) for state-machine logic; `status_color` is the category colour name (e.g. `blue-gray`, `yellow`, `green`). In `--output=compact` a null `assignee` is dropped, so treat an absent `assignee` as unassigned.
 - Full field records for every row in the page: `--detail` (this flag is `issue list` only — `search jql` / `search saved` don't accept it).
 - Explicit field selector or wire-shape `fields:["*all"]`: use → `search_jql`; `issue list` does not accept `--fields` or `--full`.
 
