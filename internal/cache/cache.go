@@ -26,11 +26,21 @@ import (
 // refreshing" to commands and completion functions.
 const DefaultTTL = 1 * time.Hour
 
+// SchemaVersion is the on-disk cache-entry shape version. The current,
+// originally-unversioned shape is version 0, so legacy entries written before
+// this field existed (which decode to Schema=0) stay valid — no upgrade wipes
+// a usable cache. The first change to a cached resource's shape bumps this
+// constant; every entry stamped with the old version then fails the read-time
+// check below and is refetched, so a CLI upgrade can never mis-parse a stale
+// shape. This is what lets the per-resource TTLs run long.
+const SchemaVersion = 0
+
 // Entry wraps a cached value with its fetch timestamp + source profile.
 // Stored verbatim on disk so consumers can introspect age and provenance.
 type Entry struct {
 	Profile   string          `json:"profile"`
 	Resource  string          `json:"resource"`
+	Schema    int             `json:"schema"`
 	FetchedAt time.Time       `json:"fetched_at"`
 	Data      json.RawMessage `json:"data"`
 }
@@ -82,6 +92,11 @@ func Read(profile, resource string, ttl time.Duration) (entry Entry, ok, stale b
 	if err := json.Unmarshal(b, &entry); err != nil {
 		return Entry{}, false, false, fmt.Errorf("decode cache %s: %w", path, err)
 	}
+	if entry.Schema != SchemaVersion {
+		// Stale shape from an older CLI: discard and report as absent so
+		// the caller refetches rather than mis-parsing the old data.
+		return Entry{}, false, false, nil
+	}
 	if ttl <= 0 {
 		ttl = DefaultTTL
 	}
@@ -103,6 +118,7 @@ func Write(profile, resource string, data json.RawMessage) (Entry, error) {
 	entry := Entry{
 		Profile:   profile,
 		Resource:  resource,
+		Schema:    SchemaVersion,
 		FetchedAt: time.Now().UTC(),
 		Data:      data,
 	}
