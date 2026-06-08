@@ -345,7 +345,7 @@ func DecodeBoardsCache(data []byte) ([]Board, error) {
 // the convenience layer.
 func (s *boardService) ResolveOne(ctx context.Context, profile, name string) (BoardScope, error) {
 	_ = ctx // resolution is local-only; ctx kept for future async hooks
-	entry, ok, _, err := cache.Read(profile, "boards", 0)
+	entry, ok, err := cache.ReadCachedOrEmpty(profile, "boards")
 	if err != nil {
 		return BoardScope{}, fmt.Errorf("board resolve: %w", err)
 	}

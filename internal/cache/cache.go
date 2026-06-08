@@ -104,6 +104,22 @@ func Read(profile, resource string, ttl time.Duration) (entry Entry, ok, stale b
 	return entry, true, stale, nil
 }
 
+// ReadCachedOrEmpty returns the cached entry for (profile, resource)
+// regardless of age, or ok=false when no usable entry exists — absent,
+// unreadable, or written by an incompatible schema. It is the NeverBlock
+// read: consumers that must serve cached-or-empty and never trigger a network
+// fetch (shell completion, JQL field reference, board-scope resolution) call
+// this, so cache age is irrelevant to them and a long resource TTL never
+// changes what they see. The read error is still returned, so a caller that
+// distinguishes "absent" from "broken" can; completion-style callers may
+// treat any (!ok || err != nil) as empty.
+func ReadCachedOrEmpty(profile, resource string) (Entry, bool, error) {
+	// Staleness is intentionally ignored, so the ttl is irrelevant; pass
+	// zero and drop the stale flag.
+	entry, ok, _, err := Read(profile, resource, 0)
+	return entry, ok, err
+}
+
 // Write atomically stores `data` (already JSON-encoded) under the (profile,
 // resource) key. Uses a temp-file-then-rename to avoid leaving a half-written
 // file when the process is killed mid-write.

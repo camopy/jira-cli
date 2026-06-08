@@ -15,6 +15,7 @@ import (
 	"github.com/gechr/clog"
 	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/cli"
+	cachereg "github.com/matcra587/jira-cli/internal/cli/cache/registry"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -534,20 +535,18 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 	return cmd
 }
 
-// boardsWarmTTLMinutes is the freshness window stamped on the login-warmed
-// boards cache, matching `cache boards`'s default TTL.
-const boardsWarmTTLMinutes = 60
-
 // warmBoardsCache primes the per-profile boards cache after a verified login.
 // It returns the cached board count, or -1 with a note when the warm could not
 // run or failed — the caller surfaces the note as a warning rather than failing
-// the (already committed) login.
+// the (already committed) login. The freshness window stamped on the warmed
+// file is the registry's boards TTL, so login-warmed and `cache boards` /
+// `boards list` reads agree on freshness.
 func warmBoardsCache(cmd *cobra.Command, profile config.Profile) (int, string) {
 	client, _, ok, err := cmdutil.JiraClientForProfile(cmd, profile)
 	if err != nil || !ok || client == nil {
 		return -1, ""
 	}
-	file, _, _, err := cmdutil.PrimeAndCacheBoards(cmd.Context(), cmdutil.CacheKeyForProfile(cmd, profile), client, boardsWarmTTLMinutes, false)
+	file, _, _, err := cmdutil.PrimeAndCacheBoards(cmd.Context(), cmdutil.CacheKeyForProfile(cmd, profile), client, cachereg.TTLMinutesFor("boards"), false)
 	if err != nil {
 		return -1, "boards cache not warmed (" + err.Error() + ") — run `jira cache boards --refresh` when ready"
 	}

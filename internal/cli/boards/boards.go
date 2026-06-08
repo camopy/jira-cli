@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cache"
+	cachereg "github.com/matcra587/jira-cli/internal/cli/cache/registry"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
@@ -90,7 +91,7 @@ $ jira boards list --refresh`,
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a re-prime even when the cache is fresh")
-	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
+	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", cachereg.TTLMinutesFor("boards"), "Freshness window before automatic refresh")
 	cmd.Flags().BoolVar(&unbounded, "unbounded", false, "Walk every page (disables the default 100-page / 10 000-board cap)")
 	cmdutil.ExtendRefreshFlags(cmd.Flags())
 	// No --dry-run: `boards list` always performs a live read and a

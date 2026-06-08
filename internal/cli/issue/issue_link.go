@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cli"
+	cachereg "github.com/matcra587/jira-cli/internal/cli/cache/registry"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -308,8 +309,9 @@ $ jira issue link delete PROJ-123 10001 --force`,
 // issueLinkTypesCommand wires `jira issue link types`.
 //
 // Reads from the `linktypes` cache when fresh; primes via
-// /issueLinkType when stale or `--refresh` is supplied. Default TTL
-// 60 minutes.
+// /issueLinkType when stale or `--refresh` is supplied. The default TTL
+// tracks the linktypes cache resource, so this command and
+// `jira cache linktypes` agree on freshness.
 //
 // `--raw` returns Atlassian's native `{issueLinkTypes: [...]}`
 // envelope verbatim.
@@ -355,7 +357,7 @@ $ jira issue link types --refresh`,
 		},
 	}
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
-	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", 60, "Freshness window before automatic refresh")
+	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", cachereg.TTLMinutesFor("linktypes"), "Freshness window before automatic refresh")
 	cmdutil.ExtendRefreshFlags(cmd.Flags())
 	return cmd
 }

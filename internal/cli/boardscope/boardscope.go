@@ -181,7 +181,7 @@ func classifyErr(err error) error {
 // BoardService.ResolveOne but keyed off the unambiguous id rather than the
 // name. Cache-only — never round-trips to the server.
 func resolveByID(_ context.Context, profile string, id int) (jira.BoardScope, error) {
-	entry, ok, _, err := cache.Read(profile, "boards", 0)
+	entry, ok, err := cache.ReadCachedOrEmpty(profile, "boards")
 	if err != nil {
 		return jira.BoardScope{}, fmt.Errorf("board resolve by id: %w", err)
 	}

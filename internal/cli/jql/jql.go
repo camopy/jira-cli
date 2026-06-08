@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/matcra587/jira-cli/internal/browser"
@@ -304,7 +303,7 @@ func AddDateFilterFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 // TTL so completion stays fast even when the cache is stale. Returns false
 // silently on any error so completion never blocks the shell.
 func ReadCacheJSON(profile, resource string, v any) bool {
-	entry, ok, _, err := cache.Read(profile, resource, 24*time.Hour*365)
+	entry, ok, err := cache.ReadCachedOrEmpty(profile, resource)
 	if err != nil || !ok {
 		return false
 	}

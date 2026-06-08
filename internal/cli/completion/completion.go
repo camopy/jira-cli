@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"time"
 
 	"github.com/gechr/clib/complete"
 
@@ -252,7 +251,7 @@ func emitCachedNames(profile, resource string) {
 // when the cache is missing or malformed so completion never blocks
 // the shell.
 func emitCachedBoards(profile string) {
-	entry, ok, _, err := cache.Read(profile, "boards", 24*time.Hour*365)
+	entry, ok, err := cache.ReadCachedOrEmpty(profile, "boards")
 	if err != nil || !ok {
 		return
 	}
