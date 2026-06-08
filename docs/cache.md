@@ -45,6 +45,10 @@ and the resource's payload field.
     `cache boards` is the exception: it emits metadata only, no
     array field.
 
+Add `-d` / `--debug` to print the HTTP request/response trace on stderr
+(token redacted); stdout keeps the clean envelope. See
+[Output](output.md#debug).
+
 ## projects
 
 ```sh
@@ -144,7 +148,9 @@ Returns every issue type Jira surfaces across visible projects, with
       "ok": true,
       "meta": { "command": "cache.issuetypes", "timestamp": "…", "request_id": "…" },
       "data": {
+        "cache_empty": false,
         "cache_state": "fresh",
+        "cache_source_state": "fresh",
         "count": 15,
         "fetched_at": "…",
         "from_cache": true,
@@ -180,7 +186,9 @@ Returns the global label list (a flat string array, not objects).
       "ok": true,
       "meta": { "command": "cache.labels", "timestamp": "…", "request_id": "…" },
       "data": {
+        "cache_empty": false,
         "cache_state": "fresh",
+        "cache_source_state": "fresh",
         "count": 2,
         "fetched_at": "…",
         "from_cache": true,
@@ -214,7 +222,9 @@ issue create flow to map `--epic <key>` to a parent link.
       "ok": true,
       "meta": { "command": "cache.epics", "timestamp": "…", "request_id": "…" },
       "data": {
+        "cache_empty": false,
         "cache_state": "fresh",
+        "cache_source_state": "fresh",
         "count": 1,
         "fetched_at": "…",
         "from_cache": true,
@@ -250,7 +260,9 @@ Jira REST representation.
       "ok": true,
       "meta": { "command": "cache.linktypes", "timestamp": "…", "request_id": "…" },
       "data": {
+        "cache_empty": false,
         "cache_state": "fresh",
+        "cache_source_state": "fresh",
         "count": 4,
         "fetched_at": "…",
         "from_cache": true,
@@ -261,7 +273,7 @@ Jira REST representation.
             "name": "Blocks",
             "inward": "is blocked by",
             "outward": "blocks",
-            "self": "https://example.atlassian.net/rest/api/3/issueLinkType/10000"
+            "self": "https://your-site.atlassian.net/rest/api/3/issueLinkType/10000"
           }
         ]
       },
@@ -395,8 +407,8 @@ jira cache clear                    # remove every cached resource for the profi
 jira cache clear projects           # remove just one resource
 ```
 
-Valid resource names: `projects`, `fields`, `issuetypes`, `labels`,
-`epics`, `linktypes`, `boards`.
+Valid resource names: `labels`, `projects`, `epics`, `fields`,
+`issuetypes`, `linktypes`, `boards`, `statuses`, `priorities`.
 
 ### clear all
 
@@ -460,7 +472,7 @@ valid set:
     {
       "type": "validation",
       "code": "arg_value_invalid",
-      "message": "unknown cache resource \"bogus\"; valid resources: labels, projects, epics, fields, issuetypes, linktypes, boards",
+      "message": "unknown cache resource \"bogus\"; valid resources: labels, projects, epics, fields, issuetypes, linktypes, boards, statuses, priorities",
       "hint": "Pass one of the documented positional argument values; run the command with --help for valid choices.",
       "retryable": false
     }

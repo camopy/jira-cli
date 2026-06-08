@@ -17,6 +17,11 @@ it three ways:
 updated >= -365d ORDER BY updated DESC
 ```
 
+The commands that call Jira (`jql validate`, `jql reference`) accept
+`-d` / `--debug` to print the HTTP request/response trace on stderr
+(token redacted); stdout keeps the clean envelope. See
+[Output](output.md#debug).
+
 Pass `--assignee me` to scope that default to issues assigned to you, or
 hand-write the full query via `--jql`:
 
@@ -42,8 +47,13 @@ jira jql build                                        # no filters: defaults
 
 === "Human"
 
+    The preview's job is to hand back the query, so human output is the
+    bare JQL — copy/paste- and pipe-safe. On a TTY it's wrapped in a
+    terminal hyperlink to the Jira search URL. Add `--debug` to restore
+    the `board_scope.applied=… jql="…" precedence=…` diagnostic line.
+
     ```text
-    INF ℹ️ board_scope.applied=false jql="project = <PROJECT_KEY> AND assignee = currentUser() AND priority = Medium ORDER BY updated DESC" precedence=none
+    project = <PROJECT_KEY> AND assignee = currentUser() AND priority = Medium ORDER BY updated DESC
     ```
 
 === "JSON"
@@ -55,7 +65,8 @@ jira jql build                                        # no filters: defaults
       "data": {
         "board_scope": { "applied": false },
         "jql": "project = <PROJECT_KEY> AND assignee = currentUser() AND priority = Medium ORDER BY updated DESC",
-        "precedence": "none"
+        "precedence": "none",
+        "url": "https://your-site.atlassian.net/issues/?jql=…"
       },
       "errors": [],
       "warnings": []
@@ -83,8 +94,8 @@ Pass one or more queries. `--mode` sets strictness: `strict` (default,
 structural warnings count), `warn`, or `none`.
 
 ```sh
-jira jql validate 'project = ENG AND statusCategory != Done'
-jira jql validate 'bad =' 'project = ENG' --mode warn
+jira jql validate 'project = PROJ AND statusCategory != Done'
+jira jql validate 'bad =' 'project = PROJ' --mode warn
 ```
 
 A query that fails to parse is reported as a *result*, not a CLI error:
@@ -98,7 +109,7 @@ JQL.
     parser message:
 
     ```text
-    OK  project = ENG AND statusCategory != Done
+    OK  project = PROJ AND statusCategory != Done
     INVALID  bad = — Error in the JQL Query: expecting a value
     ```
 
@@ -110,7 +121,7 @@ JQL.
       "meta": { "command": "jql.validate", "timestamp": "…", "request_id": "…" },
       "data": {
         "queries": [
-          { "query": "project = ENG", "valid": true },
+          { "query": "project = PROJ", "valid": true },
           { "query": "bad =", "valid": false,
             "errors": ["Error in the JQL Query: expecting a value"] }
         ]

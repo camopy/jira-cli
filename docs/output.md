@@ -84,6 +84,56 @@ on stderr.
 The action label (e.g. `Issue created`) goes to stdout only on success. JSON
 mode keeps the same envelope on success and failure.
 
+## Debug
+
+`-d` / `--debug` prints the HTTP request and response trace to **stderr**. It
+never touches stdout — in `json` mode stdout stays a clean, parseable envelope,
+so `jira … --output=json --debug | jq` still works. The `Authorization` header
+is always redacted; request and response bodies are redacted for known secret
+fields. The trace is identical in shape for every networked command, so it is
+documented once here; other pages just note that `-d` is available.
+
+```sh
+jira me --output=json --debug
+```
+
+=== "stdout (envelope)"
+
+    The envelope is unchanged by `--debug`:
+
+    ```json
+    {
+      "ok": true,
+      "meta": { "command": "me", "timestamp": "…", "request_id": "…" },
+      "data": {
+        "account_id": "<ACCOUNT_ID>",
+        "display_name": "Example User",
+        "email_address": "you@example.com",
+        "profile": "default",
+        "time_zone": "Etc/UTC"
+      },
+      "errors": [],
+      "warnings": []
+    }
+    ```
+
+=== "stderr (debug trace)"
+
+    The redacted HTTP request and response, as `clog` `DBG` lines (abbreviated):
+
+    ```text
+    DBG 🐞 output detection mode=json agent=…
+    DBG 🐞 jira request method=GET url=https://your-site.atlassian.net/rest/api/3/myself headers.Accept=application/json headers.Authorization=REDACTED
+    DBG 🐞 jira response status_code=200 status="200 OK" headers.X-Ratelimit-Remaining=349 …
+    DBG 🐞 jira response body body="{\"accountId\":\"<ACCOUNT_ID>\",\"displayName\":\"Example User\",…}"
+    DBG 🐞 fetched account time=287ms
+    ```
+
+On a failure the envelope still goes to stdout (machine mode) or the `ERR` line
+to stderr (human mode); `--debug` adds the same trace alongside, so the response
+status and body that explain the failure are visible without changing the
+parse contract.
+
 ## Per-command output
 
 Each command page documents its own Human and JSON examples, see

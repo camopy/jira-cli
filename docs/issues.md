@@ -7,6 +7,10 @@ account IDs, sites). Destructive paths (`delete`, `clone`, `move`,
 `comment delete`, `link delete`, `attachment delete`) require `--force`
 under `--no-input`.
 
+Add `-d` / `--debug` to any command to print the HTTP request and response
+trace on stderr (the token is redacted); stdout still carries the clean
+envelope. See [Output](output.md#debug) for the full trace format.
+
 ## view
 
 Read a single issue when you already know its key. Returns everything
@@ -175,9 +179,12 @@ resolved query as `--jql` for the next run. `--as-jql` prints the
 query without calling Jira, useful when a flag like `--label foo`
 might not resolve the way you expect.
 
-The default projection is a summary table, one row per issue. Pass
-`--detail` for full per-issue records (same shape as
-[`view`](#view)).
+The default projection is a summary table, one row per issue. Each row
+carries `key`, `summary`, `status`, `priority`, `assignee`, `updated`,
+plus `status_category` (Jira's workflow category: `new`, `indeterminate`,
+or `done`) and `status_color` (the category colour name, e.g. `blue-gray`,
+`yellow`, `green` — used to tint the status in human output). Pass
+`--detail` for full per-issue records (same shape as [`view`](#view)).
 
 !!! warning "Common mistake"
 
@@ -236,6 +243,8 @@ Date flags accept a relative window (`-7d`, signed, Jira units
             "key": "<ISSUE_KEY>",
             "summary": "Example issue summary",
             "status": "In Progress",
+            "status_category": "indeterminate",
+            "status_color": "yellow",
             "priority": "Medium",
             "assignee": null,
             "updated": "2026-06-01T22:00:29.281-0400"
@@ -250,11 +259,11 @@ Date flags accept a relative window (`-7d`, signed, Jira units
 === "Human"
 
     ```text
-    INF ℹ️ listed issues count=3 detail=false jql="..."
-    KEY     SUMMARY                                                     STATUS  ASSIGNEE    PRIORITY
-    <ISSUE_KEY_3>  auth status: top-level ok:true and errors:[] despite …      To Do   unassigned  Medium
-    <OTHER_ISSUE_KEY>  issue view --output json: raw Jira passthrough …            To Do   unassigned  Medium
-    <ISSUE_KEY>  auth login: hint field empty on 401; remediation …          To Do   unassigned  Medium
+    INF ℹ️ Listed issues count=3 detail=false
+    KEY     SUMMARY                    STATUS       ASSIGNEE    PRIORITY
+    <ISSUE_KEY_3>  Example issue summary      To Do        unassigned  Medium
+    <OTHER_ISSUE_KEY>  Example issue summary      In Progress  unassigned  Medium
+    <ISSUE_KEY>  Example issue summary      To Do        unassigned  Medium
     ```
 
 === "JSON"
@@ -279,6 +288,8 @@ Date flags accept a relative window (`-7d`, signed, Jira units
             "key": "<ISSUE_KEY_3>",
             "summary": "Example issue summary",
             "status": "To Do",
+            "status_category": "new",
+            "status_color": "blue-gray",
             "priority": "Medium",
             "assignee": null,
             "updated": "2026-05-27T07:12:38.839-0400"

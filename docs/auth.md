@@ -10,6 +10,10 @@ base URL, email, auth type, and a backend reference, but no secret.
 
 jira talks to **Jira Cloud only**. Server and Data Center are not supported.
 
+Add `-d` / `--debug` to print the HTTP request/response trace on stderr
+(token redacted); stdout keeps the clean envelope. See
+[Output](output.md#debug).
+
 ## Getting started
 
 Before `auth login`, gather:
@@ -683,8 +687,8 @@ When jira looks up a token for a profile, it tries sources in order:
 2.  **The backend configured on the profile**, the `keyring` or
     `1password` reference recorded by `auth login`.
 
-If neither resolves, the call fails with `auth_failure` (exit 1) and the
-`errors[0].type` field in the JSON envelope is `auth_failure`.
+If neither resolves, the call fails with an auth error (exit 1) and the
+`errors[0].type` field in the JSON envelope is `auth`.
 
 `jira auth status --output=json` reports which source resolved per profile,
 useful as a quick health check from a script.
@@ -706,7 +710,7 @@ the human message, codes are stable, messages may change.
     **Invalid token.** Stable signals in the JSON envelope:
 
     *   `errors[0].code = "jira_unauthorized"`
-    *   `errors[0].type = "auth_failure"`
+    *   `errors[0].type = "auth"`
     *   `meta.exit_code = 1`
 
     The token is missing, revoked, mistyped, or for a different Atlassian
@@ -724,7 +728,7 @@ the human message, codes are stable, messages may change.
     **Insufficient permission.** Stable signals in the JSON envelope:
 
     *   `errors[0].code = "jira_forbidden"`
-    *   `errors[0].type = "auth_failure"`
+    *   `errors[0].type = "auth"`
     *   `meta.exit_code = 1`
 
     The token authenticates fine but lacks project or field-level permission for

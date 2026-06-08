@@ -6,6 +6,10 @@ convenience layer on top of the underlying issue API; for the full
 `epic` issue type's lifecycle (create / edit / transition) use the
 [`issue`](issues.md) commands with `--type Epic`.
 
+Add `-d` / `--debug` to print the HTTP request/response trace on stderr
+(token redacted); stdout keeps the clean envelope. See
+[Output](output.md#debug).
+
 ## list
 
 Page through every epic visible to the active profile. The default

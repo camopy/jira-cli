@@ -5,6 +5,10 @@ subcommands (`add`, `list`) share the standard envelope and `--output`
 modes. `worklog add` accepts the same `--dry-run` preview path as the
 issue mutations.
 
+Add `-d` / `--debug` to print the HTTP request/response trace on stderr
+(token redacted); stdout keeps the clean envelope. See
+[Output](output.md#debug).
+
 ## add
 
 Log time against an issue. `--time-spent` accepts compact Jira-style

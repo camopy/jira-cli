@@ -11,6 +11,10 @@ Three ways to find issues, in order of how much JQL you want to write:
 To preview the JQL a set of `issue list` filters would resolve to
 without running the search, see [`jira jql build`](jql.md#build).
 
+Add `-d` / `--debug` to print the HTTP request/response trace on stderr
+(token redacted); stdout keeps the clean envelope. See
+[Output](output.md#debug).
+
 ## search jql
 
 Execute a JQL query passed inline. `--fields` narrows the per-issue
@@ -88,7 +92,10 @@ returned, `--count` can't combine with `--fields`, `--full`, or
 === "JSON"
 
     The default projection is the flat per-issue summary: `key`,
-    `summary`, `status`, `priority`, `assignee`, `updated`.
+    `summary`, `status`, `status_category`, `assignee`, `priority`,
+    `updated`. `status_category` is the stable workflow bucket
+    (`new`, `indeterminate`, or `done`); a `status_color` field rides
+    alongside when Jira reports the category's colour.
 
     ```json
     {
@@ -105,9 +112,11 @@ returned, `--count` can't combine with `--fields`, `--full`, or
             "key": "<ISSUE_KEY>",
             "summary": "Example issue summary",
             "status": "To Do",
-            "priority": "Medium",
+            "status_category": "new",
+            "status_color": "blue-gray",
             "assignee": null,
-            "updated": "2026-05-27T07:12:38.839-0400"
+            "priority": "Medium",
+            "updated": "…"
           }
         ]
       },
@@ -129,7 +138,7 @@ nested `fields` object containing only the requested keys):
       {
         "id": "10401",
         "key": "<ISSUE_KEY>",
-        "self": "https://example.atlassian.net/rest/api/3/issue/10401",
+        "self": "https://your-site.atlassian.net/rest/api/3/issue/10401",
         "fields": {
           "status": { "name": "To Do" },
           "summary": "Example issue summary"
@@ -158,8 +167,11 @@ how many fields the project defines.
 ### Bad JQL
 
 A query Jira can't parse exits 3 with a `jira_bad_request` error.
-The original Jira message lands in `errors[0].upstream_messages` so a
-script doesn't have to parse the formatted `message`:
+`errors[0].message` is the clean Jira message (parsed from the
+upstream `errorMessages`), and the raw upstream array is preserved in
+`errors[0].upstream_messages` so a script can branch on it directly. In
+machine modes the whole envelope, including this error, is written to
+**stdout** — there is no separate human `ERR` line:
 
 ```json
 {
@@ -170,8 +182,8 @@ script doesn't have to parse the formatted `message`:
     {
       "type": "validation",
       "code": "jira_bad_request",
-      "message": "{\"errorMessages\":[\"Error in the JQL Query: Expecting 'IN' but got 'valid'. (line 1, character 16)\"],\"errors\":{}}",
-      "hint": "Jira rejected the request, check the upstream_messages and upstream_field_errors fields for the specifics, then correct the input before resubmitting.",
+      "message": "Error in the JQL Query: Expecting 'IN' but got 'valid'. (line 1, character 16)",
+      "hint": "Jira rejected the request — check the upstream_messages and upstream_field_errors fields for the specifics, then correct the input before resubmitting.",
       "retryable": false,
       "http_status": 400,
       "rate_limit_remaining": 199,
@@ -228,24 +240,33 @@ frontmatter is purely informational.
 
 === "JSON"
 
-    The envelope adds a top-level `description` to the data block
-    (echoing the frontmatter). The `issues` array follows the same
-    projection rules as `search jql` (default summary, or raw Jira
-    shape under `--fields` / `--full`).
+    The data block carries the saved-query metadata —
+    `source: "saved"`, `key`, `name`, `description`, `project` (each
+    echoing the frontmatter) — alongside the `jql` that ran and the
+    `issues` array. The array follows the same projection rules as
+    `search jql` (default summary, or raw Jira shape under `--fields` /
+    `--full`).
 
     ```json
     {
       "ok": true,
       "meta": { "command": "search.saved", "timestamp": "…", "request_id": "…" },
       "data": {
+        "source": "saved",
+        "key": "my-open-bugs",
+        "name": "my-open-bugs",
         "description": "Bugs assigned to me",
+        "project": "<PROJECT_KEY>",
+        "jql": "project = <PROJECT_KEY> AND assignee = currentUser() AND statusCategory != Done",
         "issues": [
           {
             "key": "<ISSUE_KEY>",
-            "summary": "…",
+            "summary": "Example issue summary",
             "status": "To Do",
-            "priority": "Medium",
+            "status_category": "new",
+            "status_color": "blue-gray",
             "assignee": null,
+            "priority": "Medium",
             "updated": "…"
           }
         ]

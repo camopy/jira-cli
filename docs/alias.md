@@ -125,8 +125,10 @@ cat aliases.yaml | jira alias import -     # read from stdin
 
 Without `--clobber`, the import skips any name that already exists and
 reports each conflict under `data.skipped` as a map of `name → reason`
-(currently always `"name already taken"`). With `--clobber`, conflicts
-are overwritten and `data.skipped` comes back empty.
+(`"name already taken"` for a collision). Other skip reasons cover an
+empty expansion or one that doesn't resolve to a `jira` command or
+alias. With `--clobber`, existing-name conflicts are overwritten and
+`data.skipped` comes back empty (other skip reasons still apply).
 
 === "Human"
 
