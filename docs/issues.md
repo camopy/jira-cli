@@ -82,11 +82,10 @@ Single-key reads keep the existing `data.issue` payload. Multi-key reads
 return ordered per-key results under `data.results[]`; each entry has
 `ok: true` plus `issue`, or `ok: false` plus `error`. If one key fails,
 the command exits non-zero and writes the standard error envelope to
-stderr while preserving successful keys in `data.results[]`; stdout is
-empty for JSON failure envelopes. Human output keeps the
-success table on stdout; failed-key diagnostics go to stderr and are
-truncated for large batches. Use `--output=json` for the full per-key
-failure list.
+stdout — the same stream as success — while preserving successful keys
+in `data.results[]`. Human output keeps the success table on stdout;
+failed-key diagnostics go to stderr and are truncated for large batches.
+Use `--output=json` for the full per-key failure list.
 
 ```json
 {

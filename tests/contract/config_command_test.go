@@ -107,7 +107,7 @@ workday_seconds = 28800
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
+	decodeErrorEnvelopeFromStdout(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 	if len(env.Errors) == 0 {
 		t.Fatalf("config init envelope carried no errors:\nstdout=%s\nstderr=%s", stdout.String(), stderr.String())
 	}

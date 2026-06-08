@@ -464,34 +464,34 @@ func writeCommandError(ctx context.Context, cmd *cobra.Command, err error) {
 	if errors.As(err, &reported) {
 		return
 	}
-	// Failures always emit a clog diagnostic on stderr.
+	if jsonEnvelopeRequested(cmd) {
+		// Machine mode (json/compact): a failure is a parseable JSON envelope on
+		// stdout — the same stream as success, with ok:false and the exit code
+		// signaling the failure. stdout therefore stays pure JSON and no human
+		// diagnostic line is written, so `cmd --output=json | jq` works on the
+		// error path too. Some RunEs (e.g. multi-key view partial failure, or
+		// watcher add ambiguous-resolution) already wrote their own richer,
+		// data-bearing envelope to stdout and signal that with an
+		// EnvelopeWritten wrapper; don't write a second one over it.
+		var ew cmdutil.EnvelopeWrittenError
+		if !errors.As(err, &ew) {
+			_ = writeErrorEnvelopeToStdout(cmd, err)
+		}
+		return
+	}
+	// Human mode: a single clog diagnostic on stderr, no JSON. A RunE that
+	// already rendered its own failure (EnvelopeWritten) still gets this concise
+	// summary line, matching prior behavior.
 	logger := clog.Ctx(ctx)
 	if logger == clog.Default {
 		logger = clog.New(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAuto))
 	}
 	logger.Error().Err(err).Send()
-	// Some RunEs (e.g. watcher add ambiguous-resolution) write a richer
-	// envelope to stdout themselves (with structured candidates etc.) and
-	// signal that with an envelopeWritten wrapper. Avoid double-writing.
-	var ew cmdutil.EnvelopeWrittenError
-	if errors.As(err, &ew) {
-		return
-	}
-	// When --json (or --compact) was requested, stderr must also carry a
-	// parseable envelope while stdout stays reserved for successful output.
-	// We write the envelope AFTER the clog line so stderr consumers still
-	// see the human-readable message first.
-	if jsonEnvelopeRequested(cmd) {
-		// best-effort: the clog stderr line already carries the diagnostic; if
-		// the envelope write itself fails (broken stderr pipe), there's nothing
-		// useful we can do.
-		_ = writeErrorEnvelopeToStderr(cmd, err)
-	}
 }
 
 // jsonEnvelopeRequested returns true when the resolved output mode is a
 // machine mode (json or compact), so a command failure still emits a
-// parseable error envelope on stderr.
+// parseable error envelope on stdout.
 //
 // It inspects the --output flag and the env-detector directly so it works
 // even before PersistentPreRunE has run (e.g. when cobra fires a flag
@@ -511,15 +511,16 @@ func jsonEnvelopeRequested(cmd *cobra.Command) bool {
 	return resolved == cli.ModeJSON || resolved == cli.ModeCompact
 }
 
-// writeErrorEnvelopeToStderr emits a lean failure envelope carrying the
-// error in the errors[] array to cmd's stderr. Used only on the
+// writeErrorEnvelopeToStdout emits a lean failure envelope carrying the
+// error in the errors[] array to cmd's stdout. Used only on the
 // json/compact/agent-detected path so machine consumers always have
-// parseable output even when the command fails before or after RunE.
+// parseable output on the same stream as success even when the command fails
+// before or after RunE.
 //
 // This helper deliberately bypasses the compact branching used by the
 // success path: errors must stay a parseable JSON envelope regardless of
 // the output mode, so a failed command is never invisible to an agent.
-func writeErrorEnvelopeToStderr(cmd *cobra.Command, err error) error {
+func writeErrorEnvelopeToStdout(cmd *cobra.Command, err error) error {
 	// Use cobra's CommandPath() so nested sub-commands get the full dotted name
 	// (e.g. "issue.create") instead of the hand-walked single-level fallback.
 	command := strings.TrimPrefix(cmd.CommandPath(), "jira ")
@@ -528,7 +529,7 @@ func writeErrorEnvelopeToStderr(cmd *cobra.Command, err error) error {
 		command = "error"
 	}
 	env := cli.ErrorEnvelope(command, err)
-	return cli.WriteEnvelope(cmd.ErrOrStderr(), env)
+	return cli.WriteEnvelope(cmd.OutOrStdout(), env)
 }
 
 // ExitCode maps err to its process exit code. It delegates to the

@@ -72,21 +72,20 @@ workday_seconds = 28800
 
 func decodeWatcherErrorEnvelope(t *testing.T, stdout, stderr *bytes.Buffer, target any) {
 	t.Helper()
-	if len(bytes.TrimSpace(stdout.Bytes())) != 0 {
-		t.Fatalf("stdout is not empty on error\nstdout=%s\nstderr=%s", stdout.String(), stderr.String())
-	}
-	lines := bytes.Split(bytes.TrimSpace(stderr.Bytes()), []byte("\n"))
+	// Machine mode: the failure envelope is on stdout, the same stream as
+	// success.
+	lines := bytes.Split(bytes.TrimSpace(stdout.Bytes()), []byte("\n"))
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := bytes.TrimSpace(lines[i])
 		if len(line) == 0 || line[0] != '{' {
 			continue
 		}
 		if err := json.Unmarshal(line, target); err != nil {
-			t.Fatalf("stderr envelope is not JSON: %v\nstderr=%s", err, stderr.String())
+			t.Fatalf("stdout envelope is not JSON: %v\nstdout=%s", err, stdout.String())
 		}
 		return
 	}
-	t.Fatalf("stderr has no JSON envelope:\n%s", stderr.String())
+	t.Fatalf("stdout has no JSON envelope:\n%s", stdout.String())
 }
 
 const myselfFixture = `{"accountId":"712020:test-user","emailAddress":"user@example.com","displayName":"Test User","active":true}`

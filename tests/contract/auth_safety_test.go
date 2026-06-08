@@ -35,17 +35,16 @@ func TestAuthLoginRefusesPromptsInHeadlessJSONMode(t *testing.T) {
 	if strings.Contains(stdout.String(), "Profile:") || strings.Contains(stdout.String(), "Secret backend:") {
 		t.Fatalf("headless auth login wrote prompts to stdout:\nstdout=%s", stdout.String())
 	}
-	// clog diagnostic on stderr must mention "--no-input".
-	stderrLow := strings.ToLower(stderr.String())
-	if !strings.Contains(stderrLow, "err") || !strings.Contains(stderrLow, "no-input") {
-		t.Fatalf("headless auth login did not emit clog diagnostic on stderr:\nstderr=%s", stderr.String())
-	}
-	// --json path must deliver a JSON envelope on stderr.
+	// Machine mode: the failure envelope on stdout must mention --no-input;
+	// stderr stays free of a human clog line.
 	var env map[string]any
-	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
+	decodeErrorEnvelopeFromStdout(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 	errs, _ := env["errors"].([]any)
 	if len(errs) == 0 {
-		t.Fatalf("envelope.errors is empty:\nstderr=%s", stderr.String())
+		t.Fatalf("envelope.errors is empty:\nstdout=%s", stdout.String())
+	}
+	if !strings.Contains(strings.ToLower(stdout.String()), "no-input") {
+		t.Fatalf("envelope did not mention --no-input:\nstdout=%s", stdout.String())
 	}
 }
 

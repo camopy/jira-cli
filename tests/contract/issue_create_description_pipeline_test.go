@@ -113,7 +113,7 @@ func TestIssueCreateRawADFDescriptionStrictRejectsBeforeWire(t *testing.T) {
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	decodeErrorEnvelopeFromStderr(t, stdout, stderr, []string{"jira", "--config", cfg, "issue", "create", "--no-input", "--json-input", path, "--output=json"}, &env)
+	decodeErrorEnvelopeFromStdout(t, stdout, stderr, []string{"jira", "--config", cfg, "issue", "create", "--no-input", "--json-input", path, "--output=json"}, &env)
 	if len(env.Errors) == 0 {
 		t.Fatalf("expected a validation error naming the unknown node: %s", stderr)
 	}

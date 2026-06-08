@@ -6,10 +6,10 @@ package contract
 //   - be valid JSON (jq . succeeds)
 //   - contain meta, data, errors, warnings keys
 //
-// Successful envelopes are written to stdout. Error envelopes are written to
-// stderr so stdout stays reserved for successful command output.
-//
-// These tests drive the fix that makes writeCommandError envelope-aware.
+// In machine mode (json/compact) the envelope is written to stdout for both
+// success and failure — a failure carries ok:false and a non-zero exit code, so
+// a consumer parses one stream regardless of outcome. Human mode keeps its
+// diagnostic on stderr.
 
 import (
 	"bytes"
@@ -23,7 +23,7 @@ import (
 	"testing"
 )
 
-func TestErrorEnvelopeUsesStderrAndLeavesStdoutEmpty(t *testing.T) {
+func TestErrorEnvelopeUsesStdoutInMachineMode(t *testing.T) {
 	bin := buildJiraBinary(t)
 	cmd := exec.Command(bin, "completions", "fish")
 	var stdout, stderr bytes.Buffer
@@ -34,23 +34,26 @@ func TestErrorEnvelopeUsesStderrAndLeavesStdoutEmpty(t *testing.T) {
 		t.Fatal("unknown command succeeded; want command_unknown failure")
 	}
 	assertValidationExitCode(t, err)
-	if stdout.Len() != 0 {
-		t.Fatalf("stdout = %q, want empty success channel on error", stdout.String())
+	// Machine mode: the failure envelope is on stdout (the same stream as
+	// success) so `… | jq` works on the error path, and stderr stays free of a
+	// human diagnostic line that would break a stderr JSON parse.
+	if !bytes.Contains(stdout.Bytes(), []byte(`"ok":false`)) {
+		t.Fatalf("stdout does not contain a structured error envelope:\n%s", stdout.String())
 	}
-	if !bytes.Contains(stderr.Bytes(), []byte(`"ok":false`)) {
-		t.Fatalf("stderr does not contain a structured error envelope:\n%s", stderr.String())
+	if !bytes.Contains(stdout.Bytes(), []byte(`"code":"command_unknown"`)) {
+		t.Fatalf("stdout envelope does not carry command_unknown:\n%s", stdout.String())
 	}
-	if !bytes.Contains(stderr.Bytes(), []byte(`"code":"command_unknown"`)) {
-		t.Fatalf("stderr envelope does not carry command_unknown:\n%s", stderr.String())
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty in machine mode", stderr.String())
 	}
 }
 
 // requireEnvelopeOnStdout runs bin with the given args, captures stdout
 // separately from stderr, and asserts a valid JSON envelope with
-// meta/data/errors/warnings keys. Successful runs emit the envelope on stdout;
-// failing runs emit it on stderr and leave stdout empty. It returns the decoded
-// envelope map and the exit error (nil on success) so callers can make further
-// assertions.
+// meta/data/errors/warnings keys. The envelope is on stdout for both success
+// and failure (failure carries ok:false and a non-zero exit code). It returns
+// the decoded envelope map and the exit error (nil on success) so callers can
+// make further assertions.
 func requireEnvelopeOnStdout(t *testing.T, bin string, args ...string) (map[string]any, error) {
 	t.Helper()
 	cmd := exec.Command(bin, args...)
@@ -79,21 +82,14 @@ func requireEnvelopeOnStdoutWithEnv(t *testing.T, bin string, extraEnv []string,
 func requireEnvelopeFromRun(t *testing.T, stdout, stderr []byte, runErr error, args, extraEnv []string) map[string]any {
 	t.Helper()
 
-	streamName := "stdout"
-	stream := stdout
-	if runErr != nil {
-		if len(bytes.TrimSpace(stdout)) != 0 {
-			t.Fatalf("stdout is not empty on error\nstdout=%s\nstderr=%s\nargs=%v",
-				stdout, stderr, args)
-		}
-		streamName = "stderr"
-		stream = stderr
-	}
-
-	env := decodeJSONEnvelopeFromStream(t, stream, streamName, stdout, stderr, args, extraEnv)
+	// The envelope is on stdout for both success and failure — failure carries
+	// ok:false and signals via the exit code, so machine consumers parse one
+	// stream regardless of outcome.
+	_ = runErr
+	env := decodeJSONEnvelopeFromStream(t, stdout, "stdout", stdout, stderr, args, extraEnv)
 	for _, key := range []string{"meta", "data", "errors", "warnings"} {
 		if _, ok := env[key]; !ok {
-			t.Fatalf("envelope missing %q key\n%s=%s\nargs=%v", key, streamName, stream, args)
+			t.Fatalf("envelope missing %q key\nstdout=%s\nargs=%v", key, stdout, args)
 		}
 	}
 	return env
@@ -107,12 +103,9 @@ func decodeJSONEnvelopeFromStream(t *testing.T, stream []byte, streamName string
 	return env
 }
 
-func decodeErrorEnvelopeFromStderr(t *testing.T, stdout, stderr []byte, args []string, target any) {
+func decodeErrorEnvelopeFromStdout(t *testing.T, stdout, stderr []byte, args []string, target any) {
 	t.Helper()
-	if len(bytes.TrimSpace(stdout)) != 0 {
-		t.Fatalf("stdout is not empty on error\nstdout=%s\nstderr=%s\nargs=%v", stdout, stderr, args)
-	}
-	decodeJSONValueFromStream(t, stderr, "stderr", stdout, stderr, args, nil, target)
+	decodeJSONValueFromStream(t, stdout, "stdout", stdout, stderr, args, nil, target)
 }
 
 func runCommandExpectErrorEnvelope(t *testing.T, cmd *exec.Cmd, target any) ([]byte, []byte, error) {
@@ -125,7 +118,7 @@ func runCommandExpectErrorEnvelope(t *testing.T, cmd *exec.Cmd, target any) ([]b
 		t.Fatalf("command succeeded; want error\nstdout=%s\nstderr=%s\nargs=%v",
 			stdout.Bytes(), stderr.Bytes(), cmd.Args)
 	}
-	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, target)
+	decodeErrorEnvelopeFromStdout(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, target)
 	return stdout.Bytes(), stderr.Bytes(), runErr
 }
 
@@ -243,7 +236,7 @@ func TestI1HugeJsonInputEnvelope(t *testing.T) {
 }
 
 // TestI1StdinAndJsonInputEnvelope — Attack 6: both stdin pipe and --json-input supplied.
-// --json-input wins (file takes precedence), and stderr must carry an error envelope.
+// --json-input wins (file takes precedence), and stdout must carry an error envelope.
 // validation errors → exit 3.
 func TestI1StdinAndJsonInputEnvelope(t *testing.T) {
 	bin := buildJiraBinary(t)
@@ -261,10 +254,10 @@ func TestI1StdinAndJsonInputEnvelope(t *testing.T) {
 	assertValidationExitCode(t, runErr)
 
 	var env map[string]any
-	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
+	decodeErrorEnvelopeFromStdout(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 	for _, key := range []string{"meta", "data", "errors", "warnings"} {
 		if _, ok := env[key]; !ok {
-			t.Fatalf("envelope missing %q\nstderr=%s", key, stderr.String())
+			t.Fatalf("envelope missing %q\nstdout=%s", key, stdout.String())
 		}
 	}
 }

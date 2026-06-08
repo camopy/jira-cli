@@ -94,7 +94,7 @@ func TestIssueCommentCommandConvertsMarkdownToADF(t *testing.T) {
 	}
 }
 
-func TestJSONErrorsUseClogDiagnosticsAndExitCodes(t *testing.T) {
+func TestJSONErrorsUseStdoutEnvelopeAndExitCodes(t *testing.T) {
 	bin := buildJiraBinary(t)
 	cmd := exec.Command(bin, "worklog", "add", "PROJ-1", "--time-spent", "wat", "--output=json")
 	var stdout, stderr bytes.Buffer
@@ -108,18 +108,16 @@ func TestJSONErrorsUseClogDiagnosticsAndExitCodes(t *testing.T) {
 	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 3 {
 		t.Fatalf("exit = %v stdout=%s", err, stdout.String())
 	}
-	// clog diagnostic on stderr must mention "invalid duration".
-	stderrLow := strings.ToLower(stderr.String())
-	if !strings.Contains(stderrLow, "err") || !strings.Contains(stderrLow, "invalid duration") {
-		t.Fatalf("stderr clog diagnostic missing:\nstderr=%s", stderr.String())
+	// Machine mode: the JSON envelope on stdout carries the diagnostic in
+	// errors[]; stderr stays free of a human clog line.
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty in machine mode", stderr.String())
 	}
-	// --json path must deliver a JSON envelope on stderr with
-	// the error in errors[].
 	var env map[string]any
-	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
+	decodeErrorEnvelopeFromStdout(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 	errs, _ := env["errors"].([]any)
 	if len(errs) == 0 {
-		t.Fatalf("envelope.errors is empty:\nstderr=%s", stderr.String())
+		t.Fatalf("envelope.errors is empty:\nstdout=%s", stdout.String())
 	}
 	first, _ := errs[0].(map[string]any)
 	if msg, _ := first["message"].(string); !strings.Contains(msg, "invalid duration") {

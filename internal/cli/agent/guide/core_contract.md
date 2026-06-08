@@ -89,7 +89,7 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
   | `compact`        | Force the JSON `data` payload only — no `ok`/`meta`/`warnings`/`errors`        |
 
 - In `--output=human` mode, `warnings[]` mirrors to stderr as clog `WRN` lines so stdout stays clean for piping.
-- In `--output=json` and `--output=compact`, failures write the full error envelope to stderr and leave stdout empty.
+- In `--output=json` and `--output=compact`, failures write the full error envelope to stdout — the same stream as success — with `ok:false` and a non-zero exit. Parse one stream regardless of outcome; no human diagnostic line is printed to break the parse.
 - Warning `type` values you'll see:
 
   | `type`                       | Meaning                                                                        |

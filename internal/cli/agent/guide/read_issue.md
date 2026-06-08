@@ -28,7 +28,7 @@ When: known issue keys need full payloads for downstream reasoning — transitio
 - The CLI still emits its standard envelope (`ok`, `meta`, `data`, `errors`, `warnings`). Within each issue object, field names follow Jira's JSON shape, including camelCase keys such as `accountId`.
 - Single-key reads preserve the existing `data.issue` shape. Multi-key reads switch to `data.results[]`; do not parse `data.issue` after passing more than one key.
 - Multi-key reads do not fail fast. One missing or unauthorized key produces `ok: false`, a non-empty `error` in that result entry, a top-level error envelope, and retained successes for the other keys.
-- In `--output=json`, partial-failure envelopes follow the core contract for failures: the whole envelope, including retained `data.results[]` successes, is written to stderr and stdout is empty. Parse stderr on non-zero exits.
+- In `--output=json`, partial-failure envelopes follow the core contract for failures: the whole envelope, including retained `data.results[]` successes, is written to stdout with `ok:false`. Parse stdout on non-zero exits.
 - Human output keeps successful rows on stdout. Failed-key diagnostics are emitted on stderr and are bounded; use `--output=json` for the full per-key failure list.
 - Issue-key lists and ranges expand locally to at most 1000 keys. Larger expansions exit `3` before credentials, network, or dry-run mutation work starts.
 - Other issue-key commands also accept lists/ranges plus `-p` when the same operation can be applied independently per issue: comment add/list, attachment add/list, link create/list, web links, watcher add/remove/list, worklog add/list, edit with explicit fields, clone/move/delete, epic add/remove, and transition list/execute.

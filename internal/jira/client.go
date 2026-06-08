@@ -102,6 +102,32 @@ func parseErrorCollection(body []byte) errorCollection {
 	return ec
 }
 
+// displayMessage builds the concise human message for an error response.
+// It prefers Jira's parsed errorMessages[], then the field errors map
+// (sorted for stable output), and only falls back to the raw redacted
+// body when the response was not a recognized ErrorCollection — an HTML
+// maintenance page or an empty body. The full body still lives in
+// resp.RawBody and the structured fields stay on the APIError, so this
+// keeps the displayed line clean without dropping machine detail.
+func displayMessage(ec errorCollection, rawBody string) string {
+	if len(ec.ErrorMessages) > 0 {
+		return strings.Join(ec.ErrorMessages, "; ")
+	}
+	if len(ec.Errors) > 0 {
+		keys := make([]string, 0, len(ec.Errors))
+		for k := range ec.Errors {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		parts := make([]string, 0, len(keys))
+		for _, k := range keys {
+			parts = append(parts, k+": "+ec.Errors[k])
+		}
+		return strings.Join(parts, "; ")
+	}
+	return strings.TrimSpace(rawBody)
+}
+
 type Client struct {
 	client     *http.Client
 	baseURL    *url.URL
@@ -455,7 +481,7 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 		apiErr := &APIError{
 			StatusCode:         res.StatusCode,
 			Type:               classifyStatus(res.StatusCode),
-			Message:            strings.TrimSpace(string(msgBody)),
+			Message:            displayMessage(ec, string(msgBody)),
 			ErrorMessages:      ec.ErrorMessages,
 			FieldErrors:        ec.Errors,
 			UpstreamStatus:     ec.Status,

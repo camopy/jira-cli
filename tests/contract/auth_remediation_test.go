@@ -21,17 +21,16 @@ func TestMissingNonLocalCredentialsReturnStructuredAuthError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("missing non-local credentials succeeded instead of auth error:\nstdout=%s", stdout.String())
 	}
-	// clog diagnostic on stderr must mention "credential".
-	stderrLow := strings.ToLower(stderr.String())
-	if !strings.Contains(stderrLow, "err") || !strings.Contains(stderrLow, "credential") {
-		t.Fatalf("auth failure did not emit clog diagnostic on stderr:\nstderr=%s", stderr.String())
-	}
-	// --json path must deliver a JSON envelope on stderr.
+	// Machine mode: the failure envelope on stdout carries the credential
+	// diagnostic; stderr stays free of a human clog line.
 	var env map[string]any
-	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
+	decodeErrorEnvelopeFromStdout(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 	errs, _ := env["errors"].([]any)
 	if len(errs) == 0 {
-		t.Fatalf("envelope.errors is empty on auth failure:\nstderr=%s", stderr.String())
+		t.Fatalf("envelope.errors is empty on auth failure:\nstdout=%s", stdout.String())
+	}
+	if !strings.Contains(strings.ToLower(stdout.String()), "credential") {
+		t.Fatalf("envelope did not mention the credential remediation:\nstdout=%s", stdout.String())
 	}
 }
 

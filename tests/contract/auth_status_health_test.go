@@ -53,7 +53,7 @@ func TestAuthStatusFailsTopLevelWhenRemoteProbeFails(t *testing.T) {
 			Hint    string `json:"hint"`
 		} `json:"errors"`
 	}
-	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
+	decodeErrorEnvelopeFromStdout(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 	if env.OK {
 		t.Fatalf("top-level ok should be false for remote auth failure:\n%s", stderr.String())
 	}
@@ -94,7 +94,7 @@ func TestAuthStatusFailsTopLevelWhenCredentialMissing(t *testing.T) {
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
+	decodeErrorEnvelopeFromStdout(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 	if env.OK {
 		t.Fatalf("top-level ok should be false for missing credential:\n%s", stderr.String())
 	}

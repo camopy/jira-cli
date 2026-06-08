@@ -47,9 +47,11 @@ func TestRemovedLegacyOutputFlagsAreUnknownFlags(t *testing.T) {
 			if err == nil {
 				t.Fatalf("jira %s schema succeeded; want unknown-flag error", removed)
 			}
-			stderrLow := strings.ToLower(stderr.String())
-			if !strings.Contains(stderrLow, "unknown flag") {
-				t.Fatalf("jira %s did not report an unknown flag:\n%s", removed, stderr.String())
+			// In machine mode the unknown-flag error is reported in the stdout
+			// envelope; check both streams so the assertion is stream-robust.
+			combined := strings.ToLower(stdout.String() + stderr.String())
+			if !strings.Contains(combined, "unknown flag") {
+				t.Fatalf("jira %s did not report an unknown flag:\nstdout=%s\nstderr=%s", removed, stdout.String(), stderr.String())
 			}
 		})
 	}
@@ -90,17 +92,13 @@ func TestErrorDiagnosticUsesFailingCommandMessage(t *testing.T) {
 	if err == nil {
 		t.Fatalf("issue delete without --force succeeded:\nstdout=%s", stdout.String())
 	}
-	// clog diagnostic on stderr must include the failing message.
-	if !strings.Contains(stderr.String(), "issue delete requires") {
-		t.Fatalf("stderr does not include failing command message:\nstderr=%s", stderr.String())
-	}
-	// --json was requested so stderr must carry a JSON envelope
-	// with the error message in errors[].
+	// Machine mode: the failing message is in the stdout envelope's errors[],
+	// not a stderr clog line.
 	var env map[string]any
-	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
+	decodeErrorEnvelopeFromStdout(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 	errs, _ := env["errors"].([]any)
 	if len(errs) == 0 {
-		t.Fatalf("envelope.errors is empty; want error entry containing command message:\nstderr=%s", stderr.String())
+		t.Fatalf("envelope.errors is empty; want error entry containing command message:\nstdout=%s", stdout.String())
 	}
 	first, _ := errs[0].(map[string]any)
 	msg, _ := first["message"].(string)

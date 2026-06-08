@@ -326,23 +326,24 @@ func (s *Suite) runAllowFailure(t *testing.T, args ...string) (Envelope, error) 
 
 // RunExpectError runs a jira subcommand that is expected to fail and
 // asserts the CLI surfaced the failure as a structured JSON error
-// envelope: a non-zero exit, empty stdout, parseable stderr, ok=false, and a first
-// error carrying a stable code and a message. It returns the envelope
-// so callers can assert the specific code and HTTP status.
+// envelope: a non-zero exit, the envelope on stdout (the same stream as
+// success), no human diagnostic on stderr, ok=false, and a first error
+// carrying a stable code and a message. It returns the envelope so
+// callers can assert the specific code and HTTP status.
 func (s *Suite) RunExpectError(t *testing.T, args ...string) Envelope {
 	t.Helper()
 	stdout, stderr, err := s.RunRaw(t, append([]string{"--output=json", "--no-input", "--timeout=90s"}, args...)...)
 	require.Error(t, err, "jira %s expected a non-zero exit\nstdout:\n%s\nstderr:\n%s", strings.Join(args, " "), stdout, stderr)
-	require.Empty(t, strings.TrimSpace(stdout), "jira %s wrote to stdout on error\nstdout:\n%s\nstderr:\n%s", strings.Join(args, " "), stdout, stderr)
+	require.Empty(t, strings.TrimSpace(stderr), "jira %s wrote a human diagnostic to stderr on error in machine mode\nstdout:\n%s\nstderr:\n%s", strings.Join(args, " "), stdout, stderr)
 	var env Envelope
-	errorJSON := lastJSONLine(stderr)
-	require.NotEmpty(t, errorJSON, "jira %s expected a JSON error envelope on stderr, got:\n%s", strings.Join(args, " "), stderr)
+	errorJSON := lastJSONLine(stdout)
+	require.NotEmpty(t, errorJSON, "jira %s expected a JSON error envelope on stdout, got:\n%s", strings.Join(args, " "), stdout)
 	require.NoError(t, json.Unmarshal([]byte(errorJSON), &env),
-		"jira %s expected a JSON error envelope on stderr, got:\n%s", strings.Join(args, " "), stderr)
-	require.False(t, env.OK, "jira %s expected ok=false, got ok=true:\n%s", strings.Join(args, " "), stderr)
-	require.NotEmpty(t, env.Errors, "jira %s returned ok=false with an empty errors array:\n%s", strings.Join(args, " "), stderr)
-	require.NotEmpty(t, env.Errors[0].Code, "jira %s error[0] carries no stable code:\n%s", strings.Join(args, " "), stderr)
-	require.NotEmpty(t, env.Errors[0].Message, "jira %s error[0] carries no message:\n%s", strings.Join(args, " "), stderr)
+		"jira %s expected a JSON error envelope on stdout, got:\n%s", strings.Join(args, " "), stdout)
+	require.False(t, env.OK, "jira %s expected ok=false, got ok=true:\n%s", strings.Join(args, " "), stdout)
+	require.NotEmpty(t, env.Errors, "jira %s returned ok=false with an empty errors array:\n%s", strings.Join(args, " "), stdout)
+	require.NotEmpty(t, env.Errors[0].Code, "jira %s error[0] carries no stable code:\n%s", strings.Join(args, " "), stdout)
+	require.NotEmpty(t, env.Errors[0].Message, "jira %s error[0] carries no message:\n%s", strings.Join(args, " "), stdout)
 	return env
 }
 

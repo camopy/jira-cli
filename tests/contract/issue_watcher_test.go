@@ -51,11 +51,9 @@ func runJiraWatchers(t *testing.T, srvURL, profileEnv string, args ...string) ([
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
-		if len(bytes.TrimSpace(stdout.Bytes())) != 0 {
-			t.Fatalf("watchers command wrote stdout on error\nstdout=%s\nstderr=%s\nargs=%v",
-				stdout.String(), stderr.String(), cmd.Args)
-		}
-		return jsonEnvelopeLineFromStream(t, stderr.Bytes(), "stderr", stdout.Bytes(), stderr.Bytes(), cmd.Args, nil), err
+		// Machine mode: the failure envelope is on stdout, the same stream as
+		// success, with ok:false and a non-zero exit code.
+		return jsonEnvelopeLineFromStream(t, stdout.Bytes(), "stdout", stdout.Bytes(), stderr.Bytes(), cmd.Args, nil), err
 	}
 	return stdout.Bytes(), nil
 }

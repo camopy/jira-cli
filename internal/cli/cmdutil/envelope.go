@@ -44,7 +44,9 @@ func WriteEnvelopeWithErrors(cmd *cobra.Command, command string, data any, error
 		Errors:   errorsOut,
 		Warnings: []cli.Warning{},
 	}
-	return writeEnvelopeJSON(cmd, cmd.ErrOrStderr(), env)
+	// Machine mode: the failure envelope goes to stdout, the same stream as
+	// success, so a consumer piping stdout gets a parseable ok:false result.
+	return writeEnvelopeJSON(cmd, cmd.OutOrStdout(), env)
 }
 
 // WriteEnvelopeWithResponseAndErrors emits an ok:false envelope with both a
@@ -76,7 +78,9 @@ func WriteEnvelopeWithResponseAndErrors(cmd *cobra.Command, command string, data
 		Errors:   errorsOut,
 		Warnings: []cli.Warning{},
 	}
-	return writeEnvelopeJSON(cmd, cmd.ErrOrStderr(), env)
+	// Machine mode: the failure envelope goes to stdout, the same stream as
+	// success, so a consumer piping stdout gets a parseable ok:false result.
+	return writeEnvelopeJSON(cmd, cmd.OutOrStdout(), env)
 }
 
 func writePlainFailureDiagnostics(stderr io.Writer, command string, data any, errorsOut []cli.Error) error {

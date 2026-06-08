@@ -202,12 +202,12 @@ func assertWeblinkURLErrorEnvelope(t *testing.T, stdout, stderr []byte, args []s
 			Flag string `json:"flag"`
 		} `json:"errors"`
 	}
-	decodeErrorEnvelopeFromStderr(t, stdout, stderr, args, &env)
+	decodeErrorEnvelopeFromStdout(t, stdout, stderr, args, &env)
 	if len(env.Errors) == 0 {
-		t.Fatalf("error envelope has no errors\nstderr=%s", stderr)
+		t.Fatalf("error envelope has no errors\nstdout=%s", stdout)
 	}
 	if got := env.Errors[0].Code; got != wantCode {
-		t.Fatalf("errors[0].code = %q, want %q\nstderr=%s", got, wantCode, stderr)
+		t.Fatalf("errors[0].code = %q, want %q\nstdout=%s", got, wantCode, stdout)
 	}
 	if got := env.Errors[0].Flag; got != "url" {
 		t.Fatalf("errors[0].flag = %q, want url\nstderr=%s", got, stderr)
@@ -249,22 +249,24 @@ func TestWeblinkDryRunStatesRemoteNotChecked(t *testing.T) {
 // --dry-run flag (it always does a live read + cache write), so the
 // flag is removed. An unknown flag is a usage error.
 func TestBoardsListRejectsDryRunFlag(t *testing.T) {
-	_, stderr, code := runJira(t, "boards", "list", "--dry-run")
+	stdout, stderr, code := runJira(t, "boards", "list", "--dry-run")
 	if code == 0 {
 		t.Fatalf("boards list still accepts --dry-run; the dishonest flag should be removed")
 	}
-	if !strings.Contains(string(stderr), "dry-run") && !strings.Contains(string(stderr), "unknown flag") {
-		t.Fatalf("expected an unknown-flag error for boards list --dry-run, got: %s", stderr)
+	combined := string(stdout) + string(stderr)
+	if !strings.Contains(combined, "dry-run") && !strings.Contains(combined, "unknown flag") {
+		t.Fatalf("expected an unknown-flag error for boards list --dry-run, got: %s", combined)
 	}
 }
 
 // TestCacheBoardsRejectsDryRunFlag — same for the cache primer.
 func TestCacheBoardsRejectsDryRunFlag(t *testing.T) {
-	_, stderr, code := runJira(t, "cache", "boards", "--dry-run")
+	stdout, stderr, code := runJira(t, "cache", "boards", "--dry-run")
 	if code == 0 {
 		t.Fatalf("cache boards still accepts --dry-run; the dishonest flag should be removed")
 	}
-	if !strings.Contains(string(stderr), "dry-run") && !strings.Contains(string(stderr), "unknown flag") {
-		t.Fatalf("expected an unknown-flag error for cache boards --dry-run, got: %s", stderr)
+	combined := string(stdout) + string(stderr)
+	if !strings.Contains(combined, "dry-run") && !strings.Contains(combined, "unknown flag") {
+		t.Fatalf("expected an unknown-flag error for cache boards --dry-run, got: %s", combined)
 	}
 }

@@ -137,6 +137,47 @@ func TestClientDoBoundsErrorBodyRead(t *testing.T) {
 	}
 }
 
+func TestDisplayMessagePrefersParsedFields(t *testing.T) {
+	tests := []struct {
+		name string
+		ec   errorCollection
+		raw  string
+		want string
+	}{
+		{
+			name: "error messages win",
+			ec:   errorCollection{ErrorMessages: []string{"Issue does not exist."}},
+			raw:  `{"errorMessages":["Issue does not exist."],"errors":{}}`,
+			want: "Issue does not exist.",
+		},
+		{
+			name: "multiple error messages joined",
+			ec:   errorCollection{ErrorMessages: []string{"first", "second"}},
+			raw:  "ignored",
+			want: "first; second",
+		},
+		{
+			name: "field errors used when no error messages, sorted",
+			ec:   errorCollection{Errors: map[string]string{"summary": "Summary is required.", "assignee": "Unknown user."}},
+			raw:  "ignored",
+			want: "assignee: Unknown user.; summary: Summary is required.",
+		},
+		{
+			name: "raw body fallback when nothing parsed",
+			ec:   errorCollection{},
+			raw:  "  <html>maintenance</html>  ",
+			want: "<html>maintenance</html>",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := displayMessage(tt.ec, tt.raw); got != tt.want {
+				t.Fatalf("displayMessage() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestAPIErrorRedactsSensitiveBodyFields(t *testing.T) {
 	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -155,8 +196,13 @@ func TestAPIErrorRedactsSensitiveBodyFields(t *testing.T) {
 	if strings.Contains(apiErr.Message, "secret-token") || strings.Contains(apiErr.Message, "secret-password") {
 		t.Fatalf("APIError leaked sensitive body fields: %q", apiErr.Message)
 	}
-	if !strings.Contains(apiErr.Message, "REDACTED") {
-		t.Fatalf("APIError message = %q, want redaction marker", apiErr.Message)
+	// The display message is the clean errorMessages line, not the raw body.
+	if apiErr.Message != "bad" {
+		t.Fatalf("APIError message = %q, want clean errorMessages line", apiErr.Message)
+	}
+	// Redaction still reaches the structured field error parsed from the body.
+	if got := apiErr.FieldErrors["password"]; !strings.Contains(got, "REDACTED") {
+		t.Fatalf("FieldErrors[password] = %q, want redaction marker", got)
 	}
 }
 

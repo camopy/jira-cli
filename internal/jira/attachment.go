@@ -8,7 +8,6 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"strings"
 
 	xstrings "github.com/gechr/x/strings"
 )
@@ -233,7 +232,7 @@ func (s *attachmentService) Download(ctx context.Context, attachmentID string) (
 		return nil, resp, &APIError{
 			StatusCode:         res.StatusCode,
 			Type:               classifyStatus(res.StatusCode),
-			Message:            strings.TrimSpace(string(msgBody)),
+			Message:            displayMessage(ec, string(msgBody)),
 			ErrorMessages:      ec.ErrorMessages,
 			FieldErrors:        ec.Errors,
 			UpstreamStatus:     ec.Status,

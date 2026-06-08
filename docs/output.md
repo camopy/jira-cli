@@ -39,9 +39,12 @@ flowchart LR
     class Human humanOut
 ```
 
-Failures in `json` and `compact` modes write the full envelope to stderr and
-leave stdout empty, so agents can parse `errors[]`, `warnings[]`, and
-`meta.exit_code` without poisoning success pipelines.
+Failures in `json` and `compact` modes write the full envelope to **stdout** —
+the same stream as success — with `ok` set to `false` and a non-zero exit code.
+Agents parse one stream regardless of outcome: `cmd … | jq` reads `errors[]`,
+`warnings[]`, and `meta.exit_code` on success and failure alike, and no human
+diagnostic line is emitted to break the parse. Human mode keeps its diagnostic
+on stderr.
 
 ## Envelope
 

@@ -235,12 +235,22 @@ func TestDefaultBoardMissingExitsThreeWithPinnedWording(t *testing.T) {
 		t.Errorf("exit code = %d; want 3 (validation)\nstdout:\n%s\nstderr:\n%s", exitCode, stdout.String(), stderr.String())
 	}
 
-	// Pinned literal wording:
+	// Pinned literal wording, checked against the decoded envelope message so the
+	// literal quotes match (raw machine-mode stdout carries them JSON-escaped):
 	// `default_board "X" not found in boards cache — run "jira cache boards --refresh" or unset with "jira config set profiles.<profile>.default_board ''"`
 	wantSubstr := `default_board "Nonexistent" not found in boards cache — run "jira cache boards --refresh" or unset with "jira config set profiles.default.default_board ''"`
-	combined := stdout.String() + stderr.String()
-	if !strings.Contains(combined, wantSubstr) {
-		t.Errorf("error message did not contain pinned wording.\nwant substring:\n  %s\ngot:\n  %s", wantSubstr, combined)
+	var env map[string]any
+	decodeErrorEnvelopeFromStdout(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
+	errs, _ := env["errors"].([]any)
+	found := false
+	for _, e := range errs {
+		m, _ := e.(map[string]any)
+		if msg, _ := m["message"].(string); strings.Contains(msg, wantSubstr) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("error envelope did not contain pinned wording.\nwant substring:\n  %s\nstdout:\n  %s", wantSubstr, stdout.String())
 	}
 }
 
@@ -268,10 +278,10 @@ func TestDefaultBoardAmbiguousReturnsCandidates(t *testing.T) {
 	_ = cmd.Run()
 
 	var env map[string]any
-	decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
+	decodeErrorEnvelopeFromStdout(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 	errs, _ := env["errors"].([]any)
 	if len(errs) == 0 {
-		t.Fatalf("envelope.errors empty; expected ambiguous-board error\nstderr:\n%s", stderr.String())
+		t.Fatalf("envelope.errors empty; expected ambiguous-board error\nstdout:\n%s", stdout.String())
 	}
 	first, _ := errs[0].(map[string]any)
 	cands, _ := first["candidates"].([]any)

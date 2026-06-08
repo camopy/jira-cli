@@ -35,16 +35,16 @@ func TestNonDryRunMutationsRequireConfiguredJiraClient(t *testing.T) {
 			if err == nil {
 				t.Fatalf("%s succeeded without configured Jira client:\nstdout=%s", tc.name, stdout.String())
 			}
-			// clog diagnostic on stderr must mention "base URL".
-			if !strings.Contains(strings.ToLower(stderr.String()), "err") || !strings.Contains(stderr.String(), "base URL") {
-				t.Fatalf("%s stderr missing base URL clog diagnostic:\nstderr=%s", tc.name, stderr.String())
-			}
-			// --json path must deliver a JSON envelope on stderr.
+			// Machine mode: the failure envelope on stdout must carry the
+			// "base URL" remediation; stderr stays free of a human clog line.
 			var env map[string]any
-			decodeErrorEnvelopeFromStderr(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
+			decodeErrorEnvelopeFromStdout(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
 			errs, _ := env["errors"].([]any)
 			if len(errs) == 0 {
-				t.Fatalf("%s envelope.errors is empty:\nstderr=%s", tc.name, stderr.String())
+				t.Fatalf("%s envelope.errors is empty:\nstdout=%s", tc.name, stdout.String())
+			}
+			if !strings.Contains(stdout.String(), "base URL") {
+				t.Fatalf("%s envelope missing base URL remediation:\nstdout=%s", tc.name, stdout.String())
 			}
 		})
 	}

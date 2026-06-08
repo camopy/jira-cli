@@ -107,9 +107,9 @@ func TestLifecycleCommandsErrorContract(t *testing.T) {
 					t.Fatalf("exit = %d; want %d (status %d)\nstdout=%s\nstderr=%s",
 						code, sc.exitCode, sc.status, stdout, stderr)
 				}
-				// Envelope is mandatory on stderr for every error path under --json.
+				// Envelope is mandatory on stdout for every error path under --json.
 				var env map[string]any
-				decodeErrorEnvelopeFromStderr(t, stdout, stderr, args, &env)
+				decodeErrorEnvelopeFromStdout(t, stdout, stderr, args, &env)
 				errs, _ := env["errors"].([]any)
 				if len(errs) == 0 {
 					t.Fatalf("errors[] empty (status %d): %s", sc.status, stderr)

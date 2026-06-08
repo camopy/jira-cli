@@ -555,15 +555,16 @@ func TestCommentListEmitsLossyWarningPerComment(t *testing.T) {
 func TestCommentAddEmptyBodyMarkdownRejectedLocally(t *testing.T) {
 	srv, cts := newCommentServer(t, map[string]http.HandlerFunc{})
 	cfg := jiraConfig(t, srv.URL)
-	_, stderr, code := runJira(t, "--config", cfg, "issue", "comment", "add", "PROJ-1", "--body-markdown", "", "--no-input", "--output=json")
+	stdout, _, code := runJira(t, "--config", cfg, "issue", "comment", "add", "PROJ-1", "--body-markdown", "", "--no-input", "--output=json")
 	if code != 3 {
-		t.Fatalf("exit = %d; want 3 (empty body)\nstderr=%s", code, stderr)
+		t.Fatalf("exit = %d; want 3 (empty body)\nstdout=%s", code, stdout)
 	}
 	if len(cts.Requests()) != 0 {
 		t.Errorf("HTTP call made despite empty body: %d", len(cts.Requests()))
 	}
-	if !strings.Contains(strings.ToLower(string(stderr)), "comment body") && !strings.Contains(strings.ToLower(string(stderr)), "body is required") {
-		t.Errorf("stderr should mention the empty-body reason: %s", stderr)
+	// Machine mode: the empty-body reason is in the stdout envelope.
+	if !strings.Contains(strings.ToLower(string(stdout)), "comment body") && !strings.Contains(strings.ToLower(string(stdout)), "body is required") {
+		t.Errorf("envelope should mention the empty-body reason: %s", stdout)
 	}
 }
 

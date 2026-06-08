@@ -19,11 +19,11 @@ func TestBoardValidationStdoutEnvelopeReportsValidationExitCode(t *testing.T) {
 	bve := boardscope.ValidationError{
 		Msg: jira.DefaultBoardMissingMessage("default", "Engineering Sprint"),
 	}
-	if err := writeErrorEnvelopeToStderr(cmd, bve); err != nil {
-		t.Fatalf("writeErrorEnvelopeToStderr() error = %v", err)
+	if err := writeErrorEnvelopeToStdout(cmd, bve); err != nil {
+		t.Fatalf("writeErrorEnvelopeToStdout() error = %v", err)
 	}
-	if stdout.Len() != 0 {
-		t.Fatalf("stdout = %q, want empty success channel on error", stdout.String())
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty in machine mode (the envelope goes to stdout)", stderr.String())
 	}
 
 	var env struct {
@@ -35,8 +35,8 @@ func TestBoardValidationStdoutEnvelopeReportsValidationExitCode(t *testing.T) {
 			Code string `json:"code"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(stderr.Bytes(), &env); err != nil {
-		t.Fatalf("stderr is not a JSON envelope: %v\n%s", err, stderr)
+	if err := json.Unmarshal(stdout.Bytes(), &env); err != nil {
+		t.Fatalf("stdout is not a JSON envelope: %v\n%s", err, stdout)
 	}
 	if env.Meta.ExitCode == nil || *env.Meta.ExitCode != 3 {
 		t.Fatalf("meta.exit_code = %v, want 3", env.Meta.ExitCode)
