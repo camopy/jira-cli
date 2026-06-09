@@ -32,7 +32,10 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 - Env wins on the OFF→ON direction — once `JIRA_READ_ONLY` is set, every profile is read-only regardless of its own setting.
 
 # debug
-- HTTP request/response dumps to stderr with secrets redacted: `--debug` (or `-d`).
+- HTTP request/response dumps to stderr with secrets redacted: `--debug` (or `-d`). Under `--debug` each rate-limit backoff and the give-up decision also log their reason.
+
+# rate-limit retry
+- Reads auto-retry a 429 (or a 503 carrying `Retry-After`) within `--max-retry-wait` (default `30s`; `0` disables; `JIRA_MAX_RETRY_WAIT` sets it for the process; an explicit flag wins). The budget is always capped by `--timeout`. Mutations are never auto-retried. Exit 4 means Jira still returned 429 after any applicable retry was exhausted or skipped.
 
 **Run**
 - Canonical write: `jira <cmd> --no-input --json-input payload.json --output=json`
@@ -131,7 +134,7 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 | Exit 3, `code=command_unknown` | Unrecognized command; `hint` may carry `Did you mean <name>?` | Use the suggested name |
 | Exit 3, `read-only mode is active` | `JIRA_READ_ONLY=true` or profile `read_only = true` | Unset / flip the profile, or do the work elsewhere |
 | Exit 3 under `--no-input` with no field flags | Empty headless edit | Pass at least `--summary` / `--assignee` / `--json-input` → `edit_issue` |
-| Exit 4 | Rate limited; `errors[0].retry_after_seconds` set when known | Back off then retry |
+| Exit 4 | Rate limited; surfaced after any applicable retry was exhausted or skipped; `errors[0].retry_after_seconds` set when known | Raise `--max-retry-wait` / `JIRA_MAX_RETRY_WAIT`, or wait for the window to reset |
 | Exit 5 | Server error (Jira 5xx or a 413 upload-size cap); `errors[0].message` carries the upstream text | Retry if transient; for 413 split or shrink the upload |
 
 **Next**

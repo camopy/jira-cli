@@ -261,6 +261,25 @@ Mutations validate ADF strictly by default. Set `JIRA_ADF_STRICT=0` to
 fall back to best-effort (degrades silently with warnings instead of
 exit 3). See [ADF](adf.md) for what's lossy.
 
+### Rate-limit retry
+
+When Jira rate-limits a read (HTTP 429, or a 503 carrying `Retry-After`),
+the CLI waits and resends rather than failing on the first refusal. It
+honours `Retry-After` when present and otherwise backs off with jitter,
+up to a few attempts. Mutations (create, edit, transition, comment,
+worklog, attachment upload, …) are never auto-retried, because a resent
+write could duplicate.
+
+`--max-retry-wait` caps how long a single request will wait out a limit;
+the default is `30s`. Set it to `0` to disable auto-retry and fail on the
+first 429. `JIRA_MAX_RETRY_WAIT` sets the same budget; an explicit
+`--max-retry-wait` wins. Both take a Go duration (`45s`, `2m`).
+
+The budget is always capped by `--timeout`: the retry never pushes a
+command past its overall deadline. If the limit outlasts the budget, the
+request fails with `exit 4` (`rate_limit`). Run with `--debug` to see each
+backoff and the reason the CLI gave up.
+
 ## Reference
 
 ### Per-profile keys
@@ -303,6 +322,7 @@ exit 3). See [ADF](adf.md) for what's lossy.
 | `JIRA_ADF_STRICT` | `1`/`true` forces strict ADF validation; `0` enables best-effort fallback |
 | `JIRA_EDITOR` | Override the editor for `issue edit` |
 | `JIRA_KEYRING_SERVICE` | Override the keyring service name. Test-only; leave unset in production |
+| `JIRA_MAX_RETRY_WAIT` | Rate-limit retry budget as a Go duration (`30s`, `2m`); `0` disables auto-retry. `--max-retry-wait` wins |
 | `JIRA_NO_COLOR` | Disable ANSI colour in Human output |
 | `JIRA_READ_ONLY` | `1`/`true` refuses every mutation regardless of profile setting |
 | `JIRA_THEME` | Override `[theme].name` for the current process |

@@ -120,9 +120,13 @@ See [Cache](cache.md) for the full resource list.
     issue first.
 
 `exit 4` with `rate_limit`
-:   Jira returned 429. The envelope carries
-    `errors[0].retry_after_seconds`. Honour it; don't immediately retry
-    in a loop.
+:   Jira rate-limited the request (HTTP 429), surfaced after auto-retry
+    was exhausted or skipped. Reads wait and resend within
+    `--max-retry-wait` (default `30s`); mutations and `--max-retry-wait=0`
+    fail on the first 429. The envelope carries
+    `errors[0].retry_after_seconds`. Raise `--max-retry-wait` (or
+    `JIRA_MAX_RETRY_WAIT`), or wait for the window to reset. See
+    [Configuration › Rate-limit retry](config.md#rate-limit-retry).
 
 `exit 5` with `server_error`
 :   Jira's side, or a local IO failure (cache directory not writable,
