@@ -361,7 +361,7 @@ func jiraHintForStatus(status int, kind ErrorType) string {
 	case status == 410:
 		return "The resource was permanently deleted from Jira and cannot be restored — drop any cached reference to it."
 	case status == 429:
-		return "Wait for the retry window, then retry."
+		return "Jira rate-limited the request beyond the retry budget. Raise --max-retry-wait (or JIRA_MAX_RETRY_WAIT) to wait out longer limits, or retry once the window resets."
 	case status >= 500:
 		return "Jira reported a server-side error; retry after a short backoff."
 	case kind == ErrorTypeValidation:
