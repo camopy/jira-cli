@@ -129,6 +129,9 @@ func JiraClientForProfile(cmd *cobra.Command, profile config.Profile) (*jira.Cli
 		// the command-layer dry-run branches.
 		jira.WithDryRun(dryRunRequested(cmd)),
 		jira.WithDebug(debug),
+		// Turn on bounded rate-limit retry. The transport caps the wait at
+		// the request's context deadline, so --timeout always wins.
+		jira.WithMaxRetryWait(MaxRetryWaitFor(cmd)),
 	}
 	ref, refErr := SecretRefFor(profile, profile.SecretBackend)
 	if refErr != nil {

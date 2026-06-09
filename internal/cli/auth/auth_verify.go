@@ -14,9 +14,15 @@ import (
 // rather than persisting a credential that only fails on first use. The
 // request is bounded by timeout (when positive) so verification honors the
 // same per-profile timeout as every other client; a non-positive timeout
-// leaves the client default in place.
-func verifyCredential(ctx context.Context, baseURL, email, token string, timeout time.Duration) (*jira.CurrentUser, error) {
-	opts := []jira.Option{jira.WithBaseURL(baseURL), jira.WithBasicAuth(email, token)}
+// leaves the client default in place. maxRetryWait carries the resolved
+// rate-limit retry budget so this read rides out a 429 like every other
+// command rather than failing login on a transient rate limit.
+func verifyCredential(ctx context.Context, baseURL, email, token string, timeout, maxRetryWait time.Duration) (*jira.CurrentUser, error) {
+	opts := []jira.Option{
+		jira.WithBaseURL(baseURL),
+		jira.WithBasicAuth(email, token),
+		jira.WithMaxRetryWait(maxRetryWait),
+	}
 	if timeout > 0 {
 		opts = append(opts, jira.WithHTTPTimeout(timeout))
 	}

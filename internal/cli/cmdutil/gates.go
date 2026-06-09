@@ -3,11 +3,19 @@ package cmdutil
 import (
 	"os"
 	"strings"
+	"time"
 
 	"github.com/matcra587/jira-cli/internal/cli/adfmode"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/spf13/cobra"
 )
+
+// DefaultMaxRetryWait is the out-of-the-box rate-limit retry budget: the
+// longest a single request sleeps out 429 / 503 Retry-After responses before
+// it gives up. The transport always caps the effective wait at the
+// invocation's context deadline (--timeout), so this is an upper bound, never
+// an extension.
+const DefaultMaxRetryWait = 30 * time.Second
 
 // ConfiguredEditorFor resolves the editor command for a command: the active
 // profile's editor when set, otherwise the global config editor.
@@ -94,6 +102,50 @@ func dryRunRequested(cmd *cobra.Command) bool {
 		return true
 	}
 	return v
+}
+
+// MaxRetryWaitFor resolves the rate-limit retry budget for an invocation.
+// Precedence: an explicit --max-retry-wait flag, then the JIRA_MAX_RETRY_WAIT
+// env var, then the built-in default. A negative result is clamped to zero
+// (auto-retry disabled). The transport caps the effective wait at the
+// context deadline, so this value is only ever an upper bound.
+func MaxRetryWaitFor(cmd *cobra.Command) time.Duration {
+	if cmd != nil {
+		// Read straight from root's persistent flagset where the flag is
+		// declared: --max-retry-wait lives on root, and this resolver may run
+		// before cobra has merged inherited flags onto the leaf command.
+		if f := cmd.Root().PersistentFlags().Lookup("max-retry-wait"); f != nil && f.Changed {
+			if d, err := cmd.Root().PersistentFlags().GetDuration("max-retry-wait"); err == nil {
+				return clampNonNegative(d)
+			}
+		}
+	}
+	if d, ok := envMaxRetryWait(); ok {
+		return clampNonNegative(d)
+	}
+	return DefaultMaxRetryWait
+}
+
+// envMaxRetryWait parses JIRA_MAX_RETRY_WAIT as a Go duration (e.g. 30s, 2m).
+// An unset or unparseable value yields ok=false so the caller falls through to
+// the default rather than silently disabling retry on a typo.
+func envMaxRetryWait() (time.Duration, bool) {
+	raw := strings.TrimSpace(os.Getenv("JIRA_MAX_RETRY_WAIT"))
+	if raw == "" {
+		return 0, false
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, false
+	}
+	return d, true
+}
+
+func clampNonNegative(d time.Duration) time.Duration {
+	if d < 0 {
+		return 0
+	}
+	return d
 }
 
 // envReadOnlyEnabled reports whether the JIRA_READ_ONLY env var is set to a

@@ -202,7 +202,11 @@ func TestIssueListKeyRangesPreserveSuccessfulChunksOnChunkFailure(t *testing.T) 
 	defer srv.Close()
 
 	bin := buildJiraBinary(t)
+	// Retry off: this exercises chunk-failure preservation, not the retry
+	// loop (covered in internal/jira), so the 429 must surface on the first
+	// attempt without real backoff.
 	cmd := exec.Command(bin, "--config", jiraConfig(t, srv.URL), "--output=json",
+		"--max-retry-wait", "0",
 		"issue", "list", "--key", "PROJ-1:60", "-p", "2")
 	cmd.Env = append(os.Environ(), "JIRA_TOKEN_DEFAULT=test-token")
 	var env struct {

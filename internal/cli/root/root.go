@@ -273,6 +273,7 @@ func configureRootFlags(root *cobra.Command) {
 	pf.BoolP("debug", "d", false, "Enable debug output")
 	pf.Bool("no-input", false, "Disable interactive prompts (implied off a TTY or in an agent; pass `--no-input=false` to force prompts)")
 	pf.Duration("timeout", 0, "Whole-invocation deadline (e.g. 30s, 2m); 0 disables it")
+	pf.Duration("max-retry-wait", cmdutil.DefaultMaxRetryWait, "Longest a request will sleep out Jira rate limits (429/503) before giving up; 0 disables auto-retry. Always capped by --timeout")
 	pf.String("color", "auto", "Color mode; `auto` emits color only to a terminal")
 	// ADF strict/best-effort selection — mutually exclusive;
 	// internal/cli/adfmode reads them ahead of env/profile/default.
@@ -303,6 +304,11 @@ func configureRootFlags(root *cobra.Command) {
 		Group:       "Configuration",
 		Placeholder: "DURATION",
 		Terse:       "invocation deadline",
+	})
+	clib.Extend(pf.Lookup("max-retry-wait"), clib.FlagExtra{
+		Group:       "Runtime",
+		Placeholder: "DURATION",
+		Terse:       "rate-limit retry budget",
 	})
 	clib.Extend(pf.Lookup("interactive"), clib.FlagExtra{Group: "Dashboard", Terse: "launch dashboard"})
 	clib.Extend(pf.Lookup("debug"), clib.FlagExtra{Group: "Output", Terse: "debug output"})

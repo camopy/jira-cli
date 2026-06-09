@@ -389,7 +389,7 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 				verifyErr := clog.Spinner("Verifying Jira credentials").
 					NonTTYSilent(true).
 					Wait(cmd.Context(), func(ctx context.Context) error {
-						user, err := verifyCredential(ctx, profile.BaseURL, profile.Email, credential, time.Duration(profile.TimeoutSeconds)*time.Second)
+						user, err := verifyCredential(ctx, profile.BaseURL, profile.Email, credential, time.Duration(profile.TimeoutSeconds)*time.Second, cmdutil.MaxRetryWaitFor(cmd))
 						if err != nil {
 							return err
 						}

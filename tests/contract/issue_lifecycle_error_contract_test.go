@@ -55,6 +55,10 @@ var statusCases = []struct {
 // TestLifecycleCommandsErrorContract is the parametric (command × status)
 // matrix asserted in T101a.
 func TestLifecycleCommandsErrorContract(t *testing.T) {
+	// This matrix asserts the status→exit→type mapping, not the retry loop.
+	// Without this, the 429 row would auto-retry every read command with
+	// real backoff. Retry mechanics are covered in internal/jira.
+	t.Setenv("JIRA_MAX_RETRY_WAIT", "0")
 	tmpFile := filepath.Join(t.TempDir(), "x.bin")
 	if err := os.WriteFile(tmpFile, []byte("a"), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)

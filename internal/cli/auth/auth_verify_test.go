@@ -22,7 +22,7 @@ func TestVerifyCredentialReturnsUserOnSuccess(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	user, err := verifyCredential(context.Background(), srv.URL, "user@example.com", "tok123", 0)
+	user, err := verifyCredential(context.Background(), srv.URL, "user@example.com", "tok123", 0, 0)
 	if err != nil {
 		t.Fatalf("verifyCredential() error = %v", err)
 	}
@@ -46,7 +46,7 @@ func TestVerifyCredentialErrorsOnRejection(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if _, err := verifyCredential(context.Background(), srv.URL, "user@example.com", "wrong", 0); err == nil {
+	if _, err := verifyCredential(context.Background(), srv.URL, "user@example.com", "wrong", 0, 0); err == nil {
 		t.Fatal("verifyCredential() error = nil, want an auth error for a rejected token")
 	}
 }
@@ -66,7 +66,7 @@ func TestVerifyCredentialHonorsTimeout(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := verifyCredential(context.Background(), srv.URL, "user@example.com", "tok123", 1*time.Second)
+		_, err := verifyCredential(context.Background(), srv.URL, "user@example.com", "tok123", 1*time.Second, 0)
 		done <- err
 	}()
 	select {
