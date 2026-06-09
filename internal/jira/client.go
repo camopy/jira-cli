@@ -704,8 +704,76 @@ func redactSensitiveText(text string) string {
 
 func parseRate(res *http.Response) Rate {
 	remaining, _ := strconv.Atoi(res.Header.Get("X-RateLimit-Remaining"))
-	retryAfter, _ := strconv.Atoi(res.Header.Get("Retry-After"))
-	return Rate{Remaining: remaining, RetryAfterSeconds: retryAfter}
+	now := time.Now()
+	return Rate{
+		Remaining:         remaining,
+		RetryAfterSeconds: retryAfterSeconds(res.Header.Get("Retry-After"), now),
+		Reset:             parseResetHeader(res.Header.Get("X-RateLimit-Reset"), now),
+		Reason:            strings.TrimSpace(res.Header.Get("RateLimit-Reason")),
+	}
+}
+
+// retryAfterSeconds parses a Retry-After value. RFC 9110 allows either
+// delta-seconds or an HTTP-date; we accept both. A past HTTP-date (server
+// clock skew) yields 0 — safe to retry now. Absent, negative, or
+// unparseable values yield 0 rather than erroring, so a malformed header
+// never blocks a request.
+func retryAfterSeconds(raw string, now time.Time) int {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	if secs, err := strconv.Atoi(raw); err == nil {
+		if secs < 0 {
+			return 0
+		}
+		return secs
+	}
+	if t, err := http.ParseTime(raw); err == nil {
+		return secondsUntil(t, now)
+	}
+	return 0
+}
+
+// parseResetHeader parses X-RateLimit-Reset, tolerating the forms Jira and
+// proxies emit: an HTTP-date, epoch seconds, or a small delta-seconds. An
+// absent or unparseable value yields the zero time. Observability only —
+// the retry decision does not depend on it.
+func parseResetHeader(raw string, now time.Time) time.Time {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}
+	}
+	if t, err := http.ParseTime(raw); err == nil {
+		return t
+	}
+	if n, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		// A value in the Unix-epoch range (>= 2001-09-09) is an absolute
+		// timestamp; a smaller one is seconds from now. Deltas are realistically
+		// minutes-to-hours, so the gap to a real epoch (~1.7e9) is enormous —
+		// the boundary itself is a valid epoch and must take the epoch branch.
+		if n >= 1_000_000_000 {
+			return time.Unix(n, 0).UTC()
+		}
+		if n > 0 {
+			return now.Add(time.Duration(n) * time.Second).UTC()
+		}
+	}
+	return time.Time{}
+}
+
+// secondsUntil returns the whole seconds from now until t, rounded up so a
+// caller never wakes before the deadline. Non-positive durations yield 0.
+func secondsUntil(t, now time.Time) int {
+	d := t.Sub(now)
+	if d <= 0 {
+		return 0
+	}
+	secs := int(d / time.Second)
+	if d%time.Second != 0 {
+		secs++
+	}
+	return secs
 }
 
 // isMutationRequest decides whether a request actually changes server

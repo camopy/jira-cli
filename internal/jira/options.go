@@ -34,6 +34,10 @@ type Rate struct {
 	Remaining         int
 	RetryAfterSeconds int
 	Reset             time.Time
+	// Reason is Jira's RateLimit-Reason header (e.g. jira-burst-based,
+	// jira-per-issue-on-write). Empty when absent. Carried for diagnostics;
+	// the retry decision keys off the HTTP status and Retry-After, not this.
+	Reason string
 }
 
 type Response struct {
