@@ -137,6 +137,12 @@ type Client struct {
 	readOnly   bool
 	dryRun     bool
 	initErr    error
+	// retryMaxWait is the rate-limit retry budget. Zero (the default)
+	// disables auto-retry; the CLI sets it from --max-retry-wait. retrySleep
+	// and retryJitter are injection seams for deterministic tests.
+	retryMaxWait time.Duration
+	retrySleep   func(context.Context, time.Duration) error
+	retryJitter  func() float64
 }
 
 type Option func(*Client)
@@ -163,6 +169,7 @@ func newClient(opts ...Option) (*Client, error) {
 	if c.initErr != nil {
 		return c, c.initErr
 	}
+	c.installRetryTransport()
 	return c, nil
 }
 
