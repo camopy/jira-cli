@@ -1,6 +1,7 @@
 package jira
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -8,7 +9,18 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gechr/clog"
 )
+
+// debugCtx returns a context carrying a debug-level clog logger that writes
+// to buf, plus the buffer, so a test can assert on the emitted diagnostics.
+func debugCtx() (context.Context, *bytes.Buffer) {
+	buf := &bytes.Buffer{}
+	logger := clog.New(clog.NewOutput(buf, clog.ColorNever))
+	logger.SetLevel(clog.LevelDebug)
+	return logger.WithContext(context.Background()), buf
+}
 
 // fakeRT scripts a sequence of responses/errors and counts calls.
 type fakeRT struct {
@@ -299,6 +311,103 @@ func TestRealSleepReturnsOnContextCancel(t *testing.T) {
 func TestRealSleepCompletesForShortDelay(t *testing.T) {
 	if err := realSleep(context.Background(), time.Millisecond); err != nil {
 		t.Fatalf("want nil after sleeping out the delay, got %v", err)
+	}
+}
+
+func TestRetryLogsWhyUnderDebug(t *testing.T) {
+	ctx, buf := debugCtx()
+	base := &fakeRT{fn: func(_ *http.Request, call int) (*http.Response, error) {
+		if call < 1 {
+			return mkResp(http.StatusTooManyRequests,
+				map[string]string{"Retry-After": "1", "RateLimit-Reason": "jira-burst-based"}, "x"), nil
+		}
+		return mkResp(http.StatusOK, nil, "ok"), nil
+	}}
+	rt, _ := newRT(base, 30*time.Second)
+	rt.debug = true
+	// A query string (the JQL) must never reach the diagnostic.
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://jira.example/rest/api/3/search/jql?jql=project=SECRET", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := rt.RoundTrip(req)
+	defer closeBody(resp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, want := range []string{"retrying after backoff", "cleared after retry", "jira-burst-based", "attempt"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("debug log missing %q\nlog:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "SECRET") {
+		t.Fatalf("debug log leaked the query string:\n%s", out)
+	}
+}
+
+func TestRetryNonSuccessTailIsNotLoggedAsCleared(t *testing.T) {
+	// A 429 that resolves to a 500 stopped being rate-limited but did NOT
+	// recover — the diagnostic must not claim it "cleared".
+	ctx, buf := debugCtx()
+	base := &fakeRT{fn: func(_ *http.Request, call int) (*http.Response, error) {
+		if call < 1 {
+			return mkResp(http.StatusTooManyRequests, map[string]string{"Retry-After": "1"}, "x"), nil
+		}
+		return mkResp(http.StatusInternalServerError, nil, "boom"), nil
+	}}
+	rt, _ := newRT(base, 30*time.Second)
+	rt.debug = true
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://jira.example/x", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, _ := rt.RoundTrip(req)
+	defer closeBody(resp)
+	out := buf.String()
+	if strings.Contains(out, "cleared after retry") {
+		t.Fatalf("a 429→500 tail must not be logged as cleared:\n%s", out)
+	}
+	if !strings.Contains(out, "stopped retrying on a non-retryable status") {
+		t.Fatalf("non-success tail should leave an honest breadcrumb:\n%s", out)
+	}
+}
+
+func TestRetryGiveUpLogsCauseUnderDebug(t *testing.T) {
+	ctx, buf := debugCtx()
+	base := &fakeRT{fn: func(_ *http.Request, _ int) (*http.Response, error) {
+		return mkResp(http.StatusTooManyRequests, map[string]string{"Retry-After": "10"}, "x"), nil
+	}}
+	rt, _ := newRT(base, 1*time.Second) // budget under Retry-After → give up
+	rt.debug = true
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://jira.example/x", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, _ := rt.RoundTrip(req)
+	defer closeBody(resp)
+	if out := buf.String(); !strings.Contains(out, "gave up") || !strings.Contains(out, "budget") {
+		t.Fatalf("give-up log must state the budget cause, got:\n%s", out)
+	}
+}
+
+func TestRetryStaysSilentWithoutDebug(t *testing.T) {
+	ctx, buf := debugCtx()
+	base := &fakeRT{fn: func(_ *http.Request, call int) (*http.Response, error) {
+		if call < 1 {
+			return mkResp(http.StatusTooManyRequests, map[string]string{"Retry-After": "1"}, "x"), nil
+		}
+		return mkResp(http.StatusOK, nil, "ok"), nil
+	}}
+	rt, _ := newRT(base, 30*time.Second) // debug defaults false
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://jira.example/x", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, _ := rt.RoundTrip(req)
+	defer closeBody(resp)
+	if buf.Len() != 0 {
+		t.Fatalf("retry must stay silent without --debug, got:\n%s", buf.String())
 	}
 }
 

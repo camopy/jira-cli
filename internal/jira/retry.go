@@ -5,7 +5,10 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/gechr/clog"
 )
 
 // Retry policy defaults. The cap matches Jira's documented practical
@@ -44,6 +47,10 @@ type retryTransport struct {
 	sleep       func(ctx context.Context, d time.Duration) error
 	jitter      func() float64
 	now         func() time.Time
+	// debug gates the per-backoff "say why" diagnostics. It mirrors the
+	// Client's debug dumps: emit the reasoning only under --debug, never on
+	// the normal path.
+	debug bool
 }
 
 func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -76,17 +83,23 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if err != nil || !isRetryableStatus(resp) {
 			// A transport error is not retried — it may be a cancellation
 			// or a genuine network failure, neither a clean 429.
+			if attempt > 0 && err == nil {
+				t.logResolved(req, resp, attempt)
+			}
 			return resp, err
 		}
 		if attempt+1 >= t.maxAttempts {
+			t.logGiveUp(req, resp, attempt, "retry attempt cap reached")
 			return resp, nil // attempts exhausted; Client.Do builds the error
 		}
 
 		delay := t.backoff(attempt, retryAfterFromResponse(resp, t.now()))
 		if !t.now().Add(delay).Before(deadline) {
+			t.logGiveUp(req, resp, attempt, "retry budget would be exceeded before the backoff elapsed")
 			return resp, nil // a further wait would exceed the budget; give up
 		}
 
+		t.logRetry(req, resp, attempt, delay)
 		drainAndClose(resp.Body)
 		if err := t.sleep(req.Context(), delay); err != nil {
 			return nil, err // context canceled mid-backoff
@@ -107,6 +120,56 @@ func (t *retryTransport) backoff(attempt int, retryAfter time.Duration) time.Dur
 		window = t.maxDelay
 	}
 	return time.Duration(t.jitter() * float64(window))
+}
+
+// logRetry emits the "say why" diagnostic for one backoff: the status that
+// triggered it, the reason Jira gave, and how long we will wait. Gated on
+// --debug, so the normal path stays silent.
+func (t *retryTransport) logRetry(req *http.Request, resp *http.Response, attempt int, delay time.Duration) {
+	if !t.debug {
+		return
+	}
+	retryEvent(req, resp, attempt).
+		Str("delay", delay.String()).
+		Int("retry_after_s", retryAfterSeconds(resp.Header.Get("Retry-After"), t.now())).
+		Msg("jira rate limit; retrying after backoff")
+}
+
+// logGiveUp records why the loop stopped retrying — the attempt cap or the
+// wall-clock budget — so a stalled command stays explainable under --debug.
+func (t *retryTransport) logGiveUp(req *http.Request, resp *http.Response, attempt int, why string) {
+	if !t.debug {
+		return
+	}
+	retryEvent(req, resp, attempt).Str("cause", why).Msg("jira rate limit; gave up")
+}
+
+// logResolved notes how a retried request finally settled once the status
+// stopped being retryable: a 2xx means the rate limit cleared, anything else
+// means we stopped retrying on a non-retryable status (e.g. a 429 burst that
+// resolved to a 500). Either way the preceding 429s are explainable, and the
+// message never claims success the status doesn't support.
+func (t *retryTransport) logResolved(req *http.Request, resp *http.Response, attempt int) {
+	if !t.debug {
+		return
+	}
+	msg := "jira rate limit cleared after retry"
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		msg = "jira stopped retrying on a non-retryable status"
+	}
+	retryEvent(req, resp, attempt).Msg(msg)
+}
+
+// retryEvent seeds a debug event with the fields common to every retry log:
+// method, sanitized path (no query, so JQL and keys never leak), the status,
+// the 1-based attempt, and Jira's machine-readable RateLimit-Reason.
+func retryEvent(req *http.Request, resp *http.Response, attempt int) *clog.Event {
+	return debugLogger(req.Context()).Debug().
+		Str("method", req.Method).
+		Str("path", req.URL.EscapedPath()).
+		Int("status", resp.StatusCode).
+		Int("attempt", attempt+1).
+		Str("reason", strings.TrimSpace(resp.Header.Get("RateLimit-Reason")))
 }
 
 // isRetryableStatus reports whether a response should be retried: a 429
@@ -211,6 +274,7 @@ func (c *Client) installRetryTransport() {
 		sleep:       sleep,
 		jitter:      jitter,
 		now:         time.Now,
+		debug:       c.debug,
 	}
 	c.client = &cloned
 }
