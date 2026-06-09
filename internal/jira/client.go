@@ -143,7 +143,16 @@ type Client struct {
 	retryMaxWait time.Duration
 	retrySleep   func(context.Context, time.Duration) error
 	retryJitter  func() float64
+	// rateObserver, when set, is called with the parsed Rate of every
+	// successful response. The CLI uses it to surface a near-limit warning
+	// without every command inspecting the response itself.
+	rateObserver RateObserver
 }
+
+// RateObserver receives the rate-limit state of a successful response. It runs
+// on the request's goroutine — possibly one of several under -p fan-out — so
+// an implementation must be safe for concurrent calls.
+type RateObserver func(context.Context, Rate)
 
 type Option func(*Client)
 
@@ -265,6 +274,16 @@ func WithBasicAuth(email, token string) Option {
 func WithDebug(debug bool) Option {
 	return func(c *Client) {
 		c.debug = debug
+	}
+}
+
+// WithRateObserver registers a callback invoked with the rate-limit state of
+// every successful response. The CLI uses it to raise a near-limit warning;
+// it is a no-op observability seam, so a nil observer (the default) changes
+// nothing.
+func WithRateObserver(fn RateObserver) Option {
+	return func(c *Client) {
+		c.rateObserver = fn
 	}
 }
 
@@ -516,6 +535,13 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 			}
 		}
 	}
+	// Fully-successful (2xx, body decoded) response: hand its rate state to
+	// the observer so a near-limit signal can surface as a warning. Every
+	// error — non-2xx, truncation, read failure, unparseable body — has
+	// returned above, so the observer only ever sees a clean success.
+	if c.rateObserver != nil {
+		c.rateObserver(ctx, resp.Rate)
+	}
 	return resp, nil
 }
 
@@ -717,7 +743,15 @@ func parseRate(res *http.Response) Rate {
 		RetryAfterSeconds: retryAfterSeconds(res.Header.Get("Retry-After"), now),
 		Reset:             parseResetHeader(res.Header.Get("X-RateLimit-Reset"), now),
 		Reason:            strings.TrimSpace(res.Header.Get("RateLimit-Reason")),
+		NearLimit:         parseBoolHeader(res.Header.Get("X-RateLimit-NearLimit")),
 	}
+}
+
+// parseBoolHeader reads a boolean-ish header. Jira sends X-RateLimit-NearLimit
+// as "true"/"false"; anything else (absent, blank, junk) reads false so a
+// missing or malformed header never raises a spurious warning.
+func parseBoolHeader(raw string) bool {
+	return strings.EqualFold(strings.TrimSpace(raw), "true")
 }
 
 // retryAfterSeconds parses a Retry-After value. RFC 9110 allows either

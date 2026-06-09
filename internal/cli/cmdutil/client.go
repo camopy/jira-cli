@@ -132,6 +132,10 @@ func JiraClientForProfile(cmd *cobra.Command, profile config.Profile) (*jira.Cli
 		// Turn on bounded rate-limit retry. The transport caps the wait at
 		// the request's context deadline, so --timeout always wins.
 		jira.WithMaxRetryWait(MaxRetryWaitFor(cmd)),
+		// Surface Jira's near-limit signal as a non-fatal warning. The
+		// observer records into the command's rate-warn sink (carried on the
+		// request context), so no command needs to inspect the response.
+		jira.WithRateObserver(RecordRateNearLimit),
 	}
 	ref, refErr := SecretRefFor(profile, profile.SecretBackend)
 	if refErr != nil {

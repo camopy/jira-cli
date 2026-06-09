@@ -103,6 +103,7 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
   | `lossy_adf_conversion`       | markdown → ADF or roundtrip dropped detail                                     |
   | `cache-truncated`            | Cache primer hit its page/row safety bound; data fields include `truncated`/`truncated_reason` |
   | `adf-lossy-comment`          | A comment body contains constructs lost on render; entry names `comment_id` and `lossy_constructs[]` |
+  | `rate_limit_near`            | A successful response carried Jira's `X-RateLimit-NearLimit`; ease off or lower `--parallelism` before a 429 |
 
 - Exit codes (stable contract — never reused for new categories):
 

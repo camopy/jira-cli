@@ -112,7 +112,7 @@ func WriteEnvelopeWithPaginationAndRawWarnings(cmd *cobra.Command, command strin
 }
 
 func writeRawWarningEnvelope(cmd *cobra.Command, command string, data any, warnings []map[string]any, pagination *cli.Pagination) error {
-	for _, cw := range collectedCredentialWarnings(cmd) {
+	for _, cw := range collectedCommandWarnings(cmd) {
 		warnings = append(warnings, map[string]any{
 			"type":    cw.Type,
 			"message": cw.Message,
@@ -229,7 +229,7 @@ func WriteEnvelopeWithWarnings(cmd *cobra.Command, command string, data any, war
 	for _, w := range warnings {
 		cliWarnings = append(cliWarnings, cli.WarningFrom(w))
 	}
-	cliWarnings = append(cliWarnings, collectedCredentialWarnings(cmd)...)
+	cliWarnings = append(cliWarnings, collectedCommandWarnings(cmd)...)
 	if UseCompactOutput(cmd) {
 		// compact has no envelope; fold warnings into the data so a failed
 		// credential cleanup or other correctness notice is not lost.
@@ -282,7 +282,7 @@ func WriteEnvelopeWithResponseAndWarnings(cmd *cobra.Command, command string, da
 	for _, w := range warnings {
 		cliWarnings = append(cliWarnings, cli.WarningFrom(w))
 	}
-	cliWarnings = append(cliWarnings, collectedCredentialWarnings(cmd)...)
+	cliWarnings = append(cliWarnings, collectedCommandWarnings(cmd)...)
 	if UseCompactOutput(cmd) {
 		if m, ok := data.(map[string]any); ok {
 			m["pagination"] = paginationFromResponse(resp)

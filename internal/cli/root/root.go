@@ -149,6 +149,9 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	// so a legacy-keyring-fallback warning is scoped to the command that
 	// produced it and cannot bleed into another.
 	ctx = cmdutil.WithCredentialWarnSink(ctx)
+	// And a fresh rate-limit-warning sink, scoped the same way, so a
+	// near-limit notice belongs to the command that triggered it.
+	ctx = cmdutil.WithRateWarnSink(ctx)
 	ctx = logger.WithContext(ctx)
 	cmd.SetContext(ctx)
 	event := logger.Debug().Str("mode", string(det.Mode))

@@ -1,6 +1,7 @@
 package jira
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"testing"
@@ -81,10 +82,14 @@ func TestParseRatePopulatesAllFields(t *testing.T) {
 	res.Header.Set("Retry-After", "12")
 	res.Header.Set("RateLimit-Reason", "jira-burst-based")
 	res.Header.Set("X-RateLimit-Reset", "20")
+	res.Header.Set("X-RateLimit-NearLimit", "true")
 
 	rate := parseRate(res)
 	if rate.Remaining != 3 {
 		t.Errorf("Remaining = %d, want 3", rate.Remaining)
+	}
+	if !rate.NearLimit {
+		t.Errorf("NearLimit = false, want true from X-RateLimit-NearLimit: true")
 	}
 	if rate.RetryAfterSeconds != 12 {
 		t.Errorf("RetryAfterSeconds = %d, want 12", rate.RetryAfterSeconds)
@@ -101,6 +106,66 @@ func TestParseRateTolerantOfMissingHeaders(t *testing.T) {
 	rate := parseRate(&http.Response{Header: http.Header{}})
 	if rate.Remaining != 0 || rate.RetryAfterSeconds != 0 || rate.Reason != "" || !rate.Reset.IsZero() {
 		t.Fatalf("empty headers should yield a zero Rate, got %+v", rate)
+	}
+}
+
+func TestParseBoolHeader(t *testing.T) {
+	cases := map[string]bool{
+		"true": true, "TRUE": true, " true ": true,
+		"false": false, "": false, "1": false, "yes": false, "junk": false,
+	}
+	for raw, want := range cases {
+		if got := parseBoolHeader(raw); got != want {
+			t.Errorf("parseBoolHeader(%q) = %v, want %v", raw, got, want)
+		}
+	}
+}
+
+func TestRateObserverFiresOnlyOnSuccess(t *testing.T) {
+	var got []Rate
+	observe := func(_ context.Context, r Rate) { got = append(got, r) }
+
+	// Every response carries the near-limit header, but the observer must
+	// fire only on the clean 2xx: a 404 returns before the success path, and
+	// a 2xx with an unparseable body returns a server error before it too.
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-NearLimit", "true")
+		w.Header().Set("RateLimit-Reason", "jira-burst-based")
+		switch r.URL.Path {
+		case "/rest/api/3/missing":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"errorMessages":["nope"]}`))
+		case "/rest/api/3/junk":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`<html>not json</html>`))
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{}`))
+		}
+	})
+	client := newHTTPHandlerClient(handler, WithRateObserver(observe))
+
+	okReq, _ := client.NewRequest(context.Background(), http.MethodGet, "rest/api/3/ok", nil)
+	if _, err := client.Do(okReq, nil); err != nil {
+		t.Fatalf("ok request: %v", err)
+	}
+	missReq, _ := client.NewRequest(context.Background(), http.MethodGet, "rest/api/3/missing", nil)
+	if _, err := client.Do(missReq, nil); err == nil {
+		t.Fatal("missing request should error")
+	}
+	// out!=nil forces a decode; the junk body makes Do return a server error,
+	// so the observer must not fire for it.
+	var sink map[string]any
+	junkReq, _ := client.NewRequest(context.Background(), http.MethodGet, "rest/api/3/junk", nil)
+	if _, err := client.Do(junkReq, &sink); err == nil {
+		t.Fatal("junk-body request should error before the observer fires")
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("observer fired %d times, want 1 (clean success only)", len(got))
+	}
+	if !got[0].NearLimit || got[0].Reason != "jira-burst-based" {
+		t.Fatalf("observer got %+v, want NearLimit=true reason=jira-burst-based", got[0])
 	}
 }
 

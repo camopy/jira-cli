@@ -38,6 +38,11 @@ type Rate struct {
 	// jira-per-issue-on-write). Empty when absent. Carried for diagnostics;
 	// the retry decision keys off the HTTP status and Retry-After, not this.
 	Reason string
+	// NearLimit reflects Jira's X-RateLimit-NearLimit header: the server's
+	// own "you are approaching the limit" signal on an otherwise-successful
+	// response. Surfaced as a non-fatal warning so a caller can ease off
+	// before it turns into a 429.
+	NearLimit bool
 }
 
 type Response struct {

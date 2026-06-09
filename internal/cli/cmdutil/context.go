@@ -22,6 +22,8 @@ const (
 	detectorKey contextKey = "detector"
 	// credentialWarnSinkKey carries the per-command credential-warning sink.
 	credentialWarnSinkKey contextKey = "credential-warn-sink"
+	// rateWarnSinkKey carries the per-command rate-limit-warning sink.
+	rateWarnSinkKey contextKey = "rate-warn-sink"
 )
 
 // WithDetector returns a context carrying the resolved output-detection

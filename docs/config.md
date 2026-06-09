@@ -280,6 +280,11 @@ command past its overall deadline. If the limit outlasts the budget, the
 request fails with `exit 4` (`rate_limit`). Run with `--debug` to see each
 backoff and the reason the CLI gave up.
 
+When Jira flags a *successful* response as nearing the limit (its
+`X-RateLimit-NearLimit` header), the command still succeeds but adds a
+`rate_limit_near` warning — a cue to slow down or lower `--parallelism`
+before the next call turns into a 429.
+
 ## Reference
 
 ### Per-profile keys
