@@ -12,6 +12,7 @@ import (
 type JQLService interface {
 	Parse(context.Context, []string, string) ([]ParsedQuery, *Response, error)
 	AutocompleteData(context.Context) (JQLReference, *Response, error)
+	AutocompleteSuggestions(ctx context.Context, fieldName, fieldValue string) ([]JQLSuggestion, *Response, error)
 }
 
 type jqlService struct {
@@ -35,10 +36,14 @@ type JQLReference struct {
 // custom field, and holds Jira's JQL custom-field token (e.g. cf[10010], the
 // same form as Value) — not the customfield_NNNNN REST selector. Its real use
 // is as a discriminator: present means custom, absent means a system field.
+// Operators are the JQL operators the field supports; Auto reports that the
+// field's values can be fetched from the suggestions endpoint.
 type JQLField struct {
 	Value         string
 	DisplayName   string
 	CustomFieldID string
+	Operators     []string
+	Auto          bool
 }
 
 // JQLFunction is one JQL function (e.g. currentUser()).
@@ -49,9 +54,11 @@ type JQLFunction struct {
 
 type jqlReferenceWire struct {
 	VisibleFieldNames []struct {
-		Value       string `json:"value"`
-		DisplayName string `json:"displayName"`
-		Cfid        string `json:"cfid"`
+		Value       string   `json:"value"`
+		DisplayName string   `json:"displayName"`
+		Cfid        string   `json:"cfid"`
+		Operators   []string `json:"operators"`
+		Auto        string   `json:"auto"`
 	} `json:"visibleFieldNames"`
 	VisibleFunctionNames []struct {
 		Value       string `json:"value"`
@@ -76,12 +83,50 @@ func (s *jqlService) AutocompleteData(ctx context.Context) (JQLReference, *Respo
 	}
 	ref := JQLReference{ReservedWords: wire.JqlReservedWords}
 	for _, f := range wire.VisibleFieldNames {
-		ref.Fields = append(ref.Fields, JQLField{Value: f.Value, DisplayName: f.DisplayName, CustomFieldID: f.Cfid})
+		ref.Fields = append(ref.Fields, JQLField{
+			Value: f.Value, DisplayName: f.DisplayName, CustomFieldID: f.Cfid,
+			Operators: f.Operators, Auto: f.Auto == "true",
+		})
 	}
 	for _, fn := range wire.VisibleFunctionNames {
 		ref.Functions = append(ref.Functions, JQLFunction{Value: fn.Value, DisplayName: fn.DisplayName})
 	}
 	return ref, resp, nil
+}
+
+// JQLSuggestion is one autocomplete value for a field (e.g. a status name for
+// `status =`). Value is what belongs in the query; DisplayName may carry
+// markup from Jira and is for display only.
+type JQLSuggestion struct {
+	Value       string `json:"value"`
+	DisplayName string `json:"displayName"`
+}
+
+type suggestionsResponse struct {
+	Results []JQLSuggestion `json:"results"`
+}
+
+// AutocompleteSuggestions fetches live value suggestions for one field via
+// GET /jql/autocompletedata/suggestions — the API behind the Jira web UI's
+// JQL bar (e.g. fieldName=status returns the instance's status names,
+// narrowed by fieldValue as a prefix). Only fields whose reference entry has
+// Auto=true support it. Read-only.
+func (s *jqlService) AutocompleteSuggestions(ctx context.Context, fieldName, fieldValue string) ([]JQLSuggestion, *Response, error) {
+	if fieldName == "" {
+		return nil, nil, errors.New("fieldName is required")
+	}
+	q := map[string][]string{"fieldName": {fieldName}}
+	if fieldValue != "" {
+		q["fieldValue"] = []string{fieldValue}
+	}
+	path := withQuery(RESTPath("jql", "autocompletedata", "suggestions"), q)
+	req, err := s.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	var result suggestionsResponse
+	resp, err := s.client.Do(req, &result)
+	return result.Results, resp, err
 }
 
 // ParsedQuery is the per-query result of a parse/validate call: the query as

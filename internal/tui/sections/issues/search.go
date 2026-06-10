@@ -35,7 +35,37 @@ type SearchModel struct {
 	jqlInput input.Line // in-progress edit
 	editing  bool
 	savedIdx int // last ]-cycled position in the saved queries
+
+	// JQL autocomplete state: the instance's reference data (fields,
+	// operators, functions) fetched once on first edit, plus the live value
+	// suggestions for the field currently being valued. sugField/sugPrefix
+	// record the last fetch fired so identical contexts don't refire.
+	jqlRef       jira.JQLReference
+	jqlRefLoaded bool
+	valueSugs    []string
+	valueSugsFor string // field the cached values belong to
+	sugField     string
+	sugPrefix    string
 }
+
+// jqlRefScope/jqlSuggScope are the async scopes for the autocomplete fetches;
+// the suggestions scope supersedes per keystroke via the task generation.
+func (s *SearchModel) jqlRefScope() core.TaskScope {
+	return core.TaskScope(string(s.id) + ".jqlref")
+}
+
+func (s *SearchModel) jqlSuggScope() core.TaskScope {
+	return core.TaskScope(string(s.id) + ".jqlsugg")
+}
+
+// jqlRefResult and jqlSuggResult are delivered as TaskFinishedMsg.Result.
+type (
+	jqlRefResult  struct{ ref jira.JQLReference }
+	jqlSuggResult struct {
+		field, prefix string
+		values        []string
+	}
+)
 
 // NewSearch builds the search section. It opens in edit mode with no results,
 // since there is no default query to run.
@@ -128,20 +158,108 @@ var jqlStarters = []string{
 }
 
 // openEdit starts (or restarts) the JQL editor prefilled with the committed
-// query, with the saved queries and common JQL openings as tab-completable
-// ghost suggestions.
-func (s *SearchModel) openEdit() {
+// query, arms the suggestion machinery, and fetches the instance's JQL
+// reference data on first use.
+func (s *SearchModel) openEdit() tea.Cmd {
 	s.editing = true
 	s.jqlInput = input.NewLine("", "project = … ORDER BY updated DESC")
 	s.jqlInput.SetWidth(s.ctx.MainWidth - 10)
-	saved := s.saved()
-	suggestions := make([]string, 0, len(saved)+len(jqlStarters))
-	for _, l := range saved {
-		suggestions = append(suggestions, l.JQL)
-	}
-	suggestions = append(suggestions, jqlStarters...)
-	s.jqlInput.SetSuggestions(suggestions)
 	s.jqlInput.SetValue(s.jql)
+	cmd := s.refreshSuggestions()
+	if s.jqlRefLoaded {
+		return cmd
+	}
+	return tea.Batch(cmd, s.fetchJQLRef())
+}
+
+// fallbackSuggestions are the whole-query completions available without
+// reference data: the saved queries plus common JQL openings.
+func (s *SearchModel) fallbackSuggestions() []string {
+	saved := s.saved()
+	out := make([]string, 0, len(saved)+len(jqlStarters))
+	for _, l := range saved {
+		out = append(out, l.JQL)
+	}
+	return append(out, jqlStarters...)
+}
+
+// refreshSuggestions recomputes the editor's ghost completions for the
+// current input: token-aware candidates from the reference data (fields,
+// the active field's operators, functions, keywords, cached live values),
+// or the whole-query fallbacks while the reference data hasn't landed. At a
+// value position on a suggestable field it also fires the live-values fetch,
+// superseded per keystroke by the task generation.
+func (s *SearchModel) refreshSuggestions() tea.Cmd {
+	if !s.editing {
+		return nil
+	}
+	q := s.jqlInput.Value()
+	if !s.jqlRefLoaded {
+		s.jqlInput.SetSuggestions(s.fallbackSuggestions())
+		return nil
+	}
+	c := jqlComplete(q)
+	var cands []string
+	if c.kind == wantValue && strings.EqualFold(s.valueSugsFor, c.field) {
+		// The field's live values lead — for a status they're what the user
+		// means; the JQL functions follow as the generic option.
+		cands = append(cands, s.valueSugs...)
+	}
+	cands = append(cands, candidatesFor(s.jqlRef, c)...)
+	lines := completionLines(q, c, cands)
+	if c.start == 0 {
+		// At the very start the saved queries complete as whole lines too.
+		lines = append(lines, s.fallbackSuggestions()...)
+	}
+	s.jqlInput.SetSuggestions(lines)
+	if f := valueField(s.jqlRef, c); f != "" && (f != s.sugField || c.prefix != s.sugPrefix) {
+		s.sugField, s.sugPrefix = f, c.prefix
+		return s.fetchValueSuggestions(f, c.prefix)
+	}
+	return nil
+}
+
+// fetchJQLRef loads the instance's JQL autocomplete reference data once.
+func (s *SearchModel) fetchJQLRef() tea.Cmd {
+	base := s.ctx.Base
+	svc := s.ctx.Services
+	return s.ctx.StartTask(core.TaskSpec{
+		Scope: s.jqlRefScope(),
+		Run: func() (any, error) {
+			if svc == nil || svc.JQL() == nil {
+				return jqlRefResult{}, nil
+			}
+			ref, _, err := svc.JQL().AutocompleteData(base)
+			if err != nil {
+				return nil, err
+			}
+			return jqlRefResult{ref: ref}, nil
+		},
+	})
+}
+
+// fetchValueSuggestions loads live values for a field (e.g. status names)
+// narrowed by the typed prefix.
+func (s *SearchModel) fetchValueSuggestions(field, prefix string) tea.Cmd {
+	base := s.ctx.Base
+	svc := s.ctx.Services
+	return s.ctx.StartTask(core.TaskSpec{
+		Scope: s.jqlSuggScope(),
+		Run: func() (any, error) {
+			if svc == nil || svc.JQL() == nil {
+				return jqlSuggResult{field: field, prefix: prefix}, nil
+			}
+			sugs, _, err := svc.JQL().AutocompleteSuggestions(base, field, prefix)
+			if err != nil {
+				return nil, err
+			}
+			values := make([]string, 0, len(sugs))
+			for _, sg := range sugs {
+				values = append(values, sg.Value)
+			}
+			return jqlSuggResult{field: field, prefix: prefix, values: values}, nil
+		},
+	})
 }
 
 // openPresets opens the saved-query dropdown. Labels carry the name and the
@@ -195,6 +313,28 @@ func (s *SearchModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 		s.applySize(searchBoxRows)
 		return s, nil
 	case core.TaskFinishedMsg:
+		switch msg.Scope {
+		case s.jqlRefScope():
+			// Reference data is best-effort: on error the fallback
+			// suggestions simply stand.
+			if res, ok := msg.Result.(jqlRefResult); ok && msg.Err == nil {
+				s.jqlRef = res.ref
+				s.jqlRefLoaded = true
+			}
+			return s, s.refreshSuggestions()
+		case s.jqlSuggScope():
+			res, ok := msg.Result.(jqlSuggResult)
+			if !ok || msg.Err != nil {
+				// Forget the attempted field/prefix so the next keystroke at
+				// the same position retries — but don't refresh here: that
+				// would refetch immediately and loop while the API is down.
+				s.sugField, s.sugPrefix = "", ""
+				return s, nil
+			}
+			s.valueSugs = res.values
+			s.valueSugsFor = res.field
+			return s, s.refreshSuggestions()
+		}
 		cmd, _ := s.handleTask(msg)
 		return s, cmd
 	case core.RefreshTickMsg:
@@ -214,8 +354,7 @@ func (s *SearchModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 		if _, inMain := s.mainX(msg.X); inMain &&
 			msg.Button == tea.MouseLeft && !s.editing && !s.capturing() &&
 			msg.Y >= core.TopChromeRows && msg.Y < core.TopChromeRows+searchBoxRows {
-			s.openEdit()
-			return s, nil
+			return s, s.openEdit()
 		}
 		return s, s.handleClick(msg)
 	case input.EditorFinishedMsg:
@@ -232,7 +371,8 @@ func (s *SearchModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 			return s, s.ctrl.Update(msg)
 		}
 		if s.editing {
-			return s, s.jqlInput.Update(msg)
+			cmd := s.jqlInput.Update(msg)
+			return s, tea.Batch(cmd, s.refreshSuggestions())
 		}
 		cmd, _ := s.handlePaste(msg)
 		return s, cmd
@@ -258,7 +398,7 @@ func (s *SearchModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 		}
 		switch {
 		case key.Matches(msg, s.ctx.Keys.Search), key.Matches(msg, s.ctx.Keys.Open):
-			s.openEdit()
+			return s, s.openEdit()
 		case key.Matches(msg, s.ctx.Keys.Refresh):
 			return s, s.fetch()
 		case key.Matches(msg, s.ctx.Keys.NextLens):
@@ -271,7 +411,8 @@ func (s *SearchModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 }
 
 // updateEdit handles the JQL editor through the shared input: enter commits
-// and runs; esc cancels; everything else (cursor movement, paste) edits.
+// and runs; esc cancels; everything else (cursor movement, paste) edits and
+// recomputes the token-aware completions.
 func (s *SearchModel) updateEdit(msg tea.KeyPressMsg) (core.Section, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
@@ -281,7 +422,8 @@ func (s *SearchModel) updateEdit(msg tea.KeyPressMsg) (core.Section, tea.Cmd) {
 		s.jql = strings.TrimSpace(s.jqlInput.Value())
 		return s, s.fetch()
 	default:
-		return s, s.jqlInput.Update(msg)
+		cmd := s.jqlInput.Update(msg)
+		return s, tea.Batch(cmd, s.refreshSuggestions())
 	}
 	return s, nil
 }

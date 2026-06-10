@@ -220,10 +220,18 @@ syntax errors surface inline instead of as a failed search — and runs
 it. Results get the full shared toolkit: filter, facets, verbs, bulk
 mode, preview.
 
-*   **Autocomplete.** The editor offers ghost-text completions drawn
-    from your saved queries (the lens set) and common JQL openings
-    (`assignee = currentUser()…`, `project =`, `status =`, …). The
-    completion shows faint as you type; `tab` accepts it.
+*   **Autocomplete.** The editor completes the token you're typing,
+    context-aware, from your Jira instance's own JQL metadata (the same
+    API behind the web UI's query bar): field names — including custom
+    fields — at a field position, that field's operators after it, and
+    its live values after the operator (after `status =` your actual
+    statuses ghost in; a multi-word value like `In Progress` completes
+    quoted when nothing — or an opening quote — has been typed yet, and
+    after `in`/`not in` values complete parenthesised). JQL functions
+    and `AND`/`OR`/`ORDER BY` complete in their places, and your saved
+    queries complete as whole lines at the start. The completion shows
+    faint as you type; `tab` accepts it. Offline or before the metadata
+    loads, it falls back to the saved queries and common openings.
 *   **Presets.** `ctrl+p` opens a type-to-filter dropdown over the saved
     queries — matching on the name *or* the JQL text — and `enter`
     commits and runs the pick. `]` / `[` cycle through them directly.

@@ -114,14 +114,26 @@ func mkTransition(id, name string) *jira.Transition {
 	return &jira.Transition{ID: &i, Name: &n}
 }
 
-// fakeJQLSvc overrides Parse; default returns a valid (error-free) parse.
+// fakeJQLSvc overrides Parse (default: a valid, error-free parse) and the
+// autocomplete endpoints (default: empty reference/values; set ref/values to
+// exercise the completion plumbing).
 type fakeJQLSvc struct {
 	jira.JQLService
 	parseErrors []string
+	ref         jira.JQLReference
+	values      []jira.JQLSuggestion
 }
 
 func (f fakeJQLSvc) Parse(context.Context, []string, string) ([]jira.ParsedQuery, *jira.Response, error) {
 	return []jira.ParsedQuery{{Errors: f.parseErrors}}, nil, nil
+}
+
+func (f fakeJQLSvc) AutocompleteData(context.Context) (jira.JQLReference, *jira.Response, error) {
+	return f.ref, nil, nil
+}
+
+func (f fakeJQLSvc) AutocompleteSuggestions(context.Context, string, string) ([]jira.JQLSuggestion, *jira.Response, error) {
+	return f.values, nil, nil
 }
 
 // fakeServices overrides Issues() and JQL().
