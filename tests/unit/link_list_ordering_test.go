@@ -11,11 +11,11 @@ import (
 
 func TestSortLinksDirectionTypeKey(t *testing.T) {
 	links := []jira.IssueLinkView{
-		{ID: "1", Direction: "outward", Type: jira.IssueLinkType{Name: "Relates"}, OtherIssue: jira.IssueRef{Key: "KAN-200"}},
-		{ID: "2", Direction: "inward", Type: jira.IssueLinkType{Name: "Blocks"}, OtherIssue: jira.IssueRef{Key: "KAN-100"}},
-		{ID: "3", Direction: "outward", Type: jira.IssueLinkType{Name: "Blocks"}, OtherIssue: jira.IssueRef{Key: "KAN-300"}},
-		{ID: "4", Direction: "outward", Type: jira.IssueLinkType{Name: "Blocks"}, OtherIssue: jira.IssueRef{Key: "KAN-250"}},
-		{ID: "5", Direction: "inward", Type: jira.IssueLinkType{Name: "Cloners"}, OtherIssue: jira.IssueRef{Key: "KAN-50"}},
+		{ID: "1", Direction: "outward", Type: jira.IssueLinkType{Name: "Relates"}, OtherIssue: jira.IssueRef{Key: "JCT-200"}},
+		{ID: "2", Direction: "inward", Type: jira.IssueLinkType{Name: "Blocks"}, OtherIssue: jira.IssueRef{Key: "JCT-100"}},
+		{ID: "3", Direction: "outward", Type: jira.IssueLinkType{Name: "Blocks"}, OtherIssue: jira.IssueRef{Key: "JCT-300"}},
+		{ID: "4", Direction: "outward", Type: jira.IssueLinkType{Name: "Blocks"}, OtherIssue: jira.IssueRef{Key: "JCT-250"}},
+		{ID: "5", Direction: "inward", Type: jira.IssueLinkType{Name: "Cloners"}, OtherIssue: jira.IssueRef{Key: "JCT-50"}},
 	}
 	jira.SortIssueLinks(links)
 	wantOrder := []string{"2", "5", "4", "3", "1"}
@@ -28,8 +28,8 @@ func TestSortLinksDirectionTypeKey(t *testing.T) {
 
 func TestSortLinksStableOnTies(t *testing.T) {
 	links := []jira.IssueLinkView{
-		{ID: "first", Direction: "outward", Type: jira.IssueLinkType{Name: "Blocks"}, OtherIssue: jira.IssueRef{Key: "KAN-1"}},
-		{ID: "second", Direction: "outward", Type: jira.IssueLinkType{Name: "Blocks"}, OtherIssue: jira.IssueRef{Key: "KAN-1"}},
+		{ID: "first", Direction: "outward", Type: jira.IssueLinkType{Name: "Blocks"}, OtherIssue: jira.IssueRef{Key: "JCT-1"}},
+		{ID: "second", Direction: "outward", Type: jira.IssueLinkType{Name: "Blocks"}, OtherIssue: jira.IssueRef{Key: "JCT-1"}},
 	}
 	jira.SortIssueLinks(links)
 	if links[0].ID != "first" || links[1].ID != "second" {

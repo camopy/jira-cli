@@ -7,26 +7,39 @@
 package guardrails
 
 import (
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// The TUI submit path MUST NOT call adf.FromMarkdown — the
-// editor.Editor produces the ADF document as the user types, and the
-// App receives Document directly via InputSubmitted. Calling
-// FromMarkdown at submit is exactly the "convert-on-submit step" the
-// architecture forbids.
+// The TUI MUST NOT call adf.FromMarkdown — the silent converter drops
+// unsupported Markdown without telling the user. Submit paths that
+// accept Markdown text use adf.FromMarkdownLossy, which reports what
+// was lost instead of discarding it silently.
 //
-// This guard greps internal/tui/app.go for the offending call and
-// fails if it reappears.
-func TestTUIAppDoesNotCallFromMarkdownAtSubmit(t *testing.T) {
-	body, err := os.ReadFile("../../internal/tui/app.go")
+// This guard greps every Go file under internal/tui for the offending
+// call and fails if it appears.
+func TestTUIDoesNotCallFromMarkdownSilently(t *testing.T) {
+	root := "../../internal/tui"
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(string(body), "adf.FromMarkdown(") {
+			t.Errorf("%s calls adf.FromMarkdown — silent convert-on-submit forbidden, use FromMarkdownLossy", path)
+		}
+		return nil
+	})
 	if err != nil {
-		t.Fatalf("read app.go: %v", err)
-	}
-	text := string(body)
-	if strings.Contains(text, "adf.FromMarkdown(") {
-		t.Errorf("internal/tui/app.go calls adf.FromMarkdown — convert-on-submit step forbidden")
+		t.Fatalf("walk %s: %v", root, err)
 	}
 }

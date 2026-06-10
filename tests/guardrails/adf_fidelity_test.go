@@ -48,7 +48,7 @@ func TestUnderlineTextColorBackgroundColorSurviveRoundTrip(t *testing.T) {
 // doesn't false-fail the test — what matters is that a downstream
 // JSON parser sees the same URL.
 func TestURLWithQueryParamsSurvivesRoundTrip(t *testing.T) {
-	url := "https://example.atlassian.net/browse/KAN-1?focusedCommentId=12&expand=renderedFields"
+	url := "https://example.atlassian.net/browse/JCT-1?focusedCommentId=12&expand=renderedFields"
 	doc, _, err := adf.Parse([]byte(`{"type":"doc","version":1,"content":[
 		{"type":"paragraph","content":[
 			{"type":"text","text":"see","marks":[{"type":"link","attrs":{"href":"` + url + `"}}]}

@@ -25,7 +25,7 @@ func TestAuthLoginNoInputPreservesExistingProfileFields(t *testing.T) {
   auth_type = "token"
   email = "user@example.com"
   account_id = "abc123"
-  default_project = "KAN"
+  default_project = "JCT"
   read_only = false
   secret_backend = "keyring"
   refresh_interval = 30
@@ -67,7 +67,7 @@ func TestAuthLoginNoInputPreservesExistingProfileFields(t *testing.T) {
 	if !strings.Contains(s, `account_id = "abc123"`) {
 		t.Errorf(": account_id was erased by partial auth login:\n%s", s)
 	}
-	if !strings.Contains(s, `default_project = "KAN"`) {
+	if !strings.Contains(s, `default_project = "JCT"`) {
 		t.Errorf(": default_project was erased by partial auth login:\n%s", s)
 	}
 	if !strings.Contains(s, `editor = "vim"`) {

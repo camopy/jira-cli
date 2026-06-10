@@ -18,7 +18,7 @@ func TestRenderADFEmitsOSC8WhenTerminalAndPlainOtherwise(t *testing.T) {
 		"type": "doc", "version": 1, "content": [
 			{"type": "paragraph", "content": [
 				{"type": "text", "text": "see "},
-				{"type": "text", "text": "KAN-7"},
+				{"type": "text", "text": "JCT-7"},
 				{"type": "text", "text": " or visit "},
 				{"type": "text", "text": "https://example.com/info"}
 			]}
@@ -39,7 +39,7 @@ func TestRenderADFEmitsOSC8WhenTerminalAndPlainOtherwise(t *testing.T) {
 	if !strings.Contains(tty, "https://example.com/info") {
 		t.Fatalf("URL missing from TTY render: %q", tty)
 	}
-	if !strings.Contains(tty, "https://example.atlassian.net/browse/KAN-7") {
+	if !strings.Contains(tty, "https://example.atlassian.net/browse/JCT-7") {
 		t.Fatalf("issue-key did not link to base URL; got: %q", tty)
 	}
 
@@ -48,7 +48,7 @@ func TestRenderADFEmitsOSC8WhenTerminalAndPlainOtherwise(t *testing.T) {
 		t.Fatalf("plain render leaked OSC 8 escapes; got: %q", plain)
 	}
 	// Plain output MUST still contain the visible text.
-	if !strings.Contains(plain, "KAN-7") {
+	if !strings.Contains(plain, "JCT-7") {
 		t.Fatalf("plain render missing issue key text: %q", plain)
 	}
 	if !strings.Contains(plain, "https://example.com/info") {

@@ -15,7 +15,7 @@ import (
 func TestMarkdownStrictAbort_CreateRejectsLossyTable(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "create-lossy-md.json")
-	body := "{\"summary\":\"x\",\"project_key\":\"KAN\",\"issue_type\":\"Task\"," +
+	body := "{\"summary\":\"x\",\"project_key\":\"JCT\",\"issue_type\":\"Task\"," +
 		"\"description_markdown\":\"intro\\n\\n| a | b |\\n|---|---|\\n| 1 | 2 |\\n\"}"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
@@ -41,7 +41,7 @@ func TestMarkdownStrictAbort_CreateRejectsLossyTable(t *testing.T) {
 func TestMarkdownStrictAbort_CreateBestEffortWarns(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "create-lossy-md-be.json")
-	body := "{\"summary\":\"x\",\"project_key\":\"KAN\",\"issue_type\":\"Task\"," +
+	body := "{\"summary\":\"x\",\"project_key\":\"JCT\",\"issue_type\":\"Task\"," +
 		"\"description_markdown\":\"intro\\n\\n| a | b |\\n|---|---|\\n| 1 | 2 |\\n\"}"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)

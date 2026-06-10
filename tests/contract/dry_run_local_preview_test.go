@@ -28,7 +28,7 @@ func TestWatcherAddDryRunPerformsNoLiveCalls(t *testing.T) {
 
 	cfg := jiraConfig(t, srv.URL)
 	stdout, stderr, code := runJira(t, "--config", cfg, "--output=json",
-		"issue", "watch", "KAN-1", "--dry-run")
+		"issue", "watch", "JCT-1", "--dry-run")
 	if code != 0 {
 		t.Fatalf("watch --dry-run exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
 	}
@@ -58,7 +58,7 @@ func TestWatcherRemoveDryRunPerformsNoLiveCalls(t *testing.T) {
 
 	cfg := jiraConfig(t, srv.URL)
 	stdout, stderr, code := runJira(t, "--config", cfg, "--output=json",
-		"issue", "unwatch", "KAN-1", "--dry-run")
+		"issue", "unwatch", "JCT-1", "--dry-run")
 	if code != 0 {
 		t.Fatalf("unwatch --dry-run exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
 	}
@@ -77,7 +77,7 @@ func TestWatcherAddValidateRemoteResolvesUserButDoesNotMutate(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(myselfBody))
 	})
-	mux.HandleFunc("/rest/api/3/issue/KAN-1/watchers", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/rest/api/3/issue/JCT-1/watchers", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			atomic.AddInt32(&posts, 1)
 			t.Errorf("--validate-remote must not POST the watcher")
@@ -89,7 +89,7 @@ func TestWatcherAddValidateRemoteResolvesUserButDoesNotMutate(t *testing.T) {
 
 	cfg := jiraConfig(t, srv.URL)
 	stdout, stderr, code := runJira(t, "--config", cfg, "--output=json",
-		"issue", "watch", "KAN-1", "--dry-run", "--validate-remote")
+		"issue", "watch", "JCT-1", "--dry-run", "--validate-remote")
 	if code != 0 {
 		t.Fatalf("watch --dry-run --validate-remote exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
 	}
@@ -119,7 +119,7 @@ func TestWatcherAddValidateRemoteRejectsInactiveAccountID(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"accountId":"inactive","displayName":"Inactive User","active":false}`))
 	})
-	mux.HandleFunc("/rest/api/3/issue/KAN-1/watchers", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/rest/api/3/issue/JCT-1/watchers", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			atomic.AddInt32(&posts, 1)
 			t.Errorf("--validate-remote must not POST the watcher")
@@ -131,7 +131,7 @@ func TestWatcherAddValidateRemoteRejectsInactiveAccountID(t *testing.T) {
 
 	cfg := jiraConfig(t, srv.URL)
 	stdout, stderr, code := runJira(t, "--config", cfg, "--output=json",
-		"issue", "watchers", "add", "KAN-1", "--user", "accountId:inactive", "--dry-run", "--validate-remote")
+		"issue", "watchers", "add", "JCT-1", "--user", "accountId:inactive", "--dry-run", "--validate-remote")
 	if code == 0 {
 		t.Fatalf("watch --dry-run --validate-remote accepted inactive account\nstdout=%s\nstderr=%s", stdout, stderr)
 	}
@@ -157,7 +157,7 @@ func TestWeblinkDryRunRejectsMalformedURLLocally(t *testing.T) {
 
 	cfg := jiraConfig(t, srv.URL)
 	stdout, stderr, code := runJira(t, "--config", cfg, "--output=json",
-		"issue", "weblink", "KAN-1", "--url", "not a url", "--dry-run")
+		"issue", "weblink", "JCT-1", "--url", "not a url", "--dry-run")
 	if code == 0 {
 		t.Fatalf("weblink --dry-run accepted a malformed URL; want local validation failure")
 	}
@@ -166,7 +166,7 @@ func TestWeblinkDryRunRejectsMalformedURLLocally(t *testing.T) {
 	}
 	assertWeblinkURLErrorEnvelope(t, stdout, stderr, []string{
 		"jira", "--config", cfg, "--output=json",
-		"issue", "weblink", "KAN-1", "--url", "not a url", "--dry-run",
+		"issue", "weblink", "JCT-1", "--url", "not a url", "--dry-run",
 	}, "flag_value_invalid")
 }
 
@@ -181,7 +181,7 @@ func TestWeblinkRejectsMissingURLWithSpecificCode(t *testing.T) {
 
 	cfg := jiraConfig(t, srv.URL)
 	stdout, stderr, code := runJira(t, "--config", cfg, "--output=json",
-		"issue", "weblink", "KAN-1", "--dry-run")
+		"issue", "weblink", "JCT-1", "--dry-run")
 	if code == 0 {
 		t.Fatalf("weblink --dry-run accepted a missing --url; want required-flag failure")
 	}
@@ -190,7 +190,7 @@ func TestWeblinkRejectsMissingURLWithSpecificCode(t *testing.T) {
 	}
 	assertWeblinkURLErrorEnvelope(t, stdout, stderr, []string{
 		"jira", "--config", cfg, "--output=json",
-		"issue", "weblink", "KAN-1", "--dry-run",
+		"issue", "weblink", "JCT-1", "--dry-run",
 	}, "required_flag_missing")
 }
 
@@ -226,7 +226,7 @@ func TestWeblinkDryRunStatesRemoteNotChecked(t *testing.T) {
 
 	cfg := jiraConfig(t, srv.URL)
 	stdout, stderr, code := runJira(t, "--config", cfg, "--output=json",
-		"issue", "weblink", "KAN-1", "--url", "https://example.com/page", "--dry-run")
+		"issue", "weblink", "JCT-1", "--url", "https://example.com/page", "--dry-run")
 	if code != 0 {
 		t.Fatalf("weblink --dry-run exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
 	}

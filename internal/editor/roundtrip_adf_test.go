@@ -25,7 +25,7 @@ func TestRoundTripADF_OpaqueBlockPreservesMarks(t *testing.T) {
 		t.Fatalf("Parse: %v", err)
 	}
 	out, _, err := RoundTripADF(context.Background(), RoundTripADFOptions{
-		IssueKey:  "KAN-1",
+		IssueKey:  "JCT-1",
 		FieldName: "description",
 		Document:  doc,
 		EditFn:    func(_ context.Context, _ string) error { return nil },
@@ -58,7 +58,7 @@ func TestRoundTripADF_UnknownBlockPreserved(t *testing.T) {
 		t.Fatalf("Parse: %v", err)
 	}
 	out, _, err := RoundTripADF(context.Background(), RoundTripADFOptions{
-		IssueKey:  "KAN-1",
+		IssueKey:  "JCT-1",
 		FieldName: "description",
 		Document:  doc,
 		EditFn:    func(_ context.Context, _ string) error { return nil },
@@ -111,7 +111,7 @@ func TestRoundTripADF_MalformedOpaqueFenceFailsAndPreservesFile(t *testing.T) {
 	}
 
 	_, _, err = RoundTripADF(context.Background(), RoundTripADFOptions{
-		IssueKey:  "KAN-1",
+		IssueKey:  "JCT-1",
 		FieldName: "description",
 		Document:  doc,
 		EditFn:    corrupt,
@@ -142,7 +142,7 @@ func TestRoundTripADF_NoOpPreservesPanelStructure(t *testing.T) {
 		t.Fatalf("Parse: %v", err)
 	}
 	out, _, err := RoundTripADF(context.Background(), RoundTripADFOptions{
-		IssueKey:  "KAN-1",
+		IssueKey:  "JCT-1",
 		FieldName: "description",
 		Document:  doc,
 		EditFn:    func(_ context.Context, _ string) error { return nil },

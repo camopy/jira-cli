@@ -172,7 +172,7 @@ func TestValidateStrict_InlineCardMissingURLandData_Errors(t *testing.T) {
 func TestValidateStrict_ValidInlineCard_Accepted(t *testing.T) {
 	doc := mustParse(t, `{"type":"doc","version":1,"content":[
 		{"type":"paragraph","content":[
-			{"type":"inlineCard","attrs":{"url":"https://example.com/KAN-1"}}]}
+			{"type":"inlineCard","attrs":{"url":"https://example.com/JCT-1"}}]}
 	]}`)
 	if _, err := adf.ValidateDoc(doc, adfmode.ModeStrict); err != nil {
 		t.Errorf("a valid inlineCard should pass: %v", err)

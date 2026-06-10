@@ -51,7 +51,7 @@ func TestRootNoInputFlagNotShadowedByLocalFlag(t *testing.T) {
 // root flag unset and the destructive op would fall through to a prompt.
 func TestRootNoInputReachesAttachmentDelete(t *testing.T) {
 	bin := buildJiraBinary(t)
-	cmd := exec.Command(bin, "--no-input", "issue", "attachment", "delete", "KAN-1", "10001", "--output=json")
+	cmd := exec.Command(bin, "--no-input", "issue", "attachment", "delete", "JCT-1", "10001", "--output=json")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

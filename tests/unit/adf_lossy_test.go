@@ -45,9 +45,9 @@ func TestADFToMarkdownLossyAllSupported(t *testing.T) {
 	}
 }
 
-// TestADFToMarkdownLossyInlineCard verifies a doc that contains an
-// inlineCard node surfaces it in LossyConstructs.
-func TestADFToMarkdownLossyInlineCard(t *testing.T) {
+// TestADFToMarkdownInlineCardRendersAsAutolink: inlineCard renders as a
+// Markdown autolink and is therefore no longer reported lossy.
+func TestADFToMarkdownInlineCardRendersAsAutolink(t *testing.T) {
 	doc := adf.Document{Type: "doc", Version: 1, Content: []adf.Node{
 		{Type: "paragraph", Content: []adf.Node{
 			{Type: "text", Text: "see "},
@@ -55,8 +55,11 @@ func TestADFToMarkdownLossyInlineCard(t *testing.T) {
 		}},
 	}}
 	res := adf.ToMarkdownLossy(doc)
-	if !reflect.DeepEqual(res.LossyConstructs, []string{"inlineCard"}) {
-		t.Fatalf("LossyConstructs = %v, want [\"inlineCard\"]", res.LossyConstructs)
+	if len(res.LossyConstructs) != 0 {
+		t.Fatalf("LossyConstructs = %v, want empty (inlineCard is renderable)", res.LossyConstructs)
+	}
+	if !strings.Contains(res.Markdown, "<https://example.com/x>") {
+		t.Fatalf("Markdown missing autolink: %q", res.Markdown)
 	}
 }
 
@@ -71,13 +74,13 @@ func TestADFToMarkdownLossyMultipleConstructsSortedUnique(t *testing.T) {
 			{Type: "paragraph", Content: []adf.Node{{Type: "text", Text: "hidden"}}},
 		}},
 		{Type: "paragraph", Content: []adf.Node{
-			{Type: "inlineCard", Attrs: map[string]any{"url": "https://example.com/y"}},
+			{Type: "decisionItem"},
 			{Type: "text", Text: " and "},
-			{Type: "inlineCard", Attrs: map[string]any{"url": "https://example.com/z"}}, // duplicate dedupes
+			{Type: "decisionItem"}, // duplicate dedupes
 		}},
 	}}
 	res := adf.ToMarkdownLossy(doc)
-	want := []string{"expand", "inlineCard"}
+	want := []string{"decisionItem", "expand"}
 	if !reflect.DeepEqual(res.LossyConstructs, want) {
 		t.Fatalf("LossyConstructs = %v, want %v (sorted unique)", res.LossyConstructs, want)
 	}

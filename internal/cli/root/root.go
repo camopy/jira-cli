@@ -182,8 +182,7 @@ func rootRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 		return fmt.Errorf("tui requires an interactive terminal")
 	}
 	if interactive && det.Mode == cli.ModeTUI {
-		_, err := tui.Run(cmd)
-		return err
+		return tui.Run(cmd)
 	}
 	// Bare `jira` behavior:
 	//   - TTY (human): print help so users get an immediate command list

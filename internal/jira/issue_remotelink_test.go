@@ -32,7 +32,7 @@ func TestAddRemoteLinkRejectsNonHTTPSchemes(t *testing.T) {
 	svc := &issueService{client: nil} // no client — call must fail before reaching transport
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := svc.AddRemoteLink(context.Background(), "KAN-1", &RemoteLinkRequest{
+			_, err := svc.AddRemoteLink(context.Background(), "JCT-1", &RemoteLinkRequest{
 				URL:   tc.url,
 				Title: "x",
 			})

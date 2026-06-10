@@ -1,0 +1,329 @@
+package issues
+
+import (
+	"errors"
+	"strings"
+
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+
+	"github.com/matcra587/jira-cli/internal/jira"
+	"github.com/matcra587/jira-cli/internal/tui/components/action"
+	"github.com/matcra587/jira-cli/internal/tui/components/input"
+	"github.com/matcra587/jira-cli/internal/tui/components/picker"
+	"github.com/matcra587/jira-cli/internal/tui/core"
+	"github.com/matcra587/jira-cli/internal/tui/theme"
+)
+
+// searchBoxRows is the height of the JQL box (rounded border top+bottom plus the
+// query line); applySize reserves it so the results list is sized correctly.
+const searchBoxRows = 3
+
+var _ core.Section = (*SearchModel)(nil)
+
+// SearchID is the search section identifier.
+const SearchID core.SectionID = "search"
+
+// SearchModel is the JQL explore section: the same results view as Issues, but
+// its query source is a free-form JQL input plus saved queries. It never
+// auto-runs a partial query — the user commits with enter.
+type SearchModel struct {
+	results
+	jql      string     // last committed query
+	jqlInput input.Line // in-progress edit
+	editing  bool
+	savedIdx int // last ]-cycled position in the saved queries
+}
+
+// NewSearch builds the search section. It opens in edit mode with no results,
+// since there is no default query to run.
+func NewSearch(ctx *core.ProgramContext) core.Section {
+	s := &SearchModel{results: newResults(ctx, SearchID)}
+	s.refetch = s.fetch
+	return s
+}
+
+// saved returns the quick queries — the lens set, configured lenses when
+// present, built-ins otherwise. Read per call so a config hot-reload
+// refreshes the ctrl+p dropdown, ] cycling, and the editor's completions.
+func (s *SearchModel) saved() []Lens { return lensesFor(s.ctx) }
+
+func (s *SearchModel) ID() core.SectionID { return SearchID }
+func (s *SearchModel) Title() string      { return "Search" }
+
+// Init sizes the list and lands in browse mode (not editing), so the section
+// can be tabbed away from immediately. The user presses enter (or the search
+// key) to start writing a JQL query. It runs nothing until a query is submitted.
+func (s *SearchModel) Init(ctx *core.ProgramContext) tea.Cmd {
+	s.ctx = ctx
+	s.refetch = s.fetch
+	s.applySize(searchBoxRows)
+	return nil
+}
+
+// fetch validates the committed JQL via Jira's parser and only then runs the
+// search, so an invalid query surfaces an inline error instead of a failed
+// search request. Empty queries run nothing.
+func (s *SearchModel) fetch() tea.Cmd {
+	if s.jql == "" {
+		// Clear stale results and supersede any in-flight fetch (an empty-result
+		// task bumps the generation) so a late response can't repopulate.
+		s.all = nil
+		s.applyFilter()
+		s.loading = false
+		return s.ctx.StartTask(core.TaskSpec{
+			Scope: s.fetchScope(),
+			Run:   func() (any, error) { return fetchResult{}, nil },
+		})
+	}
+	if s.jql != s.lastJQL {
+		// A different query is a new world, not a refresh of the old one.
+		s.seen, s.changed = nil, nil
+	}
+	s.loading = true
+	s.loadingMore = false // a new query supersedes any in-flight page fetch
+	s.lastJQL = s.jql     // fetch-more repeats the committed query verbatim
+	jql := s.jql
+	base := s.ctx.Base
+	svc := s.ctx.Services
+	return tea.Batch(s.spin.Tick, s.ctx.StartTask(core.TaskSpec{
+		Scope: s.fetchScope(),
+		Run: func() (any, error) {
+			if svc == nil {
+				return fetchResult{}, nil
+			}
+			parsed, _, err := svc.JQL().Parse(base, []string{jql}, "")
+			if err != nil {
+				return nil, err
+			}
+			if len(parsed) > 0 && len(parsed[0].Errors) > 0 {
+				return nil, errors.New(parsed[0].Errors[0])
+			}
+			issues, next, err := jira.ListIssuesPage(base, svc.Issues(), &jira.IssueListOptions{
+				JQL:         jql,
+				Fields:      fetchFields,
+				ListOptions: jira.ListOptions{MaxResults: 50},
+			}, jira.PageCursor{})
+			if err != nil {
+				return nil, err
+			}
+			return fetchResult{issues: issues, cursor: next}, nil
+		},
+	}))
+}
+
+// jqlStarters are common query openings offered as ghost-text completions in
+// the JQL editor, alongside the saved queries themselves.
+var jqlStarters = []string{
+	"assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC",
+	"assignee = currentUser() ORDER BY updated DESC",
+	"project = ",
+	"reporter = currentUser() ORDER BY updated DESC",
+	"status = ",
+	"sprint IN openSprints() ORDER BY updated DESC",
+	"text ~ ",
+	"updated >= -7d ORDER BY updated DESC",
+}
+
+// openEdit starts (or restarts) the JQL editor prefilled with the committed
+// query, with the saved queries and common JQL openings as tab-completable
+// ghost suggestions.
+func (s *SearchModel) openEdit() {
+	s.editing = true
+	s.jqlInput = input.NewLine("", "project = … ORDER BY updated DESC")
+	s.jqlInput.SetWidth(s.ctx.MainWidth - 10)
+	saved := s.saved()
+	suggestions := make([]string, 0, len(saved)+len(jqlStarters))
+	for _, l := range saved {
+		suggestions = append(suggestions, l.JQL)
+	}
+	suggestions = append(suggestions, jqlStarters...)
+	s.jqlInput.SetSuggestions(suggestions)
+	s.jqlInput.SetValue(s.jql)
+}
+
+// openPresets opens the saved-query dropdown. Labels carry the name and the
+// query so type-to-filter matches either; the value is the JQL itself.
+func (s *SearchModel) openPresets() {
+	saved := s.saved()
+	items := make([]picker.Item, len(saved))
+	for i, l := range saved {
+		items[i] = picker.Item{Label: l.Name + " — " + l.JQL, Value: l.JQL}
+	}
+	s.ctrl.OpenPreset(items)
+}
+
+// updatePreset drives the open preset dropdown: enter commits the picked JQL
+// and runs it, esc closes, everything else types into the picker's filter.
+func (s *SearchModel) updatePreset(msg tea.KeyPressMsg) tea.Cmd {
+	switch msg.String() {
+	case "esc":
+		s.ctrl.Cancel()
+		return nil
+	case "enter":
+		req, ok := s.ctrl.Submit()
+		if !ok {
+			return nil
+		}
+		s.editing = false
+		s.jql = req.Text
+		return s.fetch()
+	default:
+		return s.ctrl.Update(msg)
+	}
+}
+
+// loadSaved cycles the saved queries into the committed query and runs it.
+func (s *SearchModel) loadSaved(delta int) tea.Cmd {
+	saved := s.saved()
+	if len(saved) == 0 {
+		return nil
+	}
+	n := len(saved)
+	s.savedIdx = ((s.savedIdx+delta)%n + n) % n
+	s.jql = saved[s.savedIdx].JQL
+	s.editing = false
+	return s.fetch()
+}
+
+// Update edits/commits the JQL, then delegates shared behavior to results.
+func (s *SearchModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		s.applySize(searchBoxRows)
+		return s, nil
+	case core.TaskFinishedMsg:
+		cmd, _ := s.handleTask(msg)
+		return s, cmd
+	case core.RefreshTickMsg:
+		// Nothing to refresh until a query has been committed (an empty-JQL
+		// refetch would just churn tasks), and never mid-edit — the embedded
+		// results can't see s.editing, so gate it here.
+		if s.jql == "" || s.editing {
+			return s, nil
+		}
+		return s, s.autoRefresh()
+	case tea.MouseWheelMsg:
+		return s, s.handleWheel(msg)
+	case tea.MouseClickMsg:
+		// A click on the JQL box starts editing; the rest is shared routing.
+		// The x bound keeps preview-pane clicks (which share these rows under
+		// a side dock) from opening the editor.
+		if _, inMain := s.mainX(msg.X); inMain &&
+			msg.Button == tea.MouseLeft && !s.editing && !s.capturing() &&
+			msg.Y >= core.TopChromeRows && msg.Y < core.TopChromeRows+searchBoxRows {
+			s.openEdit()
+			return s, nil
+		}
+		return s, s.handleClick(msg)
+	case input.EditorFinishedMsg:
+		return s, s.handleEditor(msg)
+	case spinner.TickMsg:
+		return s, s.handleSpinner(msg)
+	case flashClearMsg:
+		s.handleFlashClear(msg)
+		return s, nil
+	case tea.PasteMsg:
+		// The preset dropdown outranks the editor: opened from edit mode it
+		// covers the box, so a paste must filter it, not the hidden input.
+		if s.ctrl.Active() && s.ctrl.Mode() == action.ModePreset {
+			return s, s.ctrl.Update(msg)
+		}
+		if s.editing {
+			return s, s.jqlInput.Update(msg)
+		}
+		cmd, _ := s.handlePaste(msg)
+		return s, cmd
+	case tea.KeyPressMsg:
+		// The preset dropdown is search-owned: it must run before the editor
+		// and the shared key routing so its keys never leak through.
+		if s.ctrl.Active() && s.ctrl.Mode() == action.ModePreset {
+			return s, s.updatePreset(msg)
+		}
+		if s.editing {
+			if key.Matches(msg, s.ctx.Keys.Presets) {
+				s.openPresets()
+				return s, nil
+			}
+			return s.updateEdit(msg)
+		}
+		if key.Matches(msg, s.ctx.Keys.Presets) && !s.capturing() {
+			s.openPresets()
+			return s, nil
+		}
+		if cmd, handled := s.handleKey(msg); handled {
+			return s, cmd
+		}
+		switch {
+		case key.Matches(msg, s.ctx.Keys.Search), key.Matches(msg, s.ctx.Keys.Open):
+			s.openEdit()
+		case key.Matches(msg, s.ctx.Keys.Refresh):
+			return s, s.fetch()
+		case key.Matches(msg, s.ctx.Keys.NextLens):
+			return s, s.loadSaved(1)
+		case key.Matches(msg, s.ctx.Keys.PrevLens):
+			return s, s.loadSaved(-1)
+		}
+	}
+	return s, nil
+}
+
+// updateEdit handles the JQL editor through the shared input: enter commits
+// and runs; esc cancels; everything else (cursor movement, paste) edits.
+func (s *SearchModel) updateEdit(msg tea.KeyPressMsg) (core.Section, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		s.editing = false
+	case "enter":
+		s.editing = false
+		s.jql = strings.TrimSpace(s.jqlInput.Value())
+		return s, s.fetch()
+	default:
+		return s, s.jqlInput.Update(msg)
+	}
+	return s, nil
+}
+
+// View renders the JQL query box above the shared results body. The box border
+// brightens while editing so focus is obvious.
+func (s *SearchModel) View() string {
+	var body string
+	switch {
+	case s.editing:
+		body = s.jqlInput.View()
+	case s.jql != "":
+		body = s.jql
+	default:
+		body = lipgloss.NewStyle().Faint(true).Render("enter to write a JQL query · ctrl+p saved queries · ] cycle")
+	}
+
+	border := theme.Theme.Dim.GetForeground()
+	if s.editing {
+		border = theme.Theme.Blue.GetForeground()
+	}
+	w := s.ctx.MainWidth - 4 // rounded border (2) + horizontal padding (2)
+	if w < 1 {
+		w = 1
+	}
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(border).
+		Padding(0, 1).
+		Width(w).
+		Render(lipgloss.NewStyle().Bold(true).Render("JQL ") + body)
+	return s.view(box)
+}
+
+// CapturesInput reports JQL-edit focus on top of the shared filter/action focus.
+func (s *SearchModel) CapturesInput() bool { return s.editing || s.capturing() }
+
+// HelpBindings lists the section's contextual bindings.
+func (s *SearchModel) HelpBindings() []key.Binding {
+	k := s.ctx.Keys
+	return []key.Binding{
+		k.Search, k.Presets, k.Open, k.Transition, k.AssignMe, k.Comment, k.OpenBrowse,
+		k.Filter, k.Facet, k.Jumplist, k.TogglePreview,
+	}
+}

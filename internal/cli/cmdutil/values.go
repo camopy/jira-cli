@@ -42,7 +42,7 @@ func StringFromAny(v any) string {
 }
 
 // WireObjectString reads a string field out of a Jira wire object value
-// (e.g. the "key" of a {"key":"KAN"} project object). It returns "" when
+// (e.g. the "key" of a {"key":"JCT"} project object). It returns "" when
 // the value is not an object or the field is absent / not a string.
 func WireObjectString(v any, key string) string {
 	m, ok := v.(map[string]any)

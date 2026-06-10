@@ -8,9 +8,15 @@ import (
 )
 
 const (
+	// DefaultRefreshIntervalSeconds is the per-profile polling default (watch
+	// commands and the like). The dashboard's cadence is the separate
+	// DefaultTUIRefreshSeconds below.
 	DefaultRefreshIntervalSeconds = 30
-	DefaultTimeoutSeconds         = 30
-	DefaultWorkdaySeconds         = 28800
+	// DefaultTUIRefreshSeconds is the dashboard's auto-refresh cadence; the
+	// TUI refetches every section this often unless the user is mid-action.
+	DefaultTUIRefreshSeconds = 60
+	DefaultTimeoutSeconds    = 30
+	DefaultWorkdaySeconds    = 28800
 )
 
 type AuthType string
@@ -47,6 +53,33 @@ type TUI struct {
 	RefreshInterval int      `koanf:"refresh_interval" toml:"refresh_interval"`
 	DefaultTab      string   `koanf:"default_tab" toml:"default_tab"`
 	Tabs            []string `koanf:"tabs" toml:"tabs"`
+	// Preview docks the issue sidebar: right, left, bottom, hidden, or auto
+	// (right on wide terminals, bottom on narrow). Applies on hot-reload too.
+	Preview string `koanf:"preview" toml:"preview"`
+	// Sections are user-defined dashboard tabs: each entry is a
+	// saved JQL query that becomes its own tab with its own result count.
+	Sections []TUISection `koanf:"sections" toml:"sections"`
+	// PreviewSize is the preview pane's share of the split as a percent
+	// (20–80; values outside clamp, 0/absent keeps the 50% default).
+	PreviewSize int `koanf:"preview_size" toml:"preview_size"`
+	// Keys rebinds TUI actions: action name → key list (the first key shows
+	// in help). Unknown action names surface as a footer error rather than
+	// failing the load. Applies on hot-reload; removing an entry restores
+	// the default binding.
+	Keys map[string][]string `koanf:"keys" toml:"keys"`
+	// Lenses replace the issues tab's built-in quick-filters (Mine/Sprint/
+	// Updated/Reported) with custom titled JQL queries. Absent or empty
+	// keeps the built-ins.
+	Lenses []TUISection `koanf:"lenses" toml:"lenses"`
+	// DefaultLens names the lens (by title, case-insensitive) the issues tab
+	// lands on. Absent or unmatched falls back to the first lens.
+	DefaultLens string `koanf:"default_lens" toml:"default_lens"`
+}
+
+// TUISection is one configured dashboard tab: a title and the JQL it runs.
+type TUISection struct {
+	Title string `koanf:"title" toml:"title"`
+	JQL   string `koanf:"jql" toml:"jql"`
 }
 
 type Profile struct {
@@ -102,7 +135,7 @@ func Defaults() Config {
 			WorkdaySeconds:  DefaultWorkdaySeconds,
 		}},
 		TUI: TUI{
-			RefreshInterval: DefaultRefreshIntervalSeconds,
+			RefreshInterval: DefaultTUIRefreshSeconds,
 			DefaultTab:      "issues",
 			Tabs:            []string{"issues", "epics", "search", "activity"},
 		},

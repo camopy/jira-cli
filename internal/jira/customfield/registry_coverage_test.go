@@ -123,7 +123,7 @@ func TestEveryTypeValidatorRoundTrips(t *testing.T) {
 		"user":            map[string]any{"accountId": "5b10ac8d82e05b22cc7d4ef5"},
 		"group":           map[string]any{"name": "jira-developers"},
 		"components":      []any{map[string]any{"name": "ui"}},
-		"parent":          map[string]any{"key": "KAN-1"},
+		"parent":          map[string]any{"key": "JCT-1"},
 		"labels":          []any{"bug", "regression"},
 		"version":         []any{map[string]any{"name": "1.0.0"}},
 		"fixversions":     []any{map[string]any{"name": "1.1.0"}},

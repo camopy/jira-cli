@@ -27,7 +27,7 @@ func TestExternalEditPreservesOpaqueSubtreesAcrossNoOpEdit(t *testing.T) {
 			]},
 			{"type": "paragraph", "content": [
 				{"type": "text", "text": "see also "},
-				{"type": "inlineCard", "attrs": {"url": "https://example.com/KAN-1"}}
+				{"type": "inlineCard", "attrs": {"url": "https://example.com/JCT-1"}}
 			]},
 			{"type": "paragraph", "content": [{"type": "text", "text": "trailer"}]}
 		]
@@ -39,7 +39,7 @@ func TestExternalEditPreservesOpaqueSubtreesAcrossNoOpEdit(t *testing.T) {
 	}
 
 	out, warnings, err := editor.RoundTripADF(context.Background(), editor.RoundTripADFOptions{
-		IssueKey:  "KAN-1",
+		IssueKey:  "JCT-1",
 		FieldName: "description",
 		Document:  doc,
 		EditFn:    func(_ context.Context, path string) error { return nil }, // no-op edit
@@ -61,7 +61,7 @@ func TestExternalEditPreservesOpaqueSubtreesAcrossNoOpEdit(t *testing.T) {
 		t.Fatalf("Marshal: %v", err)
 	}
 	gotStr := string(got)
-	for _, marker := range []string{`"panel"`, `"inlineCard"`, "https://example.com/KAN-1", "ENC"} {
+	for _, marker := range []string{`"panel"`, `"inlineCard"`, "https://example.com/JCT-1", "ENC"} {
 		if !strings.Contains(gotStr, marker) {
 			t.Fatalf("opaque marker %q missing after round-trip; got: %s", marker, gotStr)
 		}

@@ -1,16 +1,26 @@
+// Package tui wires the `jira tui` command to the section-based dashboard. The
+// command resolves a Jira client for the active profile, adapts it to the seam
+// the TUI sections consume, registers the views, and runs the Bubble Tea app.
 package tui
 
 import (
 	"context"
+	"fmt"
 	"os"
-	"time"
+	"strings"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
-	"github.com/matcra587/jira-cli/internal/tui"
-	"github.com/spf13/cobra"
+	"github.com/matcra587/jira-cli/internal/tui/core"
+	"github.com/matcra587/jira-cli/internal/tui/sections/issues"
+	"github.com/matcra587/jira-cli/internal/tui/sections/settings"
+	"github.com/matcra587/jira-cli/internal/tui/theme"
+	"github.com/matcra587/jira-cli/internal/version"
 )
 
 // NewCommand constructs the tui subcommand.
@@ -21,109 +31,256 @@ func NewCommand() *cobra.Command {
 		GroupID: "dashboard",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			_, err := cli.RequireTTY(os.Stdout)
-			if err != nil {
+			if _, err := cli.RequireTTY(os.Stdout); err != nil {
 				return err
 			}
-			_, err = Run(cmd)
-			return err
+			return Run(cmd)
 		},
 	}
 }
 
-// Run launches the TUI dashboard for the given command context.
-func Run(cmd *cobra.Command) (any, error) {
-	return tui.RunWithOptions(cmd.Context(), tuiOptionsForCommand(cmd))
+// Run builds and runs the dashboard for the command's profile. A missing or
+// invalid credential is returned as an error (the program never opens); an
+// unconfigured profile opens an empty dashboard the user can still navigate.
+func Run(cmd *cobra.Command) error {
+	app, err := buildApp(cmd)
+	if err != nil {
+		return err
+	}
+	_, err = tea.NewProgram(app, tea.WithContext(cmd.Context())).Run()
+	return err
 }
 
-func tuiOptionsForCommand(cmd *cobra.Command) tui.Options {
-	opts := tui.Options{}
+// buildApp resolves the Jira client and config for the active profile and wires
+// them into the dashboard. It is the cobra/client glue; the view registration
+// lives in newApp so it can be tested without a live client.
+func buildApp(cmd *cobra.Command) (core.App, error) {
 	client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
-		opts.InitialError = err.Error()
-		return opts
+		return core.App{}, err
 	}
-	if cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd))); err == nil {
-		opts.ActiveProfile = cmdutil.ActiveProfile(cmd, cfg).Name
-		for _, profile := range cfg.Profiles {
-			opts.Profiles = append(opts.Profiles, profile.Name)
-		}
-	}
-	if opts.ActiveProfile == "" {
-		opts.ActiveProfile = profile.Name
-	}
-	opts.BaseURL = profile.BaseURL
-	opts.Email = profile.Email
-	opts.AccountID = profile.AccountID
-	opts.TeamAccountIDs = append([]string(nil), profile.TeamAccountIDs...)
-	if profile.RefreshInterval > 0 {
-		opts.RefreshEvery = time.Duration(profile.RefreshInterval) * time.Second
-	}
+	var svc core.Services
 	if ok {
-		// Auto-resolve account_id via /myself when the profile doesn't have
-		// it. Jira Cloud requires an accountId for assign-by-user (email
-		// is silently ignored) so without this the TUI's "A" key would
-		// look like it succeeded but never set the assignee.
-		if opts.AccountID == "" {
-			ctx, cancel := context.WithTimeout(cmd.Context(), 5*time.Second)
-			defer cancel()
-			if user, _, err := cmdutil.ServicesForClient(client).User().Myself(ctx); err == nil && user.AccountID != "" {
-				opts.AccountID = user.AccountID
-				if opts.Email == "" && user.EmailAddress != "" {
-					opts.Email = user.EmailAddress
-				}
+		svc = servicesAdapter{factory: cmdutil.ServicesForClient(client)}
+	}
+	var cfg *config.Config
+	if loaded, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd))); err == nil {
+		cfg = loaded
+	}
+	// Resolve the same path config.Load used: an absent --config means the
+	// default location, and the settings watcher must point at the real file.
+	cfgPath := cmdutil.ConfigPath(cmd)
+	if cfgPath == "" {
+		cfgPath = config.DefaultPath()
+	}
+	return newApp(svc, cfg, profile, cmd.Context(), cfgPath), nil
+}
+
+// newApp registers the dashboard's sections and returns the root model. Issues
+// is first, so it is the landing view. New sections (boards, epics, worklogs)
+// join by registering a factory here and appending to order — the App needs no
+// change. The profile supplies the footer context (profile name, default
+// project and board).
+func newApp(svc core.Services, cfg *config.Config, profile config.Profile, base context.Context, cfgPath string) core.App {
+	// Resolve and apply the configured clib theme ("auto" detects the
+	// terminal background) before any section derives styles from it — the
+	// glamour markdown style is built from this palette at section
+	// construction. The legacy TUI did this in its own constructor; the
+	// cutover entrypoint must do it itself.
+	name := ""
+	if cfg != nil {
+		name = cfg.Theme.Name
+	}
+	theme.Apply(theme.Resolve(name))
+
+	ctx := core.NewProgramContext(svc, cfg)
+	// tui.keys overrides; a bad override shouldn't kill the dashboard, so it
+	// lands in the footer instead.
+	if err := ctx.RebindKeys(cfg); err != nil {
+		ctx.Err = err
+	}
+	ctx.ProfileName = profile.Name
+	ctx.Project = profile.DefaultProject
+	ctx.Board = profile.DefaultBoard
+	ctx.BaseURL = profile.BaseURL
+	ctx.WorkdaySeconds = profile.WorkdaySeconds
+	ctx.Version = version.Version
+	ctx.ConfigPath = cfgPath
+	if cfg != nil {
+		ctx.SetPreviewFromConfig(cfg.TUI.Preview)
+		ctx.SetPreviewRatioPercent(cfg.TUI.PreviewSize)
+	}
+	ctx.SetLenses(cfg)
+	if base != nil {
+		ctx.Base = base
+	}
+	registry := core.NewRegistry()
+	registry.Register(issues.ID, issues.New)
+	registry.Register(issues.SearchID, issues.NewSearch)
+	registry.Register(settings.ID, settings.New)
+	queries := registerQuerySections(registry, cfg)
+	app := core.NewApp(ctx, registry, resolveOrder(cfg, registry, queries))
+	// Config hot-reload: re-register the config-derived query sections and
+	// rebuild the tab order. Every previous query instance is invalidated —
+	// its JQL may have changed — and refetches on rebuild. prev is captured so
+	// a shrinking section list still drops the orphaned tabs.
+	prev := queries
+	app.Reconfigure = func(_ *core.ProgramContext, reg *core.Registry, fresh *config.Config) ([]core.SectionID, []core.SectionID) {
+		invalidate := make([]core.SectionID, 0, len(prev))
+		for _, q := range prev {
+			invalidate = append(invalidate, q.id)
+		}
+		next := registerQuerySections(reg, fresh)
+		prev = next
+		return resolveOrder(fresh, reg, next), invalidate
+	}
+	return app
+}
+
+// querySection pairs a configured section's ID with its title for ordering and
+// default_tab matching.
+type querySection struct {
+	id    core.SectionID
+	title string
+}
+
+// registerQuerySections registers one dashboard tab per tui.sections entry:
+// each saved JQL query becomes its own section. Entries with no
+// JQL are skipped; a missing title falls back to a numbered label.
+func registerQuerySections(registry *core.Registry, cfg *config.Config) []querySection {
+	if cfg == nil {
+		return nil
+	}
+	var out []querySection
+	for i, sec := range cfg.TUI.Sections {
+		if strings.TrimSpace(sec.JQL) == "" {
+			continue
+		}
+		title := strings.TrimSpace(sec.Title)
+		if title == "" {
+			title = fmt.Sprintf("Query %d", i+1)
+		}
+		// IDs use the sequential valid-section index, not the raw config slice
+		// position, so a removed or blank entry doesn't shift its neighbors' IDs.
+		id := issues.QueryID(len(out))
+		registry.Register(id, issues.NewQuery(id, title, sec.JQL))
+		out = append(out, querySection{id: id, title: title})
+	}
+	return out
+}
+
+// resolveOrder builds the tab order from config, keeping only sections that are
+// actually registered — so a configured-but-unimplemented tab (e.g. "epics")
+// is skipped rather than opening a blank view — and floats the configured
+// default_tab to the front as the landing view. The configured tabs list is
+// authoritative for which views are visible: default_tab is honored only when
+// it also appears in tabs, so it can never silently add an unlisted view. It
+// falls back to the built-in order when config is absent or names no known
+// section. New sections light up automatically as they are registered.
+func resolveOrder(cfg *config.Config, registry *core.Registry, queries []querySection) []core.SectionID {
+	fallback := []core.SectionID{issues.ID, issues.SearchID}
+	if registry.Has(settings.ID) {
+		fallback = append(fallback, settings.ID)
+	}
+	if cfg == nil {
+		return fallback
+	}
+	// A tabs/default_tab name resolves to a builtin section ID first, then to a
+	// configured section's title (case-insensitive). Builtin precedence means a
+	// query titled "Search" can never hijack default_tab = "search".
+	idFor := func(name string) (core.SectionID, bool) {
+		if id := core.SectionID(name); registry.Has(id) {
+			return id, true
+		}
+		for _, q := range queries {
+			if strings.EqualFold(q.title, name) {
+				return q.id, true
 			}
 		}
-		opts.IssueProvider = tui.IssueProviderFunc(func(ctx context.Context) ([]*jira.Issue, error) {
-			issues, _, err := cmdutil.ServicesForClient(client).Issue().List(ctx, &jira.IssueListOptions{ListOptions: jira.ListOptions{MaxResults: 50}})
-			return issues, err
-		})
-		opts.MutationService = tuiJiraMutations{issues: cmdutil.ServicesForClient(client).Issue(), worklogs: cmdutil.ServicesForClient(client).Worklog()}
+		return "", false
 	}
-	return opts
+	var order []core.SectionID
+	for _, name := range cfg.TUI.Tabs {
+		if id, ok := idFor(name); ok && !contains(order, id) {
+			order = append(order, id)
+		}
+	}
+	if len(order) == 0 {
+		order = fallback
+	}
+	// Configured query sections always show — defining one in tui.sections is
+	// the opt-in, and removing the entry is how you hide it. Tabs may name a
+	// query by title to position it explicitly; the rest slot in after the
+	// triage home (or lead when Issues is not visible).
+	order = insertQueries(order, queries)
+	// Settings always rides last unless tabs placed it explicitly, so older
+	// tabs lists (written before the section existed) still get it.
+	if registry.Has(settings.ID) && !contains(order, settings.ID) {
+		order = append(order, settings.ID)
+	}
+	if def, ok := idFor(cfg.TUI.DefaultTab); ok && contains(order, def) {
+		order = floatFront(order, def)
+	}
+	return order
 }
 
-type tuiJiraMutations struct {
-	issues   jira.IssueService
-	worklogs jira.WorklogService
+// insertQueries splices the configured sections into the tab order directly
+// after the Issues tab, or in front when Issues is hidden.
+func insertQueries(order []core.SectionID, queries []querySection) []core.SectionID {
+	if len(queries) == 0 {
+		return order
+	}
+	ids := make([]core.SectionID, 0, len(queries))
+	for _, q := range queries {
+		if !contains(order, q.id) { // already placed explicitly via tabs
+			ids = append(ids, q.id)
+		}
+	}
+	if len(ids) == 0 {
+		return order
+	}
+	for i, id := range order {
+		if id == issues.ID {
+			out := append([]core.SectionID{}, order[:i+1]...)
+			out = append(out, ids...)
+			return append(out, order[i+1:]...)
+		}
+	}
+	return append(ids, order...)
 }
 
-func (m tuiJiraMutations) UpdateIssue(ctx context.Context, key string, fields map[string]any) (*jira.Issue, error) {
-	issue, _, err := m.issues.Update(ctx, key, &jira.IssueUpdateRequest{Fields: fields})
-	return issue, err
+// floatFront returns order with id (expected to be present) moved to the front,
+// preserving the relative order of the remaining sections.
+func floatFront(order []core.SectionID, id core.SectionID) []core.SectionID {
+	out := make([]core.SectionID, 0, len(order))
+	out = append(out, id)
+	for _, x := range order {
+		if x != id {
+			out = append(out, x)
+		}
+	}
+	return out
 }
 
-func (m tuiJiraMutations) CreateIssue(ctx context.Context, req *jira.IssueCreateRequest) (*jira.Issue, error) {
-	issue, _, err := m.issues.Create(ctx, req)
-	return issue, err
+func contains(ids []core.SectionID, id core.SectionID) bool {
+	for _, x := range ids {
+		if x == id {
+			return true
+		}
+	}
+	return false
 }
 
-func (m tuiJiraMutations) TransitionIssue(ctx context.Context, key string, req *jira.TransitionRequest) error {
-	_, err := m.issues.Transition(ctx, key, req)
-	return err
-}
+// servicesAdapter satisfies core.Services by delegating to the CLI's service
+// factory. It lives here, in the wiring layer, so core never imports the cli
+// packages and no import cycle can form. The plural method names match the TUI
+// seam; the factory uses singular names.
+type servicesAdapter struct{ factory *cmdutil.ServiceFactory }
 
-func (m tuiJiraMutations) AddComment(ctx context.Context, key string, req *jira.CommentAddRequest) (*jira.Comment, error) {
-	comment, _, err := m.issues.AddComment(ctx, key, req)
-	return comment, err
-}
+var _ core.Services = servicesAdapter{}
 
-func (m tuiJiraMutations) AddWorklog(ctx context.Context, key string, req *jira.WorklogAddRequest) (*jira.Worklog, error) {
-	worklog, _, err := m.worklogs.Add(ctx, key, req)
-	return worklog, err
-}
-
-func (m tuiJiraMutations) CloneIssue(ctx context.Context, key string, req *jira.IssueCloneRequest) (*jira.Issue, error) {
-	issue, _, err := m.issues.Clone(ctx, key, req)
-	return issue, err
-}
-
-func (m tuiJiraMutations) MoveIssue(ctx context.Context, key string, req *jira.IssueMoveRequest) (*jira.Issue, error) {
-	issue, _, err := m.issues.Move(ctx, key, req)
-	return issue, err
-}
-
-func (m tuiJiraMutations) DeleteIssue(ctx context.Context, key string) error {
-	_, err := m.issues.Delete(ctx, key, nil)
-	return err
-}
+func (a servicesAdapter) Issues() jira.IssueService     { return a.factory.Issue() }
+func (a servicesAdapter) Search() jira.SearchService    { return a.factory.Search() }
+func (a servicesAdapter) JQL() jira.JQLService          { return a.factory.JQL() }
+func (a servicesAdapter) Users() jira.UserService       { return a.factory.User() }
+func (a servicesAdapter) Worklogs() jira.WorklogService { return a.factory.Worklog() }

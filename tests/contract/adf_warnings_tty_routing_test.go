@@ -57,7 +57,7 @@ func TestWarningsInPlainGoToStderrOnly(t *testing.T) {
 		Stderr:   stderr,
 		Mode:     cli.RoutePlain,
 		Command:  "issue.create",
-		Data:     map[string]any{"key": "KAN-1"},
+		Data:     map[string]any{"key": "JCT-1"},
 		Warnings: warnings,
 	})
 	if err != nil {
@@ -92,7 +92,7 @@ func TestNoWarningsKeepsStderrSilent(t *testing.T) {
 		Stderr:  stderr,
 		Mode:    cli.RoutePlain,
 		Command: "issue.view",
-		Data:    map[string]any{"key": "KAN-1"},
+		Data:    map[string]any{"key": "JCT-1"},
 	})
 	if err != nil {
 		t.Fatalf("RouteWarnings: %v", err)

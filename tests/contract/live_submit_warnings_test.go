@@ -33,7 +33,7 @@ func TestLiveSubmitEnvelopeIncludesPipelineWarnings(t *testing.T) {
 
 	env := cli.Envelope{
 		Meta:     cli.Meta{Command: "issue.create", Timestamp: "t"},
-		Data:     map[string]any{"issue": map[string]any{"key": "KAN-1"}},
+		Data:     map[string]any{"issue": map[string]any{"key": "JCT-1"}},
 		Errors:   []cli.Error{},
 		Warnings: []cli.Warning{cliWarn},
 	}

@@ -19,14 +19,14 @@ func TestSplitTransitionTarget(t *testing.T) {
 		wantTarget string
 		wantKeys   []string
 	}{
-		{name: "key plus status name", args: []string{"KAN-1", "In Progress"}, wantTarget: "In Progress", wantKeys: []string{"KAN-1"}},
-		{name: "unquoted multi-word status", args: []string{"KAN-1", "In", "Progress"}, wantTarget: "In Progress", wantKeys: []string{"KAN-1"}},
-		{name: "bulk keys plus unquoted multi-word", args: []string{"KAN-1", "KAN-2", "Code", "Review"}, wantTarget: "Code Review", wantKeys: []string{"KAN-1", "KAN-2"}},
-		{name: "key plus numeric id", args: []string{"KAN-1", "31"}, wantTarget: "31", wantKeys: []string{"KAN-1"}},
-		{name: "bulk keys plus status", args: []string{"KAN-1", "KAN-2", "Done"}, wantTarget: "Done", wantKeys: []string{"KAN-1", "KAN-2"}},
-		{name: "all keys list mode", args: []string{"KAN-1", "KAN-2"}, wantTarget: "", wantKeys: []string{"KAN-1", "KAN-2"}},
-		{name: "single key list mode", args: []string{"KAN-1"}, wantTarget: "", wantKeys: []string{"KAN-1"}},
-		{name: "explicit flag wins, all args are keys", args: []string{"KAN-1", "KAN-2"}, flag: "41", wantTarget: "41", wantKeys: []string{"KAN-1", "KAN-2"}},
+		{name: "key plus status name", args: []string{"JCT-1", "In Progress"}, wantTarget: "In Progress", wantKeys: []string{"JCT-1"}},
+		{name: "unquoted multi-word status", args: []string{"JCT-1", "In", "Progress"}, wantTarget: "In Progress", wantKeys: []string{"JCT-1"}},
+		{name: "bulk keys plus unquoted multi-word", args: []string{"JCT-1", "JCT-2", "Code", "Review"}, wantTarget: "Code Review", wantKeys: []string{"JCT-1", "JCT-2"}},
+		{name: "key plus numeric id", args: []string{"JCT-1", "31"}, wantTarget: "31", wantKeys: []string{"JCT-1"}},
+		{name: "bulk keys plus status", args: []string{"JCT-1", "JCT-2", "Done"}, wantTarget: "Done", wantKeys: []string{"JCT-1", "JCT-2"}},
+		{name: "all keys list mode", args: []string{"JCT-1", "JCT-2"}, wantTarget: "", wantKeys: []string{"JCT-1", "JCT-2"}},
+		{name: "single key list mode", args: []string{"JCT-1"}, wantTarget: "", wantKeys: []string{"JCT-1"}},
+		{name: "explicit flag wins, all args are keys", args: []string{"JCT-1", "JCT-2"}, flag: "41", wantTarget: "41", wantKeys: []string{"JCT-1", "JCT-2"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			target, keyArgs := splitTransitionTarget(tc.args, tc.flag)
@@ -64,7 +64,7 @@ func TestMatchTransition(t *testing.T) {
 		{name: "unknown name errors", target: "Nope", wantOK: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			id, err := matchTransition(transitions, tc.target, "KAN-1")
+			id, err := matchTransition(transitions, tc.target, "JCT-1")
 			if tc.wantOK {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)

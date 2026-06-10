@@ -69,7 +69,7 @@ func TestWatchersListEnvelopeShape(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 			_, _ = w.Write([]byte(body))
 		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/myself":
 			_, _ = w.Write([]byte(myselfBody))
@@ -80,7 +80,7 @@ func TestWatchersListEnvelopeShape(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token", "issue", "watchers", "list", "KAN-1")
+	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token", "issue", "watchers", "list", "JCT-1")
 	if err != nil {
 		t.Fatalf("watchers list error = %v\n%s", err, out)
 	}
@@ -116,13 +116,13 @@ func TestWatchersAddPostsRawAccountIDStringAndReadsBack(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/myself":
 			_, _ = w.Write([]byte(myselfBody))
-		case r.Method == http.MethodPost && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+		case r.Method == http.MethodPost && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 			atomic.AddInt32(&postCount, 1)
 			buf := make([]byte, r.ContentLength)
 			_, _ = r.Body.Read(buf)
 			postBody.Store(string(buf))
 			w.WriteHeader(http.StatusNoContent)
-		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 			atomic.AddInt32(&getCount, 1)
 			body := watchersBody(false, 1, [2]string{"712020:test-user", "Test User"})
 			_, _ = w.Write([]byte(body))
@@ -134,7 +134,7 @@ func TestWatchersAddPostsRawAccountIDStringAndReadsBack(t *testing.T) {
 	defer srv.Close()
 
 	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
-		"issue", "watchers", "add", "KAN-1", "--user", "me",
+		"issue", "watchers", "add", "JCT-1", "--user", "me",
 	)
 	if err != nil {
 		t.Fatalf("watchers add error = %v\n%s", err, out)
@@ -177,9 +177,9 @@ func TestWatchersAddIdempotentWhenAlreadyWatching(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/myself":
 			_, _ = w.Write([]byte(myselfBody))
-		case r.Method == http.MethodPost && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+		case r.Method == http.MethodPost && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 			w.WriteHeader(http.StatusNoContent)
-		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 			// Return the same accountId we're trying to add → already watching.
 			body := watchersBody(true, 1, [2]string{"712020:test-user", "Test User"})
 			_, _ = w.Write([]byte(body))
@@ -191,7 +191,7 @@ func TestWatchersAddIdempotentWhenAlreadyWatching(t *testing.T) {
 	defer srv.Close()
 
 	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
-		"issue", "watchers", "add", "KAN-1", "--user", "me",
+		"issue", "watchers", "add", "JCT-1", "--user", "me",
 	)
 	if err != nil {
 		t.Fatalf("idempotent add error = %v\n%s", err, out)
@@ -216,10 +216,10 @@ func TestWatchersAddNoReadbackBareShape(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/myself":
 			_, _ = w.Write([]byte(myselfBody))
-		case r.Method == http.MethodPost && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+		case r.Method == http.MethodPost && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 			atomic.StoreInt32(&sawPost, 1)
 			w.WriteHeader(http.StatusNoContent)
-		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 			if atomic.LoadInt32(&sawPost) == 1 {
 				atomic.AddInt32(&getAfterPost, 1)
 			}
@@ -233,7 +233,7 @@ func TestWatchersAddNoReadbackBareShape(t *testing.T) {
 	defer srv.Close()
 
 	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
-		"issue", "watchers", "add", "KAN-1", "--user", "me", "--no-readback",
+		"issue", "watchers", "add", "JCT-1", "--user", "me", "--no-readback",
 	)
 	if err != nil {
 		t.Fatalf("watchers add --no-readback error = %v\n%s", err, out)
@@ -267,11 +267,11 @@ func TestWatchersRemoveDeletesByAccountIDAndReadsBack(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/myself":
 			_, _ = w.Write([]byte(myselfBody))
-		case r.Method == http.MethodDelete && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+		case r.Method == http.MethodDelete && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 			atomic.AddInt32(&deleteHits, 1)
 			deleteQuery.Store(r.URL.RawQuery)
 			w.WriteHeader(http.StatusNoContent)
-		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 			body := watchersBody(false, 0)
 			_, _ = w.Write([]byte(body))
 		default:
@@ -282,7 +282,7 @@ func TestWatchersRemoveDeletesByAccountIDAndReadsBack(t *testing.T) {
 	defer srv.Close()
 
 	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
-		"issue", "watchers", "remove", "KAN-1", "--user", "me",
+		"issue", "watchers", "remove", "JCT-1", "--user", "me",
 	)
 	if err != nil {
 		t.Fatalf("watchers remove error = %v\n%s", err, out)
@@ -333,7 +333,7 @@ func TestWatchersAddUserMeSkipsUserSearch(t *testing.T) {
 	defer srv.Close()
 
 	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
-		"issue", "watchers", "add", "KAN-1", "--user", "me",
+		"issue", "watchers", "add", "JCT-1", "--user", "me",
 	)
 	if err != nil {
 		t.Fatalf("error = %v\n%s", err, out)
@@ -368,7 +368,7 @@ func TestWatchersAddAccountIDPrefixSkipsUserSearch(t *testing.T) {
 	defer srv.Close()
 
 	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
-		"issue", "watchers", "add", "KAN-1", "--user", "accountId:712020:abc",
+		"issue", "watchers", "add", "JCT-1", "--user", "accountId:712020:abc",
 	)
 	if err != nil {
 		t.Fatalf("error = %v\n%s", err, out)
@@ -402,7 +402,7 @@ func TestWatchersAddEmailQueriesUserSearch(t *testing.T) {
 	defer srv.Close()
 
 	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
-		"issue", "watchers", "add", "KAN-1", "--user", "alice@example.com",
+		"issue", "watchers", "add", "JCT-1", "--user", "alice@example.com",
 	)
 	if err != nil {
 		t.Fatalf("error = %v\n%s", err, out)
@@ -433,7 +433,7 @@ func TestWatchersAddAmbiguousReturnsExit3WithCandidates(t *testing.T) {
 	defer srv.Close()
 
 	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
-		"issue", "watchers", "add", "KAN-1", "--user", "alice",
+		"issue", "watchers", "add", "JCT-1", "--user", "alice",
 	)
 	if err == nil {
 		t.Fatalf("watchers add expected to fail (exit 3), got success:\n%s", out)
@@ -476,7 +476,7 @@ func TestWatchersAddZeroMatchReturnsExit2(t *testing.T) {
 	defer srv.Close()
 
 	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
-		"issue", "watchers", "add", "KAN-1", "--user", "ghost@example.com",
+		"issue", "watchers", "add", "JCT-1", "--user", "ghost@example.com",
 	)
 	if err == nil {
 		t.Fatalf("watchers add expected to fail (exit 2), got success:\n%s", out)
@@ -499,12 +499,12 @@ func TestWatchShortcutEquivalentToWatchersAddMe(t *testing.T) {
 			switch {
 			case r.URL.Path == "/rest/api/3/myself":
 				_, _ = w.Write([]byte(myselfBody))
-			case r.Method == http.MethodPost && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+			case r.Method == http.MethodPost && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 				buf := make([]byte, r.ContentLength)
 				_, _ = r.Body.Read(buf)
 				target.Store(string(buf))
 				w.WriteHeader(http.StatusNoContent)
-			case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+			case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 				_, _ = w.Write([]byte(watchersBody(true, 1, [2]string{"712020:test-user", "Test"})))
 			default:
 				w.WriteHeader(http.StatusNotFound)
@@ -517,10 +517,10 @@ func TestWatchShortcutEquivalentToWatchersAddMe(t *testing.T) {
 	srvB := httptest.NewServer(chooseTarget(&post2))
 	defer srvB.Close()
 
-	if out, err := runJiraWatchers(t, srvA.URL, "JIRA_TOKEN_DEFAULT=test-token", "issue", "watchers", "add", "KAN-1", "--user", "me"); err != nil {
+	if out, err := runJiraWatchers(t, srvA.URL, "JIRA_TOKEN_DEFAULT=test-token", "issue", "watchers", "add", "JCT-1", "--user", "me"); err != nil {
 		t.Fatalf("watchers add error = %v\n%s", err, out)
 	}
-	if out, err := runJiraWatchers(t, srvB.URL, "JIRA_TOKEN_DEFAULT=test-token", "issue", "watch", "KAN-1"); err != nil {
+	if out, err := runJiraWatchers(t, srvB.URL, "JIRA_TOKEN_DEFAULT=test-token", "issue", "watch", "JCT-1"); err != nil {
 		t.Fatalf("watch shortcut error = %v\n%s", err, out)
 	}
 
@@ -539,10 +539,10 @@ func TestUnwatchShortcutEquivalentToWatchersRemoveMe(t *testing.T) {
 			switch {
 			case r.URL.Path == "/rest/api/3/myself":
 				_, _ = w.Write([]byte(myselfBody))
-			case r.Method == http.MethodDelete && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+			case r.Method == http.MethodDelete && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 				target.Store(r.URL.RawQuery)
 				w.WriteHeader(http.StatusNoContent)
-			case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+			case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 				_, _ = w.Write([]byte(watchersBody(false, 0)))
 			default:
 				w.WriteHeader(http.StatusNotFound)
@@ -555,10 +555,10 @@ func TestUnwatchShortcutEquivalentToWatchersRemoveMe(t *testing.T) {
 	srvB := httptest.NewServer(chooseTarget(&del2))
 	defer srvB.Close()
 
-	if out, err := runJiraWatchers(t, srvA.URL, "JIRA_TOKEN_DEFAULT=test-token", "issue", "watchers", "remove", "KAN-1", "--user", "me"); err != nil {
+	if out, err := runJiraWatchers(t, srvA.URL, "JIRA_TOKEN_DEFAULT=test-token", "issue", "watchers", "remove", "JCT-1", "--user", "me"); err != nil {
 		t.Fatalf("watchers remove error = %v\n%s", err, out)
 	}
-	if out, err := runJiraWatchers(t, srvB.URL, "JIRA_TOKEN_DEFAULT=test-token", "issue", "unwatch", "KAN-1"); err != nil {
+	if out, err := runJiraWatchers(t, srvB.URL, "JIRA_TOKEN_DEFAULT=test-token", "issue", "unwatch", "JCT-1"); err != nil {
 		t.Fatalf("unwatch shortcut error = %v\n%s", err, out)
 	}
 

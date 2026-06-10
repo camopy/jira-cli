@@ -148,7 +148,7 @@ func TestReadOnlyOnlyAllowsExactSearchEndpoint(t *testing.T) {
 	defer srv.Close()
 
 	client := jira.NewClient(jira.WithBaseURL(srv.URL), jira.WithReadOnly(true))
-	allowed, err := client.NewRequest(context.Background(), http.MethodPost, "rest/api/3/search/jql", map[string]any{"jql": "project=KAN"})
+	allowed, err := client.NewRequest(context.Background(), http.MethodPost, "rest/api/3/search/jql", map[string]any{"jql": "project=JCT"})
 	if err != nil {
 		t.Fatalf("NewRequest(allowed) error = %v", err)
 	}
@@ -188,7 +188,7 @@ func TestReadOnlySearchAllowlistRespectsBasePath(t *testing.T) {
 	defer srv.Close()
 
 	client := jira.NewClient(jira.WithBaseURL(srv.URL+"/jira/"), jira.WithReadOnly(true))
-	allowed, err := client.NewRequest(context.Background(), http.MethodPost, "rest/api/3/search/jql", map[string]any{"jql": "project=KAN"})
+	allowed, err := client.NewRequest(context.Background(), http.MethodPost, "rest/api/3/search/jql", map[string]any{"jql": "project=JCT"})
 	if err != nil {
 		t.Fatalf("NewRequest(allowed) error = %v", err)
 	}

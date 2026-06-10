@@ -11,17 +11,17 @@ import (
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
-// fixtureIssue is the raw JSON Jira returns for GET /rest/api/3/issue/KAN-1.
+// fixtureIssue is the raw JSON Jira returns for GET /rest/api/3/issue/JCT-1.
 // It includes server-assigned/lifecycle fields that must NOT appear in the POST.
 const fixtureIssue = `{
 	"id":   "10001",
-	"key":  "KAN-1",
+	"key":  "JCT-1",
 	"self": "https://example.atlassian.net/rest/api/3/issue/10001",
 	"fields": {
 		"summary":     " source issue",
 		"description": null,
 		"issuetype":   {"id": "10002", "name": "Task", "subtask": false},
-		"project":     {"id": "10000", "key": "KAN", "name": "Kanban Project"},
+		"project":     {"id": "10000", "key": "JCT", "name": "Kanban Project"},
 		"priority":    {"id": "3", "name": "Medium"},
 		"assignee":    {"accountId": "user-abc", "displayName": "Alice"},
 		"status":      {"name": "To Do"},
@@ -69,7 +69,7 @@ func TestClone_GetThenPostWithSanitizedFields(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1":
+		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/JCT-1":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(fixtureIssue))
 
@@ -78,7 +78,7 @@ func TestClone_GetThenPostWithSanitizedFields(t *testing.T) {
 			_ = json.Unmarshal(body, &capturedPostBody)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"id":"10002","key":"KAN-2","self":"https://example.atlassian.net/rest/api/3/issue/10002"}`))
+			_, _ = w.Write([]byte(`{"id":"10002","key":"JCT-2","self":"https://example.atlassian.net/rest/api/3/issue/10002"}`))
 
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
@@ -90,12 +90,12 @@ func TestClone_GetThenPostWithSanitizedFields(t *testing.T) {
 	client := jira.NewClient(jira.WithBaseURL(srv.URL + "/"))
 	svc := jira.NewIssueService(client)
 
-	issue, _, err := svc.Clone(context.Background(), "KAN-1", &jira.IssueCloneRequest{})
+	issue, _, err := svc.Clone(context.Background(), "JCT-1", &jira.IssueCloneRequest{})
 	if err != nil {
 		t.Fatalf("Clone() error = %v", err)
 	}
-	if issue == nil || issue.Key == nil || *issue.Key != "KAN-2" {
-		t.Fatalf("Clone() key = %v, want KAN-2", issue)
+	if issue == nil || issue.Key == nil || *issue.Key != "JCT-2" {
+		t.Fatalf("Clone() key = %v, want JCT-2", issue)
 	}
 	if capturedPostBody == nil {
 		t.Fatal("Clone() did not POST to /rest/api/3/issue")
@@ -134,10 +134,10 @@ func TestClone_GetThenPostWithSanitizedFields(t *testing.T) {
 		t.Errorf("POST fields[summary] = %v, want %q", fields["summary"], " source issue")
 	}
 
-	// project must be collapsed to {key: KAN}.
+	// project must be collapsed to {key: JCT}.
 	proj, _ := fields["project"].(map[string]any)
-	if proj == nil || proj["key"] != "KAN" {
-		t.Errorf("POST fields[project] = %v, want {key:KAN}", fields["project"])
+	if proj == nil || proj["key"] != "JCT" {
+		t.Errorf("POST fields[project] = %v, want {key:JCT}", fields["project"])
 	}
 	if _, hasID := proj["id"]; hasID {
 		t.Errorf("POST fields[project] should only have 'key', not 'id'")
@@ -169,7 +169,7 @@ func TestClone_RequestFieldsOverrideSourceFields(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1":
+		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/JCT-1":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(fixtureIssue))
 
@@ -178,7 +178,7 @@ func TestClone_RequestFieldsOverrideSourceFields(t *testing.T) {
 			_ = json.Unmarshal(body, &capturedPostBody)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"id":"10003","key":"KAN-3"}`))
+			_, _ = w.Write([]byte(`{"id":"10003","key":"JCT-3"}`))
 
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
@@ -191,12 +191,12 @@ func TestClone_RequestFieldsOverrideSourceFields(t *testing.T) {
 	svc := jira.NewIssueService(client)
 
 	overrides := map[string]any{"summary": "overridden summary"}
-	issue, _, err := svc.Clone(context.Background(), "KAN-1", &jira.IssueCloneRequest{Fields: overrides})
+	issue, _, err := svc.Clone(context.Background(), "JCT-1", &jira.IssueCloneRequest{Fields: overrides})
 	if err != nil {
 		t.Fatalf("Clone() with overrides error = %v", err)
 	}
-	if issue == nil || issue.Key == nil || *issue.Key != "KAN-3" {
-		t.Fatalf("Clone() key = %v, want KAN-3", issue)
+	if issue == nil || issue.Key == nil || *issue.Key != "JCT-3" {
+		t.Fatalf("Clone() key = %v, want JCT-3", issue)
 	}
 
 	fields, _ := capturedPostBody["fields"].(map[string]any)
@@ -215,14 +215,14 @@ func TestClone_DryRunSkipsPost(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1":
+		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/JCT-1":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(fixtureIssue))
 
 		case r.Method == http.MethodPost && r.URL.Path == "/rest/api/3/issue":
 			posted = true
 			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"key":"KAN-2"}`))
+			_, _ = w.Write([]byte(`{"key":"JCT-2"}`))
 
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
@@ -234,7 +234,7 @@ func TestClone_DryRunSkipsPost(t *testing.T) {
 	client := jira.NewClient(jira.WithBaseURL(srv.URL + "/"))
 	svc := jira.NewIssueService(client)
 
-	issue, _, err := svc.Clone(context.Background(), "KAN-1", &jira.IssueCloneRequest{DryRun: true})
+	issue, _, err := svc.Clone(context.Background(), "JCT-1", &jira.IssueCloneRequest{DryRun: true})
 	if err != nil {
 		t.Fatalf("Clone(dry-run) error = %v", err)
 	}

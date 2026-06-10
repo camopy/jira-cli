@@ -78,7 +78,7 @@ func TestSchemaRecoveredOnRefresh(t *testing.T) {
 			return pipeline.ScreenSchema{}, pipeline.ErrSchemaUnknown
 		}
 		return pipeline.ScreenSchema{
-			Project:     "KAN",
+			Project:     "JCT",
 			IssueType:   "Story",
 			ValidFields: map[string]bool{"summary": true},
 		}, nil

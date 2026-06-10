@@ -81,7 +81,7 @@ func TestRunMutationFlattensCustomFieldsBeforeScreenValidation(t *testing.T) {
 			},
 		},
 		Schema: pipeline.ScreenSchema{
-			Project:     "KAN",
+			Project:     "JCT",
 			IssueType:   "Story",
 			ValidFields: map[string]bool{"summary": true},
 		},
@@ -102,7 +102,7 @@ func TestRunMutationExemptsSelectedFieldsFromScreenValidation(t *testing.T) {
 	out := pipeline.RunMutation(pipeline.MutationInput{
 		Mode: adfmode.ModeStrict,
 		Fields: map[string]any{
-			"project":   map[string]any{"key": "KAN"},
+			"project":   map[string]any{"key": "JCT"},
 			"issuetype": map[string]any{"name": "Task"},
 			"summary":   "move me",
 		},
@@ -157,7 +157,7 @@ func TestRunMutationDoesNotExemptCustomFieldsFromScreenValidation(t *testing.T) 
 // label, and rejects a genuinely malformed value fatally.
 func TestRunMutationEncodesCustomFieldByScreenSchemaType(t *testing.T) {
 	schema := pipeline.ScreenSchema{
-		Project:     "KAN",
+		Project:     "JCT",
 		IssueType:   "Story",
 		ValidFields: map[string]bool{"summary": true, "customfield_20001": true},
 		FieldTypes:  map[string]string{"customfield_20001": "select"},

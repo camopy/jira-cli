@@ -107,11 +107,11 @@ func TestIsExpression(t *testing.T) {
 		in   string
 		want bool
 	}{
-		{"KAN-1", true},
-		{"KAN-1..KAN-5", true},
-		{"KAN-1:5", true},
-		{"KAN-1,KAN-2", true},
-		{"  KAN-3  ", true},
+		{"JCT-1", true},
+		{"JCT-1..JCT-5", true},
+		{"JCT-1:5", true},
+		{"JCT-1,JCT-2", true},
+		{"  JCT-3  ", true},
 		{"In Progress", false},
 		{"Done", false},
 		{"To Do", false},

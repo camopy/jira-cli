@@ -122,7 +122,10 @@ func TestConfigSet_RejectsInvalidEnum(t *testing.T) {
 		"profiles.default.auth_type":      "garbage",
 		"profiles.default.secret_backend": "vault",
 		"profiles.default.read_only":      "maybe",
-		"tui.default_tab":                 "nope",
+		// tui.default_tab is deliberately absent: it accepts any non-empty
+		// value because configured tui.sections titles are valid targets and
+		// the validator cannot know them. Only the empty string is rejected.
+		"tui.default_tab": "",
 	}
 	for key, value := range cases {
 		err := cfg.Set(key, value)

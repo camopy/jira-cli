@@ -216,6 +216,8 @@ func (c Config) Get(key string) (string, bool) {
 		return c.Theme.Path, true
 	case "tui.refresh_interval":
 		return strconv.Itoa(c.TUI.RefreshInterval), true
+	case "tui.preview":
+		return c.TUI.Preview, true
 	case "tui.default_tab":
 		return c.TUI.DefaultTab, true
 	}
@@ -260,13 +262,22 @@ func (c *Config) Set(key, value string) error {
 		}
 		c.TUI.RefreshInterval = n
 		return nil
-	case "tui.default_tab":
-		switch value {
-		case "issues", "epics", "search", "activity":
-			c.TUI.DefaultTab = value
+	case "tui.preview":
+		switch strings.ToLower(value) {
+		case "right", "left", "bottom", "hidden", "auto":
+			c.TUI.Preview = strings.ToLower(value)
 			return nil
 		}
-		return fmt.Errorf("invalid tui.default_tab %q (valid: issues, epics, search, activity)", value)
+		return fmt.Errorf("invalid tui.preview %q (valid: right, left, bottom, hidden, auto)", value)
+	case "tui.default_tab":
+		// Builtin section IDs or a configured tui.sections title; an unknown
+		// value is ignored at runtime rather than rejected here, because the
+		// set of valid titles lives in the same file being edited.
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("tui.default_tab cannot be empty")
+		}
+		c.TUI.DefaultTab = value
+		return nil
 	}
 	if strings.HasPrefix(key, profileFieldPrefix) {
 		return c.setProfileField(key, value)
@@ -313,6 +324,9 @@ func defaultMap() map[string]any {
 			"refresh_interval": d.TUI.RefreshInterval,
 			"default_tab":      d.TUI.DefaultTab,
 			"tabs":             d.TUI.Tabs,
+			// preview is deliberately NOT defaulted here: an absent key must
+			// load as "" so a hot-reload doesn't stomp the runtime p-key cycle
+			// with an implicit "auto" on every unrelated config change.
 		},
 		"profiles": []map[string]any{{
 			"name":             "default",

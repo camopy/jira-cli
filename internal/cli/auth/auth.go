@@ -1076,7 +1076,7 @@ func probeRemoteAuth(ctx context.Context, cmd *cobra.Command, profile config.Pro
 		permsOut["ok"] = anyGranted
 		permsOut["grants"] = grants
 		if !anyGranted {
-			permsOut["hint"] = "token authenticates but has zero CLI-relevant permissions — check the Resources tab of your scoped token at id.atlassian.com (KAN/SAM1 etc. must be selected)"
+			permsOut["hint"] = "token authenticates but has zero CLI-relevant permissions — check the Resources tab of your scoped token at id.atlassian.com (JCT/SAM1 etc. must be selected)"
 		}
 	}
 	out["permissions"] = permsOut

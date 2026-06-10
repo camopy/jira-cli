@@ -315,7 +315,7 @@ before the next call turns into a 429.
 | `queries_path` | Where [`search saved`](search.md#search-saved) looks for `.jql` files |
 | `editor` | Default editor for `issue edit` (per-profile `editor` wins) |
 | `[theme]` | Output and TUI theme; see [`config theme`](#themes) |
-| `[tui]` | TUI defaults (`refresh_interval`, `default_tab`, `tabs`) — TUI is experimental |
+| `[tui]` | Dashboard configuration: tabs, lenses, custom JQL sections, preview dock, keybindings, refresh — see [TUI](tui.md#configuration) |
 | `[aliases]` | User-defined command aliases; managed via [`jira alias`](alias.md) |
 
 ### Environment variables
@@ -455,7 +455,22 @@ editor          = "nvim --wait"
 [tui]
   refresh_interval = 30
   default_tab = "issues"
-  tabs = ["issues", "epics", "search", "activity"]
+  default_lens = "Team"
+  preview = "right"
+  preview_size = 40
+
+# Replace the Issues tab's quick-filter chips — see the TUI docs
+[[tui.lenses]]
+  title = "Team"
+  jql = "project = JCT AND statusCategory != Done ORDER BY updated DESC"
+
+# Add your own dashboard tabs
+[[tui.sections]]
+  title = "Needs review"
+  jql = "status = 'In Review' ORDER BY updated DESC"
+
+[tui.keys]
+  transition = ["T"]
 
 [aliases]
   todo = "issue list --status \"To Do\""
@@ -464,6 +479,7 @@ editor          = "nvim --wait"
 
 ## See also
 
+*   [TUI](tui.md): everything under `[tui]` — tabs, lenses, sections, preview, keybindings — in depth.
 *   [Auth](auth.md): API tokens, keyring vs 1Password vs env, `auth login` and `auth migrate`.
 *   [`search saved`](search.md#search-saved): `queries_path` points here.
 *   [Cache](cache.md): cached metadata lives under `~/.cache/jira-cli/<profile>-<hash>/`, scoped by profile + base URL + config path.

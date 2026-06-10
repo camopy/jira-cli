@@ -20,6 +20,7 @@ flow (CI / scripted bootstrap), see [`auth login`](auth.md#auth-login).
 
 ## What it does
 
+*   **Triage interactively** in a full-screen dashboard: tabbed JQL views, quick-filter lenses, single-key verbs, bulk actions. → [TUI](tui.md)
 *   **Read and search** issues, comments, attachments, watchers, worklog. → [Issues](issues.md), [Search](search.md), [JQL](jql.md)
 *   **Create, edit, transition, link** issues with rich-text ADF payloads and dry-run preview. → [Issues](issues.md)
 *   **Cache** project, field, board, label, and link-type metadata so completion and validation don't pay a round trip. → [Cache](cache.md)
@@ -31,6 +32,7 @@ flow (CI / scripted bootstrap), see [`auth login`](auth.md#auth-login).
 
 | I want to… | Command |
 |---|---|
+| Work a queue in a persistent dashboard | [`jira tui`](tui.md) |
 | Authenticate against a Jira tenant | [`jira auth login`](auth.md#auth-login) |
 | Switch between configured profiles | [`jira auth switch`](auth.md#auth-switch) or `--profile/-P` |
 | Find issues by filter flags | [`jira issue list`](issues.md#list) |
@@ -49,10 +51,12 @@ flow (CI / scripted bootstrap), see [`auth login`](auth.md#auth-login).
 | Identify the active profile and user | [`jira me`](auth.md#auth-whoami) |
 | Correlate a CLI invocation with Jira logs | `--output=json`, then `meta.request_id` |
 
-!!! note "`jira tui` is experimental"
-    The persistent dashboard (`jira tui` / `jira -i`) ships with the
-    binary but isn't actively developed. For day-to-day work the
-    headless commands above are the supported surface.
+!!! tip "Prefer a dashboard?"
+    `jira tui` (or `jira -i`) opens a persistent, full-screen
+    dashboard over the same data: tabbed JQL views, quick-filter
+    lenses, an issue preview, and single-key triage verbs with bulk
+    actions. It's in **alpha** — see [TUI](tui.md) for the tour and
+    every `[tui]` config key.
 
 ## Output modes
 

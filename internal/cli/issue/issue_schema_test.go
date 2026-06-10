@@ -30,14 +30,14 @@ func (f *fakeScreenSchemaLookup) GetEditSchemaForProfile(_ context.Context, _, _
 // stage-4 encoder branches on.
 func TestScreenSchemaFetcherConvertsFieldSchema(t *testing.T) {
 	lookup := &fakeScreenSchemaLookup{schema: &jira.ProjectFieldSchema{
-		ProjectKey: "KAN",
+		ProjectKey: "JCT",
 		IssueType:  "Story",
 		Fields: []jira.FieldSchema{
 			{ID: "summary", Type: "string"},
 			{ID: "customfield_10001", Type: "number", Custom: "float"},
 		},
 	}}
-	fetch := newScreenSchemaFetcher(context.Background(), lookup, "default", "KAN", "Story")
+	fetch := newScreenSchemaFetcher(context.Background(), lookup, "default", "JCT", "Story")
 	got, err := fetch()
 	if err != nil {
 		t.Fatalf("fetch error = %v", err)
@@ -68,7 +68,7 @@ func TestScreenSchemaFetcherUnknownWhenProjectMissing(t *testing.T) {
 // pipeline's strict/best-effort policy governs the outcome.
 func TestScreenSchemaFetcherWrapsLookupError(t *testing.T) {
 	lookup := &fakeScreenSchemaLookup{err: errors.New("boom")}
-	fetch := newScreenSchemaFetcher(context.Background(), lookup, "default", "KAN", "Story")
+	fetch := newScreenSchemaFetcher(context.Background(), lookup, "default", "JCT", "Story")
 	_, err := fetch()
 	if !errors.Is(err, pipeline.ErrSchemaUnknown) {
 		t.Fatalf("transport failure must surface as ErrSchemaUnknown, got %v", err)

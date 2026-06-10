@@ -58,9 +58,9 @@ func TestWebOpenReportsURLWithoutSpawning(t *testing.T) {
 		wantURL     string
 		wantCommand string
 	}{
-		{"issue view --web", []string{"issue", "view", "KAN-1", "--web", "--output=json"}, "https://acme.atlassian.net/browse/KAN-1", "issue.view"},
-		{"jira open", []string{"open", "KAN-1", "--output=json"}, "https://acme.atlassian.net/browse/KAN-1", "open"},
-		{"search jql --web", []string{"search", "jql", "project = KAN", "--web", "--output=json"}, "https://acme.atlassian.net/issues/?jql=project+%3D+KAN", "search.jql"},
+		{"issue view --web", []string{"issue", "view", "JCT-1", "--web", "--output=json"}, "https://acme.atlassian.net/browse/JCT-1", "issue.view"},
+		{"jira open", []string{"open", "JCT-1", "--output=json"}, "https://acme.atlassian.net/browse/JCT-1", "open"},
+		{"search jql --web", []string{"search", "jql", "project = JCT", "--web", "--output=json"}, "https://acme.atlassian.net/issues/?jql=project+%3D+JCT", "search.jql"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			data, command := webEnvelope(t, cfg, tc.args...)

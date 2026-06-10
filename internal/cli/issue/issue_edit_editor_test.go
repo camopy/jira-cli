@@ -101,7 +101,7 @@ func TestIssueEditEditorPreservesPanelAcrossNoOpSave(t *testing.T) {
 			]},
 			{"type": "paragraph", "content": [
 				{"type": "text", "text": "ref "},
-				{"type": "inlineCard", "attrs": {"url": "https://example.com/KAN-1"}}
+				{"type": "inlineCard", "attrs": {"url": "https://example.com/JCT-1"}}
 			]}
 		]
 	}`
@@ -133,7 +133,7 @@ func TestIssueEditEditorPreservesPanelAcrossNoOpSave(t *testing.T) {
 		t.Fatal("no PUT body captured — issue edit did not submit an update")
 	}
 	got := string(putBody)
-	for _, marker := range []string{`"panel"`, `"panelType"`, "panel body", `"inlineCard"`, "https://example.com/KAN-1"} {
+	for _, marker := range []string{`"panel"`, `"panelType"`, "panel body", `"inlineCard"`, "https://example.com/JCT-1"} {
 		if !strings.Contains(got, marker) {
 			t.Fatalf("editor round-trip erased %q from the update payload — opaque ADF was not preserved: %s", marker, got)
 		}

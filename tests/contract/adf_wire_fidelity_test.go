@@ -28,7 +28,7 @@ func TestI4WrongShapeADFRejectedByComment(t *testing.T) {
 	}
 
 	cmd := exec.Command("go", "run", "../../cmd/jira",
-		"issue", "comment", "KAN-1",
+		"issue", "comment", "JCT-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
 
@@ -69,7 +69,7 @@ func TestI4UnknownNodeStrictModeRejectedByComment(t *testing.T) {
 	}
 
 	cmd := exec.Command("go", "run", "../../cmd/jira",
-		"issue", "comment", "KAN-1",
+		"issue", "comment", "JCT-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
 
@@ -106,7 +106,7 @@ func TestI4UnknownNodeBestEffortWarnsNotErrors(t *testing.T) {
 	}
 
 	cmd := exec.Command("go", "run", "../../cmd/jira",
-		"issue", "comment", "KAN-1",
+		"issue", "comment", "JCT-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json",
 		"--adf-best-effort")
@@ -156,7 +156,7 @@ func TestI4IllegalMarkOnBlockStrictModeErrors(t *testing.T) {
 	}
 
 	cmd := exec.Command("go", "run", "../../cmd/jira",
-		"issue", "comment", "KAN-1",
+		"issue", "comment", "JCT-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
 
@@ -187,7 +187,7 @@ func TestI4UnknownMarkRejectedByStrictMode(t *testing.T) {
 	}
 
 	cmd := exec.Command("go", "run", "../../cmd/jira",
-		"issue", "comment", "KAN-1",
+		"issue", "comment", "JCT-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
 
@@ -215,7 +215,7 @@ func TestI4CreatePathRejectsUnknownAdfNode(t *testing.T) {
 	path := filepath.Join(dir, "f007-unknown-node.json")
 	body := `{
 		"summary": " repro",
-		"project_key": "KAN",
+		"project_key": "JCT",
 		"issue_type": "Task",
 		"description": {
 			"type": "doc",
@@ -259,7 +259,7 @@ func TestI4CreatePathRejectsUnknownAdfNode(t *testing.T) {
 func TestI4CreatePathRejectsWrongShapeAdf(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "f007-wrong-shape.json")
-	body := `{"summary": "x", "project_key": "KAN", "issue_type": "Task", "description": {"type": "doc", "version": 1, "content": "not an array"}}`
+	body := `{"summary": "x", "project_key": "JCT", "issue_type": "Task", "description": {"type": "doc", "version": 1, "content": "not an array"}}`
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestI4CreatePathBestEffortPreservesUnknownNode(t *testing.T) {
 	path := filepath.Join(dir, "f007-best-effort.json")
 	body := `{
 		"summary": " best-effort",
-		"project_key": "KAN",
+		"project_key": "JCT",
 		"issue_type": "Task",
 		"description": {
 			"type": "doc",

@@ -103,13 +103,25 @@ a future auth update because they require Atlassian's gateway URL
 
 ## TUI
 
-Run `jira -i` or `jira tui` in a terminal. The dashboard uses vim-style navigation
-and keeps running until `q`.
+> [!WARNING]
+> The dashboard is in **alpha**: actively developed, and keybindings or
+> configuration may still change between releases. The headless CLI
+> commands remain the stable surface for scripts and agents.
 
-The TUI is still in active development. Use it for interactive daily navigation;
-prefer regular CLI commands for scripts and agent workflows.
+Run `jira -i` or `jira tui` in a terminal for a persistent, full-screen
+dashboard: tabbed JQL views with live counts, quick-filter lenses, an
+always-visible issue preview, single-key triage verbs with optimistic
+updates, multi-select bulk actions, and a JQL search workbench with
+autocomplete and saved-query presets. Tabs, lenses, sections, the preview
+dock and every keybinding are configurable under `[tui]` in `config.toml`.
 
-Core keys: `j/k`, `/`, `Enter`, `e`, `m`, `c`, `w`, `n`, `r`, `P`, `?`, `q`.
+Core keys: `j/k` move, `enter` open, `/` filter, `f` facet, `]`/`[` lens,
+`t` transition, `a`/`A` assign, `c` comment, `e` edit, `w` worklog,
+`space` select, `ctrl+o` recent, `?` help, `q` quit.
+
+See the [TUI documentation](https://matcra587.github.io/jira-cli/tui/) for
+the full tour and configuration reference. Prefer the regular CLI commands
+for scripts and agent workflows.
 
 ## Output
 

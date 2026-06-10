@@ -42,7 +42,8 @@ func TestCollectLossyCommentWarningsEmitsOnePerLossyComment(t *testing.T) {
 	plainID := "100"
 
 	// Build an ADF doc by hand with two distinct lossy node types so we can
-	// assert the sorted-unique behavior.
+	// assert the sorted-unique behavior. inlineCard/panel/table/mention are
+	// renderable now, so reach for constructs the renderer still drops.
 	lossyDoc := adf.Document{
 		Type:    "doc",
 		Version: 1,
@@ -50,11 +51,11 @@ func TestCollectLossyCommentWarningsEmitsOnePerLossyComment(t *testing.T) {
 			{
 				Type: "paragraph",
 				Content: []adf.Node{
-					{Type: "inlineCard", Attrs: map[string]any{"url": "https://example.com"}},
+					{Type: "decisionItem"},
 					{Type: "text", Text: "see"},
 				},
 			},
-			{Type: "panel", Attrs: map[string]any{"panelType": "custom"}},
+			{Type: "extension", Attrs: map[string]any{"extensionKey": "x"}},
 		},
 	}
 	lossyID := "201"
@@ -74,8 +75,8 @@ func TestCollectLossyCommentWarningsEmitsOnePerLossyComment(t *testing.T) {
 		t.Errorf("warning.type = %q; want adf-lossy-comment", got[0].Type)
 	}
 
-	// LossyConstructs must be sorted unique. inlineCard < panel.
-	want := []string{"inlineCard", "panel"}
+	// LossyConstructs must be sorted unique. decisionItem < extension.
+	want := []string{"decisionItem", "extension"}
 	if !slices.Equal(got[0].LossyConstructs, want) {
 		t.Errorf("lossy_constructs = %v; want %v (sorted unique)", got[0].LossyConstructs, want)
 	}

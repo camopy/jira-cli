@@ -20,7 +20,7 @@ func TestApplyCompatibility_BestEffortDegradesUnsupportedInlineCard(t *testing.T
 	doc, _, err := adf.Parse([]byte(`{
 		"type": "doc", "version": 1, "content": [
 			{"type": "paragraph", "content": [
-				{"type": "inlineCard", "attrs": {"url": "https://example.com/issue/KAN-1"}}
+				{"type": "inlineCard", "attrs": {"url": "https://example.com/issue/JCT-1"}}
 			]}
 		]
 	}`))
@@ -73,7 +73,7 @@ func TestApplyCompatibility_BestEffortDegradesUnsupportedInlineCard(t *testing.T
 		t.Fatalf("degraded child must have a link mark; got marks=%v", child.Marks)
 	}
 	href, _ := child.Marks[0].Attrs["href"].(string)
-	if href != "https://example.com/issue/KAN-1" {
+	if href != "https://example.com/issue/JCT-1" {
 		t.Fatalf("link mark href = %q, want the original inlineCard URL", href)
 	}
 }

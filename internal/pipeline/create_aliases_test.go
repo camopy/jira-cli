@@ -14,7 +14,7 @@ import (
 // be rejected as off-screen even for a default create.
 func TestNormalizeCreateAliasesTranslatesAliasKeys(t *testing.T) {
 	in := map[string]any{
-		"project_key":         "KAN",
+		"project_key":         "JCT",
 		"issue_type":          "Task",
 		"assignee_account_id": "acc-1",
 		"summary":             "ok",
@@ -30,7 +30,7 @@ func TestNormalizeCreateAliasesTranslatesAliasKeys(t *testing.T) {
 		t.Fatalf("assignee_account_id alias must be removed: %v", out)
 	}
 	project, ok := out["project"].(map[string]any)
-	if !ok || project["key"] != "KAN" {
+	if !ok || project["key"] != "JCT" {
 		t.Fatalf("project wire shape wrong: %v", out["project"])
 	}
 	issuetype, ok := out["issuetype"].(map[string]any)
@@ -51,7 +51,7 @@ func TestNormalizeCreateAliasesTranslatesAliasKeys(t *testing.T) {
 // double-set so the user supplies the field exactly once.
 func TestNormalizeCreateAliasesConflictKeepsBothDistinct(t *testing.T) {
 	in := map[string]any{
-		"project_key": "KAN",
+		"project_key": "JCT",
 		"project":     map[string]any{"key": "OTHER"},
 		"summary":     "ok",
 	}
@@ -66,13 +66,13 @@ func TestNormalizeCreateAliasesConflictKeepsBothDistinct(t *testing.T) {
 // the create screen, so a resolved schema accepts it in strict mode.
 func TestRunMutationAcceptsNormalizedDefaultCreatePayload(t *testing.T) {
 	normalized := pipeline.NormalizeCreateAliases(map[string]any{
-		"project_key":         "KAN",
+		"project_key":         "JCT",
 		"issue_type":          "Task",
 		"assignee_account_id": "acc-1",
 		"summary":             "ok",
 	})
 	schema := pipeline.ScreenSchema{
-		Project:   "KAN",
+		Project:   "JCT",
 		IssueType: "Task",
 		ValidFields: map[string]bool{
 			"project": true, "issuetype": true, "assignee": true, "summary": true,

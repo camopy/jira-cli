@@ -28,7 +28,7 @@ func TestSearchAllBoundedByDefaults(t *testing.T) {
 			if i > 0 {
 				body += ","
 			}
-			body += `{"key":"KAN-1"}`
+			body += `{"key":"JCT-1"}`
 		}
 		body += `],"isLast":false,"nextPageToken":"page-` + itoaPos(page) + `"}`
 		_, _ = w.Write([]byte(body))
@@ -60,7 +60,7 @@ func TestSearchAllBoundedByDefaults(t *testing.T) {
 
 func TestSearchAllRespectsExplicitMaxPages(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"issues":[{"key":"KAN-1"},{"key":"KAN-2"}],"isLast":false,"nextPageToken":"abc"}`))
+		_, _ = w.Write([]byte(`{"issues":[{"key":"JCT-1"},{"key":"JCT-2"}],"isLast":false,"nextPageToken":"abc"}`))
 	}))
 	defer srv.Close()
 
@@ -85,9 +85,9 @@ func TestDrainSearchExactMaxResultsOnLastPageNotTruncated(t *testing.T) {
 		page := pageCount.Add(1)
 		switch page {
 		case 1:
-			_, _ = w.Write([]byte(`{"issues":[{"key":"KAN-1"}],"isLast":false,"nextPageToken":"next"}`))
+			_, _ = w.Write([]byte(`{"issues":[{"key":"JCT-1"}],"isLast":false,"nextPageToken":"next"}`))
 		case 2:
-			_, _ = w.Write([]byte(`{"issues":[{"key":"KAN-2"}],"isLast":true}`))
+			_, _ = w.Write([]byte(`{"issues":[{"key":"JCT-2"}],"isLast":true}`))
 		default:
 			t.Fatalf("unexpected page %d", page)
 		}
@@ -113,7 +113,7 @@ func TestDrainSearchExactMaxResultsWithMorePagesIsTruncated(t *testing.T) {
 	var pageCount atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		page := pageCount.Add(1)
-		_, _ = w.Write([]byte(`{"issues":[{"key":"KAN-` + itoaPos(page) + `"}],"isLast":false,"nextPageToken":"next"}`))
+		_, _ = w.Write([]byte(`{"issues":[{"key":"JCT-` + itoaPos(page) + `"}],"isLast":false,"nextPageToken":"next"}`))
 	}))
 	defer srv.Close()
 

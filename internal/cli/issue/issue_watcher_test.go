@@ -113,7 +113,7 @@ func TestWatchersListEmitsEnvelopeShape(t *testing.T) {
 		switch r.URL.Path {
 		case "/rest/api/3/myself":
 			_, _ = w.Write([]byte(myselfFixture))
-		case "/rest/api/3/issue/KAN-1/watchers":
+		case "/rest/api/3/issue/JCT-1/watchers":
 			_, _ = w.Write([]byte(watcherListJSON(true, 2,
 				[2]string{"acc-alice", "Alice"},
 				[2]string{"acc-bob", "Bob"},
@@ -125,7 +125,7 @@ func TestWatchersListEmitsEnvelopeShape(t *testing.T) {
 	defer srv.Close()
 
 	root, stdout, stderr := newWatcherTestRoot(t, srv.URL)
-	root.SetArgs([]string{"watchers", "list", "KAN-1"})
+	root.SetArgs([]string{"watchers", "list", "JCT-1"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\nstderr: %s", err, stderr.String())
 	}
@@ -154,13 +154,13 @@ func TestWatchersAddPostsRawAccountIDStringAndReadsBack(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/myself":
 			_, _ = w.Write([]byte(myselfFixture))
-		case r.Method == http.MethodPost && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+		case r.Method == http.MethodPost && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 			atomic.AddInt32(&postCount, 1)
 			buf := new(bytes.Buffer)
 			_, _ = buf.ReadFrom(r.Body)
 			postBody.Store(buf.String())
 			w.WriteHeader(http.StatusNoContent)
-		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 			atomic.AddInt32(&getCount, 1)
 			_, _ = w.Write([]byte(watcherListJSON(true, 1, [2]string{"712020:test-user", "Test"})))
 		default:
@@ -170,7 +170,7 @@ func TestWatchersAddPostsRawAccountIDStringAndReadsBack(t *testing.T) {
 	defer srv.Close()
 
 	root, stdout, stderr := newWatcherTestRoot(t, srv.URL)
-	root.SetArgs([]string{"watchers", "add", "KAN-1", "--user", "me"})
+	root.SetArgs([]string{"watchers", "add", "JCT-1", "--user", "me"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\nstderr: %s", err, stderr.String())
 	}
@@ -206,10 +206,10 @@ func TestWatchersAddNoReadbackBareShape(t *testing.T) {
 		switch {
 		case r.URL.Path == "/rest/api/3/myself":
 			_, _ = w.Write([]byte(myselfFixture))
-		case r.Method == http.MethodPost && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+		case r.Method == http.MethodPost && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 			atomic.StoreInt32(&postSeen, 1)
 			w.WriteHeader(http.StatusNoContent)
-		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 			if atomic.LoadInt32(&postSeen) == 1 {
 				atomic.AddInt32(&getAfterPost, 1)
 			}
@@ -221,7 +221,7 @@ func TestWatchersAddNoReadbackBareShape(t *testing.T) {
 	defer srv.Close()
 
 	root, stdout, stderr := newWatcherTestRoot(t, srv.URL)
-	root.SetArgs([]string{"watchers", "add", "KAN-1", "--user", "me", "--no-readback"})
+	root.SetArgs([]string{"watchers", "add", "JCT-1", "--user", "me", "--no-readback"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\nstderr: %s", err, stderr.String())
 	}
@@ -262,7 +262,7 @@ func TestWatchersAddAmbiguousEmitsCandidatesEnvelope(t *testing.T) {
 	defer srv.Close()
 
 	root, stdout, stderr := newWatcherTestRoot(t, srv.URL)
-	root.SetArgs([]string{"watchers", "add", "KAN-1", "--user", "alice"})
+	root.SetArgs([]string{"watchers", "add", "JCT-1", "--user", "alice"})
 	err := root.Execute()
 	if err == nil {
 		t.Fatalf("expected ambiguity error, got success:\n%s", stdout)
@@ -301,10 +301,10 @@ func TestWatchersRemoveDeletesByAccountIDAndReadsBack(t *testing.T) {
 		switch {
 		case r.URL.Path == "/rest/api/3/myself":
 			_, _ = w.Write([]byte(myselfFixture))
-		case r.Method == http.MethodDelete && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+		case r.Method == http.MethodDelete && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 			deleteQuery.Store(r.URL.RawQuery)
 			w.WriteHeader(http.StatusNoContent)
-		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 			_, _ = w.Write([]byte(watcherListJSON(false, 0)))
 		default:
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
@@ -313,7 +313,7 @@ func TestWatchersRemoveDeletesByAccountIDAndReadsBack(t *testing.T) {
 	defer srv.Close()
 
 	root, stdout, stderr := newWatcherTestRoot(t, srv.URL)
-	root.SetArgs([]string{"watchers", "remove", "KAN-1", "--user", "me"})
+	root.SetArgs([]string{"watchers", "remove", "JCT-1", "--user", "me"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v\nstderr: %s", err, stderr.String())
 	}
@@ -338,12 +338,12 @@ func TestWatchShortcutEquivalentToWatchersAddMe(t *testing.T) {
 			switch {
 			case r.URL.Path == "/rest/api/3/myself":
 				_, _ = w.Write([]byte(myselfFixture))
-			case r.Method == http.MethodPost && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+			case r.Method == http.MethodPost && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 				buf := new(bytes.Buffer)
 				_, _ = buf.ReadFrom(r.Body)
 				captures[slot].Store(buf.String())
 				w.WriteHeader(http.StatusNoContent)
-			case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+			case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 				_, _ = w.Write([]byte(watcherListJSON(true, 1, [2]string{"712020:test-user", "Test"})))
 			default:
 				t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
@@ -356,12 +356,12 @@ func TestWatchShortcutEquivalentToWatchersAddMe(t *testing.T) {
 	defer srvB.Close()
 
 	rootA, _, _ := newWatcherTestRoot(t, srvA.URL)
-	rootA.SetArgs([]string{"watchers", "add", "KAN-1", "--user", "me"})
+	rootA.SetArgs([]string{"watchers", "add", "JCT-1", "--user", "me"})
 	if err := rootA.Execute(); err != nil {
 		t.Fatalf("watchers add: %v", err)
 	}
 	rootB, _, _ := newWatcherTestRoot(t, srvB.URL)
-	rootB.SetArgs([]string{"watch", "KAN-1"})
+	rootB.SetArgs([]string{"watch", "JCT-1"})
 	if err := rootB.Execute(); err != nil {
 		t.Fatalf("watch shortcut: %v", err)
 	}
@@ -380,10 +380,10 @@ func TestUnwatchShortcutEquivalentToWatchersRemoveMe(t *testing.T) {
 			switch {
 			case r.URL.Path == "/rest/api/3/myself":
 				_, _ = w.Write([]byte(myselfFixture))
-			case r.Method == http.MethodDelete && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+			case r.Method == http.MethodDelete && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 				captures[slot].Store(r.URL.RawQuery)
 				w.WriteHeader(http.StatusNoContent)
-			case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/KAN-1/watchers":
+			case r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issue/JCT-1/watchers":
 				_, _ = w.Write([]byte(watcherListJSON(false, 0)))
 			default:
 				t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
@@ -396,12 +396,12 @@ func TestUnwatchShortcutEquivalentToWatchersRemoveMe(t *testing.T) {
 	defer srvB.Close()
 
 	rootA, _, _ := newWatcherTestRoot(t, srvA.URL)
-	rootA.SetArgs([]string{"watchers", "remove", "KAN-1", "--user", "me"})
+	rootA.SetArgs([]string{"watchers", "remove", "JCT-1", "--user", "me"})
 	if err := rootA.Execute(); err != nil {
 		t.Fatalf("watchers remove: %v", err)
 	}
 	rootB, _, _ := newWatcherTestRoot(t, srvB.URL)
-	rootB.SetArgs([]string{"unwatch", "KAN-1"})
+	rootB.SetArgs([]string{"unwatch", "JCT-1"})
 	if err := rootB.Execute(); err != nil {
 		t.Fatalf("unwatch shortcut: %v", err)
 	}

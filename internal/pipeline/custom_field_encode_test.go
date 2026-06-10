@@ -15,7 +15,7 @@ import (
 // encoded as {"value":"High"} on the wire.
 func TestRunMutationEncodesBareSelectLabel(t *testing.T) {
 	schema := pipeline.ScreenSchema{
-		Project:     "KAN",
+		Project:     "JCT",
 		IssueType:   "Story",
 		ValidFields: map[string]bool{"summary": true, "customfield_40001": true},
 		FieldTypes:  map[string]string{"customfield_40001": "select"},
@@ -180,7 +180,7 @@ func TestRunMutationEncodesBareVersionAndProject(t *testing.T) {
 		Mode: adfmode.ModeStrict,
 		Fields: map[string]any{
 			"customfield_50002": "1.0",
-			"customfield_50003": "KAN",
+			"customfield_50003": "JCT",
 		},
 		Schema: schema,
 		DryRun: true,
@@ -191,7 +191,7 @@ func TestRunMutationEncodesBareVersionAndProject(t *testing.T) {
 	if got := out.SubmitFields["customfield_50002"]; !reflect.DeepEqual(got, map[string]any{"name": "1.0"}) {
 		t.Fatalf("bare version not lifted: got %#v", got)
 	}
-	if got := out.SubmitFields["customfield_50003"]; !reflect.DeepEqual(got, map[string]any{"key": "KAN"}) {
+	if got := out.SubmitFields["customfield_50003"]; !reflect.DeepEqual(got, map[string]any{"key": "JCT"}) {
 		t.Fatalf("bare project not lifted: got %#v", got)
 	}
 }

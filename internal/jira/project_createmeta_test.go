@@ -17,7 +17,7 @@ func TestGetFieldSchemaResolvesIssueTypeNameToID(t *testing.T) {
 	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case strings.HasSuffix(r.URL.Path, "/createmeta/KAN/issuetypes"):
+		case strings.HasSuffix(r.URL.Path, "/createmeta/JCT/issuetypes"):
 			_, _ = w.Write([]byte(`{
 				"startAt":0,"maxResults":50,"total":2,
 				"issueTypes":[
@@ -25,7 +25,7 @@ func TestGetFieldSchemaResolvesIssueTypeNameToID(t *testing.T) {
 					{"id":"10002","name":"Task"}
 				]
 			}`))
-		case strings.Contains(r.URL.Path, "/createmeta/KAN/issuetypes/"):
+		case strings.Contains(r.URL.Path, "/createmeta/JCT/issuetypes/"):
 			fieldMetaPath = r.URL.Path
 			_, _ = w.Write([]byte(`{
 				"startAt":0,"maxResults":50,"total":1,
@@ -39,11 +39,11 @@ func TestGetFieldSchemaResolvesIssueTypeNameToID(t *testing.T) {
 	}))
 
 	svc := NewProjectService(client, 0)
-	schema, _, err := svc.GetFieldSchemaForProfile(context.Background(), "default", "KAN", "Task")
+	schema, _, err := svc.GetFieldSchemaForProfile(context.Background(), "default", "JCT", "Task")
 	if err != nil {
 		t.Fatalf("GetFieldSchemaForProfile: %v", err)
 	}
-	if !strings.HasSuffix(fieldMetaPath, "/createmeta/KAN/issuetypes/10002") {
+	if !strings.HasSuffix(fieldMetaPath, "/createmeta/JCT/issuetypes/10002") {
 		t.Fatalf("field-metadata call must use the resolved issue-type id 10002, got %q", fieldMetaPath)
 	}
 	if len(schema.Fields) != 1 || schema.Fields[0].ID != "summary" {
@@ -56,7 +56,7 @@ func TestGetFieldSchemaResolvesIssueTypeNameToID(t *testing.T) {
 func TestGetFieldSchemaUnknownIssueTypeNameFails(t *testing.T) {
 	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if strings.HasSuffix(r.URL.Path, "/createmeta/KAN/issuetypes") {
+		if strings.HasSuffix(r.URL.Path, "/createmeta/JCT/issuetypes") {
 			_, _ = w.Write([]byte(`{"startAt":0,"maxResults":50,"total":1,"issueTypes":[{"id":"10001","name":"Bug"}]}`))
 			return
 		}
@@ -64,7 +64,7 @@ func TestGetFieldSchemaUnknownIssueTypeNameFails(t *testing.T) {
 	}))
 
 	svc := NewProjectService(client, 0)
-	_, _, err := svc.GetFieldSchemaForProfile(context.Background(), "default", "KAN", "Nonexistent")
+	_, _, err := svc.GetFieldSchemaForProfile(context.Background(), "default", "JCT", "Nonexistent")
 	if err == nil {
 		t.Fatal("an unknown issue-type name must produce an error, not a bad-path call")
 	}
@@ -76,13 +76,13 @@ func TestGetFieldSchemaResolvesIssueTypeOnSecondPage(t *testing.T) {
 	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case strings.HasSuffix(r.URL.Path, "/createmeta/KAN/issuetypes"):
+		case strings.HasSuffix(r.URL.Path, "/createmeta/JCT/issuetypes"):
 			if r.URL.Query().Get("startAt") == "0" {
 				_, _ = w.Write([]byte(`{"startAt":0,"maxResults":1,"total":2,"issueTypes":[{"id":"10001","name":"Bug"}]}`))
 				return
 			}
 			_, _ = w.Write([]byte(`{"startAt":1,"maxResults":1,"total":2,"issueTypes":[{"id":"10002","name":"Task"}]}`))
-		case strings.Contains(r.URL.Path, "/createmeta/KAN/issuetypes/10002"):
+		case strings.Contains(r.URL.Path, "/createmeta/JCT/issuetypes/10002"):
 			_, _ = w.Write([]byte(`{"startAt":0,"maxResults":50,"total":1,"fields":[{"fieldId":"summary","name":"Summary","schema":{"type":"string"}}]}`))
 		default:
 			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
@@ -90,7 +90,7 @@ func TestGetFieldSchemaResolvesIssueTypeOnSecondPage(t *testing.T) {
 	}))
 
 	svc := NewProjectService(client, 0)
-	if _, _, err := svc.GetFieldSchemaForProfile(context.Background(), "default", "KAN", "Task"); err != nil {
+	if _, _, err := svc.GetFieldSchemaForProfile(context.Background(), "default", "JCT", "Task"); err != nil {
 		t.Fatalf("issue type on page 2 must resolve: %v", err)
 	}
 }
@@ -102,9 +102,9 @@ func TestGetFieldSchemaWalksAllFieldPages(t *testing.T) {
 	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case strings.HasSuffix(r.URL.Path, "/createmeta/KAN/issuetypes"):
+		case strings.HasSuffix(r.URL.Path, "/createmeta/JCT/issuetypes"):
 			_, _ = w.Write([]byte(`{"startAt":0,"maxResults":50,"total":1,"issueTypes":[{"id":"10002","name":"Task"}]}`))
-		case strings.Contains(r.URL.Path, "/createmeta/KAN/issuetypes/10002"):
+		case strings.Contains(r.URL.Path, "/createmeta/JCT/issuetypes/10002"):
 			if r.URL.Query().Get("startAt") == "0" {
 				_, _ = w.Write([]byte(`{
 					"startAt":0,"maxResults":1,"total":2,
@@ -122,7 +122,7 @@ func TestGetFieldSchemaWalksAllFieldPages(t *testing.T) {
 	}))
 
 	svc := NewProjectService(client, 0)
-	schema, _, err := svc.GetFieldSchemaForProfile(context.Background(), "default", "KAN", "Task")
+	schema, _, err := svc.GetFieldSchemaForProfile(context.Background(), "default", "JCT", "Task")
 	if err != nil {
 		t.Fatalf("GetFieldSchemaForProfile: %v", err)
 	}

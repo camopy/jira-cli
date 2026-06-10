@@ -24,7 +24,7 @@ func TestRunMutationStrictBlocksInvalidField(t *testing.T) {
 			"customfield_99999": "should fail",
 		},
 		Schema: pipeline.ScreenSchema{
-			Project:     "KAN",
+			Project:     "JCT",
 			IssueType:   "Story",
 			ValidFields: map[string]bool{"summary": true, "description": true},
 		},
@@ -50,7 +50,7 @@ func TestRunMutationBestEffortDropsAndContinues(t *testing.T) {
 			"customfield_99999": "drop me",
 		},
 		Schema: pipeline.ScreenSchema{
-			Project:     "KAN",
+			Project:     "JCT",
 			IssueType:   "Story",
 			ValidFields: map[string]bool{"summary": true},
 		},

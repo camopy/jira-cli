@@ -14,7 +14,7 @@ type RenderOptions struct {
 	// renderer emits plain text.
 	IsTerminal bool
 	// BaseURL is the active profile's Jira base URL, used to expand
-	// issue keys (KAN-7) into browseable links.
+	// issue keys (JCT-7) into browseable links.
 	BaseURL string
 }
 
@@ -59,6 +59,11 @@ func activate(text, baseURL string) string {
 	})
 	return text
 }
+
+// Hyperlink wraps text in an OSC 8 escape pointing at url, for UI chrome
+// (issue keys, breadcrumbs) — terminals that support it make the text
+// clickable; others show it unchanged. Shares osc8's control-byte hygiene.
+func Hyperlink(url, text string) string { return osc8(url, text) }
 
 // osc8 returns the OSC 8 hyperlink escape for url displayed as text.
 // Both halves are stripped of control bytes so a control byte cannot

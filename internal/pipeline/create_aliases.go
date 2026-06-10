@@ -39,7 +39,7 @@ var createAliases = map[string]createAlias{
 // create. The input map is not mutated; a normalized copy is returned.
 //
 // A non-empty string alias value is encoded into its wire object shape
-// (project_key "KAN" -> project {"key":"KAN"}). An alias with an empty
+// (project_key "JCT" -> project {"key":"JCT"}). An alias with an empty
 // or non-string value is dropped — it carries nothing to send. An alias
 // whose wire key is also explicitly set is left for
 // NormalizeCreateAliasesChecked to reject; this convenience form keeps

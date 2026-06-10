@@ -27,6 +27,7 @@ var topLevelKeys = []KeyDesc{
 	{"theme.path", "Theme TOML path", nil},
 	{"tui.refresh_interval", "TUI refresh seconds", nil},
 	{"tui.default_tab", "TUI default tab on launch", []string{"issues", "epics", "search", "activity"}},
+	{"tui.preview", "TUI sidebar position", []string{"right", "left", "bottom", "hidden", "auto"}},
 }
 
 // profileFieldKeys are templates relative to a profile.

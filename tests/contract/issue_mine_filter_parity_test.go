@@ -45,8 +45,8 @@ func TestIssueMineSharesListFilterSurface(t *testing.T) {
 		{"single label", []string{"--label", "foo"}, "labels = foo"},
 		{"repeated label", []string{"--label", "foo", "--label", "bar"}, "labels in (foo, bar)"},
 		{"type", []string{"--type", "Bug"}, "issuetype = Bug"},
-		{"epic", []string{"--epic", "KAN-1"}, "parent = KAN-1"},
-		{"key", []string{"--key", "KAN-5"}, "key = KAN-5"},
+		{"epic", []string{"--epic", "JCT-1"}, "parent = JCT-1"},
+		{"key", []string{"--key", "JCT-5"}, "key = JCT-5"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

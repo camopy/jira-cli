@@ -147,7 +147,7 @@ func TestIssueListDoesNotReadExportedMutableDefaultFields(t *testing.T) {
 	}))
 
 	service := NewIssueService(client)
-	if _, _, err := service.List(context.Background(), &IssueListOptions{JQL: "project=KAN"}); err != nil {
+	if _, _, err := service.List(context.Background(), &IssueListOptions{JQL: "project=JCT"}); err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
 	if strings.Join(fields, ",") != strings.Join(defaultIssueListFields, ",") {

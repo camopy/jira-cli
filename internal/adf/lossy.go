@@ -40,6 +40,21 @@ var renderableMarkdownNodes = map[string]bool{
 	"orderedList": true,
 	"listItem":    true,
 	"codeBlock":   true,
+	"blockquote":  true,
+	"panel":       true, // quote with a bold type label
+	"rule":        true,
+	"hardBreak":   true,
+	"mention":     true, // @name
+	"emoji":       true,
+	"status":      true, // inline code chip
+	"inlineCard":  true, // autolink
+	"table":       true,
+	"tableRow":    true,
+	"tableHeader": true,
+	"tableCell":   true,
+	"mediaSingle": true, // labeled [attachment: …] placeholder
+	"mediaGroup":  true,
+	"media":       true,
 }
 
 // renderableMarkdownMarks is the set of mark types the renderer in
@@ -50,6 +65,7 @@ var renderableMarkdownMarks = map[string]bool{
 	"em":     true,
 	"code":   true,
 	"link":   true,
+	"strike": true,
 }
 
 // ToMarkdownLossy renders doc to GFM Markdown and reports every node or

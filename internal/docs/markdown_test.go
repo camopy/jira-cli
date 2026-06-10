@@ -19,7 +19,7 @@ func sampleTree() *cobra.Command {
 		Use:     "create",
 		Short:   "Create an issue",
 		Long:    "Create an issue in a project.",
-		Example: "  jira issue create --project KAN --summary x",
+		Example: "  jira issue create --project JCT --summary x",
 		Run:     func(*cobra.Command, []string) {},
 	}
 	create.Flags().String("project", "", "project key")

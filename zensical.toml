@@ -23,6 +23,7 @@ nav = [
         { Configuration = "config.md" },
     ] },
     { "Working with Jira" = [
+        { TUI = "tui.md" },
         { Issues = "issues.md" },
         { Search = "search.md" },
         { JQL = "jql.md" },

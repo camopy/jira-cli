@@ -17,7 +17,7 @@ import (
 //	               remainder
 func TestFieldValidationStrictAbortsOnInvalidField(t *testing.T) {
 	schema := pipeline.ScreenSchema{
-		Project:     "KAN",
+		Project:     "JCT",
 		IssueType:   "Story",
 		ValidFields: map[string]bool{"summary": true, "description": true, "labels": true},
 	}
@@ -39,7 +39,7 @@ func TestFieldValidationStrictAbortsOnInvalidField(t *testing.T) {
 	if pe.Field != "epic_link" {
 		t.Fatalf("error.field = %q, want epic_link", pe.Field)
 	}
-	if pe.Project != "KAN" || pe.IssueType != "Story" {
+	if pe.Project != "JCT" || pe.IssueType != "Story" {
 		t.Fatalf("error missing project/issue_type context: %+v", pe)
 	}
 	if pe.Reason == "" {
@@ -49,7 +49,7 @@ func TestFieldValidationStrictAbortsOnInvalidField(t *testing.T) {
 
 func TestFieldValidationBestEffortDropsInvalidFields(t *testing.T) {
 	schema := pipeline.ScreenSchema{
-		Project:     "KAN",
+		Project:     "JCT",
 		IssueType:   "Story",
 		ValidFields: map[string]bool{"summary": true, "description": true},
 	}

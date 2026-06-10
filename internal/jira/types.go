@@ -23,6 +23,7 @@ type Issue struct {
 
 type IssueFields struct {
 	Summary      *string                    `json:"summary,omitempty"`
+	IssueType    *IssueType                 `json:"issuetype,omitempty"`
 	Description  *adf.Document              `json:"description,omitempty"`
 	Status       *Status                    `json:"status,omitempty"`
 	Assignee     *User                      `json:"assignee,omitempty"`
@@ -69,6 +70,13 @@ type StatusCategory struct {
 
 type Priority struct {
 	Name *string `json:"name,omitempty"`
+}
+
+// IssueType is the issue's type (Epic, Story, Task, Bug, Sub-task, ...).
+type IssueType struct {
+	Name    *string `json:"name,omitempty"`
+	IconURL *string `json:"iconUrl,omitempty"`
+	Subtask *bool   `json:"subtask,omitempty"`
 }
 
 type User struct {

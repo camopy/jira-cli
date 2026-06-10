@@ -71,7 +71,7 @@ func TestIssueMoveCanonicalProjectIssueTypePayloadBypassesSourceEditScreen(t *te
 		}
 		project, _ := body.Fields["project"].(map[string]any)
 		issueType, _ := body.Fields["issuetype"].(map[string]any)
-		if project["key"] != "KAN" || issueType["name"] != "Task" {
+		if project["key"] != "JCT" || issueType["name"] != "Task" {
 			t.Errorf("move body lost canonical project/issuetype fields: %+v", body.Fields)
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -82,7 +82,7 @@ func TestIssueMoveCanonicalProjectIssueTypePayloadBypassesSourceEditScreen(t *te
 	defer srv.Close()
 
 	input := filepath.Join(t.TempDir(), "move.json")
-	if err := os.WriteFile(input, []byte(`{"fields":{"project":{"key":"KAN"},"issuetype":{"name":"Task"}}}`), 0o600); err != nil {
+	if err := os.WriteFile(input, []byte(`{"fields":{"project":{"key":"JCT"},"issuetype":{"name":"Task"}}}`), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", jiraConfig(t, srv.URL), "issue", "move", "PROJ-1", "--force", "--no-input", "--json-input", input, "--output=json")

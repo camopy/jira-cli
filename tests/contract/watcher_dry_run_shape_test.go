@@ -30,7 +30,7 @@ func TestWatcherDryRunAccountIDPrefixResolvesLocally(t *testing.T) {
 
 	cfg := jiraConfig(t, srv.URL)
 	stdout, stderr, code := runJira(t, "--config", cfg, "--output=json",
-		"issue", "watchers", "add", "KAN-1", "--user", "accountId:712020:abc", "--dry-run")
+		"issue", "watchers", "add", "JCT-1", "--user", "accountId:712020:abc", "--dry-run")
 	if code != 0 {
 		t.Fatalf("watchers add --dry-run exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
 	}
@@ -46,8 +46,8 @@ func TestWatcherDryRunAccountIDPrefixResolvesLocally(t *testing.T) {
 	if env.Data["dry_run"] != true {
 		t.Fatalf("data.dry_run = %#v, want true", env.Data["dry_run"])
 	}
-	if env.Data["key"] != "KAN-1" {
-		t.Fatalf("data.key = %#v, want KAN-1", env.Data["key"])
+	if env.Data["key"] != "JCT-1" {
+		t.Fatalf("data.key = %#v, want JCT-1", env.Data["key"])
 	}
 	if env.Data["account_id_resolved"] != "712020:abc" {
 		t.Fatalf("data.account_id_resolved = %#v, want \"712020:abc\" (locally derivable)", env.Data["account_id_resolved"])
@@ -71,7 +71,7 @@ func TestWatcherDryRunNameEchoesUnresolved(t *testing.T) {
 
 	cfg := jiraConfig(t, srv.URL)
 	stdout, stderr, code := runJira(t, "--config", cfg, "--output=json",
-		"issue", "watchers", "add", "KAN-1", "--user", "alice@example.com", "--dry-run")
+		"issue", "watchers", "add", "JCT-1", "--user", "alice@example.com", "--dry-run")
 	if code != 0 {
 		t.Fatalf("watchers add --dry-run exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
 	}

@@ -204,3 +204,32 @@ func TestLoadReadsExistingConfig(t *testing.T) {
 		t.Fatalf("Load().DefaultProfile = %q, want work", cfg.DefaultProfile)
 	}
 }
+
+// [tui.keys] rebinds dashboard actions: a TOML table of action → key list
+// must land in Config.TUI.Keys verbatim.
+func TestLoadParsesTUIKeyOverrides(t *testing.T) {
+	toml := `default_profile = "default"
+
+[[profiles]]
+name = "default"
+auth_type = "token"
+
+[tui.keys]
+transition = ["x"]
+refresh = ["R", "f5"]
+`
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte(toml), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	cfg, err := config.Load(config.WithPath(path))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got := cfg.TUI.Keys["transition"]; len(got) != 1 || got[0] != "x" {
+		t.Errorf("tui.keys.transition = %v, want [x]", got)
+	}
+	if got := cfg.TUI.Keys["refresh"]; len(got) != 2 || got[0] != "R" || got[1] != "f5" {
+		t.Errorf("tui.keys.refresh = %v, want [R f5]", got)
+	}
+}
