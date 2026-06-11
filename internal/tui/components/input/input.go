@@ -56,6 +56,9 @@ func (l *Line) SetSuggestions(values []string) {
 	l.ti.SetSuggestions(values)
 }
 
+// Suggestions returns the current completion values.
+func (l Line) Suggestions() []string { return l.ti.AvailableSuggestions() }
+
 // Update routes a message (keys, paste) into the input.
 func (l *Line) Update(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd

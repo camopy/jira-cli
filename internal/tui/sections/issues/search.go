@@ -194,7 +194,10 @@ func (s *SearchModel) refreshSuggestions() tea.Cmd {
 		return nil
 	}
 	q := s.jqlInput.Value()
-	if !s.jqlRefLoaded {
+	if q == "" || !s.jqlRefLoaded {
+		// An empty editor offers the saved queries and common openings, not
+		// the instance's field list — its alphabetically-first entry is
+		// usually some plugin's custom field, a baffling first ghost.
 		s.jqlInput.SetSuggestions(s.fallbackSuggestions())
 		return nil
 	}

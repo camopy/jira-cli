@@ -194,6 +194,33 @@ func TestCompletionLinesAreCaseInsensitiveOnThePrefix(t *testing.T) {
 	}
 }
 
+func TestCommonFieldsRankAheadOfPluginFields(t *testing.T) {
+	ref := jira.JQLReference{Fields: []jira.JQLField{
+		{Value: "a4j-incident-creation-deduplication-alias"},
+		{Value: "status"},
+		{Value: "assignee"},
+		{Value: "zzz-custom"},
+	}}
+	got := candidatesFor(ref, jqlContext{kind: wantField})
+	want := []string{"assignee ", "status ", "a4j-incident-creation-deduplication-alias ", "zzz-custom "}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("field ranking = %v, want %v", got, want)
+	}
+}
+
+func TestCommonFunctionsRankAheadOfSLAFunctions(t *testing.T) {
+	ref := jira.JQLReference{Functions: []jira.JQLFunction{
+		{Value: "breached()"},
+		{Value: "currentUser()"},
+		{Value: "openSprints()"},
+	}}
+	got := candidatesFor(ref, jqlContext{kind: wantValue})
+	want := []string{"currentUser()", "openSprints()", "breached()"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("function ranking = %v, want %v", got, want)
+	}
+}
+
 // --- search wiring ---
 
 func completeSearchModel(t *testing.T) *SearchModel {
@@ -237,6 +264,19 @@ func TestTypingGetsTokenAwareFieldCompletion(t *testing.T) {
 	s.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	if got := s.jqlInput.Value(); got != "status " {
 		t.Errorf("tab accepted %q, want %q", got, "status ")
+	}
+}
+
+func TestEmptyEditorOffersOnlySavedQueries(t *testing.T) {
+	// The instance's field list alphabetically starts at some plugin custom
+	// field — a baffling ghost on an empty editor. Until something is typed
+	// only the whole-query fallbacks complete.
+	s := completeSearchModel(t)
+	_, cmd := s.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	s.Update(taskMsg(t, cmd)) // reference data lands
+	want := s.fallbackSuggestions()
+	if got := s.jqlInput.Suggestions(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("empty editor suggestions = %v, want the fallbacks %v", got, want)
 	}
 }
 

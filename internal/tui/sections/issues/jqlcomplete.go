@@ -47,6 +47,46 @@ var (
 	jqlDirections  = []string{"ASC", "DESC"}
 )
 
+// jqlCommonFields and jqlCommonFunctions rank the everyday names ahead of the
+// instance's long tail — plugin custom fields ("a4j-incident-…") and JSM SLA
+// functions ("breached()") would otherwise win alphabetically and ghost as
+// the first suggestion. Unlisted candidates follow, alphabetical.
+var (
+	jqlCommonFields = []string{
+		"project", "assignee", "status", "reporter", "summary", "text",
+		"sprint", "labels", "priority", "type", "issuetype", "component",
+		"fixVersion", "parent", "key", "statusCategory", "resolution",
+		"created", "updated", "due",
+	}
+	jqlCommonFunctions = []string{
+		"currentUser()", "openSprints()", "now()", "startOfDay()",
+		"endOfDay()", "startOfWeek()", "endOfWeek()", "membersOf()",
+	}
+)
+
+// rankCandidates orders cands by their position in priority (trailing spaces
+// and case ignored), then alphabetically for the unlisted rest.
+func rankCandidates(cands, priority []string) []string {
+	rank := make(map[string]int, len(priority))
+	for i, p := range priority {
+		rank[strings.ToLower(p)] = i + 1
+	}
+	at := func(c string) int {
+		if r, ok := rank[strings.ToLower(strings.TrimRight(c, " "))]; ok {
+			return r
+		}
+		return len(priority) + 1
+	}
+	sort.SliceStable(cands, func(i, j int) bool {
+		ri, rj := at(cands[i]), at(cands[j])
+		if ri != rj {
+			return ri < rj
+		}
+		return cands[i] < cands[j]
+	})
+	return cands
+}
+
 // jqlComplete classifies the end of the input. It walks tokens left to right
 // through a tiny clause state machine: field → operator → value → connective,
 // with ORDER BY switching to field → direction. It is deliberately forgiving —
@@ -176,6 +216,7 @@ func candidatesFor(ref jira.JQLReference, c jqlContext) []string {
 		for _, f := range ref.Fields {
 			out = append(out, f.Value+" ")
 		}
+		return rankCandidates(out, jqlCommonFields)
 	case wantOperator:
 		for _, f := range ref.Fields {
 			if strings.EqualFold(f.Value, c.field) {
@@ -188,6 +229,7 @@ func candidatesFor(ref jira.JQLReference, c jqlContext) []string {
 		for _, fn := range ref.Functions {
 			out = append(out, fn.Value)
 		}
+		return rankCandidates(out, jqlCommonFunctions)
 	case wantConnective:
 		out = append(out, jqlConnectives...)
 	case wantDirection:

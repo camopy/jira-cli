@@ -229,8 +229,11 @@ mode, preview.
     quoted when nothing — or an opening quote — has been typed yet, and
     after `in`/`not in` values complete parenthesised). JQL functions
     and `AND`/`OR`/`ORDER BY` complete in their places, and your saved
-    queries complete as whole lines at the start. The completion shows
-    faint as you type; `tab` accepts it. Offline or before the metadata
+    queries complete as whole lines at the start. Everyday names
+    (`project`, `assignee`, `currentUser()`, …) rank ahead of plugin
+    custom fields, and an empty editor offers only the saved queries —
+    token suggestions start once you type. The completion shows faint
+    as you type; `tab` accepts it. Offline or before the metadata
     loads, it falls back to the saved queries and common openings.
 *   **Presets.** `ctrl+p` opens a type-to-filter dropdown over the saved
     queries — matching on the name *or* the JQL text — and `enter`
