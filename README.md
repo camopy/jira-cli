@@ -39,9 +39,9 @@ For issue creation, editing, comments, and ADF payloads, start with
 
 ## Configuration
 
-Configuration lives in `~/.config/jira-cli/config.toml`. Use metadata-only
-profiles; credentials belong in the OS keychain, 1Password, or environment
-fallbacks.
+Configuration lives in `~/.config/jira-cli/config.toml` (on Windows,
+`%AppData%\jira-cli\config.toml`). Use metadata-only profiles; credentials
+belong in the OS keychain, 1Password, or environment fallbacks.
 
 ```sh
 jira config init --no-input \

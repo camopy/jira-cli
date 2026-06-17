@@ -200,7 +200,8 @@ machine modes the whole envelope, including this error, is written to
 ## search saved
 
 Run a query stored on disk by name. Saved queries live under
-`~/.config/jira-cli/queries/<name>.jql` (override the directory via
+`~/.config/jira-cli/queries/<name>.jql` (on Windows,
+`%AppData%\jira-cli\queries\<name>.jql`; override the directory via
 `queries_path` in the profile config). The file format is one JQL
 statement with optional YAML or TOML frontmatter for metadata.
 

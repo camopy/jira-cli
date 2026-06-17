@@ -9,6 +9,13 @@ scoped to a `(profile, base_url, config_path)` tuple and live under:
 ~/.cache/jira-cli/<profile>-<hash>/<resource>.json
 ```
 
+The base directory resolves OS-natively:
+
+| Platform | Cache directory |
+|----------|-----------------|
+| Linux/macOS | `$XDG_CACHE_HOME/jira-cli/...` if `XDG_CACHE_HOME` is set to an absolute path, else `~/.cache/jira-cli/...` |
+| Windows | `%LocalAppData%\cache\jira-cli\...` (e.g. `C:\Users\You\AppData\Local\cache\jira-cli\...`); `XDG_CACHE_HOME` is honored when set to an absolute path |
+
 Each `jira cache <resource>` command primes the matching `<resource>.json`,
 reading from disk when fresh and refetching from Jira when missing,
 stale, or `--refresh` is passed.

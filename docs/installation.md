@@ -371,6 +371,9 @@ Clean those up explicitly if you're walking away from jira entirely.
     rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/jira-cli"
     ```
 
+    On Windows the equivalent dirs are `%AppData%\jira-cli` (config and
+    queries) and `%LocalAppData%\cache\jira-cli` (cache).
+
     If you've already uninstalled the binary, the keyring or 1Password
     item must be removed by hand through the OS keychain app or
     `op item delete`.

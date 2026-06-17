@@ -13,6 +13,13 @@ detail.
 ~/.config/jira-cli/config.toml
 ```
 
+The base directory resolves OS-natively:
+
+| Platform | Config file |
+|----------|-------------|
+| Linux/macOS | `$XDG_CONFIG_HOME/jira-cli/config.toml` if `XDG_CONFIG_HOME` is set to an absolute path, else `~/.config/jira-cli/config.toml` |
+| Windows | `%AppData%\jira-cli\config.toml` (e.g. `C:\Users\You\AppData\Roaming\jira-cli\config.toml`); `XDG_CONFIG_HOME` is honored when set to an absolute path |
+
 Override with `--config <path>` on any command. The directory is created
 on first run by [`config init`](#init). Tokens never live in the config
 file: they sit in the OS keyring, 1Password, or an environment variable,
