@@ -62,7 +62,9 @@ func SanitizeCompletionField(s string) string {
 func Hyperlink(url, text string) string {
 	url = SanitizeTerminalText(url)
 	text = SanitizeTerminalText(text)
-	return clog.NewOutput(io.Discard, clog.ColorAlways).Hyperlink(url, text)
+	logger := clog.New(clog.NewOutput(io.Discard, clog.ColorAlways))
+	logger.SetFieldFormats(clog.Default.FieldFormats())
+	return logger.Output().Hyperlink(url, text)
 }
 
 // isControlRune reports whether r is a C0 or C1 control character (the

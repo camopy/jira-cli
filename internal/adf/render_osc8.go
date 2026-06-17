@@ -71,7 +71,9 @@ func Hyperlink(url, text string) string { return osc8(url, text) }
 func osc8(url, text string) string {
 	url = stripControlBytes(url)
 	text = stripControlBytes(text)
-	return clog.NewOutput(io.Discard, clog.ColorAlways).Hyperlink(url, text)
+	logger := clog.New(clog.NewOutput(io.Discard, clog.ColorAlways))
+	logger.SetFieldFormats(clog.Default.FieldFormats())
+	return logger.Output().Hyperlink(url, text)
 }
 
 // stripControlBytes drops C0 and C1 control characters. Tab, newline and

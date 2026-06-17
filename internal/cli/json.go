@@ -224,7 +224,7 @@ func writeJSON(w io.Writer, data any, mode clog.JSONPrintMode, color clog.ColorM
 	}
 	logger := clog.New(clog.NewOutput(out, color))
 	if printTheme != nil {
-		logger.SetPrintTheme(printTheme)
+		logger.SetTheme(clogtheme.Single(printTheme))
 	}
 	logger.Print().Mode(mode).JSON(data)
 	return ew.err

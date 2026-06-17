@@ -38,8 +38,11 @@ func TestOSC8SanitizesURLAndText(t *testing.T) {
 }
 
 func TestOSC8HonorsClogHyperlinkDisabled(t *testing.T) {
-	clog.SetHyperlinkEnabled(false)
-	t.Cleanup(func() { clog.SetHyperlinkEnabled(true) })
+	formats := clog.Default.FieldFormats()
+	disabled := formats
+	disabled.HyperlinkEnabled = false
+	clog.SetFieldFormats(disabled)
+	t.Cleanup(func() { clog.SetFieldFormats(formats) })
 
 	got := osc8("https://example.com", "example")
 	if strings.Contains(got, "\x1b]8;;") {
