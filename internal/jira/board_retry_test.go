@@ -31,7 +31,8 @@ func TestBoardListAllRidesOutTransientRateLimit(t *testing.T) {
 			_, _ = w.Write([]byte(`{"maxResults":1,"startAt":1,"isLast":true,"values":[{"id":2,"name":"Board 2","type":"scrum"}]}`))
 		}
 	})
-	client := newHTTPHandlerClient(handler,
+	client := newHTTPHandlerClient(
+		handler,
 		WithMaxRetryWait(30*time.Second),
 		withRetrySleep(func(context.Context, time.Duration) error { return nil }),
 		withRetryJitter(func() float64 { return 0 }),
@@ -70,7 +71,8 @@ func TestBoardListAllSurfacesRateLimitAfterBudget(t *testing.T) {
 			_, _ = w.Write([]byte(`{"errorMessages":["rate limited"]}`))
 		}
 	})
-	client := newHTTPHandlerClient(handler,
+	client := newHTTPHandlerClient(
+		handler,
 		WithMaxRetryWait(5*time.Second),
 		withRetrySleep(func(context.Context, time.Duration) error { return nil }),
 		withRetryJitter(func() float64 { return 0 }),

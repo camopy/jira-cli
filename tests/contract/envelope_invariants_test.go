@@ -297,7 +297,8 @@ func TestI1AgentDetectedModeEmitsEnvelopeOnError(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	// Set CLAUDE_CODE=1 — triggers agent detection → ModeCompact, no explicit flag.
-	env, runErr := requireEnvelopeOnStdoutWithEnv(t, bin,
+	env, runErr := requireEnvelopeOnStdoutWithEnv(
+		t, bin,
 		[]string{"CLAUDE_CODE=1"},
 		"issue", "create", "--json-input", badJSON,
 	)

@@ -81,7 +81,8 @@ func boardPlainLine(m map[string]any, style authPlainStyle) string {
 	typeCell := padRight(typeName, 6)
 	projectsCell := boardProjectDescriptor(projects)
 
-	return fmt.Sprintf("  %s  %s  %s  %s",
+	return fmt.Sprintf(
+		"  %s  %s  %s  %s",
 		style.dim(idCell),
 		style.bold(nameCell),
 		style.dim(typeCell),

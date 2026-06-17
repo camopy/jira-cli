@@ -261,7 +261,8 @@ secret_backend = "keyring"
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	cmd := exec.Command(bin, "--config", path, "--output=json", "config", "set", "profiles.work.default_project", "REAL")
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(
+		os.Environ(),
 		"JIRA_PROFILE_WORK_BASE_URL=https://overlay.atlassian.net",
 		"JIRA_PROFILE_WORK_DEFAULT_ISSUE_TYPE=OverlayType",
 	)

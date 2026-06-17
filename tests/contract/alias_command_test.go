@@ -155,7 +155,8 @@ secret_backend = "keyring"
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "alias", "set", "mine", "issue", "list")
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(
+		os.Environ(),
 		"JIRA_PROFILE_WORK_DEFAULT_ISSUE_TYPE=OverlayType",
 		"JIRA_DEFAULT_PROFILE=phantom",
 	)

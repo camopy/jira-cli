@@ -207,7 +207,8 @@ func applyTheme(t *clibtheme.Theme) {
 // tints that don't fight foreground text.
 func tintBg(c color.Color, intensity float64) string {
 	r, g, b, _ := c.RGBA()
-	return fmt.Sprintf("\x1b[48;2;%d;%d;%dm",
+	return fmt.Sprintf(
+		"\x1b[48;2;%d;%d;%dm",
 		int(float64(r>>8)*intensity),
 		int(float64(g>>8)*intensity),
 		int(float64(b>>8)*intensity),

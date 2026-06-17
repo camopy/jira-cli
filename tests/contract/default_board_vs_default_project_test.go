@@ -49,7 +49,8 @@ func TestDefaultBoardWinsExclusivelyOverDefaultProject(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", cacheRoot)
 
 	srv := newFakeSearchServer(t)
-	cfg := jiraConfigWithBothDefaults(t, srv.srv.URL,
+	cfg := jiraConfigWithBothDefaults(
+		t, srv.srv.URL,
 		"UNRELATED",          // default_project intentionally pointing nowhere
 		"Engineering Sprint", // default_board → ENG
 	)

@@ -102,7 +102,8 @@ func TestAuthLoginVerifiesAndPersistsIdentity(t *testing.T) {
 	t.Setenv("JIRA_TEST_TOKEN", "good-token")
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 
-	stdout, stderr, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+	stdout, stderr, err := runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
 		"--base-url", srv.URL,
 		"--email", "ada@example.com",
 		"--backend", "keyring",
@@ -145,7 +146,8 @@ func TestAuthLoginAbortsWhenVerificationFails(t *testing.T) {
 	t.Setenv("JIRA_TEST_TOKEN", "wrong-token")
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 
-	_, _, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+	_, _, err := runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
 		"--base-url", srv.URL,
 		"--email", "ada@example.com",
 		"--backend", "keyring",
@@ -182,7 +184,8 @@ func TestAuthLoginRejectedCredentialMapsRemediationToHint(t *testing.T) {
 	t.Setenv("JIRA_TEST_TOKEN", "wrong-token")
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 
-	_, _, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+	_, _, err := runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
 		"--base-url", srv.URL,
 		"--email", "ada@example.com",
 		"--backend", "keyring",
@@ -217,7 +220,8 @@ func TestAuthLoginVerificationServerErrorIsNotReportedAsBadCredential(t *testing
 	t.Setenv("JIRA_TEST_TOKEN", "good-token")
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 
-	_, _, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+	_, _, err := runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
 		"--base-url", srv.URL,
 		"--email", "ada@example.com",
 		"--backend", "keyring",
@@ -248,7 +252,8 @@ func TestAuthLoginVerificationServerErrorMapsRemediationToHint(t *testing.T) {
 	t.Setenv("JIRA_TEST_TOKEN", "good-token")
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 
-	_, _, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+	_, _, err := runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
 		"--base-url", srv.URL,
 		"--email", "ada@example.com",
 		"--backend", "keyring",
@@ -283,7 +288,8 @@ func TestAuthLoginSkipVerifyDoesNotContactServer(t *testing.T) {
 	t.Setenv("JIRA_TEST_TOKEN", "unchecked-token")
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 
-	stdout, stderr, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+	stdout, stderr, err := runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
 		"--base-url", srv.URL,
 		"--email", "ada@example.com",
 		"--backend", "keyring",
@@ -319,7 +325,8 @@ func TestAuthLoginRejectsCleartextBaseURLBeforeSendingToken(t *testing.T) {
 	t.Setenv("JIRA_TEST_TOKEN", "secret-token")
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 
-	_, _, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+	_, _, err := runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
 		"--base-url", "http://insecure.example.invalid",
 		"--email", "ada@example.com",
 		"--backend", "keyring",
@@ -357,7 +364,8 @@ func TestAuthLoginRejectsUnsafeProfileNameBeforeSendingToken(t *testing.T) {
 	t.Setenv("JIRA_TEST_TOKEN", "secret-token")
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 
-	_, _, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+	_, _, err := runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
 		"--profile-name", "Bad Name",
 		"--base-url", srv.URL,
 		"--email", "ada@example.com",
@@ -440,7 +448,8 @@ func TestAuthLoginFreshConfigCustomNameLeavesNoSeededDefault(t *testing.T) {
 	t.Setenv("JIRA_TEST_TOKEN", "tok")
 	configPath := filepath.Join(t.TempDir(), "config.toml") // does not exist yet
 
-	_, stderr, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+	_, stderr, err := runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
 		"--profile-name", "work",
 		"--base-url", "https://company.atlassian.net",
 		"--email", "ada@example.com",
@@ -473,7 +482,8 @@ func TestAuthLoginFreshConfigDefaultNameKeepsProfile(t *testing.T) {
 	t.Setenv("JIRA_TEST_TOKEN", "tok")
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 
-	_, stderr, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+	_, stderr, err := runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
 		"--base-url", "https://company.atlassian.net",
 		"--email", "ada@example.com",
 		"--backend", "keyring",
@@ -519,7 +529,8 @@ func TestAuthLoginSkipVerifyClearsStaleAccountIDOnEmailChange(t *testing.T) {
 	}
 
 	t.Setenv("JIRA_TEST_TOKEN", "new-token")
-	_, stderr, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+	_, stderr, err := runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
 		"--base-url", "https://company.atlassian.net",
 		"--email", "new@example.com",
 		"--credential-env", "JIRA_TEST_TOKEN",
@@ -550,7 +561,8 @@ func TestAuthLoginRequiresEmailWhenCredentialSupplied(t *testing.T) {
 	t.Setenv("JIRA_TEST_TOKEN", "orphan-token")
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 
-	_, stderr, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+	_, stderr, err := runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
 		"--profile-name", "noemail",
 		"--base-url", srv.URL,
 		"--backend", "keyring",
@@ -577,7 +589,8 @@ func TestAuthLoginRejectsJSONInputInInteractiveMode(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	_, _, err := runAuthLoginInProcess(t, cli.ModePlain, configPath,
+	_, _, err := runAuthLoginInProcess(
+		t, cli.ModePlain, configPath,
 		"--no-input=false",
 		"--json-input", jsonPath,
 	)
@@ -612,7 +625,8 @@ func TestAuthLoginHeadlessReloginInheritsPersistedEmail(t *testing.T) {
 	}
 
 	t.Setenv("JIRA_TEST_TOKEN", "rotated-token")
-	_, stderr, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+	_, stderr, err := runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
 		"--base-url", "https://company.atlassian.net",
 		"--credential-env", "JIRA_TEST_TOKEN",
 		"--skip-verify",
@@ -658,7 +672,8 @@ func TestAuthLoginVerifiedWithoutAccountIDClearsStaleOnEmailChange(t *testing.T)
 	}
 
 	t.Setenv("JIRA_TEST_TOKEN", "new-token")
-	_, stderr, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+	_, stderr, err := runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
 		"--base-url", srv.URL,
 		"--email", "new@example.com",
 		"--credential-env", "JIRA_TEST_TOKEN",
@@ -702,7 +717,8 @@ func TestAuthLoginReloginUsesProfileBackendNotFlagDefault(t *testing.T) {
 
 	t.Setenv("JIRA_TEST_TOKEN", "op-token")
 	// No --backend: the profile's 1Password backend must be used for storage.
-	_, _, _ = runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+	_, _, _ = runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
 		"--base-url", "https://company.atlassian.net",
 		"--credential-env", "JIRA_TEST_TOKEN",
 		"--skip-verify",
@@ -736,7 +752,8 @@ func TestAuthLoginRejectsBackendSwitchOnRelogin(t *testing.T) {
 	}
 
 	t.Setenv("JIRA_TEST_TOKEN", "switch-token")
-	_, _, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+	_, _, err := runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
 		"--base-url", "https://company.atlassian.net",
 		"--email", "dev@example.com",
 		"--backend", "keyring",
@@ -782,7 +799,8 @@ func TestAuthLoginAllowsMatchingExplicitBackend(t *testing.T) {
 	}
 
 	t.Setenv("JIRA_TEST_TOKEN", "same-backend-token")
-	_, stderr, err := runAuthLoginInProcess(t, cli.ModeJSON, configPath,
+	_, stderr, err := runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
 		"--base-url", "https://company.atlassian.net",
 		"--email", "dev@example.com",
 		"--backend", "keyring",
@@ -813,7 +831,8 @@ func TestAuthLoginAnnouncesAuthenticatedUser(t *testing.T) {
 	t.Setenv("JIRA_TEST_TOKEN", "good-token")
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 
-	_, stderr, err := runAuthLoginInProcess(t, cli.ModePlain, configPath,
+	_, stderr, err := runAuthLoginInProcess(
+		t, cli.ModePlain, configPath,
 		"--base-url", srv.URL,
 		"--email", "grace@example.com",
 		"--backend", "keyring",

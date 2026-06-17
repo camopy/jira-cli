@@ -11,7 +11,8 @@ import (
 func jumpModel(t *testing.T) *Model {
 	t.Helper()
 	m := changeModel(t)
-	land(m,
+	land(
+		m,
 		mkIssue("JCT-1", "To Do", "first"),
 		mkIssue("JCT-2", "In Progress", "second"),
 		mkIssue("JCT-3", "Done", "third"),

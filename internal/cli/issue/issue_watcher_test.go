@@ -114,7 +114,8 @@ func TestWatchersListEmitsEnvelopeShape(t *testing.T) {
 		case "/rest/api/3/myself":
 			_, _ = w.Write([]byte(myselfFixture))
 		case "/rest/api/3/issue/JCT-1/watchers":
-			_, _ = w.Write([]byte(watcherListJSON(true, 2,
+			_, _ = w.Write([]byte(watcherListJSON(
+				true, 2,
 				[2]string{"acc-alice", "Alice"},
 				[2]string{"acc-bob", "Bob"},
 			)))

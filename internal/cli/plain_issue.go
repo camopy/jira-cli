@@ -55,7 +55,8 @@ func WriteIssueViewPlain(w io.Writer, command string, data any, opts ...PlainOpt
 	if assignee == "" {
 		assignee = "unassigned"
 	}
-	logger.Info().Parts(clog.PartMessage).Msg(fmt.Sprintf("  status: %s  priority: %s  assignee: %s",
+	logger.Info().Parts(clog.PartMessage).Msg(fmt.Sprintf(
+		"  status: %s  priority: %s  assignee: %s",
 		firstNonEmpty(status, "unknown"),
 		firstNonEmpty(priority, "none"),
 		assignee,

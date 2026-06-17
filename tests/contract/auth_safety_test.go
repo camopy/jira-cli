@@ -114,7 +114,8 @@ workday_seconds = 28800
 		_ = store.Delete(context.Background(), probeRef)
 	})
 
-	cmd := exec.Command(bin, "--config", configPath, "--output=json", "auth", "login",
+	cmd := exec.Command(
+		bin, "--config", configPath, "--output=json", "auth", "login",
 		"--profile-name", "default",
 		"--base-url", "https://work.atlassian.net",
 		"--email", "user@example.com",
@@ -137,7 +138,8 @@ workday_seconds = 28800
 	}
 	beforeHash := sha256.Sum256(before)
 
-	cmd = exec.Command(bin, "--config", configPath, "--output=json", "auth", "login",
+	cmd = exec.Command(
+		bin, "--config", configPath, "--output=json", "auth", "login",
 		"--profile-name", probeProfile,
 		"--base-url", rejectingJira.URL,
 		"--email", "john.doe@example.com",
@@ -287,7 +289,8 @@ secret_backend = "keyring"
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	cmd := exec.Command(bin, "--config", path, "--output=json", "auth", "whoami", "--save")
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(
+		os.Environ(),
 		"JIRA_TOKEN_WORK=test-token",
 		"JIRA_PROFILE_WORK_DEFAULT_ISSUE_TYPE=OverlayType",
 		"JIRA_DEFAULT_PROFILE=work",
@@ -333,7 +336,8 @@ secret_backend = "keyring"
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	cmd := exec.Command(bin, "--config", path, "--profile", "ghost", "--output=json", "auth", "whoami", "--save")
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(
+		os.Environ(),
 		"JIRA_TOKEN_GHOST=test-token",
 		"JIRA_PROFILE_GHOST_BASE_URL="+srv.URL,
 	)
@@ -415,7 +419,8 @@ secret_backend = "keyring"
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	cmd := exec.Command(bin, "--config", path, "--output=json", "auth", "whoami", "--save")
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(
+		os.Environ(),
 		"JIRA_TOKEN_WORK=test-token",
 		"JIRA_PROFILE_WORK_BASE_URL="+serverB.URL,
 		"JIRA_DEFAULT_PROFILE=work",

@@ -142,7 +142,8 @@ func bulkModel(t *testing.T, svc fakeServices) *Model {
 	ctx := newTestCtx(svc)
 	m := New(ctx).(*Model)
 	m.Init(ctx)
-	land(m,
+	land(
+		m,
 		mkIssue("JCT-1", "To Do", "a"),
 		mkIssue("JCT-2", "To Do", "b"),
 		mkIssue("JCT-3", "To Do", "c"),

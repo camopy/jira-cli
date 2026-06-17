@@ -44,11 +44,13 @@ func TestFirstFetchMarksNothing(t *testing.T) {
 
 func TestRefreshMarksNewAndUpdatedRows(t *testing.T) {
 	m := changeModel(t)
-	land(m,
+	land(
+		m,
 		upIssue("JCT-1", "To Do", "a", "2026-06-01T10:00:00.000+0000"),
 		upIssue("JCT-2", "To Do", "b", "2026-06-01T10:00:00.000+0000"),
 	)
-	land(m,
+	land(
+		m,
 		upIssue("JCT-1", "To Do", "a", "2026-06-01T10:00:00.000+0000"),       // unchanged
 		upIssue("JCT-2", "In Progress", "b", "2026-06-02T09:00:00.000+0000"), // updated
 		upIssue("JCT-3", "To Do", "c", "2026-06-02T09:30:00.000+0000"),       // new
@@ -67,7 +69,8 @@ func TestRefreshMarksNewAndUpdatedRows(t *testing.T) {
 func TestChangeMarkRendersDotUntilViewed(t *testing.T) {
 	m := changeModel(t)
 	land(m, upIssue("JCT-1", "To Do", "a", "1"))
-	land(m,
+	land(
+		m,
 		upIssue("JCT-1", "To Do", "a", "1"),
 		upIssue("JCT-2", "To Do", "b", "2"),
 	)
@@ -117,7 +120,8 @@ func TestFetchMoreRegistersWithoutMarking(t *testing.T) {
 		t.Errorf("pagination marked %v, want none (it loads old issues, not changes)", m.changed)
 	}
 	// A later refresh must not call the paged-in issue "new".
-	land(m,
+	land(
+		m,
 		upIssue("JCT-1", "To Do", "a", "1"),
 		upIssue("JCT-2", "To Do", "b", "2"),
 	)
@@ -145,7 +149,8 @@ func TestRefreshReorderKeepsUnviewedDot(t *testing.T) {
 	land(m, upIssue("JCT-1", "To Do", "a", "1"))
 	// The refresh inserts a new issue ABOVE the old selection: the stale
 	// cursor index briefly points at the new row, which must keep its dot.
-	land(m,
+	land(
+		m,
 		upIssue("JCT-9", "To Do", "brand new on top", "9"),
 		upIssue("JCT-1", "To Do", "a", "1"),
 	)
@@ -172,7 +177,8 @@ func TestPagedInIssueNotNewWhenRerankedOntoPageOne(t *testing.T) {
 		issues: []*jira.Issue{upIssue("JCT-2", "To Do", "b", "2")},
 	}})
 	// JCT-2 re-ranks onto page one unchanged: previously seen, not "new".
-	land(m,
+	land(
+		m,
 		upIssue("JCT-2", "To Do", "b", "2"),
 		upIssue("JCT-1", "To Do", "a", "1"),
 	)

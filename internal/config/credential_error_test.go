@@ -176,7 +176,7 @@ func TestClassifyCredentialErrorDoesNotLeakSecrets(t *testing.T) {
 }
 
 func containsSecretLike(s string) bool {
-	return len(s) > 0 && (contains(s, "super-secret-value-12345"))
+	return len(s) > 0 && contains(s, "super-secret-value-12345")
 }
 
 func contains(haystack, needle string) bool {

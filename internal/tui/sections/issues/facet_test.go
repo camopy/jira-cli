@@ -22,7 +22,8 @@ func facetIssue(key, status, assignee string, labels ...string) *jira.Issue {
 func facetModel(t *testing.T) *Model {
 	t.Helper()
 	m := changeModel(t)
-	land(m,
+	land(
+		m,
 		facetIssue("JCT-1", "To Do", "Ann", "infra"),
 		facetIssue("JCT-2", "In Progress", "Ann", "infra", "urgent"),
 		facetIssue("JCT-3", "In Progress", "Bob"),

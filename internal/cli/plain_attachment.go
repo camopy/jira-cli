@@ -75,7 +75,8 @@ func attachmentPlainLine(m map[string]any, style authPlainStyle) string {
 		author = "(unknown)"
 	}
 
-	return fmt.Sprintf("  %s  %s  %s  by %s  %s",
+	return fmt.Sprintf(
+		"  %s  %s  %s  by %s  %s",
 		style.bold(id),
 		filename,
 		style.dim(attachmentHumanBytes(size)),

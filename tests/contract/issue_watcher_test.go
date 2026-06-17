@@ -61,7 +61,8 @@ func runJiraWatchers(t *testing.T, srvURL, profileEnv string, args ...string) ([
 // ----- watchers list contract ----------
 
 func TestWatchersListEnvelopeShape(t *testing.T) {
-	body := watchersBody(true, 3,
+	body := watchersBody(
+		true, 3,
 		[2]string{"acc-alice", "Alice"},
 		[2]string{"acc-bob", "Bob"},
 		[2]string{"acc-carol", "Carol"},
@@ -133,7 +134,8 @@ func TestWatchersAddPostsRawAccountIDStringAndReadsBack(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
+	out, err := runJiraWatchers(
+		t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
 		"issue", "watchers", "add", "JCT-1", "--user", "me",
 	)
 	if err != nil {
@@ -190,7 +192,8 @@ func TestWatchersAddIdempotentWhenAlreadyWatching(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
+	out, err := runJiraWatchers(
+		t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
 		"issue", "watchers", "add", "JCT-1", "--user", "me",
 	)
 	if err != nil {
@@ -232,7 +235,8 @@ func TestWatchersAddNoReadbackBareShape(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
+	out, err := runJiraWatchers(
+		t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
 		"issue", "watchers", "add", "JCT-1", "--user", "me", "--no-readback",
 	)
 	if err != nil {
@@ -281,7 +285,8 @@ func TestWatchersRemoveDeletesByAccountIDAndReadsBack(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
+	out, err := runJiraWatchers(
+		t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
 		"issue", "watchers", "remove", "JCT-1", "--user", "me",
 	)
 	if err != nil {
@@ -332,7 +337,8 @@ func TestWatchersAddUserMeSkipsUserSearch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
+	out, err := runJiraWatchers(
+		t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
 		"issue", "watchers", "add", "JCT-1", "--user", "me",
 	)
 	if err != nil {
@@ -367,7 +373,8 @@ func TestWatchersAddAccountIDPrefixSkipsUserSearch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
+	out, err := runJiraWatchers(
+		t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
 		"issue", "watchers", "add", "JCT-1", "--user", "accountId:712020:abc",
 	)
 	if err != nil {
@@ -401,7 +408,8 @@ func TestWatchersAddEmailQueriesUserSearch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
+	out, err := runJiraWatchers(
+		t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
 		"issue", "watchers", "add", "JCT-1", "--user", "alice@example.com",
 	)
 	if err != nil {
@@ -432,7 +440,8 @@ func TestWatchersAddAmbiguousReturnsExit3WithCandidates(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
+	out, err := runJiraWatchers(
+		t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
 		"issue", "watchers", "add", "JCT-1", "--user", "alice",
 	)
 	if err == nil {
@@ -475,7 +484,8 @@ func TestWatchersAddZeroMatchReturnsExit2(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	out, err := runJiraWatchers(t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
+	out, err := runJiraWatchers(
+		t, srv.URL, "JIRA_TOKEN_DEFAULT=test-token",
 		"issue", "watchers", "add", "JCT-1", "--user", "ghost@example.com",
 	)
 	if err == nil {
