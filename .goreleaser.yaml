@@ -21,11 +21,12 @@ builds:
     goos:
       - darwin
       - linux
+      - windows
     goarch:
       - amd64
       - arm64
-    # Ship darwin/arm64 and linux/amd64+arm64 only. Intel macOS is not a
-    # release target, so drop the darwin/amd64 combination.
+    # Ship darwin/arm64, linux/amd64+arm64, and windows/amd64+arm64. Intel
+    # macOS is not a release target, so drop the darwin/amd64 combination.
     ignore:
       - goos: darwin
         goarch: amd64
@@ -47,6 +48,10 @@ archives:
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
     formats:
       - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
 
 checksum:
   name_template: checksums.txt
