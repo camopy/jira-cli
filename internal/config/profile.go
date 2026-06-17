@@ -139,7 +139,7 @@ func Defaults() Config {
 			DefaultTab:      "issues",
 			Tabs:            []string{"issues", "epics", "search", "activity"},
 		},
-		QueriesPath: "~/.config/jira-cli/queries",
+		QueriesPath: DefaultQueriesPath(),
 		Aliases:     map[string]string{},
 	}
 }

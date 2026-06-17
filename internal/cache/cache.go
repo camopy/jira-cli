@@ -204,7 +204,7 @@ func ClearProfile(profile string) (int, error) {
 }
 
 func dirRoot() string {
-	root, err := shell.XDGCacheHome()
+	root, err := shell.CacheDir()
 	if err != nil || root == "" {
 		root = ".cache"
 	}

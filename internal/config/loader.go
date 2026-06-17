@@ -286,11 +286,24 @@ func (c *Config) Set(key, value string) error {
 }
 
 func DefaultPath() string {
-	root, err := shell.XDGConfigHome()
+	return filepath.Join(configRoot(), "jira-cli", "config.toml")
+}
+
+// DefaultQueriesPath returns the default saved-queries directory, resolved
+// under the same OS-native config root as DefaultPath so the two stay
+// consistent across platforms (~/.config on Unix, %AppData% on Windows).
+func DefaultQueriesPath() string {
+	return filepath.Join(configRoot(), "jira-cli", "queries")
+}
+
+// configRoot resolves the OS-native config base directory, falling back to a
+// relative ".config" only when the user's directory cannot be determined.
+func configRoot() string {
+	root, err := shell.ConfigDir()
 	if err != nil || root == "" {
 		root = ".config"
 	}
-	return filepath.Join(root, "jira-cli", "config.toml")
+	return root
 }
 
 func ensureConfig(path string) error {

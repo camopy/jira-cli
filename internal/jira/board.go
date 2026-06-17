@@ -302,8 +302,9 @@ func (s *boardService) ProjectsForBoard(ctx context.Context, boardID int) ([]str
 }
 
 // BoardsCacheFile is the on-disk envelope persisted under
-// `${XDG_CACHE_HOME:-~/.cache}/jira-cli/<profile>/boards.json` per
-// data-model.md > BoardsCache. Carried inside the generic cache.Entry's
+// `<cache-dir>/jira-cli/<profile>/boards.json` (the OS-native cache dir:
+// `${XDG_CACHE_HOME:-~/.cache}` on Unix, `%LocalAppData%\cache` on Windows)
+// per data-model.md > BoardsCache. Carried inside the generic cache.Entry's
 // Data field so the existing internal/cache machinery (atomic write,
 // 0600 perms, TTL freshness) round-trips it unchanged.
 type BoardsCacheFile struct {
