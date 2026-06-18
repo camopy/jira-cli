@@ -16,10 +16,15 @@ When: a fresh profile, a missing keyring entry, or a rotated token blocks any ot
 Resolution order: the environment override is checked first; if unset, the profile's configured backend (`secret_backend = "keyring"` or `"1password"`) is used.
 
 # auth type
-- One of `token`, `basic`, `pat`, `mtls`. Anything else returns exit 3 — no fake authenticated profile is stored.
+- Jira Cloud only, so `auth_type` is always `token` (set automatically — there is no `--auth-type` flag). This one type covers both classic and scoped (granular) Atlassian API tokens.
+
+# token flavor (auto-detected — no flags)
+- **Classic** token: authenticates at the site `base_url` (`https://<site>.atlassian.net/...`).
+- **Scoped (granular)** token: authenticates the same way (HTTP Basic email+token) but the site host rejects it; it works only through the Atlassian gateway `https://api.atlassian.com/ex/jira/<cloud_id>/...`.
+- The token string carries no type marker, so `auth login` detects it by trying it: verify against the site; on a 401/403, discover the `cloud_id` (unauthenticated `<base_url>/_edge/tenant_info`) and re-verify against the gateway. A gateway success means scoped — the `cloud_id` is stored on the profile and all later requests route through the gateway. There are NO `--scoped`/`--cloud-id` flags.
 
 # command shape
-- First-time TTY: bare `jira auth login` walks profile name → base URL → email → auth type → backend → credential prompt (reads stdin without echoing).
+- First-time TTY: bare `jira auth login` walks profile name → base URL → email → backend → credential prompt (reads stdin without echoing). Classic vs scoped is detected automatically.
 - Headless (CI / agent): `--no-input` with explicit flags for every field. Secret feeds via `--secret-stdin` (keyring) or `--vault` + `--item` (1Password).
 
 # guard
@@ -35,17 +40,16 @@ Resolution order: the environment override is checked first; if unset, the profi
     --profile-name work \
     --base-url https://company.atlassian.net \
     --email dev@example.com \
-    --auth-type token \
     --backend keyring \
     --secret-stdin
   ```
+- Scoped (granular) token: identical command — the same headless invocation above auto-detects scoped (site 401 → tenant_info → gateway) and stores `cloud_id`. No extra flags.
 - Headless, 1Password backend:
   ```sh
   jira auth login --no-input \
     --profile-name work \
     --base-url https://company.atlassian.net \
     --email dev@example.com \
-    --auth-type token \
     --backend 1password \
     --vault Engineering \
     --item jira-cli-work
@@ -75,8 +79,8 @@ Further reading:
 
 **Behavior**
 - `auth login --no-input` with **partial flags merges** into the existing profile. This protects against mistyped one-flag updates wiping unrelated fields like `email` or `account_id`. To replace cleanly, pass every field.
-- `auth login` in a TTY pre-fills profile metadata from the active/configured profile, including `base_url`, `email`, and backend-specific 1Password fields.
-- Auth types accepted: `token`, `basic`, `pat`, `mtls`. Anything else returns exit 3.
+- `auth login` in a TTY pre-fills profile metadata from the active/configured profile, including `base_url`, `email`, `cloud_id`, and backend-specific 1Password fields.
+- `auth_type` is always `token` (Jira Cloud); it covers classic and scoped tokens. The flavor is auto-detected at login (site probe, then gateway fallback) and recorded as the profile's `cloud_id` when scoped. `auth status` / `auth login` report `token_type` (`classic` | `scoped`). There are no scoped-specific flags.
 - Secret hygiene contract (HTTP-transport-level — enforced once, not per command):
   - Secrets are **never** stored in the TOML config — only metadata (backend selector, vault, item ref).
   - All logging, including `--debug`, redacts `Authorization` headers and any field named `secret` / `token` / `api_token` / `cookie`.
@@ -87,7 +91,8 @@ Further reading:
 | Symptom | Cause | Next |
 |---|---|---|
 | Exit 1 on every call | Credential missing or expired | `jira auth status` → identify failing backend → `jira auth login --profile-name <name>` |
-| `unsupported auth type "X"` | Typo in `--auth-type` | Use one of `token`, `basic`, `pat`, `mtls` |
+| Scoped token: 401/403 on `/myself` despite a valid token | Granular token missing required scopes | Add the read scopes Atlassian requires for `/myself` (`read:jira-user`, `read:user:jira`, `read:application-role:jira`, `read:group:jira`, `read:avatar:jira`) to the token at id.atlassian.com |
+| Scoped token rejected at login (site 401, gateway not reached) | `_edge/tenant_info` blocked, so scoped can't be auto-detected | Set the id manually: `jira config set profiles.<name>.cloud_id <id>` (find it at `https://<site>.atlassian.net/_edge/tenant_info`) |
 | `credential not found` | Backend has no entry for this profile | `jira auth login --profile-name <name>` |
 | `OP_SERVICE_ACCOUNT_TOKEN not set` | 1Password service-account env missing | Export it, or fall back to keyring backend via `jira auth migrate --backend keyring` |
 | Exit 3, `1Password backend requires a vault` / `requires an item` | `--backend 1password` headless without `--vault`/`--item` | Pass both `--vault` and `--item` — they form the secret reference and are validated up front, before any network call |

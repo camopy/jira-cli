@@ -301,7 +301,8 @@ before the next call turns into a 429.
 | `name` | Lookup key; matches `--profile` and `JIRA_DEFAULT_PROFILE` |
 | `base_url` | Jira site URL (e.g. `https://example.atlassian.net`) |
 | `email` | Atlassian account email; used as the auth username with API tokens |
-| `auth_type` | `token` is the only supported value today |
+| `auth_type` | `token` is the only supported value (covers both classic and scoped API tokens) |
+| `cloud_id` | Atlassian cloudId for a [scoped (granular) token](auth.md#scoped-granular-api-tokens); normally set automatically by `auth login` token detection. Present = route through the gateway; empty = classic, site-addressed token |
 | `account_id` | Filled in by [`auth login`](auth.md); enables `--assignee me` |
 | `secret_backend` | `keyring`, `onepassword`, or `env` |
 | `onepassword_account`, `vault`, `item` | 1Password addressing when `secret_backend = "onepassword"` |

@@ -61,8 +61,9 @@ jira auth login
 jira auth token
 ```
 
-Use `token`, `basic`, `pat`, or `mtls` for `auth login`. Unsupported auth types
-are rejected instead of being stored as fake authenticated profiles.
+`auth login` uses `auth_type = token` (the only supported value); it covers
+both classic and scoped (granular) API tokens. Unsupported auth types are
+rejected instead of being stored as fake authenticated profiles.
 
 The 1Password backend uses the Go SDK when `onepassword_account` is configured
 for desktop-app auth or `OP_SERVICE_ACCOUNT_TOKEN` is present for service-account
@@ -95,11 +96,14 @@ item = "jira-cli-work"
 
 ### Token support
 
-jira talks to **Jira Cloud only**; Server/Data Center are not supported. Today
-the CLI supports classic Atlassian API tokens. Scoped API tokens are planned for
-a future auth update because they require Atlassian's gateway URL
-(`https://api.atlassian.com/ex/jira/<cloudId>/...`) instead of the normal
-`https://your-site.atlassian.net/...` REST base URL.
+jira talks to **Jira Cloud only**; Server/Data Center are not supported. The
+CLI supports both classic Atlassian API tokens and scoped (granular) API
+tokens, and `jira auth login` **detects which you have automatically** — there
+are no scoped-specific flags. Classic tokens hit the site REST base URL
+(`https://your-site.atlassian.net/...`); scoped tokens are auto-detected at
+login (verified against the site, then the gateway) and routed through
+Atlassian's gateway (`https://api.atlassian.com/ex/jira/<cloudId>/...`) via a
+stored `cloud_id`. See [docs/auth.md](docs/auth.md).
 
 ## TUI
 

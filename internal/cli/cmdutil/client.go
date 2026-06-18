@@ -118,7 +118,12 @@ func JiraClientForProfile(cmd *cobra.Command, profile config.Profile) (*jira.Cli
 	}
 	debug, _ := cmd.Root().PersistentFlags().GetBool("debug")
 	opts := []jira.Option{
-		jira.WithBaseURL(profile.BaseURL),
+		// ClientBaseURL is the site URL for a classic token and the Atlassian
+		// gateway (https://api.atlassian.com/ex/jira/<cloud_id>/) for a scoped
+		// token. Routing diverges here and nowhere else: the client emits
+		// relative paths against this base, so every REST/Agile call and the
+		// search/jql read-whitelist follow automatically.
+		jira.WithBaseURL(profile.ClientBaseURL()),
 		jira.WithHTTPTimeout(time.Duration(profile.TimeoutSeconds) * time.Second),
 		// Single source of truth for the read-only gate. Set on the client
 		// so EVERY mutation across EVERY command is automatically refused

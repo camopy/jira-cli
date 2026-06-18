@@ -23,6 +23,42 @@ type AuthType string
 
 const AuthTypeToken AuthType = "token"
 
+// AtlassianGatewayBaseURL is the Atlassian API gateway root. Scoped (granular)
+// API tokens are rejected by the site host and only work when REST calls are
+// addressed through this gateway with the site's cloudId in the path. Classic
+// API tokens hit the site host directly and never touch the gateway.
+const AtlassianGatewayBaseURL = "https://api.atlassian.com"
+
+// GatewayBaseURL builds the REST base URL a scoped-token profile must target:
+// https://api.atlassian.com/ex/jira/<cloudID>/ . The trailing slash is load
+// bearing — the Jira client resolves its relative paths (rest/api/3/...)
+// against this base, and a missing slash would drop the /ex/jira/<cloudID>
+// segment.
+func GatewayBaseURL(cloudID string) string {
+	return AtlassianGatewayBaseURL + "/ex/jira/" + strings.TrimSpace(cloudID) + "/"
+}
+
+// ValidateCloudID checks that a cloud_id is a plausible, URL-path-safe
+// Atlassian cloudId (a UUID in practice). It is deliberately lenient about the
+// exact shape — Atlassian has never promised the UUID format — but rejects
+// blanks and anything that could break the gateway path (spaces, slashes,
+// control bytes).
+func ValidateCloudID(id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return errors.New("cloud_id is required for a scoped (granular) API token")
+	}
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9',
+			r == '-', r == '_', r == '.':
+		default:
+			return fmt.Errorf("cloud_id %q contains an invalid character %q; expected a UUID-like identifier", id, string(r))
+		}
+	}
+	return nil
+}
+
 type SecretBackend string
 
 const (
@@ -95,14 +131,23 @@ type Profile struct {
 	// scope. NOT validated at set time; the cache may not exist yet.
 	// Use-time validation lives in boardscope.FromFlags. An explicit
 	// `--board ""` suppresses any configured default.
-	DefaultBoard       string        `koanf:"default_board" toml:"default_board"`
-	RefreshInterval    int           `koanf:"refresh_interval" toml:"refresh_interval"`
-	TimeoutSeconds     int           `koanf:"timeout" toml:"timeout"`
-	WorkdaySeconds     int           `koanf:"workday_seconds" toml:"workday_seconds"`
-	SecretBackend      SecretBackend `koanf:"secret_backend" toml:"secret_backend"`
-	OnePasswordAccount string        `koanf:"onepassword_account" toml:"onepassword_account"`
-	Vault              string        `koanf:"vault" toml:"vault"`
-	Item               string        `koanf:"item" toml:"item"`
+	DefaultBoard    string        `koanf:"default_board" toml:"default_board"`
+	RefreshInterval int           `koanf:"refresh_interval" toml:"refresh_interval"`
+	TimeoutSeconds  int           `koanf:"timeout" toml:"timeout"`
+	WorkdaySeconds  int           `koanf:"workday_seconds" toml:"workday_seconds"`
+	SecretBackend   SecretBackend `koanf:"secret_backend" toml:"secret_backend"`
+	// CloudID, when set, marks this profile as using a scoped (granular)
+	// Atlassian API token. The auth mechanism is unchanged — HTTP Basic with
+	// the account email and token — but REST calls must route through the
+	// Atlassian gateway (https://api.atlassian.com/ex/jira/<cloud_id>/...)
+	// because the site host rejects scoped tokens. BaseURL is still stored as
+	// the site URL for cloudId discovery, display, and browser links; the
+	// effective request base URL is derived by ClientBaseURL. Empty means a
+	// classic API token addressed directly at the site.
+	CloudID            string `koanf:"cloud_id" toml:"cloud_id"`
+	OnePasswordAccount string `koanf:"onepassword_account" toml:"onepassword_account"`
+	Vault              string `koanf:"vault" toml:"vault"`
+	Item               string `koanf:"item" toml:"item"`
 	// TeamAccountIDs lists the account IDs of teammates whose issues count
 	// as "my team" in TUI filtering. Optional.
 	TeamAccountIDs []string `koanf:"team_account_ids" toml:"team_account_ids"`
@@ -187,6 +232,11 @@ func (c *Config) Validate() error {
 		}
 		if err := ValidateBaseURL(p.BaseURL); err != nil {
 			return fmt.Errorf("profile %q base_url: %w", p.Name, err)
+		}
+		if p.CloudID != "" {
+			if err := ValidateCloudID(p.CloudID); err != nil {
+				return fmt.Errorf("profile %q cloud_id: %w", p.Name, err)
+			}
 		}
 	}
 	if _, ok := seen[c.DefaultProfile]; !ok {
@@ -340,6 +390,26 @@ func (c Config) ResolveProfile(name string) (Profile, error) {
 		}
 	}
 	return Profile{}, ProfileNotDefinedError{Name: name}
+}
+
+// ClientBaseURL is the REST base URL the Jira client must target for this
+// profile. A classic API-token profile addresses the site directly; a scoped
+// (granular) token profile carries a CloudID and must route through the
+// Atlassian gateway, the only base URL that accepts scoped tokens. This is the
+// single chokepoint that turns a cloud_id into gateway routing — every client
+// constructor and credential-verification path funnels its base URL through
+// here, so classic and scoped profiles diverge in exactly one place.
+func (p Profile) ClientBaseURL() string {
+	if p.CloudID != "" {
+		return GatewayBaseURL(p.CloudID)
+	}
+	return p.BaseURL
+}
+
+// Scoped reports whether this profile authenticates with a scoped (granular)
+// API token, i.e. one routed through the Atlassian gateway via a cloud_id.
+func (p Profile) Scoped() bool {
+	return p.CloudID != ""
 }
 
 func (p Profile) Redacted() string {

@@ -35,6 +35,7 @@ var topLevelKeys = []KeyDesc{
 var profileFieldKeys = []KeyDesc{
 	{"base_url", "Jira base URL", nil},
 	{"auth_type", "Auth type", []string{"token"}},
+	{"cloud_id", "Atlassian cloudId; set it to route this profile's scoped (granular) API token through the gateway", nil},
 	{"email", "Atlassian Cloud account email", nil},
 	{"default_project", "Default project key", nil},
 	{"default_issue_type", "Default issue type", nil},
@@ -133,6 +134,8 @@ func (c *Config) getProfileField(key string) (string, bool) {
 		return p.BaseURL, true
 	case "auth_type":
 		return string(p.AuthType), true
+	case "cloud_id":
+		return p.CloudID, true
 	case "email":
 		return p.Email, true
 	case "default_project":
@@ -185,6 +188,17 @@ func (c *Config) setProfileField(key, value string) error {
 			return fmt.Errorf("invalid auth_type %q (valid: token)", value)
 		}
 		p.AuthType = AuthType(value)
+	case "cloud_id":
+		// An empty value clears scoped routing (reverts to a classic token
+		// addressed at the site); a non-empty value must be a valid cloudId.
+		if strings.TrimSpace(value) == "" {
+			p.CloudID = ""
+		} else {
+			if err := ValidateCloudID(value); err != nil {
+				return err
+			}
+			p.CloudID = strings.TrimSpace(value)
+		}
 	case "email":
 		p.Email = value
 	case "default_project":

@@ -20,9 +20,10 @@ Before `auth login`, gather:
 
 *   An <abbr title="A subdomain of atlassian.net, e.g. https://example.atlassian.net">Atlassian Cloud site</abbr> (jira targets Cloud only).
 *   The account email tied to that site.
-*   A classic
+*   An
     [API token](https://id.atlassian.com/manage-profile/security/api-tokens)
-    tied to that account.
+    tied to that account — either a classic token or a scoped (granular)
+    token (see [Scoped (granular) API tokens](#scoped-granular-api-tokens)).
 *   A <abbr title="Short local name jira uses to look up the credential, defaults to 'default'. Multiple profiles let you point at different Atlassian tenants.">profile name</abbr>.
 *   A <abbr title="Interactive prompt, --secret-stdin, --credential-env, or the per-profile JIRA_TOKEN_{PROFILE} environment variable.">token source</abbr>.
 
@@ -177,9 +178,11 @@ persistent flag that disables prompting across the whole CLI.
         "display_name": "John Doe",
         "onepassword_account": "",
         "profile": "default",
+        "scoped": false,
         "secret_backend": "keyring",
         "skip_verify": false,
         "stored_secret": true,
+        "token_type": "classic",
         "verified": true
       },
       "errors": [],
@@ -189,6 +192,10 @@ persistent flag that disables prompting across the whole CLI.
 
     `account_id` and `display_name` are present only when the token
     was verified against `/myself` (omitted under `--skip-verify`).
+    `token_type` is `classic` for a site-addressed API token and
+    `scoped` for a granular token (see
+    [Scoped (granular) API tokens](#scoped-granular-api-tokens)); a
+    scoped login also carries `cloud_id`.
 
 === "Skip verify"
 
@@ -204,9 +211,11 @@ persistent flag that disables prompting across the whole CLI.
         "auth_type": "token",
         "onepassword_account": "",
         "profile": "default",
+        "scoped": false,
         "secret_backend": "keyring",
         "skip_verify": true,
         "stored_secret": true,
+        "token_type": "classic",
         "verified": false
       },
       "errors": [],
@@ -216,6 +225,64 @@ persistent flag that disables prompting across the whole CLI.
 
     The human output drops the `✓ Logged in as …` line for the same
     reason, without `/myself`, there's no name to print.
+
+## Scoped (granular) API tokens
+
+Atlassian's newer
+[API tokens with scopes](https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/)
+grant only the permissions you select (`read:jira-work`,
+`write:jira-work`, …) instead of full account access. They authenticate
+exactly like a classic token — HTTP Basic with your account email and the
+token — but the **site host rejects them**: scoped tokens are accepted only
+through the Atlassian gateway, `https://api.atlassian.com/ex/jira/<cloudId>/…`.
+
+**You don't configure any of this — `auth login` detects it.** The token
+string carries no type marker (classic and scoped tokens share the same
+`ATATT…` prefix), so the CLI determines the type the only reliable way: by
+trying it. There are no scoped-specific flags.
+
+How detection works during `auth login`:
+
+1.  Verify the token against the **site** (`<base-url>/rest/api/3/myself`).
+2.  **Accepted** → it's a **classic** token. Done.
+3.  **Rejected (401/403)** → it might be scoped. The CLI discovers the
+    site's cloudId (unauthenticated `GET <site>/_edge/tenant_info`) and
+    re-verifies against the **gateway**. If that succeeds, the token is
+    **scoped**: the `cloud_id` is stored on the profile and every later
+    request for it routes through the gateway.
+4.  Rejected at both, or a non-auth error (network / 5xx) → reported as a
+    normal login failure; nothing scoped is assumed.
+
+So a scoped login looks exactly like a classic one:
+
+```sh
+jira auth login \
+  --profile-name work \
+  --base-url https://acme.atlassian.net \
+  --email me@example.com
+# → token tried at the site, then (if rejected) the gateway;
+#   cloud_id stored automatically when it turns out to be scoped.
+```
+
+Because detection re-verifies a scoped token against the gateway `/myself`, a
+token whose scopes don't cover `/myself` fails at login rather than on first
+use. For `/myself`, Atlassian requires the union `read:jira-work`,
+`read:jira-user` and the four read scopes (`read:user:jira`,
+`read:application-role:jira`, `read:group:jira`, `read:avatar:jira`); a
+missing scope surfaces as a 401/403 with a hint from `auth status`.
+
+`auth status` reports `token_type` (`classic` or `scoped`) and the `cloud_id`
+for each profile, and probes through the gateway for scoped profiles.
+
+!!! note "Offline / blocked networks"
+    Detection needs to reach the site (and, for scoped tokens, the
+    `_edge/tenant_info` probe). With `--skip-verify` no probe runs, so the
+    type can't be detected and the profile stays whatever it already was
+    (classic for a new profile). If `_edge/tenant_info` is blocked on your
+    network, set the id manually with
+    `jira config set profiles.<name>.cloud_id <cloudId>` (find it at
+    `https://<site>.atlassian.net/_edge/tenant_info` in a browser); clearing
+    it reverts the profile to a classic, site-addressed token.
 
 === "Error (401)"
 
@@ -579,9 +646,10 @@ above) wraps everything in the standard error envelope with
 ## auth refresh
 
 Re-resolve the active profile's credential and trigger a backend-specific
-refresh flow. Today, jira-cli only supports classic API tokens, so this is a
-**no-op** that reports why nothing happened, it exists as a future hook for
-OAuth-style flows.
+refresh flow. Both classic and scoped API tokens authenticate with static
+HTTP Basic credentials that never expire mid-session, so this is a **no-op**
+that reports why nothing happened; it exists as a future hook for OAuth-style
+flows.
 
 ```sh
 jira auth refresh
@@ -780,15 +848,19 @@ CLI-side validation errors stay separate from API errors:
 
 ## Token support
 
-jira talks to **Jira Cloud only**; Server/Data Center are not supported. Today
-the CLI supports classic Atlassian API tokens.
+jira talks to **Jira Cloud only**; Server/Data Center are not supported. The
+CLI supports both classic Atlassian API tokens and scoped (granular) API
+tokens.
 
-Scoped API tokens are not supported yet. They require routing REST API v3 calls
-through Atlassian's gateway URL
-(`https://api.atlassian.com/ex/jira/<cloudId>/...`) instead of the normal
-`https://your-site.atlassian.net/...` REST base URL. Support for scoped tokens
-is planned for a future auth update that changes how the CLI stores and
-resolves Jira API base URLs.
+Classic tokens are addressed at the site REST base URL
+(`https://your-site.atlassian.net/...`). Scoped tokens carry a `cloud_id` and
+route through Atlassian's gateway
+(`https://api.atlassian.com/ex/jira/<cloudId>/...`), which is the only base
+URL that accepts them — see
+[Scoped (granular) API tokens](#scoped-granular-api-tokens). Both flavours
+authenticate the same way: HTTP Basic with the account email and the token.
+`auth_type` remains `token` for both; the presence of a `cloud_id` is what
+selects gateway routing.
 
 ## Further reading
 

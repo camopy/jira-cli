@@ -78,6 +78,7 @@ func (v OperationVerb) PastPlural() string { return phrase(v.Past, v.NounPlural(
 // they can never disagree. Keys are sorted alphabetically; forms are lower case.
 var operationVerbs = map[string]OperationVerb{
 	"auth.login":                {"logging in", "logged in", "log in", ""},
+	"auth.login.discover":       {"discovering", "discovered", "discover", "cloud ID"},
 	"auth.logout":               {"logging out", "logged out", "log out", ""},
 	"auth.status":               {"checking", "checked", "check", "auth"},
 	"auth.switch":               {"switching", "switched", "switch", "profile"},

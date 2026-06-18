@@ -143,13 +143,17 @@ func authLoginCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Configure authentication for a profile",
+		Long: "Configure a Jira profile and store its credential. The token type — classic " +
+			"or scoped (granular) — is detected automatically: verification tries the site " +
+			"first, and on rejection re-checks the Atlassian gateway, persisting the " +
+			"discovered cloudId when the token turns out to be scoped. Nothing extra to pass.",
 		Example: `# Configure a profile interactively (prompts for token)
 $ jira auth login --profile-name work --base-url https://acme.atlassian.net --email me@example.com
 
 # Headless login reading the token from an environment variable
 $ jira auth login --no-input --profile-name ci --base-url https://acme.atlassian.net --email ci@example.com --credential-env JIRA_API_TOKEN
 
-# Headless login reading the token from stdin
+# Headless login reading the token from stdin (classic or scoped — auto-detected)
 $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-url https://acme.atlassian.net --email me@example.com --secret-stdin`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -376,11 +380,19 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 			}
 			// Confirm the token actually authenticates before persisting it, so
 			// a rejected token fails the login here instead of silently on first
-			// real use. The check runs against the in-memory credential, so it
-			// covers every backend (keyring, 1Password) identically. The
-			// resolved accountId is folded into the profile so `--assignee me`
-			// works immediately without a separate `auth whoami`. --skip-verify
-			// opts out for offline setup or an unreachable endpoint.
+			// real use, AND auto-detect its type while we're at it. A classic
+			// token authenticates at the site; a scoped (granular) token is
+			// rejected there and works only through the Atlassian gateway. So
+			// verification tries the site first and, on an auth rejection,
+			// discovers the cloudId and re-checks the gateway — a 2xx there means
+			// the token is scoped, and the cloudId is stamped on the profile so
+			// every later command routes through the gateway too. The token
+			// itself carries no type marker (classic and scoped share the same
+			// prefix), so this behavioral probe is the only reliable signal. The
+			// resolved accountId is folded in so `--assignee me` works
+			// immediately. --skip-verify opts out for offline/unreachable setup;
+			// with no probe the type cannot be detected, so it stays whatever the
+			// profile already carried (classic for a brand-new profile).
 			var verifiedUser *jira.CurrentUser
 			if credential != "" && !skipVerify {
 				// .Silent() runs the task and returns its error without logging
@@ -389,11 +401,15 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 				verifyErr := clog.Spinner("Verifying Jira credentials").
 					NonTTYSilent(true).
 					Wait(cmd.Context(), func(ctx context.Context) error {
-						user, err := verifyCredential(ctx, profile.BaseURL, profile.Email, credential, time.Duration(profile.TimeoutSeconds)*time.Second, cmdutil.MaxRetryWaitFor(cmd))
+						user, cloudID, err := verifyAndDetectCredential(ctx, profile, credential, time.Duration(profile.TimeoutSeconds)*time.Second, cmdutil.MaxRetryWaitFor(cmd), config.GatewayBaseURL)
 						if err != nil {
 							return err
 						}
 						verifiedUser = user
+						// Authoritative: empty for a classic token (clears any
+						// stale cloud_id carried from a prior scoped login),
+						// set for a scoped one.
+						profile.CloudID = cloudID
 						return nil
 					}).Silent()
 				if verifyErr != nil {
@@ -481,11 +497,19 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 					cmdutil.RecordCredentialWarnings(cmd, []string{warmNote})
 				}
 			}
-			// On a human terminal, confirm who the verified token belongs to so
-			// the user sees the identity instead of a silent return. Machine
-			// modes consume the same identity from the envelope below.
+			// On a human terminal, narrate the scoped-token flow and confirm
+			// who the verified token belongs to, instead of a silent return.
+			// Machine modes consume the same facts from the envelope below.
 			if verifiedUser != nil {
 				if mode := cmdutil.DetectorFromContext(cmd).Mode; mode == cli.ModePlain || mode == cli.ModeTUI {
+					// Scoped tokens were auto-detected via the gateway; say so
+					// and surface the discovered cloud ID, so the user sees WHAT
+					// kind of token this is and WHY a cloud ID appeared rather
+					// than an unexplained id. Phrasing comes from the
+					// operation-verb registry so it matches the debug flow line.
+					if profile.CloudID != "" {
+						clog.Info().Parts(clog.PartMessage).Msg("Scoped token — " + cli.VerbFor("auth.login.discover").Pastf() + " id=" + profile.CloudID)
+					}
 					name := cmdutil.FirstNonEmpty(verifiedUser.DisplayName, verifiedUser.EmailAddress, profile.Email)
 					msg := "✓ Logged in as " + name
 					if boardsCached >= 0 {
@@ -497,11 +521,16 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 			data := map[string]any{
 				"profile":             profileName,
 				"auth_type":           string(config.AuthTypeToken),
+				"token_type":          tokenType(profile),
+				"scoped":              profile.Scoped(),
 				"secret_backend":      string(profile.SecretBackend),
 				"onepassword_account": onePasswordAccount,
 				"stored_secret":       credential != "",
 				"verified":            verifiedUser != nil,
 				"skip_verify":         skipVerify,
+			}
+			if profile.CloudID != "" {
+				data["cloud_id"] = profile.CloudID
 			}
 			if verifiedUser != nil {
 				data["account_id"] = verifiedUser.AccountID
@@ -533,6 +562,17 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 	clib.Extend(cmd.Flags().Lookup("profile-name"), clib.FlagExtra{Placeholder: "NAME", Complete: "predictor=profile"})
 	clib.Extend(cmd.Flags().Lookup("backend"), clib.FlagExtra{Placeholder: "BACKEND", Terse: "secret backend", Enum: []string{"keyring", "1password"}, EnumTerse: []string{"OS keychain", "1Password CLI"}, EnumDefault: "keyring"})
 	return cmd
+}
+
+// tokenType labels a profile's API-token flavor for envelopes and status
+// output: "scoped" when it routes through the Atlassian gateway via a cloudId,
+// "classic" otherwise. Both use HTTP Basic auth — the distinction is the base
+// URL the token is accepted at.
+func tokenType(profile config.Profile) string {
+	if profile.Scoped() {
+		return "scoped"
+	}
+	return "classic"
 }
 
 // warmBoardsCache primes the per-profile boards cache after a verified login.
@@ -954,7 +994,10 @@ $ jira auth status --project PROJ`,
 			}
 			profiles := make([]map[string]any, 0, len(cfg.Profiles))
 			for _, profile := range cfg.Profiles {
-				entry := map[string]any{"profile": profile.Name}
+				entry := map[string]any{"profile": profile.Name, "token_type": tokenType(profile)}
+				if profile.CloudID != "" {
+					entry["cloud_id"] = profile.CloudID
+				}
 				ref, refErr := cmdutil.SecretRefFor(profile, profile.SecretBackend)
 				if refErr != nil {
 					entry["valid"] = false
