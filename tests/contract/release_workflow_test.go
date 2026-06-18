@@ -142,15 +142,15 @@ func TestReleaseArtifactsUseSupportedTargets(t *testing.T) {
 			t.Fatalf("release workflow missing supported platform %q\n%s", want, release)
 		}
 	}
-	for _, want := range []string{"      - darwin\n", "      - linux\n"} {
+	for _, want := range []string{"      - darwin\n", "      - linux\n", "      - windows\n"} {
 		if !strings.Contains(gotGoReleaser, want) {
 			t.Fatalf("GoReleaser config missing supported goos %q\n%s", want, goreleaser)
 		}
 	}
-	for _, forbidden := range []string{"      - windows\n", "goos: windows"} {
-		if strings.Contains(gotGoReleaser, forbidden) {
-			t.Fatalf("GoReleaser config advertises unsupported target %q\n%s", forbidden, goreleaser)
-		}
+	// Windows is a supported target and ships as a zip (via format_overrides),
+	// rather than the tar.gz used for darwin/linux.
+	if !strings.Contains(gotGoReleaser, "goos: windows") {
+		t.Fatalf("GoReleaser config must ship the windows zip archive\n%s", goreleaser)
 	}
 	// Intel macOS is not a release target; the build matrix must drop it.
 	if !strings.Contains(gotGoReleaser, "goos: darwin\n        goarch: amd64") {
