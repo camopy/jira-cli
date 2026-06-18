@@ -129,6 +129,15 @@ func RunMutation(in MutationInput) MutationResult {
 
 	doc := in.ADFDoc
 	if doc != nil {
+		// Normalize away losslessly-invalid constructs (e.g. empty text
+		// nodes) BEFORE validation and submission. Jira rejects the whole
+		// document with an opaque INVALID_INPUT for these, yet they carry no
+		// renderable content, so the repair runs in every mode and the
+		// cleaned doc is what gets validated and sent.
+		normalized, normWarnings := adf.Normalize(*doc)
+		res.Warnings = append(res.Warnings, normWarnings...)
+		doc = &normalized
+
 		// ValidateDoc enforces root shape (always) and per-mode node/mark
 		// rules. Runs before ApplyCompatibility so unknown nodes are
 		// caught at the validation stage, not on the wire.

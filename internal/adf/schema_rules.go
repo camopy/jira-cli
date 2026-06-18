@@ -149,10 +149,13 @@ var nodeRules = map[string]nodeRule{
 		requiredAttrs: []attrRule{{key: "timestamp", typ: attrString, nonEmpty: true}},
 	},
 	"mention": {
-		requiredAttrs: []attrRule{{key: "id", typ: attrString}},
+		// id must be a non-empty account reference; an empty id is a broken
+		// mention that Jira rejects (parity with the other non-empty required
+		// string attrs: status.text, date.timestamp, media.id, link.href, …).
+		requiredAttrs: []attrRule{{key: "id", typ: attrString, nonEmpty: true}},
 	},
 	"emoji": {
-		requiredAttrs: []attrRule{{key: "shortName", typ: attrString}},
+		requiredAttrs: []attrRule{{key: "shortName", typ: attrString, nonEmpty: true}},
 	},
 	"taskItem": {
 		requiredAttrs: []attrRule{
