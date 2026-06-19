@@ -87,7 +87,7 @@ func TestReadmeDocumentsReleaseVersionMetadata(t *testing.T) {
 		"Homebrew and GoReleaser release archives include release version metadata",
 		"`go install github.com/matcra587/jira-cli/cmd/jira@latest`",
 		"`dev`",
-		"Release archives currently target macOS and Linux",
+		"Release archives currently target macOS, Linux, and Windows",
 		"CGO-enabled source build for 1Password-backed profiles",
 	} {
 		if !strings.Contains(got, want) {

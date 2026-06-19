@@ -11,7 +11,7 @@ go install github.com/matcra587/jira-cli/cmd/jira@latest
 Homebrew and GoReleaser release archives include release version metadata.
 `go install github.com/matcra587/jira-cli/cmd/jira@latest` builds from source
 and may report `dev` or git-derived metadata in `jira version`.
-Release archives currently target macOS and Linux.
+Release archives currently target macOS, Linux, and Windows.
 
 See [docs/installation.md](docs/installation.md) for release archives, the
 one-line installer, source builds, and uninstall steps. The examples below
@@ -67,7 +67,7 @@ rejected instead of being stored as fake authenticated profiles.
 
 The 1Password backend uses the Go SDK when `onepassword_account` is configured
 for desktop-app auth or `OP_SERVICE_ACCOUNT_TOKEN` is present for service-account
-auth. macOS and Linux release archives are built without CGO, so use a
+auth. macOS, Linux, and Windows release archives are built without CGO, so use a
 CGO-enabled source build for 1Password-backed profiles.
 
 For desktop-app auth, 1Password must be signed in and allowed to serve SDK

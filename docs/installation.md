@@ -19,16 +19,18 @@ jira runs on:
     *   macOS 13.0+ on Apple Silicon (arm64).
     *   Any glibc-based Linux on amd64 or arm64 (Ubuntu, Debian, Fedora,
         RHEL, Arch, openSUSE, …).
+    *   Windows 10/11 on amd64 or arm64.
     *   WSL 2 (treat as Linux for install purposes).
 *   **Hardware**: any x86-64 or arm64 CPU. The release binary is a
     CGO-disabled static Go build under 30 MB.
-*   **Shell**: Bash, Zsh, or Fish.
+*   **Shell**: Bash, Zsh, or Fish (or PowerShell on Windows).
 
-!!! warning "Native Windows is not supported"
-    The upstream `gechr/clog` dependency uses Unix-only signals
-    (`syscall.SIGWINCH`), so all install paths fail on `GOOS=windows`.
-    Use [WSL](https://learn.microsoft.com/windows/wsl/) and follow the
-    Linux instructions.
+!!! note "Windows"
+    Native Windows (amd64/arm64) is supported: install the pre-built
+    `.zip` archive from the releases page or use
+    [`go install`](#go-install). The one-line installer and Homebrew are
+    Unix-only, so they don't cover Windows. [WSL](https://learn.microsoft.com/windows/wsl/)
+    also works, treat it as Linux.
 
 !!! note "musl-based Linux (Alpine)"
     Release archives are statically linked (CGO disabled), so the
@@ -37,21 +39,25 @@ jira runs on:
 
 ## Platform support
 
-Pre-built archives and the Homebrew formula cover Linux (amd64/arm64) and
-Apple Silicon macOS. Intel macOS installs through `go install` or a source
+Pre-built archives cover Linux (amd64/arm64), Apple Silicon macOS, and
+Windows (amd64/arm64). The Homebrew formula is Unix-only (Linux and Apple
+Silicon macOS). Intel macOS installs through `go install` or a source
 build.
 
-| Platform | Homebrew | Pre-built tarball | `go install` |
+| Platform | Homebrew | Pre-built archive | `go install` |
 |----------|:--------:|:-----------------:|:------------:|
 | Linux · amd64 | ✓ | ✓ | ✓ |
 | Linux · arm64 | ✓ | ✓ | ✓ |
 | macOS · Apple Silicon (arm64) | ✓ | ✓ | ✓ |
 | macOS · Intel (amd64) | - | - | ✓ |
+| Windows · amd64 | - | ✓ (`.zip`) | ✓ |
+| Windows · arm64 | - | ✓ (`.zip`) | ✓ |
 
 !!! note "No Intel-macOS binary"
-    The release pipeline builds `linux/amd64`, `linux/arm64`, and
-    `darwin/arm64` only. On Intel macOS, use [`go install`](#go-install)
-    or `brew install --HEAD matcra587/tap/jira` (which compiles from source
+    The release pipeline builds `linux/amd64`, `linux/arm64`,
+    `darwin/arm64`, `windows/amd64`, and `windows/arm64` — not
+    `darwin/amd64`. On Intel macOS, use [`go install`](#go-install) or
+    `brew install --HEAD matcra587/tap/jira` (which compiles from source
     via the Homebrew Go toolchain).
 
 ## Quick start
