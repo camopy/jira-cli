@@ -53,6 +53,18 @@ archives:
         formats:
           - zip
 
+scoops:
+  - repository:
+      owner: matcra587
+      name: scoop-bucket
+      branch: main
+      token: "{{ .Env.SCOOP_GITHUB_TOKEN }}"
+    directory: bucket
+    homepage: https://github.com/matcra587/jira-cli
+    description: Agent-first Jira CLI for developer workflows
+    license: MIT
+    commit_msg_template: "jira: {{ .Tag }}"
+
 checksum:
   name_template: checksums.txt
 
