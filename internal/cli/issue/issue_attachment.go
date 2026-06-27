@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/issuekey"
@@ -30,7 +31,19 @@ import (
 func IssueAttachmentCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "attachment",
-		Short: "Manage attachments on an issue (list/add/delete/download)",
+		Short: "Manage issue attachments",
+		Long: "List, upload, delete, and download Jira issue attachments. Use this group " +
+			"when working with files attached to issue comments or descriptions.\n\n" +
+			"Upload, delete, and download subcommands each document their own dry-run or " +
+			"force behavior. Attachment binary content is never written to stdout.",
+		Example: `# List attachments on an issue
+$ jira issue attachment list PROJ-123
+
+# Preview uploading a file
+$ jira issue attachment add PROJ-123 ./report.pdf --dry-run
+
+# Write binary content to a file instead of stdout
+$ jira issue attachment download PROJ-123 10500 --to ./report.pdf`,
 	}
 	cmd.AddCommand(
 		issueAttachmentListCommand(),
@@ -60,15 +73,23 @@ func issueAttachmentListCommand() *cobra.Command {
 	var all bool
 	var parallelism int
 	cmd := &cobra.Command{
-		Use:         "list KEY...",
-		Short:       "List attachments on an issue",
+		Use:   "list KEY...",
+		Short: "List attachments on an issue",
+		Long: "List attachments on one or more issues. Use it to find attachment IDs before " +
+			"downloading or deleting files.\n\n" +
+			"Jira returns attachments as part of the issue data; the command applies " +
+			"`--limit` client-side unless `--all` is set. Multiple issue keys are read " +
+			"with bounded parallelism.",
 		Args:        cobra.MinimumNArgs(1),
 		Annotations: issueKeyArg,
 		Example: `# List attachments on an issue
 $ jira issue attachment list PROJ-123
 
-# Return every attachment regardless of the page size
-$ jira issue attachment list PROJ-123 --all`,
+# Return every attachment regardless of page size
+$ jira issue attachment list PROJ-123 --all
+
+# List attachments as JSON
+$ jira issue attachment list PROJ-123 --output=json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {
@@ -104,10 +125,9 @@ $ jira issue attachment list PROJ-123 --all`,
 			})
 		},
 	}
-	cmd.Flags().IntVar(&limit, "limit", 50, "Page size (max attachments returned without `--all`)")
-	cmd.Flags().BoolVar(&all, "all", false, "Return every attachment regardless of `--limit`")
+	cmdutil.AddIntVar(cmd.Flags(), &limit, "limit", 50, "Page size (max attachments returned without `--all`)", clib.FlagExtra{Group: "Pagination", Placeholder: "N", Terse: "page size"})
+	cmdutil.AddBoolVar(cmd.Flags(), &all, "all", false, "Return every attachment regardless of `--limit`", clib.FlagExtra{Group: "Pagination", Terse: "fetch all pages"})
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
-	cmdutil.ExtendPaginationFlags(cmd.Flags())
 	return cmd
 }
 
@@ -143,15 +163,24 @@ func issueAttachmentAddCommand() *cobra.Command {
 	var dryRun bool
 	var parallelism int
 	cmd := &cobra.Command{
-		Use:         "add KEY... [PATH...]",
-		Short:       "Upload one or more attachments to an issue",
+		Use:   "add KEY... [PATH...]",
+		Short: "Upload one or more attachments to an issue",
+		Long: "Upload one or more local files to one or more issues. Use positional paths " +
+			"for quick uploads or repeated `--file` flags when paths contain shell-sensitive " +
+			"characters.\n\n" +
+			"Before any HTTP request, the command checks every path, file type, and size. " +
+			"`--dry-run` performs that local preflight and prints the inferred files without " +
+			"uploading anything.",
 		Args:        cobra.MinimumNArgs(1),
 		Annotations: issueKeyArg,
 		Example: `# Attach a file to an issue
 $ jira issue attachment add PROJ-123 ./report.pdf
 
 # Attach several files via repeated --file
-$ jira issue attachment add PROJ-123 --file ./report.pdf --file ./logs.txt`,
+$ jira issue attachment add PROJ-123 --file ./report.pdf --file ./logs.txt
+
+# Preview local file checks without uploading
+$ jira issue attachment add PROJ-123 ./report.pdf --dry-run`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, paths, err := attachmentAddKeysAndPaths(args, files)
 			if err != nil {
@@ -221,10 +250,8 @@ $ jira issue attachment add PROJ-123 --file ./report.pdf --file ./logs.txt`,
 	// StringArrayVar, not StringSliceVar: a slice flag splits each value
 	// on commas, which would shatter a legitimate filename like
 	// "report,final.pdf" into two bogus paths. Each --file is one path.
-	cmd.Flags().StringArrayVar(&files, "file", nil, "Path to attach (repeatable)")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without uploading")
-	cmdutil.ExtendFileFlag(cmd.Flags(), "file", "Input", "PATH")
-	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.AddStringArrayVar(cmd.Flags(), &files, "file", nil, "Path to attach (repeatable)", clib.FlagExtra{Group: "Input", Placeholder: "FILE", Hint: "file"})
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview without uploading")
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
 }
@@ -352,11 +379,19 @@ func jiraMaxAttachmentUploadBytes() int64 {
 func issueAttachmentDeleteCommand() *cobra.Command {
 	var force, dryRun bool
 	cmd := &cobra.Command{
-		Use:         "delete KEY ATTACHMENT_ID",
-		Short:       "Delete an attachment from an issue",
+		Use:   "delete KEY ATTACHMENT_ID",
+		Short: "Delete an attachment from an issue",
+		Long: "Delete one attachment by its Jira attachment ID. Use `attachment list` first " +
+			"when you need to discover the ID for an issue.\n\n" +
+			"`--dry-run` previews the deletion and never contacts Jira. Live deletes require " +
+			"`--force` in headless, agent, or `--no-input` mode; an interactive terminal is " +
+			"prompted when `--force` is omitted.",
 		Args:        cobra.ExactArgs(2),
 		Annotations: issueKeyArg,
-		Example: `# Delete an attachment by id without a prompt
+		Example: `# Preview deleting an attachment
+$ jira issue attachment delete PROJ-123 10500 --dry-run
+
+# Delete an attachment by id without a prompt
 $ jira issue attachment delete PROJ-123 10500 --force`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			key, attachmentID := args[0], args[1]
@@ -401,10 +436,8 @@ $ jira issue attachment delete PROJ-123 10500 --force`,
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive removal under `--no-input` / non-TTY")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without deleting")
-	cmdutil.ExtendForceFlag(cmd.Flags())
-	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.AddForceFlag(cmd.Flags(), &force, "Confirm destructive removal under `--no-input` / non-TTY")
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview without deleting")
 	return cmd
 }
 
@@ -412,15 +445,24 @@ func issueAttachmentDownloadCommand() *cobra.Command {
 	var output string
 	var force, dryRun bool
 	cmd := &cobra.Command{
-		Use:         "download KEY ATTACHMENT_ID [--to PATH]",
-		Short:       "Download an attachment from an issue",
+		Use:   "download KEY ATTACHMENT_ID [--to PATH]",
+		Short: "Download an attachment from an issue",
+		Long: "Download one attachment by ID and write it to a file. Use it after " +
+			"`attachment list` when you need the file content locally.\n\n" +
+			"Binary content is always written to a file, never stdout, so JSON output stays " +
+			"parseable. Existing target files are protected unless `--force` is set. " +
+			"`--dry-run` validates the target path and prints the planned write without " +
+			"downloading.",
 		Args:        cobra.ExactArgs(2),
 		Annotations: issueKeyArg,
 		Example: `# Download an attachment to the current directory
 $ jira issue attachment download PROJ-123 10500
 
 # Download to a specific path, overwriting if it exists
-$ jira issue attachment download PROJ-123 10500 --to ./report.pdf --force`,
+$ jira issue attachment download PROJ-123 10500 --to ./report.pdf --force
+
+# Preview the download target without contacting Jira
+$ jira issue attachment download PROJ-123 10500 --to ./report.pdf --dry-run`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			key, attachmentID := args[0], args[1]
 			mode, target := resolveDownloadMode(output)
@@ -486,12 +528,9 @@ $ jira issue attachment download PROJ-123 10500 --to ./report.pdf --force`,
 			})
 		},
 	}
-	cmd.Flags().StringVar(&output, "to", "", "Write the attachment to PATH (default: current directory)")
-	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing target file")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without downloading")
-	cmdutil.ExtendFileFlag(cmd.Flags(), "to", "Output", "PATH")
-	cmdutil.ExtendForceFlag(cmd.Flags())
-	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.AddFileFlag(cmd.Flags(), &output, "to", "", "Write the attachment to PATH (default: current directory)", "Output", "PATH")
+	cmdutil.AddForceFlag(cmd.Flags(), &force, "Overwrite existing target file")
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview without downloading")
 	return cmd
 }
 

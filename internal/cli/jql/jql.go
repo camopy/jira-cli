@@ -22,14 +22,22 @@ func NewCommand() *cobra.Command {
 	build := &cobra.Command{
 		Use:   "build",
 		Short: "Build a JQL query from flags",
-		Example: `# Build a query restricted to a project and status
-$ jira jql build --project PROJ --status "In Progress"
+		Long: "Compose a JQL string from jira-cli's shared filter flags. Use it to preview " +
+			"the query that `issue list` and related commands would run, or to build a " +
+			"query for another tool.\n\n" +
+			"This command is local and does not contact Jira. Board scope is applied after " +
+			"the base query is built, and the returned URL is best-effort from the active " +
+			"profile's base URL.",
+		Example: `$ jira jql build --project PROJ --status "In Progress"
 
 # Build a query for your own recently updated issues
 $ jira jql build --assignee me --updated -7d --order-by updated
 
-# Build a query across several issue keys
-$ jira jql build --key PROJ-1,PROJ-2 --label backend`,
+# Use a comma-separated issue-key filter
+$ jira jql build --key PROJ-1,PROJ-2 --label backend
+
+# Return the generated query and URL as JSON
+$ jira jql build --project PROJ --status Done --output=json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			scope, precedence, err := boardscope.FromFlags(cmd)
@@ -73,8 +81,18 @@ $ jira jql build --key PROJ-1,PROJ-2 --label backend`,
 func referenceCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "reference",
-		Short: "List the JQL fields, functions, and reserved words this instance exposes",
-		Args:  cobra.NoArgs,
+		Short: "List Jira JQL reference data",
+		Long: "Fetch Jira's JQL autocomplete metadata for the active site. Use it to find " +
+			"queryable field names, custom field IDs, functions, and reserved words before " +
+			"writing a query.\n\n" +
+			"The command calls Jira's `/jql/autocompletedata` endpoint and requires a " +
+			"configured profile. Human output focuses on fields; JSON output includes " +
+			"fields, functions, and reserved words.",
+		Example: `$ jira jql reference
+
+# Include functions and reserved words, not just human field rows
+$ jira jql reference --output=json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
@@ -134,12 +152,20 @@ func validateCommand() *cobra.Command {
 	var mode string
 	cmd := &cobra.Command{
 		Use:   "validate QUERY...",
-		Short: "Validate JQL through Jira's parser (per-query errors and warnings)",
-		Example: `# Validate a single query
-$ jira jql validate "status = Done AND assignee = currentUser()"
+		Short: "Validate JQL with Jira",
+		Long: "Send one or more JQL strings to Jira's parser and report per-query errors and " +
+			"warnings. Use it before saving a query or handing generated JQL to another " +
+			"command.\n\n" +
+			"A JQL parse failure is returned as data with `valid: false`; it is not treated " +
+			"as a CLI input error. Transport, authentication, rate limit, and server " +
+			"failures still return non-zero command errors.",
+		Example: `$ jira jql validate "status = Done AND assignee = currentUser()"
 
-# Validate several queries at once with lenient checking
-$ jira jql validate "project = PROJ" "created >= -7d" --mode warn`,
+# Use Jira's lenient warning mode
+$ jira jql validate "project = PROJ" "created >= -7d" --mode warn
+
+# Return per-query validity in JSON
+$ jira jql validate "project = PROJ AND status = Done" --output=json`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			switch mode {
@@ -172,8 +198,7 @@ $ jira jql validate "project = PROJ" "created >= -7d" --mode warn`,
 			return cmdutil.WriteEnvelopeWithResponse(cmd, "jql.validate", map[string]any{"queries": out}, resp)
 		},
 	}
-	cmd.Flags().StringVar(&mode, "mode", "strict", "Validation strictness")
-	clib.Extend(cmd.Flags().Lookup("mode"), clib.FlagExtra{
+	cmdutil.AddStringVar(cmd.Flags(), &mode, "mode", "strict", "Validation strictness", clib.FlagExtra{
 		Group:       "Validation",
 		Placeholder: "MODE",
 		Terse:       "validation mode",
@@ -192,33 +217,12 @@ $ jira jql validate "project = PROJ" "created >= -7d" --mode warn`,
 // and `issue mine` by construction. Sort and date flags compose via
 // AddSortFlags / AddDateFilterFlags, which both commands also call.
 func AddFilterFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
-	cmd.Flags().StringSliceVar(&builder.Projects, "project", nil, "Restrict to Jira project key")
-	cmd.Flags().StringSliceVar(&builder.Keys, "key", nil, "Restrict to issue key, comma list, or `PROJ-1..PROJ-5` range")
-	cmd.Flags().StringSliceVar(&builder.Epics, "epic", nil, "Restrict to issues in epic keys")
-	cmd.Flags().StringSliceVar(&builder.Statuses, "status", nil, "Restrict by status: name, category comparator (`<Done`, `>=In Progress`), or negation (`!Abandoned`)")
-	cmd.Flags().StringSliceVar(&builder.Priorities, "priority", nil, "Restrict by priority")
-	cmd.Flags().StringSliceVar(&builder.Labels, "label", nil, "Restrict by label")
-	cmd.Flags().StringSliceVar(&builder.IssueTypes, "type", nil, "Restrict by issue type")
-	clib.Extend(
-		cmd.Flags().Lookup("project"),
-		clib.FlagExtra{Group: "Filters", Placeholder: "KEY", Complete: "predictor=cacheproject,comma"},
-	)
-	clib.Extend(
-		cmd.Flags().Lookup("key"),
-		clib.FlagExtra{Group: "Filters", Placeholder: "KEY", Complete: "predictor=issuekey,comma"},
-	)
-	clib.Extend(
-		cmd.Flags().Lookup("epic"),
-		clib.FlagExtra{Group: "Filters", Placeholder: "KEY", Complete: "predictor=cacheepic,comma"},
-	)
-	clib.Extend(
-		cmd.Flags().Lookup("label"),
-		clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Complete: "predictor=cachelabel,comma"},
-	)
-	clib.Extend(
-		cmd.Flags().Lookup("type"),
-		clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Terse: "by type", Complete: "predictor=cacheissuetype,comma"},
-	)
+	cmdutil.AddStringSliceVar(cmd.Flags(), &builder.Projects, "project", nil, "Restrict to Jira project key",
+		clib.FlagExtra{Group: "Filters", Placeholder: "KEY", Complete: "predictor=cacheproject,comma"})
+	cmdutil.AddStringSliceVar(cmd.Flags(), &builder.Keys, "key", nil, "Restrict to issue key, comma list, or `PROJ-1..PROJ-5` range",
+		clib.FlagExtra{Group: "Filters", Placeholder: "KEY", Complete: "predictor=issuekey,comma"})
+	cmdutil.AddStringSliceVar(cmd.Flags(), &builder.Epics, "epic", nil, "Restrict to issues in epic keys",
+		clib.FlagExtra{Group: "Filters", Placeholder: "KEY", Complete: "predictor=cacheepic,comma"})
 	// Completion offers the plain status/priority names from the per-profile
 	// cache — the common case, and the operand the negation form ("!Abandoned")
 	// also takes. It deliberately does not cover the category-comparator grammar
@@ -226,8 +230,14 @@ func AddFilterFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 	// status name; a prefix like "<" simply matches no cached name and offers
 	// nothing rather than a misleading one. The predictors emit names only, so
 	// the short Terse (not the long usage) becomes each candidate's description.
-	clib.Extend(cmd.Flags().Lookup("status"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Terse: "by status", Complete: "predictor=cachestatus,comma"})
-	clib.Extend(cmd.Flags().Lookup("priority"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Terse: "by priority", Complete: "predictor=cachepriority,comma"})
+	cmdutil.AddStringSliceVar(cmd.Flags(), &builder.Statuses, "status", nil, "Restrict by status: name, category comparator (`<Done`, `>=In Progress`), or negation (`!Abandoned`)",
+		clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Terse: "by status", Complete: "predictor=cachestatus,comma"})
+	cmdutil.AddStringSliceVar(cmd.Flags(), &builder.Priorities, "priority", nil, "Restrict by priority",
+		clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Terse: "by priority", Complete: "predictor=cachepriority,comma"})
+	cmdutil.AddStringSliceVar(cmd.Flags(), &builder.Labels, "label", nil, "Restrict by label",
+		clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Complete: "predictor=cachelabel,comma"})
+	cmdutil.AddStringSliceVar(cmd.Flags(), &builder.IssueTypes, "type", nil, "Restrict by issue type",
+		clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Terse: "by type", Complete: "predictor=cacheissuetype,comma"})
 }
 
 // AddJQLBuilderFlags attaches the full JQL builder surface to cmd: the shared
@@ -235,28 +245,22 @@ func AddFilterFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 // the sort and date flags.
 func AddJQLBuilderFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 	AddFilterFlags(cmd, builder)
-	cmd.Flags().StringVar(&builder.Assignee, "assignee", "", "Restrict by assignee; use `me` for the current user")
-	cmd.Flags().StringVar(&builder.Reporter, "reporter", "", "Restrict by reporter; use `me` for the current user")
-	clib.Extend(
-		cmd.Flags().Lookup("assignee"),
+	cmdutil.AddStringVar(cmd.Flags(), &builder.Assignee, "assignee", "", "Restrict by assignee; use `me` for the current user",
 		clib.FlagExtra{
 			Group:       "Filters",
 			Placeholder: "USER",
 			Terse:       "by assignee",
 			Enum:        []string{"me", "none"},
 			EnumTerse:   []string{"current user", "unassigned"},
-		},
-	)
-	clib.Extend(
-		cmd.Flags().Lookup("reporter"),
+		})
+	cmdutil.AddStringVar(cmd.Flags(), &builder.Reporter, "reporter", "", "Restrict by reporter; use `me` for the current user",
 		clib.FlagExtra{
 			Group:       "Filters",
 			Placeholder: "USER",
 			Terse:       "by reporter",
 			Enum:        []string{"me"},
 			EnumTerse:   []string{"current user"},
-		},
-	)
+		})
 	AddSortFlags(cmd, builder)
 	AddDateFilterFlags(cmd, builder)
 }
@@ -266,10 +270,7 @@ func AddJQLBuilderFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 // surface, so the sort defaults (field "updated", descending) are defined once
 // and stay consistent across every command that builds a query.
 func AddSortFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
-	cmd.Flags().StringVar(&builder.OrderBy, "order-by", "updated", "Sort field")
-	cmd.Flags().BoolVar(&builder.Descending, "desc", true, "Sort descending")
-	clib.Extend(
-		cmd.Flags().Lookup("order-by"),
+	cmdutil.AddStringVar(cmd.Flags(), &builder.OrderBy, "order-by", "updated", "Sort field",
 		clib.FlagExtra{
 			Group:       "Sort",
 			Placeholder: "FIELD",
@@ -277,9 +278,8 @@ func AddSortFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 			Enum:        []string{"updated", "created", "priority", "status", "key", "summary"},
 			EnumTerse:   []string{"last-updated time", "creation time", "priority level", "workflow status", "issue key", "title text"},
 			EnumDefault: "updated",
-		},
-	)
-	clib.Extend(cmd.Flags().Lookup("desc"), clib.FlagExtra{Group: "Sort"})
+		})
+	cmdutil.AddBoolVar(cmd.Flags(), &builder.Descending, "desc", true, "Sort descending", clib.FlagExtra{Group: "Sort"})
 }
 
 // AddDateFilterFlags attaches the --updated/--created/--resolved timeframe
@@ -288,15 +288,15 @@ func AddSortFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
 // once. Each value is a relative duration (-7d), an absolute date (2026-01-01),
 // a comparator form (>=2026-01-01), or an A..B range — see jql.BuildOptions.
 func AddDateFilterFlags(cmd *cobra.Command, builder *jql.BuildOptions) {
-	cmd.Flags().StringVar(&builder.Updated, "updated", "", "Filter by updated date: `-7d`, `2026-01-01`, `>=2026-01-01`, or `A..B` range")
-	cmd.Flags().StringVar(&builder.Created, "created", "", "Filter by created date (same grammar as `--updated`)")
-	cmd.Flags().StringVar(&builder.Resolved, "resolved", "", "Filter by resolved date (same grammar as `--updated`)")
 	// "Filters/Dates" renders the three date flags as a blank-line-separated
 	// cluster at the foot of the Filters section, so the timeframe controls read
 	// as a unit rather than interleaving with the project/status/label filters.
-	for _, name := range []string{"updated", "created", "resolved"} {
-		clib.Extend(cmd.Flags().Lookup(name), clib.FlagExtra{Group: "Filters/Dates", Placeholder: "DATE"})
-	}
+	cmdutil.AddStringVar(cmd.Flags(), &builder.Updated, "updated", "", "Filter by updated date: `-7d`, `2026-01-01`, `>=2026-01-01`, or `A..B` range",
+		clib.FlagExtra{Group: "Filters/Dates", Placeholder: "DATE"})
+	cmdutil.AddStringVar(cmd.Flags(), &builder.Created, "created", "", "Filter by created date (same grammar as `--updated`)",
+		clib.FlagExtra{Group: "Filters/Dates", Placeholder: "DATE"})
+	cmdutil.AddStringVar(cmd.Flags(), &builder.Resolved, "resolved", "", "Filter by resolved date (same grammar as `--updated`)",
+		clib.FlagExtra{Group: "Filters/Dates", Placeholder: "DATE"})
 }
 
 // ReadCacheJSON loads a cache resource into v for the given profile, ignoring

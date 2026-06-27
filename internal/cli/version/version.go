@@ -13,8 +13,12 @@ import (
 // as a structured envelope.
 func NewCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:     "version",
-		Short:   "Print version information",
+		Use:   "version",
+		Short: "Print version information",
+		Example: `$ jira version
+
+# Keep build metadata parseable for scripts
+$ jira version --output=json`,
 		GroupID: "agent",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

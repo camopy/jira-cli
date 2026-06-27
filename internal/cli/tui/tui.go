@@ -26,8 +26,17 @@ import (
 // NewCommand constructs the tui subcommand.
 func NewCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:     "tui",
-		Short:   "Launch the persistent dashboard",
+		Use:   "tui",
+		Short: "Launch the persistent dashboard",
+		Long: "Launch the terminal dashboard for the active profile. Use it when you want " +
+			"an interactive issue triage view instead of one-shot command output.\n\n" +
+			"The dashboard requires stdout to be an interactive terminal. In scripts or " +
+			"agent workflows, use the resource commands such as `jira issue list` and " +
+			"`jira search jql` instead.",
+		Example: `$ jira tui
+
+# Open the dashboard for a non-active profile
+$ jira --profile prod tui`,
 		GroupID: "dashboard",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

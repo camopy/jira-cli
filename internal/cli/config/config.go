@@ -31,8 +31,11 @@ func configThemeCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "theme",
 		Short: "Manage theme configuration",
-		Example: `# Show the current theme configuration
-$ jira config theme
+		Long: "Show or update the theme settings in the local config file. Use it when " +
+			"terminal colors need to match a built-in theme or a custom TOML file.\n\n" +
+			"With no flags, the command only reports the current theme. Passing `--name` " +
+			"or `--path` writes config and does not contact Jira.",
+		Example: `$ jira config theme
 
 # Set a built-in theme by name
 $ jira config theme --name dracula
@@ -75,19 +78,17 @@ $ jira config theme --path ./my-theme.toml`,
 			})
 		},
 	}
-	cmd.Flags().StringVar(&name, "name", "", "Theme name")
-	cmd.Flags().StringVar(&path, "path", "", "Theme TOML path")
 	// Theme names are self-describing (dracula, nord, catppuccin-mocha), so a
 	// per-value EnumTerse would just restate the value. A short Terse keeps the
 	// completion description from falling back to the flag usage instead.
-	clib.Extend(cmd.Flags().Lookup("name"), clib.FlagExtra{
+	cmdutil.AddStringVar(cmd.Flags(), &name, "name", "", "Theme name", clib.FlagExtra{
 		Group:       "Theme",
 		Placeholder: "NAME",
 		Terse:       "theme name",
 		Enum:        config.ThemeNameValues,
 		EnumDefault: "auto",
 	})
-	clib.Extend(cmd.Flags().Lookup("path"), clib.FlagExtra{
+	cmdutil.AddStringVar(cmd.Flags(), &path, "path", "", "Theme TOML path", clib.FlagExtra{
 		Group:       "Theme",
 		Placeholder: "PATH",
 		Hint:        "file",
@@ -100,11 +101,18 @@ func configInitCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Create initial configuration",
-		Example: `# Create the initial config file for the default profile
-$ jira config init --base-url https://acme.atlassian.net --email me@example.com
+		Long: "Create a config file with one Jira profile and token-auth metadata. Use it " +
+			"for a quick bootstrap when you want to add the credential later with " +
+			"`jira auth login`.\n\n" +
+			"The command requires a Jira base URL and account email. It writes config only; " +
+			"no secret is stored and Jira is not contacted.",
+		Example: `$ jira config init --base-url https://acme.atlassian.net --email me@example.com
 
 # Create config under a named profile
-$ jira config init --profile work --base-url https://acme.atlassian.net --email me@example.com`,
+$ jira config init --profile work --base-url https://acme.atlassian.net --email me@example.com
+
+# Create config at an explicit path
+$ jira --config ./jira.toml config init --base-url https://acme.atlassian.net --email me@example.com`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			profile := cmdutil.RequestedProfile(cmd)
@@ -142,8 +150,10 @@ $ jira config init --profile work --base-url https://acme.atlassian.net --email 
 			})
 		},
 	}
-	cmd.Flags().StringVar(&baseURL, "base-url", "", "Jira base URL")
-	cmd.Flags().StringVar(&email, "email", "", "Jira account email")
+	cmdutil.AddStringVar(cmd.Flags(), &baseURL, "base-url", "", "Jira base URL",
+		clib.FlagExtra{Group: "Configuration", Placeholder: "URL", Terse: "Jira base URL"})
+	cmdutil.AddStringVar(cmd.Flags(), &email, "email", "", "Jira account email",
+		clib.FlagExtra{Group: "Configuration", Placeholder: "EMAIL", Terse: "account email"})
 	return cmd
 }
 
@@ -175,7 +185,14 @@ func configProfileCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "profile",
 		Short: "List configured profiles",
-		Args:  cobra.NoArgs,
+		Long: "List profiles in the local config file and mark the active default. Use it " +
+			"before switching profiles or checking which names are available for `--profile`.\n\n" +
+			"This command reads config only and does not verify credentials or contact Jira.",
+		Example: `$ jira config profile
+
+# Show the active marker in a parseable shape
+$ jira config profile --output=json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
@@ -200,8 +217,14 @@ func configGetCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get KEY",
 		Short: "Show a configuration value",
-		Example: `# Read a configuration value
-$ jira config get theme.name`,
+		Long: "Read one supported config key from the local config file. Use it in scripts " +
+			"when you need a single value without parsing the whole file.\n\n" +
+			"Profile-scoped keys include the profile name in the key path, for example " +
+			"`profiles.default.base_url`.",
+		Example: `$ jira config get theme.name
+
+# Read the active profile's base URL
+$ jira config get profiles.default.base_url`,
 		Args:              cobra.ExactArgs(1),
 		Annotations:       map[string]string{"clib": "dynamic-args='configkey'"},
 		ValidArgsFunction: completeConfigKeys,
@@ -223,8 +246,14 @@ func configSetCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "set KEY VALUE",
 		Short: "Set a configuration value",
-		Example: `# Set a configuration value
-$ jira config set theme.name dracula`,
+		Long: "Set one supported config key and save the file. Use it for small local edits " +
+			"such as theme settings, default project values, and TUI preferences.\n\n" +
+			"The new value is validated before saving. Secrets are not written through " +
+			"`config set`; use `jira auth login` or `jira auth migrate` for credentials.",
+		Example: `$ jira config set theme.name dracula
+
+# Set the default project for a profile
+$ jira config set profiles.default.default_project PROJ`,
 		Args:              cobra.ExactArgs(2),
 		Annotations:       map[string]string{"clib": "dynamic-args='configkey,configvalue'"},
 		ValidArgsFunction: completeConfigSetArgs,

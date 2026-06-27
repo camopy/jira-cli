@@ -33,9 +33,22 @@ import (
 func issueCommentGroup() *cobra.Command {
 	addFlags := commentAddFlags{}
 	cmd := &cobra.Command{
-		Use:         "comment KEY...",
-		Short:       "Manage comments on a Jira issue",
-		Long:        "Add, list, edit, or delete comments. With no subcommand, behaves as `comment add KEY ...` for back-compat with the legacy `jira issue comment KEY` invocation.",
+		Use:   "comment KEY...",
+		Short: "Manage comments on a Jira issue",
+		Long: "Add, list, edit, or delete Jira issue comments. Use the subcommands for " +
+			"explicit comment workflows, or pass issue keys directly for the legacy " +
+			"`comment add` behavior.\n\n" +
+			"Comment bodies can be supplied as Markdown convenience input or native ADF " +
+			"JSON. Mutating comment commands run the body through the validate-and-encode " +
+			"ADF pipeline before submission.",
+		Example: `# Add a comment using the legacy shorthand
+$ jira issue comment PROJ-123 --body-markdown "Deployed to staging."
+
+# Add a comment from a native ADF JSON file
+$ jira issue comment PROJ-123 --json-input ./comment.json
+
+# Preview the comment without contacting Jira
+$ jira issue comment add PROJ-123 --body-markdown "Draft note" --dry-run`,
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		Args:        cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -64,15 +77,23 @@ func commentListCommand() *cobra.Command {
 	var all bool
 	var parallelism int
 	cmd := &cobra.Command{
-		Use:         "list KEY...",
-		Short:       "List comments on an issue",
+		Use:   "list KEY...",
+		Short: "List comments on an issue",
+		Long: "List comments on one or more issues. Use it to inspect discussion history " +
+			"or find comment IDs before editing or deleting.\n\n" +
+			"`--all` walks comment pages until Jira reports the last page or a rate limit " +
+			"interrupts pagination. ADF bodies are rendered to Markdown for human output; " +
+			"lossy renders are surfaced as warnings.",
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		Args:        cobra.MinimumNArgs(1),
 		Example: `# List the most recent comments on an issue
 $ jira issue comment list PROJ-123
 
 # Walk every page of comments
-$ jira issue comment list PROJ-123 --all`,
+$ jira issue comment list PROJ-123 --all
+
+# Keep comment metadata parseable
+$ jira issue comment list PROJ-123 --output=json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {
@@ -104,10 +125,9 @@ $ jira issue comment list PROJ-123 --all`,
 			})
 		},
 	}
-	cmd.Flags().IntVar(&limit, "limit", 50, "Maximum comments per page")
-	cmd.Flags().BoolVar(&all, "all", false, "Walk every page until isLast")
+	cmdutil.AddIntVar(cmd.Flags(), &limit, "limit", 50, "Maximum comments per page", clib.FlagExtra{Group: "Pagination", Placeholder: "N"})
+	cmdutil.AddBoolVar(cmd.Flags(), &all, "all", false, "Walk every page until isLast", clib.FlagExtra{Group: "Pagination"})
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
-	cmdutil.ExtendPaginationFlags(cmd.Flags())
 	return cmd
 }
 
@@ -354,8 +374,13 @@ type commentAddFlags struct {
 func commentAddCommand() *cobra.Command {
 	flags := commentAddFlags{}
 	cmd := &cobra.Command{
-		Use:         "add KEY...",
-		Short:       "Add a comment to an issue",
+		Use:   "add KEY...",
+		Short: "Add a comment to an issue",
+		Long: "Add the same comment to one or more issues. Use Markdown for quick terminal " +
+			"notes or `--json-input` when an agent already has a native ADF comment body.\n\n" +
+			"The comment body runs through the validate-and-encode ADF pipeline before " +
+			"submission. `--dry-run` previews the validated ADF and does not contact Jira. " +
+			"Visibility can be restricted by Jira role or group.",
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		Args:        cobra.MinimumNArgs(1),
 		Example: `# Add a Markdown comment to an issue
@@ -365,7 +390,10 @@ $ jira issue comment add PROJ-123 --body-markdown "Deployed to staging."
 $ jira issue comment add PROJ-123 --json-input ./comment.json
 
 # Restrict a comment to a Jira role
-$ jira issue comment add PROJ-123 --body-markdown "Internal note." --visibility-role Developers`,
+$ jira issue comment add PROJ-123 --body-markdown "Internal note." --visibility-role Developers
+
+# Preview a comment for an agent
+$ jira issue comment add PROJ-123 --body-markdown "Draft note." --dry-run --output=json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {
@@ -379,16 +407,11 @@ $ jira issue comment add PROJ-123 --body-markdown "Internal note." --visibility-
 }
 
 func registerCommentAddFlags(cmd *cobra.Command, flags *commentAddFlags) {
-	cmd.Flags().StringVar(&flags.markdown, "body-markdown", "", "Comment body as Markdown (lossy convenience layer)")
-	cmd.Flags().StringVar(&flags.jsonInput, "json-input", "", "Comment body as native ADF JSON file (canonical for agents)")
-	cmd.Flags().StringVar(&flags.visRole, "visibility-role", "", "Restrict comment to a Jira role (e.g. Developers)")
-	cmd.Flags().StringVar(&flags.visGroup, "visibility-group", "", "Restrict comment to a Jira group")
-	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Preview mutation without submitting")
-	cmdutil.ExtendFlag(cmd.Flags(), "body-markdown", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
-	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
-	cmdutil.ExtendFlag(cmd.Flags(), "visibility-role", clib.FlagExtra{Group: "Visibility", Placeholder: "ROLE"})
-	cmdutil.ExtendFlag(cmd.Flags(), "visibility-group", clib.FlagExtra{Group: "Visibility", Placeholder: "GROUP"})
-	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.AddStringVar(cmd.Flags(), &flags.markdown, "body-markdown", "", "Comment body as Markdown (lossy convenience layer)", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
+	cmdutil.AddFileFlag(cmd.Flags(), &flags.jsonInput, "json-input", "", "Comment body as native ADF JSON file (canonical for agents)", "Input", "FILE")
+	cmdutil.AddStringVar(cmd.Flags(), &flags.visRole, "visibility-role", "", "Restrict comment to a Jira role (e.g. Developers)", clib.FlagExtra{Group: "Visibility", Placeholder: "ROLE"})
+	cmdutil.AddStringVar(cmd.Flags(), &flags.visGroup, "visibility-group", "", "Restrict comment to a Jira group", clib.FlagExtra{Group: "Visibility", Placeholder: "GROUP"})
+	cmdutil.AddDryRunFlag(cmd.Flags(), &flags.dryRun, "Preview mutation without submitting")
 	cmdutil.AddParallelismFlag(cmd, &flags.parallelism)
 	// Exactly one body source: a Markdown convenience string or a native
 	// ADF JSON file. Declared as Cobra flag metadata so the conflict is
@@ -592,31 +615,33 @@ type commentEditFlags struct {
 func commentEditCommand() *cobra.Command {
 	flags := commentEditFlags{}
 	cmd := &cobra.Command{
-		Use:         "edit KEY COMMENT_ID",
-		Short:       "Edit an existing comment",
+		Use:   "edit KEY COMMENT_ID",
+		Short: "Edit an existing comment",
+		Long: "Replace a comment body and optionally adjust its visibility. Use `comment " +
+			"list` first when you need to find the comment ID.\n\n" +
+			"The replacement body runs through the validate-and-encode ADF pipeline before " +
+			"submission. `--dry-run` previews the validated body and visibility change " +
+			"without contacting Jira.",
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		Args:        cobra.ExactArgs(2),
 		Example: `# Replace a comment body with new Markdown
 $ jira issue comment edit PROJ-123 10042 --body-markdown "Updated: rollout complete."
 
 # Remove a comment's visibility restriction
-$ jira issue comment edit PROJ-123 10042 --body-markdown "Now public." --clear-visibility`,
+$ jira issue comment edit PROJ-123 10042 --body-markdown "Now public." --clear-visibility
+
+# Preview a comment edit
+$ jira issue comment edit PROJ-123 10042 --body-markdown "Draft update." --dry-run`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCommentEdit(cmd, args[0], args[1], flags)
 		},
 	}
-	cmd.Flags().StringVar(&flags.markdown, "body-markdown", "", "New body as Markdown")
-	cmd.Flags().StringVar(&flags.jsonInput, "json-input", "", "New body as native ADF JSON file")
-	cmd.Flags().StringVar(&flags.visRole, "visibility-role", "", "Replace visibility with a Jira role")
-	cmd.Flags().StringVar(&flags.visGroup, "visibility-group", "", "Replace visibility with a Jira group")
-	cmd.Flags().BoolVar(&flags.visClear, "clear-visibility", false, "Remove any existing visibility restriction")
-	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Preview without calling Jira")
-	cmdutil.ExtendFlag(cmd.Flags(), "body-markdown", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
-	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
-	cmdutil.ExtendFlag(cmd.Flags(), "visibility-role", clib.FlagExtra{Group: "Visibility", Placeholder: "ROLE"})
-	cmdutil.ExtendFlag(cmd.Flags(), "visibility-group", clib.FlagExtra{Group: "Visibility", Placeholder: "GROUP"})
-	cmdutil.ExtendFlag(cmd.Flags(), "clear-visibility", clib.FlagExtra{Group: "Visibility"})
-	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.AddStringVar(cmd.Flags(), &flags.markdown, "body-markdown", "", "New body as Markdown", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
+	cmdutil.AddFileFlag(cmd.Flags(), &flags.jsonInput, "json-input", "", "New body as native ADF JSON file", "Input", "FILE")
+	cmdutil.AddStringVar(cmd.Flags(), &flags.visRole, "visibility-role", "", "Replace visibility with a Jira role", clib.FlagExtra{Group: "Visibility", Placeholder: "ROLE"})
+	cmdutil.AddStringVar(cmd.Flags(), &flags.visGroup, "visibility-group", "", "Replace visibility with a Jira group", clib.FlagExtra{Group: "Visibility", Placeholder: "GROUP"})
+	cmdutil.AddBoolVar(cmd.Flags(), &flags.visClear, "clear-visibility", false, "Remove any existing visibility restriction", clib.FlagExtra{Group: "Visibility"})
+	cmdutil.AddDryRunFlag(cmd.Flags(), &flags.dryRun, "Preview without calling Jira")
 	cmd.MarkFlagsMutuallyExclusive("body-markdown", "json-input")
 	return cmd
 }
@@ -698,8 +723,13 @@ func describeVisibilityChange(vis jira.VisibilityChange) string {
 func commentDeleteCommand() *cobra.Command {
 	var force, dryRun bool
 	cmd := &cobra.Command{
-		Use:         "delete KEY COMMENT_ID",
-		Short:       "Delete a comment",
+		Use:   "delete KEY COMMENT_ID",
+		Short: "Delete a comment",
+		Long: "Delete one comment by ID from an issue. Use it after `comment list` when a " +
+			"comment should be removed rather than edited.\n\n" +
+			"`--dry-run` previews the deletion and never contacts Jira. Live deletes require " +
+			"`--force` in headless, agent, or `--no-input` mode; an interactive terminal is " +
+			"prompted when `--force` is omitted.",
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		Args:        cobra.ExactArgs(2),
 		Example: `# Preview deleting a comment
@@ -752,9 +782,7 @@ $ jira issue comment delete PROJ-123 10042 --force`,
 			}, resp)
 		},
 	}
-	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive delete under `--no-input` / non-TTY")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without calling Jira")
-	cmdutil.ExtendForceFlag(cmd.Flags())
-	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.AddForceFlag(cmd.Flags(), &force, "Confirm destructive delete under `--no-input` / non-TTY")
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview without calling Jira")
 	return cmd
 }

@@ -43,15 +43,18 @@ var ErrCompletionHandled = errors.New("completion request handled")
 func newRootCommand(rt *runtime.Runtime) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "jira",
-		Short: "Jira CLI",
-		Long:  "TUI-first, agent-ready CLI for Jira developer workflows.",
-		Example: `# Launch the persistent dashboard
-	$ jira -i
+		Short: "Run Jira developer workflows",
+		Long: "Run Jira developer workflows from a terminal. Use it to read issues, build JQL, " +
+			"update work, manage authentication, and open the persistent dashboard.\n\n" +
+			"With stdout attached to a terminal, bare `jira` prints help. In non-TTY or " +
+			"agent-detected output, bare `jira` emits the command schema as JSON; use " +
+			"`jira agent schema` when you want explicit discovery.",
+		Example: `# Use the global interactive flag to open the dashboard
+$ jira -i
 
-	# List issues as structured JSON
-	$ jira issue list --output=json
+# Structured output for scripts and agents
+$ jira issue list --output=json
 
-# Run a saved JQL query
 $ jira search saved my-open-bugs`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -267,55 +270,41 @@ func rootCompletionFlagMeta(root *cobra.Command) []complete.FlagMeta {
 // call installs a fresh, independent flag set.
 func configureRootFlags(root *cobra.Command) {
 	pf := root.PersistentFlags()
-	pf.StringP("profile", "P", "", "Jira profile name")
-	pf.StringP("config", "c", "", "Config file path")
-	pf.StringP("output", "o", "auto", "Output mode; "+
-		"`compact` is the JSON data without the envelope (drops ok/meta/warnings/errors)")
-	pf.BoolP("interactive", "i", false, "Launch persistent dashboard from root command")
-	pf.BoolP("debug", "d", false, "Enable debug output")
-	pf.Bool("no-input", false, "Disable interactive prompts (implied off a TTY or in an agent; pass `--no-input=false` to force prompts)")
-	pf.Duration("timeout", 0, "Whole-invocation deadline (e.g. 30s, 2m); 0 disables it")
-	pf.Duration("max-retry-wait", cmdutil.DefaultMaxRetryWait, "Longest a request will sleep out Jira rate limits (429/503) before giving up; 0 disables auto-retry. Always capped by --timeout")
-	pf.String("color", "auto", "Color mode; `auto` emits color only to a terminal")
-	// ADF strict/best-effort selection — mutually exclusive;
-	// internal/cli/adfmode reads them ahead of env/profile/default.
-	pf.Bool("adf-strict", false, "Treat lossy ADF conversions as errors")
-	pf.Bool("adf-best-effort", false, "Allow lossy ADF conversions with structured warnings")
-
-	clib.Extend(pf.Lookup("profile"), clib.FlagExtra{
+	cmdutil.AddStringP(pf, "profile", "P", "", "Jira profile name", clib.FlagExtra{
 		Group:       "Configuration",
 		Placeholder: "NAME",
 		Complete:    "predictor=profile",
 		Terse:       "profile name",
 	})
-	clib.Extend(pf.Lookup("config"), clib.FlagExtra{
+	cmdutil.AddStringP(pf, "config", "c", "", "Config file path", clib.FlagExtra{
 		Group:       "Configuration",
 		Placeholder: "PATH",
 		Hint:        "file",
 		Terse:       "config file path",
 	})
-	clib.Extend(pf.Lookup("output"), clib.FlagExtra{
-		Group:       "Output",
-		Placeholder: "MODE",
-		Enum:        cli.OutputModeValues,
-		EnumTerse:   []string{"detect terminal", "rich text", "JSON envelope", "JSON data only"},
-		EnumDefault: "auto",
-		Terse:       "output mode",
-	})
-	clib.Extend(pf.Lookup("timeout"), clib.FlagExtra{
-		Group:       "Configuration",
-		Placeholder: "DURATION",
-		Terse:       "invocation deadline",
-	})
-	clib.Extend(pf.Lookup("max-retry-wait"), clib.FlagExtra{
-		Group:       "Runtime",
-		Placeholder: "DURATION",
-		Terse:       "rate-limit retry budget",
-	})
-	clib.Extend(pf.Lookup("interactive"), clib.FlagExtra{Group: "Dashboard", Terse: "launch dashboard"})
-	clib.Extend(pf.Lookup("debug"), clib.FlagExtra{Group: "Output", Terse: "debug output"})
-	clib.Extend(pf.Lookup("no-input"), clib.FlagExtra{Group: "Runtime", Terse: "disable prompts"})
-	clib.Extend(pf.Lookup("color"), clib.FlagExtra{
+	cmdutil.AddStringP(pf, "output", "o", "auto",
+		"Output mode; `compact` is the JSON data without the envelope (drops ok/meta/warnings/errors)",
+		clib.FlagExtra{
+			Group:       "Output",
+			Placeholder: "MODE",
+			Enum:        cli.OutputModeValues,
+			EnumTerse:   []string{"detect terminal", "rich text", "JSON envelope", "JSON data only"},
+			EnumDefault: "auto",
+			Terse:       "output mode",
+		})
+	cmdutil.AddBoolP(pf, "interactive", "i", false, "Launch persistent dashboard from root command",
+		clib.FlagExtra{Group: "Dashboard", Terse: "launch dashboard"})
+	cmdutil.AddBoolP(pf, "debug", "d", false, "Enable debug output",
+		clib.FlagExtra{Group: "Output", Terse: "debug output"})
+	cmdutil.AddBool(pf, "no-input", false,
+		"Disable interactive prompts (implied off a TTY or in an agent; pass `--no-input=false` to force prompts)",
+		clib.FlagExtra{Group: "Runtime", Terse: "disable prompts"})
+	cmdutil.AddDuration(pf, "timeout", 0, "Whole-invocation deadline (e.g. 30s, 2m); 0 disables it",
+		clib.FlagExtra{Group: "Configuration", Placeholder: "DURATION", Terse: "invocation deadline"})
+	cmdutil.AddDuration(pf, "max-retry-wait", cmdutil.DefaultMaxRetryWait,
+		"Longest a request will sleep out Jira rate limits (429/503) before giving up; 0 disables auto-retry. Always capped by --timeout",
+		clib.FlagExtra{Group: "Runtime", Placeholder: "DURATION", Terse: "rate-limit retry budget"})
+	cmdutil.AddString(pf, "color", "auto", "Color mode; `auto` emits color only to a terminal", clib.FlagExtra{
 		Group:       "Output",
 		Placeholder: "MODE",
 		Enum:        []string{"auto", "always", "never"},
@@ -323,8 +312,12 @@ func configureRootFlags(root *cobra.Command) {
 		EnumDefault: "auto",
 		Terse:       "color mode",
 	})
-	clib.Extend(pf.Lookup("adf-strict"), clib.FlagExtra{Group: "ADF", Terse: "reject lossy ADF"})
-	clib.Extend(pf.Lookup("adf-best-effort"), clib.FlagExtra{Group: "ADF", Terse: "allow lossy ADF"})
+	// ADF strict/best-effort selection — mutually exclusive;
+	// internal/cli/adfmode reads them ahead of env/profile/default.
+	cmdutil.AddBool(pf, "adf-strict", false, "Treat lossy ADF conversions as errors",
+		clib.FlagExtra{Group: "ADF", Terse: "reject lossy ADF"})
+	cmdutil.AddBool(pf, "adf-best-effort", false, "Allow lossy ADF conversions with structured warnings",
+		clib.FlagExtra{Group: "ADF", Terse: "allow lossy ADF"})
 
 	root.MarkFlagsMutuallyExclusive("adf-strict", "adf-best-effort")
 }

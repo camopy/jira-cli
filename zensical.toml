@@ -13,7 +13,7 @@ Copyright &copy; 2026 Matt Craven &middot; MIT licence.<br>
 docs_dir = "docs"
 site_dir = "site"
 
-extra_css = ["stylesheets/catppuccin.css"]
+extra_css = ["stylesheets/theme.css"]
 
 nav = [
     { "Setup & access" = [
@@ -32,29 +32,138 @@ nav = [
         { Alias = "alias.md" },
         { Cache = "cache.md" },
         { Agents = "agent.md" },
-    ] },
-    { Contributing = "contributing.md" },
-    { Reference = [
         { Output = "output.md" },
         { Troubleshooting = "troubleshooting.md" },
         { ADF = "adf.md" },
         { "Custom fields" = "custom-fields.md" },
-        { jira = "reference/jira.md" },
-        { "jira agent" = "reference/jira_agent.md" },
-        { "jira alias" = "reference/jira_alias.md" },
-        { "jira auth" = "reference/jira_auth.md" },
-        { "jira boards" = "reference/jira_boards.md" },
-        { "jira cache" = "reference/jira_cache.md" },
-        { "jira config" = "reference/jira_config.md" },
-        { "jira epic" = "reference/jira_epic.md" },
-        { "jira issue" = "reference/jira_issue.md" },
-        { "jira jql" = "reference/jira_jql.md" },
-        { "jira me" = "reference/jira_me.md" },
-        { "jira search" = "reference/jira_search.md" },
-        { "jira tui" = "reference/jira_tui.md" },
-        { "jira version" = "reference/jira_version.md" },
-        { "jira worklog" = "reference/jira_worklog.md" },
     ] },
+    { Contributing = "contributing.md" },
+    # >>> gen-docs:reference-nav (generated — do not edit by hand)
+    { Reference = [
+        { "jira" = [
+            "reference/jira/index.md",
+            { "agent" = [
+                "reference/jira/agent/index.md",
+                { "adf-matrix" = "reference/jira/agent/adf-matrix.md" },
+                { "fieldtypes" = "reference/jira/agent/fieldtypes.md" },
+                { "guide" = "reference/jira/agent/guide.md" },
+                { "schema" = "reference/jira/agent/schema.md" },
+            ] },
+            { "alias" = [
+                "reference/jira/alias/index.md",
+                { "delete" = "reference/jira/alias/delete.md" },
+                { "import" = "reference/jira/alias/import.md" },
+                { "list" = "reference/jira/alias/list.md" },
+                { "set" = "reference/jira/alias/set.md" },
+            ] },
+            { "auth" = [
+                "reference/jira/auth/index.md",
+                { "login" = "reference/jira/auth/login.md" },
+                { "logout" = "reference/jira/auth/logout.md" },
+                { "migrate" = "reference/jira/auth/migrate.md" },
+                { "refresh" = "reference/jira/auth/refresh.md" },
+                { "status" = "reference/jira/auth/status.md" },
+                { "switch" = "reference/jira/auth/switch.md" },
+                { "token" = "reference/jira/auth/token.md" },
+                { "whoami" = "reference/jira/auth/whoami.md" },
+            ] },
+            { "boards" = [
+                "reference/jira/boards/index.md",
+                { "list" = "reference/jira/boards/list.md" },
+            ] },
+            { "cache" = [
+                "reference/jira/cache/index.md",
+                { "boards" = "reference/jira/cache/boards.md" },
+                { "clear" = "reference/jira/cache/clear.md" },
+                { "epics" = "reference/jira/cache/epics.md" },
+                { "fields" = "reference/jira/cache/fields.md" },
+                { "issuetypes" = "reference/jira/cache/issuetypes.md" },
+                { "labels" = "reference/jira/cache/labels.md" },
+                { "linktypes" = "reference/jira/cache/linktypes.md" },
+                { "priorities" = "reference/jira/cache/priorities.md" },
+                { "projects" = "reference/jira/cache/projects.md" },
+                { "refresh" = "reference/jira/cache/refresh.md" },
+                { "statuses" = "reference/jira/cache/statuses.md" },
+            ] },
+            { "config" = [
+                "reference/jira/config/index.md",
+                { "get" = "reference/jira/config/get.md" },
+                { "init" = "reference/jira/config/init.md" },
+                { "profile" = "reference/jira/config/profile.md" },
+                { "set" = "reference/jira/config/set.md" },
+                { "theme" = "reference/jira/config/theme.md" },
+            ] },
+            { "epic" = [
+                "reference/jira/epic/index.md",
+                { "add" = "reference/jira/epic/add.md" },
+                { "board" = "reference/jira/epic/board.md" },
+                { "list" = "reference/jira/epic/list.md" },
+                { "remove" = "reference/jira/epic/remove.md" },
+            ] },
+            { "issue" = [
+                "reference/jira/issue/index.md",
+                { "attachment" = [
+                    "reference/jira/issue/attachment/index.md",
+                    { "add" = "reference/jira/issue/attachment/add.md" },
+                    { "delete" = "reference/jira/issue/attachment/delete.md" },
+                    { "download" = "reference/jira/issue/attachment/download.md" },
+                    { "list" = "reference/jira/issue/attachment/list.md" },
+                ] },
+                { "clone" = "reference/jira/issue/clone.md" },
+                { "comment" = [
+                    "reference/jira/issue/comment/index.md",
+                    { "add" = "reference/jira/issue/comment/add.md" },
+                    { "delete" = "reference/jira/issue/comment/delete.md" },
+                    { "edit" = "reference/jira/issue/comment/edit.md" },
+                    { "list" = "reference/jira/issue/comment/list.md" },
+                ] },
+                { "create" = "reference/jira/issue/create.md" },
+                { "delete" = "reference/jira/issue/delete.md" },
+                { "edit" = "reference/jira/issue/edit.md" },
+                { "link" = [
+                    "reference/jira/issue/link/index.md",
+                    { "delete" = "reference/jira/issue/link/delete.md" },
+                    { "list" = "reference/jira/issue/link/list.md" },
+                    { "types" = "reference/jira/issue/link/types.md" },
+                ] },
+                { "list" = "reference/jira/issue/list.md" },
+                { "mine" = "reference/jira/issue/mine.md" },
+                { "move" = "reference/jira/issue/move.md" },
+                { "transition" = "reference/jira/issue/transition.md" },
+                { "unwatch" = "reference/jira/issue/unwatch.md" },
+                { "view" = "reference/jira/issue/view.md" },
+                { "watch" = "reference/jira/issue/watch.md" },
+                { "watchers" = [
+                    "reference/jira/issue/watchers/index.md",
+                    { "add" = "reference/jira/issue/watchers/add.md" },
+                    { "list" = "reference/jira/issue/watchers/list.md" },
+                    { "remove" = "reference/jira/issue/watchers/remove.md" },
+                ] },
+                { "weblink" = "reference/jira/issue/weblink.md" },
+            ] },
+            { "jql" = [
+                "reference/jira/jql/index.md",
+                { "build" = "reference/jira/jql/build.md" },
+                { "reference" = "reference/jira/jql/reference.md" },
+                { "validate" = "reference/jira/jql/validate.md" },
+            ] },
+            { "me" = "reference/jira/me.md" },
+            { "open" = "reference/jira/open.md" },
+            { "search" = [
+                "reference/jira/search/index.md",
+                { "jql" = "reference/jira/search/jql.md" },
+                { "saved" = "reference/jira/search/saved.md" },
+            ] },
+            { "tui" = "reference/jira/tui.md" },
+            { "version" = "reference/jira/version.md" },
+            { "worklog" = [
+                "reference/jira/worklog/index.md",
+                { "add" = "reference/jira/worklog/add.md" },
+                { "list" = "reference/jira/worklog/list.md" },
+            ] },
+        ] },
+    ] },
+    # <<< gen-docs:reference-nav
 ]
 
 # ----------------------------------------------------------------------------
@@ -81,9 +190,13 @@ favicon = "assets/favicon.svg"
 font.text = "Geist"
 font.code = "Geist Mono"
 features = [
+    "navigation.instant",
+    "navigation.instant.progress",
     "navigation.tracking",
     "navigation.tabs",
     "navigation.sections",
+    "navigation.indexes",
+    "navigation.path",
     "navigation.top",
     "navigation.footer",
     "header.autohide",

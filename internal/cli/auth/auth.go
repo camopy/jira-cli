@@ -43,12 +43,20 @@ func authWhoamiCommand() *cobra.Command {
 	var save bool
 	cmd := &cobra.Command{
 		Use:   "whoami",
-		Short: "Show the authenticated user's identity from `/myself`",
-		Example: `# Show the authenticated user's identity
-$ jira auth whoami
+		Short: "Show the active user's identity",
+		Long: "Fetch `/myself` for the active profile and print the account identity Jira " +
+			"returns. Use it to confirm which Atlassian account a profile is using.\n\n" +
+			"With `--save`, the resolved account ID is written back to the file-backed " +
+			"profile so `--assignee me` and TUI shortcuts can use Jira's canonical " +
+			"identifier. `--save` refuses environment-only profile overlays to avoid " +
+			"writing an account ID for the wrong tenant.",
+		Example: `$ jira auth whoami
 
 # Persist the resolved account ID to the active profile
-$ jira auth whoami --save`,
+$ jira auth whoami --save
+
+# Check another profile without changing the active one
+$ jira --profile prod auth whoami --output=json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// Without --save, fetch /myself for the env-overlaid active
@@ -133,7 +141,7 @@ $ jira auth whoami --save`,
 			return cmdutil.WriteEnvelope(cmd, "auth.whoami", data)
 		},
 	}
-	cmd.Flags().BoolVar(&save, "save", false, "Persist the resolved `account_id` (and email if blank) to the active profile")
+	cmdutil.AddBoolVar(cmd.Flags(), &save, "save", false, "Persist the resolved `account_id` (and email if blank) to the active profile", clib.FlagExtra{Group: "Configuration", Terse: "persist account id"})
 	return cmd
 }
 
@@ -542,25 +550,23 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 			return cmdutil.WriteEnvelope(cmd, "auth.login", data)
 		},
 	}
-	cmd.Flags().StringVar(&profileName, "profile-name", "default", "Profile name to configure")
-	cmd.Flags().StringVar(&baseURL, "base-url", "", "Jira base URL")
-	cmd.Flags().StringVar(&email, "email", "", "Jira Cloud account email")
-	cmd.Flags().StringVar(&backend, "backend", string(config.SecretBackendKeyring), "Secret backend for the credential")
-	cmd.Flags().StringVar(&onePasswordAccount, "onepassword-account", "", "1Password desktop app account name")
-	cmd.Flags().StringVar(&vault, "vault", "", "1Password vault name")
-	cmd.Flags().StringVar(&item, "item", "", "1Password item name")
-	cmd.Flags().BoolVar(&secretStdin, "secret-stdin", false, "Read credential from stdin")
-	cmd.Flags().BoolVar(&skipVerify, "skip-verify", false, "Store the credential without verifying it against `/myself` first")
-	cmd.Flags().StringVar(&credentialEnv, "credential-env", "", "Read the credential from a named environment variable [example: JIRA_API_TOKEN]")
-	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read auth profile metadata from JSON file")
+	cmdutil.AddStringVar(cmd.Flags(), &profileName, "profile-name", "default", "Profile name to configure", clib.FlagExtra{Group: "Configuration", Placeholder: "NAME", Complete: "predictor=profile"})
+	cmdutil.AddStringVar(cmd.Flags(), &baseURL, "base-url", "", "Jira base URL", clib.FlagExtra{Group: "Configuration", Placeholder: "URL", Terse: "site URL"})
+	cmdutil.AddStringVar(cmd.Flags(), &email, "email", "", "Jira Cloud account email", clib.FlagExtra{Group: "Configuration", Placeholder: "EMAIL", Terse: "account email"})
+	cmdutil.AddStringVar(cmd.Flags(), &backend, "backend", string(config.SecretBackendKeyring), "Secret backend for the credential", clib.FlagExtra{Placeholder: "BACKEND", Terse: "secret backend", Enum: []string{"keyring", "1password"}, EnumTerse: []string{"OS keychain", "1Password CLI"}, EnumDefault: "keyring"})
+	cmdutil.AddStringVar(cmd.Flags(), &onePasswordAccount, "onepassword-account", "", "1Password desktop app account name", clib.FlagExtra{Group: "1Password", Placeholder: "ACCOUNT"})
+	cmdutil.AddStringVar(cmd.Flags(), &vault, "vault", "", "1Password vault name", clib.FlagExtra{Group: "1Password", Placeholder: "VAULT"})
+	cmdutil.AddStringVar(cmd.Flags(), &item, "item", "", "1Password item name", clib.FlagExtra{Group: "1Password", Placeholder: "NAME"})
+	cmdutil.AddBoolVar(cmd.Flags(), &secretStdin, "secret-stdin", false, "Read credential from stdin", clib.FlagExtra{Group: "Input", Terse: "read token from stdin"})
+	cmdutil.AddBoolVar(cmd.Flags(), &skipVerify, "skip-verify", false, "Store the credential without verifying it against `/myself` first", clib.FlagExtra{Group: "Connection", Terse: "skip token check"})
+	cmdutil.AddStringVar(cmd.Flags(), &credentialEnv, "credential-env", "", "Read the credential from a named environment variable [example: JIRA_API_TOKEN]", clib.FlagExtra{Group: "Input", Placeholder: "VAR"})
+	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read auth profile metadata from JSON file", "Input", "FILE")
 	// --secret-stdin and --credential-env both supply the credential. Passing
 	// both is a syntactic conflict: one would silently win by processing
 	// order, so reject it in Cobra validation before any source is read.
 	// --json-input carries only profile metadata, never the credential, so it
 	// is not part of this group.
 	cmd.MarkFlagsMutuallyExclusive("secret-stdin", "credential-env")
-	clib.Extend(cmd.Flags().Lookup("profile-name"), clib.FlagExtra{Placeholder: "NAME", Complete: "predictor=profile"})
-	clib.Extend(cmd.Flags().Lookup("backend"), clib.FlagExtra{Placeholder: "BACKEND", Terse: "secret backend", Enum: []string{"keyring", "1password"}, EnumTerse: []string{"OS keychain", "1Password CLI"}, EnumDefault: "keyring"})
 	return cmd
 }
 
@@ -978,14 +984,17 @@ func authStatusCommand() *cobra.Command {
 		Long: "Reports credential resolution and (by default) probes the live Jira API " +
 			"to surface how the token actually behaves end-to-end. Pass `--no-probe` " +
 			"to skip remote calls and run only the local credential check.",
-		Example: `# Check every profile against the live Jira API
+		Example: `# Includes live Jira probes by default
 $ jira auth status
 
-# Run only the local credential check, no network calls
+# Run only the local credential check
 $ jira auth status --no-probe
 
 # Probe permissions in the context of a specific project
-$ jira auth status --project PROJ`,
+$ jira auth status --project PROJ
+
+# Machine-readable health check
+$ jira auth status --output=json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
@@ -1047,9 +1056,8 @@ $ jira auth status --project PROJ`,
 			return cmdutil.WriteEnvelope(cmd, "auth.status", data)
 		},
 	}
-	cmd.Flags().BoolVar(&noProbe, "no-probe", false, "Skip the remote `/myself` + `/mypermissions` check")
-	cmd.Flags().StringVar(&projectKey, "project", "", "Probe permissions in the context of this project")
-	clib.Extend(cmd.Flags().Lookup("project"), clib.FlagExtra{Placeholder: "KEY", Complete: "predictor=cacheproject"})
+	cmdutil.AddBoolVar(cmd.Flags(), &noProbe, "no-probe", false, "Skip the remote `/myself` + `/mypermissions` check", clib.FlagExtra{Group: "Validation", Terse: "local check only"})
+	cmdutil.AddStringVar(cmd.Flags(), &projectKey, "project", "", "Probe permissions in the context of this project", clib.FlagExtra{Group: "Validation", Placeholder: "KEY", Complete: "predictor=cacheproject"})
 	return cmd
 }
 
@@ -1211,8 +1219,15 @@ func authLogoutCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout PROFILE",
 		Short: "Remove stored credentials",
-		Example: `# Remove the stored credential for a profile
-$ jira auth logout work`,
+		Long: "Remove the stored credential for one profile from its configured secret " +
+			"backend. Use it when a token is no longer valid or a machine should stop " +
+			"using that Jira account.\n\n" +
+			"The profile entry remains in config, so site metadata and defaults are kept. " +
+			"If no credential exists, the command succeeds and reports `removed: false`.",
+		Example: `$ jira auth logout work
+
+# Report whether a credential was removed
+$ jira auth logout work --output=json`,
 		Args:              cobra.ExactArgs(1),
 		Annotations:       map[string]string{"clib": "dynamic-args='profile'"},
 		ValidArgsFunction: cmdutil.CompleteProfileNames,
@@ -1249,8 +1264,14 @@ func authSwitchCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "switch PROFILE",
 		Short: "Switch active profile",
-		Example: `# Make a profile the active one
-$ jira auth switch work`,
+		Long: "Set the config file's default profile. Use it when most upcoming commands " +
+			"should target a different Jira site or account without passing `--profile` " +
+			"each time.\n\n" +
+			"This changes local config only. It does not verify credentials or contact Jira.",
+		Example: `$ jira auth switch work
+
+# Return the new active profile as JSON
+$ jira auth switch work --output=json`,
 		Args:              cobra.ExactArgs(1),
 		Annotations:       map[string]string{"clib": "dynamic-args='profile'"},
 		ValidArgsFunction: cmdutil.CompleteProfileNames,
@@ -1275,8 +1296,17 @@ $ jira auth switch work`,
 func authRefreshCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "refresh",
-		Short: "Refresh credentials",
-		Args:  cobra.NoArgs,
+		Short: "Report credential refresh support",
+		Long: "Report whether the active profile's auth type has a refresh flow. Use it " +
+			"from scripts that share a generic auth lifecycle across CLIs.\n\n" +
+			"Jira API-token profiles do not have refreshable credentials, so this command " +
+			"returns `refreshed: false` with a reason instead of rotating a token.",
+		Example: `# Token profiles report why no refresh happened
+$ jira auth refresh
+
+# Check another profile without changing the active one
+$ jira --profile prod auth refresh --output=json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
@@ -1303,6 +1333,12 @@ func authMigrateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "migrate",
 		Short: "Migrate credentials between backends",
+		Long: "Move stored credentials between supported secret backends while keeping each " +
+			"profile's Jira metadata. Use it when switching from the OS keyring to " +
+			"1Password, or when moving a profile back to the keyring.\n\n" +
+			"`--dry-run` previews the migration plan without reading or writing secrets. " +
+			"Real migrations stage destination writes before saving config, then clean up " +
+			"old storage where jira-cli owns it.",
 		Example: `# Preview migrating every profile's credential to 1Password
 $ jira auth migrate --backend 1password --vault Private --dry-run
 
@@ -1461,12 +1497,11 @@ $ jira auth migrate --profile work --backend keyring`,
 			return cmdutil.WriteEnvelope(cmd, "auth.migrate", data)
 		},
 	}
-	cmd.Flags().StringVar(&backend, "backend", string(config.SecretBackendKeyring), "Target secret backend for the credential")
-	cmd.Flags().StringVar(&onePasswordAccount, "onepassword-account", "", "1Password desktop app account name")
-	cmd.Flags().StringVar(&vault, "vault", "", "1Password vault name")
-	cmd.Flags().StringVar(&item, "item", "", "1Password item name")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview credential migration")
-	clib.Extend(cmd.Flags().Lookup("backend"), clib.FlagExtra{Placeholder: "BACKEND", Terse: "secret backend", Enum: []string{"keyring", "1password"}, EnumTerse: []string{"OS keychain", "1Password CLI"}, EnumDefault: "keyring"})
+	cmdutil.AddStringVar(cmd.Flags(), &backend, "backend", string(config.SecretBackendKeyring), "Target secret backend for the credential", clib.FlagExtra{Placeholder: "BACKEND", Terse: "secret backend", Enum: []string{"keyring", "1password"}, EnumTerse: []string{"OS keychain", "1Password CLI"}, EnumDefault: "keyring"})
+	cmdutil.AddStringVar(cmd.Flags(), &onePasswordAccount, "onepassword-account", "", "1Password desktop app account name", clib.FlagExtra{Group: "1Password", Placeholder: "ACCOUNT"})
+	cmdutil.AddStringVar(cmd.Flags(), &vault, "vault", "", "1Password vault name", clib.FlagExtra{Group: "1Password", Placeholder: "VAULT"})
+	cmdutil.AddStringVar(cmd.Flags(), &item, "item", "", "1Password item name", clib.FlagExtra{Group: "1Password", Placeholder: "NAME"})
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview credential migration")
 	return cmd
 }
 
@@ -1474,7 +1509,16 @@ func authTokenCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "token",
 		Short: "Show redacted token diagnostics",
-		Args:  cobra.NoArgs,
+		Long: "Inspect where the active profile's credential is stored and whether it can " +
+			"be resolved. Use it to debug local secret backend problems without printing " +
+			"the token.\n\n" +
+			"The token value is always redacted. This command checks local credential " +
+			"resolution only; use `jira auth status` when you also need live Jira probes.",
+		Example: `$ jira auth token
+
+# Check another profile without printing the secret
+$ jira --profile prod auth token --output=json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {

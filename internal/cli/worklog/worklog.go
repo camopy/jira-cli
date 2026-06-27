@@ -22,14 +22,23 @@ func worklogAddCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add KEY...",
 		Short: "Add a worklog",
-		Example: `# Log time against an issue
-$ jira worklog add PROJ-123 --time-spent 2h30m
+		Long: "Add a worklog to one or more issues. Use it when recording time spent from the " +
+			"terminal, with optional Markdown or ADF comments.\n\n" +
+			"Time is parsed with the active profile's workday length for day-based values. " +
+			"Comments pass through the validate-and-encode ADF pipeline before submission.\n\n" +
+			"`--dry-run` runs local parsing and ADF validation but does not contact Jira. " +
+			"`--json-input` can supply time, started, and a canonical ADF comment for " +
+			"headless workflows.",
+		Example: `$ jira worklog add PROJ-123 --time-spent 2h30m
 
-# Log time with a comment
+# Include a Markdown comment in the worklog
 $ jira worklog add PROJ-123 --time-spent 1h --comment-markdown "Pairing session"
 
-# Preview a worklog without submitting it
-$ jira worklog add PROJ-123 --time-spent 45m --dry-run`,
+# Preview parsing and ADF validation without contacting Jira
+$ jira worklog add PROJ-123 --time-spent 45m --dry-run
+
+# Use a JSON payload for headless input
+$ jira worklog add PROJ-123 --json-input worklog.json --dry-run --output=json`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
@@ -148,16 +157,12 @@ $ jira worklog add PROJ-123 --time-spent 45m --dry-run`,
 			}, pipeOut.Warnings)
 		},
 	}
-	cmd.Flags().StringVar(&timeSpent, "time-spent", "", "Human-readable time spent [example: 2h30m]")
-	cmd.Flags().StringVar(&started, "started", "", "Worklog start timestamp")
-	cmd.Flags().StringVar(&commentMarkdown, "comment-markdown", "", "Worklog comment as Markdown")
-	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read worklog payload from JSON file")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
-	cmdutil.ExtendFlag(cmd.Flags(), "time-spent", clib.FlagExtra{Group: "Worklog", Placeholder: "DURATION"})
-	cmdutil.ExtendFlag(cmd.Flags(), "started", clib.FlagExtra{Group: "Worklog", Placeholder: "TIME"})
-	cmdutil.ExtendFlag(cmd.Flags(), "comment-markdown", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
-	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
-	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	fs := cmd.Flags()
+	cmdutil.AddStringVar(fs, &timeSpent, "time-spent", "", "Human-readable time spent [example: 2h30m]", clib.FlagExtra{Group: "Worklog", Placeholder: "DURATION"})
+	cmdutil.AddStringVar(fs, &started, "started", "", "Worklog start timestamp", clib.FlagExtra{Group: "Worklog", Placeholder: "TIME"})
+	cmdutil.AddStringVar(fs, &commentMarkdown, "comment-markdown", "", "Worklog comment as Markdown", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
+	cmdutil.AddFileFlag(fs, &jsonInput, "json-input", "", "Read worklog payload from JSON file", "Input", "FILE")
+	cmdutil.AddDryRunFlag(fs, &dryRun, "Preview mutation without submitting")
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
 }
@@ -227,11 +232,17 @@ func worklogListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list KEY...",
 		Short: "List worklogs",
-		Example: `# List the worklogs on an issue
-$ jira worklog list PROJ-123
+		Long: "List worklogs for one or more issues. Use it to inspect time entries before " +
+			"adding more work or auditing recent activity.\n\n" +
+			"Each issue fetch is capped at the command's page size. Multiple issue keys are " +
+			"queried with bounded parallelism and return per-key results.",
+		Example: `$ jira worklog list PROJ-123
 
-# List worklogs across several issues
-$ jira worklog list PROJ-1 PROJ-2 PROJ-3`,
+# Fetch several issues with bounded parallelism
+$ jira worklog list PROJ-1 PROJ-2 PROJ-3
+
+# Keep worklog output parseable
+$ jira worklog list PROJ-123 --output=json`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})

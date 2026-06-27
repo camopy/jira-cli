@@ -69,30 +69,34 @@ func issueMineCommand() *cobra.Command {
 	var opts issueListOptions
 	cmd := &cobra.Command{
 		Use:   "mine",
-		Short: "List issues assigned to you (alias for `issue list --assignee me`)",
-		Example: `# List issues assigned to you
-$ jira issue mine
+		Short: "List issues assigned to you",
+		Long: "List issues where the assignee is the current Jira user. Use it for the " +
+			"common personal triage view without typing `--assignee me`.\n\n" +
+			"This command shares the `issue list` runner and output shape. It accepts the " +
+			"same filters except assignee and reporter, with assignee pinned to " +
+			"`currentUser()`.",
+		Example: `$ jira issue mine
 
 # List your open issues in a project, newest first
-$ jira issue mine --project PROJ --status '!Done' --order-by created`,
+$ jira issue mine --project PROJ --status '!Done' --order-by created
+
+# Preview generated JQL without contacting Jira
+$ jira issue mine --project PROJ --as-jql`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts.builder.Assignee = "me"
 			return runIssueList(cmd, opts)
 		},
 	}
-	cmd.Flags().BoolVar(&opts.detail, "detail", false, "Fetch full issue records")
-	cmd.Flags().StringVar(&opts.jqlQuery, "jql", "", "Add custom JQL clauses (combined with `assignee = currentUser()`)")
-	cmd.Flags().BoolVar(&opts.asJQL, "as-jql", false, "Print the built JQL without calling Jira")
+	cmdutil.AddBoolVar(cmd.Flags(), &opts.detail, "detail", false, "Fetch full issue records", clib.FlagExtra{Group: "Output"})
+	cmdutil.AddStringVar(cmd.Flags(), &opts.jqlQuery, "jql", "", "Add custom JQL clauses (combined with `assignee = currentUser()`)", clib.FlagExtra{Group: "Filters", Placeholder: "JQL"})
+	cmdutil.AddBoolVar(cmd.Flags(), &opts.asJQL, "as-jql", false, "Print the built JQL without calling Jira", clib.FlagExtra{Group: "Output"})
 	// Share `issue list`'s filter surface minus assignee/reporter: assignee is
 	// pinned to currentUser() in RunE above, so the two cannot drift.
 	clijql.AddFilterFlags(cmd, &opts.builder)
 	clijql.AddSortFlags(cmd, &opts.builder)
 	clijql.AddDateFilterFlags(cmd, &opts.builder)
 	cmdutil.AddIssueColumnFlags(cmd.Flags(), &opts.columns, &opts.tsv)
-	cmdutil.ExtendFlag(cmd.Flags(), "detail", clib.FlagExtra{Group: "Output"})
-	cmdutil.ExtendFlag(cmd.Flags(), "jql", clib.FlagExtra{Group: "Filters", Placeholder: "JQL"})
-	cmdutil.ExtendFlag(cmd.Flags(), "as-jql", clib.FlagExtra{Group: "Output"})
 	return cmd
 }
 
@@ -102,8 +106,13 @@ func issueViewCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "view KEY...",
 		Short: "View issue details",
-		Example: `# View a single issue
-$ jira issue view PROJ-123
+		Long: "Fetch one or more issues with rendered fields, names, schema, transitions, " +
+			"and operations expanded. Use it when you need the full issue context before " +
+			"editing, commenting, or transitioning.\n\n" +
+			"`--web` opens a single issue URL and does not call Jira beyond reading the " +
+			"configured base URL. Multiple issue keys are fetched with bounded parallelism " +
+			"and return partial results when some keys fail.",
+		Example: `$ jira issue view PROJ-123
 
 # View several issues, four requests at a time
 $ jira issue view PROJ-1 PROJ-2 PROJ-3 --parallelism 4
@@ -129,8 +138,7 @@ $ jira issue view PROJ-123 --web`,
 		},
 	}
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
-	cmd.Flags().BoolVar(&web, "web", false, "Open the issue in a browser instead of printing it")
-	cmdutil.ExtendFlag(cmd.Flags(), "web", clib.FlagExtra{Group: "Output"})
+	cmdutil.AddBoolVar(cmd.Flags(), &web, "web", false, "Open the issue in a browser instead of printing it", clib.FlagExtra{Group: "Output"})
 	return cmd
 }
 
@@ -157,8 +165,14 @@ func NewOpenCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "open KEY",
 		Short: "Open an issue in a browser",
-		Example: `# Open an issue in your browser
-$ jira open PROJ-123`,
+		Long: "Open one Jira issue in the default browser. Use it as a short top-level " +
+			"shortcut when you already know the issue key.\n\n" +
+			"The command builds the browse URL from the active profile base URL. It does " +
+			"not fetch the issue from Jira.",
+		Example: `$ jira open PROJ-123
+
+# Print the URL envelope as JSON
+$ jira open PROJ-123 --output=json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
@@ -688,14 +702,26 @@ func issueCreateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create an issue",
-		Example: `# Create a task in a project
-$ jira issue create --project PROJ --type Task --summary "Fix the build"
+		Long: "Create a Jira issue from convenience flags, profile defaults, or a JSON " +
+			"payload. Use flags for common fields and `--json-input` for full Jira field " +
+			"objects, custom fields, or rich ADF descriptions.\n\n" +
+			"Create requests run through the validate-and-encode mutation pipeline before " +
+			"submission. `--dry-run` performs local parsing, alias normalisation, ADF " +
+			"validation, and preview rendering without resolving credentials or contacting " +
+			"Jira.\n\n" +
+			"Headless `--no-input` needs complete input from flags, JSON, or profile " +
+			"defaults: project, issue type, and summary must all be known before the " +
+			"command can submit.",
+		Example: `$ jira issue create --project PROJ --type Task --summary "Fix the build"
 
 # Create a bug assigned to you with a label
 $ jira issue create --project PROJ --type Bug --summary "Crash on startup" --assignee me --label regression
 
-# Preview the create payload without submitting
-$ jira issue create --project PROJ --type Task --summary "Draft" --dry-run`,
+# Preview the create payload without contacting Jira
+$ jira issue create --project PROJ --type Task --summary "Draft" --dry-run
+
+# Preview a full JSON payload for an agent
+$ jira issue create --json-input issue-create.json --dry-run --output=json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			noInput := cmdutil.NoInputRequested(cmd)
@@ -907,24 +933,15 @@ $ jira issue create --project PROJ --type Task --summary "Draft" --dry-run`,
 			return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.create", map[string]any{"issue": issue, "dry_run": false}, resp, pipeOut.Warnings)
 		},
 	}
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
-	cmd.Flags().StringVar(&summary, "summary", "", "Issue summary")
-	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read issue create payload from JSON file")
-	cmd.Flags().StringVar(&assignee, "assignee", "", "Assign on creation: `me`, an email, or a Jira account ID")
-	cmd.Flags().StringVar(&project, "project", "", "Project key (overrides the profile default)")
-	cmd.Flags().StringVar(&issueType, "type", "", "Issue type name (overrides the profile default)")
-	cmd.Flags().StringVar(&parent, "parent", "", "Parent issue key (for a subtask or epic child)")
-	cmd.Flags().StringVar(&priority, "priority", "", "Priority name")
-	cmd.Flags().StringSliceVar(&labels, "label", nil, "Label to attach (repeatable)")
-	cmdutil.ExtendDryRunFlag(cmd.Flags())
-	cmdutil.ExtendFlag(cmd.Flags(), "summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
-	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
-	cmdutil.ExtendFlag(cmd.Flags(), "assignee", clib.FlagExtra{Group: "Fields", Placeholder: "USER", Terse: "assignee", Enum: []string{"me"}, EnumTerse: []string{"current user"}})
-	cmdutil.ExtendFlag(cmd.Flags(), "project", clib.FlagExtra{Group: "Fields", Placeholder: "KEY", Complete: "predictor=cacheproject"})
-	cmdutil.ExtendFlag(cmd.Flags(), "type", clib.FlagExtra{Group: "Fields", Placeholder: "NAME", Terse: "issue type", Complete: "predictor=cacheissuetype"})
-	cmdutil.ExtendFlag(cmd.Flags(), "parent", clib.FlagExtra{Group: "Fields", Placeholder: "KEY", Complete: "predictor=issuekey"})
-	cmdutil.ExtendFlag(cmd.Flags(), "priority", clib.FlagExtra{Group: "Fields", Placeholder: "NAME", Terse: "priority", Complete: "predictor=cachepriority"})
-	cmdutil.ExtendFlag(cmd.Flags(), "label", clib.FlagExtra{Group: "Fields", Placeholder: "NAME", Complete: "predictor=cachelabel,comma"})
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
+	cmdutil.AddStringVar(cmd.Flags(), &summary, "summary", "", "Issue summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
+	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read issue create payload from JSON file", "Input", "FILE")
+	cmdutil.AddStringVar(cmd.Flags(), &assignee, "assignee", "", "Assign on creation: `me`, an email, or a Jira account ID", clib.FlagExtra{Group: "Fields", Placeholder: "USER", Terse: "assignee", Enum: []string{"me"}, EnumTerse: []string{"current user"}})
+	cmdutil.AddStringVar(cmd.Flags(), &project, "project", "", "Project key (overrides the profile default)", clib.FlagExtra{Group: "Fields", Placeholder: "KEY", Complete: "predictor=cacheproject"})
+	cmdutil.AddStringVar(cmd.Flags(), &issueType, "type", "", "Issue type name (overrides the profile default)", clib.FlagExtra{Group: "Fields", Placeholder: "NAME", Terse: "issue type", Complete: "predictor=cacheissuetype"})
+	cmdutil.AddStringVar(cmd.Flags(), &parent, "parent", "", "Parent issue key (for a subtask or epic child)", clib.FlagExtra{Group: "Fields", Placeholder: "KEY", Complete: "predictor=issuekey"})
+	cmdutil.AddStringVar(cmd.Flags(), &priority, "priority", "", "Priority name", clib.FlagExtra{Group: "Fields", Placeholder: "NAME", Terse: "priority", Complete: "predictor=cachepriority"})
+	cmdutil.AddStringSliceVar(cmd.Flags(), &labels, "label", nil, "Label to attach (repeatable)", clib.FlagExtra{Group: "Fields", Placeholder: "NAME", Complete: "predictor=cachelabel,comma"})
 	return cmd
 }
 
@@ -1126,20 +1143,23 @@ func issueEditCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "edit KEY...",
 		Short: "Edit an issue",
-		Long: "Edit a Jira issue.\n\n" +
-			"With no field flags, opens the configured external editor on the issue\n" +
-			"description (kubectl-style). Use `--summary` / `--assignee` / `--json-input`\n" +
-			"for headless or single-field edits.\n\n" +
-			"In headless mode (`--no-input`), at least one field flag MUST be provided\n" +
-			"— there is no editor to open and silent no-ops are validation errors.",
-		Example: `# Replace an issue summary
-$ jira issue edit PROJ-123 --summary "Updated title"
+		Long: "Edit one or more Jira issues. With no field flags, a single-key edit opens " +
+			"the configured external editor on the issue description. Use `--summary`, " +
+			"`--assignee`, or `--json-input` for headless and multi-key edits.\n\n" +
+			"All field changes run through the validate-and-encode mutation pipeline before " +
+			"submission. `--dry-run` previews the validated fields and does not submit.\n\n" +
+			"In headless mode (`--no-input`), at least one field flag or `--json-input` " +
+			"must be provided because there is no editor to open.",
+		Example: `$ jira issue edit PROJ-123 --summary "Updated title"
 
 # Reassign an issue to yourself
 $ jira issue edit PROJ-123 --assignee me
 
-# Apply the same field change to several issues at once
-$ jira issue edit PROJ-1 PROJ-2 --assignee none`,
+# Preview an edit without contacting Jira
+$ jira issue edit PROJ-123 --summary "Draft title" --dry-run
+
+# Apply JSON fields to several issues at once
+$ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=json`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
@@ -1295,14 +1315,10 @@ $ jira issue edit PROJ-1 PROJ-2 --assignee none`,
 			}, pipeOut.Warnings)
 		},
 	}
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
-	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read issue edit payload from JSON file")
-	cmd.Flags().StringVar(&summary, "summary", "", "Replace the issue summary")
-	cmd.Flags().StringVar(&assignee, "assignee", "", "Set assignee: `me`, `none`/`unassigned`, an email, or a Jira account ID")
-	cmdutil.ExtendDryRunFlag(cmd.Flags())
-	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
-	cmdutil.ExtendFlag(cmd.Flags(), "summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
-	cmdutil.ExtendFlag(cmd.Flags(), "assignee", clib.FlagExtra{Group: "Fields", Placeholder: "USER", Terse: "assignee", Enum: []string{"me", "none"}, EnumTerse: []string{"current user", "unassign"}})
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
+	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read issue edit payload from JSON file", "Input", "FILE")
+	cmdutil.AddStringVar(cmd.Flags(), &summary, "summary", "", "Replace the issue summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
+	cmdutil.AddStringVar(cmd.Flags(), &assignee, "assignee", "", "Set assignee: `me`, `none`/`unassigned`, an email, or a Jira account ID", clib.FlagExtra{Group: "Fields", Placeholder: "USER", Terse: "assignee", Enum: []string{"me", "none"}, EnumTerse: []string{"current user", "unassign"}})
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
 }
@@ -1473,12 +1489,22 @@ func issueTransitionCommand() *cobra.Command {
 	returnCmd := &cobra.Command{
 		Use:   "transition KEY... [STATUS]",
 		Short: "Transition an issue to a new status",
-		Long: "Move one or more issues to a new workflow status.\n\n" +
-			"Give the target status as a trailing argument — its name (e.g. `In Progress`)\n" +
-			"or a numeric transition id: `jira issue transition KEY \"In Progress\"`. A name is\n" +
-			"resolved against the issue's available transitions at runtime. With no status\n" +
-			"argument the available transitions are listed instead. The `--transition` flag\n" +
-			"is still accepted.",
+		Long: "Move one or more issues to a workflow status. Use it when advancing work " +
+			"through Jira from a script or terminal triage session.\n\n" +
+			"Give the target status as a trailing argument, such as `In Progress`, or pass a " +
+			"numeric transition ID. A status name is resolved against each issue's available " +
+			"transitions at runtime; the same name can map to different IDs across workflows.\n\n" +
+			"With no target, the command lists available transitions instead of mutating. " +
+			"`--dry-run` is a local preview and echoes the requested target without resolving " +
+			"it through Jira.",
+		Example: `# List available transitions for an issue
+$ jira issue transition PROJ-123
+
+# Move an issue to a named status
+$ jira issue transition PROJ-123 "In Progress"
+
+# Preview transitioning several issues without contacting Jira
+$ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target, keyArgs := splitTransitionTarget(args, transitionID)
@@ -1576,11 +1602,9 @@ func issueTransitionCommand() *cobra.Command {
 			return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transition", map[string]any{"issue": key, "transition": id, "dry_run": false}, resp, pipeOut.Warnings)
 		},
 	}
-	returnCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
-	returnCmd.Flags().StringVar(&transitionID, "transition", "", "Transition id or status name (or pass the status as a positional argument)")
+	cmdutil.AddDryRunFlag(returnCmd.Flags(), &dryRun, "Preview mutation without submitting")
+	cmdutil.AddStringVar(returnCmd.Flags(), &transitionID, "transition", "", "Transition id or status name (or pass the status as a positional argument)", clib.FlagExtra{Group: "Transition", Placeholder: "STATUS"})
 	cmdutil.AddParallelismFlag(returnCmd, &parallelism)
-	cmdutil.ExtendDryRunFlag(returnCmd.Flags())
-	cmdutil.ExtendFlag(returnCmd.Flags(), "transition", clib.FlagExtra{Group: "Transition", Placeholder: "STATUS"})
 	return returnCmd
 }
 
@@ -1735,6 +1759,14 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   name + " KEY...",
 		Short: short,
+		Long: "Run the `issue " + name + "` mutation for one or more issue keys. Use it " +
+			"when you need the shared clone, move, or delete safety path rather than a " +
+			"specialised Jira screen.\n\n" +
+			"`--dry-run` previews the mutation locally and does not contact Jira. Live " +
+			"clone and move payloads run through the validate-and-encode pipeline before " +
+			"submission; delete carries no field payload.\n\n" +
+			"Live destructive operations require `--force` in headless, agent, or " +
+			"`--no-input` mode. Without `--force`, an interactive terminal is prompted.",
 		Example: "# Preview the change without applying it\n" +
 			"$ jira issue " + name + " PROJ-123 --dry-run\n\n" +
 			"# Apply the change non-interactively\n" +
@@ -1863,16 +1895,12 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 			return fmt.Errorf("jira base URL is required for issue.%s", name)
 		},
 	}
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
-	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive mutation")
-	cmd.Flags().StringVar(&jsonInput, "json-input", "", "Read mutation payload from JSON file")
-	cmdutil.ExtendDryRunFlag(cmd.Flags())
-	cmdutil.ExtendForceFlag(cmd.Flags())
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
+	cmdutil.AddForceFlag(cmd.Flags(), &force, "Confirm destructive mutation")
+	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read mutation payload from JSON file", "Input", "FILE")
 	if name == "delete" {
-		cmd.Flags().BoolVar(&deleteSubtasks, "delete-subtasks", false, "Also delete the issue's subtasks (Jira refuses delete otherwise when subtasks exist)")
-		cmdutil.ExtendFlag(cmd.Flags(), "delete-subtasks", clib.FlagExtra{Group: "Safety"})
+		cmdutil.AddBoolVar(cmd.Flags(), &deleteSubtasks, "delete-subtasks", false, "Also delete the issue's subtasks (Jira refuses delete otherwise when subtasks exist)", clib.FlagExtra{Group: "Safety"})
 	}
-	cmdutil.ExtendFileFlag(cmd.Flags(), "json-input", "Input", "FILE")
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
 }
@@ -2015,8 +2043,20 @@ func issueWebLinkCommand() *cobra.Command {
 	var parallelism int
 	cmd := &cobra.Command{
 		Use:   "weblink KEY...",
-		Short: "Attach a web link (URL + title) to an issue",
-		Args:  cobra.MinimumNArgs(1),
+		Short: "Attach a web link to an issue",
+		Long: "Attach a Jira remote web link to one or more issues. Use it to point an " +
+			"issue at a pull request, design document, incident, or other external URL.\n\n" +
+			"`--dry-run` validates local URL syntax and previews the request without " +
+			"contacting Jira or checking whether the target URL is reachable. Multiple " +
+			"issue keys return per-key results.",
+		Example: `$ jira issue weblink PROJ-123 --url https://github.com/acme/app/pull/42 --title "Fix build"
+
+# Preview adding a link without contacting Jira
+$ jira issue weblink PROJ-123 --url https://example.com/design --title "Design note" --dry-run
+
+# Attach the same link to several issues and keep results parseable
+$ jira issue weblink PROJ-123 PROJ-124 --url https://example.com/runbook --title "Runbook" --dry-run --output=json`,
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {
@@ -2067,12 +2107,9 @@ func issueWebLinkCommand() *cobra.Command {
 			}, resp)
 		},
 	}
-	cmd.Flags().StringVar(&url, "url", "", "Web link target URL (required)")
-	cmd.Flags().StringVar(&title, "title", "", "Display title for the link")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without creating the link")
-	cmdutil.ExtendFlag(cmd.Flags(), "url", clib.FlagExtra{Group: "Link", Placeholder: "URL", Hint: "url"})
-	cmdutil.ExtendFlag(cmd.Flags(), "title", clib.FlagExtra{Group: "Link", Placeholder: "TEXT"})
-	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.AddStringVar(cmd.Flags(), &url, "url", "", "Web link target URL (required)", clib.FlagExtra{Group: "Link", Placeholder: "URL", Hint: "url"})
+	cmdutil.AddStringVar(cmd.Flags(), &title, "title", "", "Display title for the link", clib.FlagExtra{Group: "Link", Placeholder: "TEXT"})
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview without creating the link")
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
 }

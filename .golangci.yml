@@ -124,6 +124,12 @@ linters:
       - path: '_test\.go$'
         linters:
           - gocritic
+      # cmdutil is the flag register-and-extend wrapper layer: its flags.go and
+      # bundlers (parallelism.go, …) call the raw pflag setters on purpose, so
+      # the ruleguard raw-pflag-declaration rule must not fire here.
+      - path: '^internal/cli/cmdutil/'
+        linters:
+          - gocritic
       - path: '(^|.*/)internal/(cli/stdin/stdin|editor/roundtrip)\.go$'
         linters:
           - gosec

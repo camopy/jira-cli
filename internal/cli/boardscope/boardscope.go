@@ -249,9 +249,7 @@ func ApplyClauseToJQL(query string, scope jira.BoardScope) string {
 // exclusion) onto a list-style command. Shared by `issue list` and `jql build`
 // so the surface stays in lockstep.
 func AddFlags(cmd *cobra.Command) {
-	cmd.Flags().String("board", "", "Restrict to issues whose project belongs to the named board (case-insensitive exact match against the cache)")
-	cmd.Flags().Int("board-id", 0, "Restrict to issues whose project belongs to the board with this id")
+	cmdutil.AddString(cmd.Flags(), "board", "", "Restrict to issues whose project belongs to the named board (case-insensitive exact match against the cache)", clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Complete: "predictor=cacheboard", Terse: "board filter"})
+	cmdutil.AddInt(cmd.Flags(), "board-id", 0, "Restrict to issues whose project belongs to the board with this id", clib.FlagExtra{Group: "Filters", Placeholder: "ID", Terse: "board id"})
 	cmd.MarkFlagsMutuallyExclusive("board", "board-id")
-	clib.Extend(cmd.Flags().Lookup("board"), clib.FlagExtra{Group: "Filters", Placeholder: "NAME", Complete: "predictor=cacheboard"})
-	clib.Extend(cmd.Flags().Lookup("board-id"), clib.FlagExtra{Group: "Filters", Placeholder: "N"})
 }

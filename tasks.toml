@@ -139,11 +139,15 @@ description = "Download Go module dependencies"
 run = "go mod download"
 
 ["docs:gen"]
-description = "Generate the command reference from the Cobra tree into docs/reference (gitignored; built into the site, not committed)"
-run = """
-rm -rf docs/reference && mkdir -p docs/reference
-go run ./cmd/gen-docs --website --doc-path docs/reference
-"""
+description = "Generate the command reference from the Cobra tree into docs/reference (gitignored) and refresh the reference nav block in zensical.toml"
+# --clean drops pages for deleted commands; --nav-config rewrites the generated
+# reference-nav block. gen-docs does its own clean/mkdir, so no shell rm/mkdir
+# (which keeps the task portable to Windows).
+run = "go run ./cmd/gen-docs --website --clean --doc-path docs/reference --nav-config zensical.toml"
+
+["docs:nav-check"]
+description = "Fail if the reference nav in zensical.toml has drifted from the Cobra command tree"
+run = "go run ./cmd/gen-docs --nav-config zensical.toml --check"
 
 ["docs:build"]
 description = "Build the documentation site"

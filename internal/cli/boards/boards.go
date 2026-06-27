@@ -13,6 +13,7 @@ import (
 	"sort"
 	"time"
 
+	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cache"
@@ -47,12 +48,23 @@ func boardsListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List the boards visible to this profile",
-		Args:  cobra.NoArgs,
-		Example: `# List boards (serves from cache, primes on first run)
+		Long: "List Jira boards visible to the active profile. Use it to discover board IDs " +
+			"for issue listing, JQL building, and profile defaults.\n\n" +
+			"The command serves from the per-profile boards cache when it is fresh. On a " +
+			"first run, stale cache, or `--refresh`, it reads Jira's agile board API and " +
+			"writes the cache before printing results.\n\n" +
+			"Large sites are capped by default to avoid unbounded pagination. Use " +
+			"`--unbounded` when you really need every board and are prepared for a longer " +
+			"live read.",
+		Args: cobra.NoArgs,
+		Example: `# Serves from cache, primes on first run
 $ jira boards list
 
 # Re-prime from the server before listing
-$ jira boards list --refresh`,
+$ jira boards list --refresh
+
+# Fetch every board on a large site
+$ jira boards list --refresh --unbounded --output=json`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
@@ -90,10 +102,9 @@ $ jira boards list --refresh`,
 			return cmdutil.WriteEnvelopeWithRawWarnings(cmd, "boards.list", envelopeData, warnings)
 		},
 	}
-	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a re-prime even when the cache is fresh")
-	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", cachereg.TTLMinutesFor("boards"), "Freshness window before automatic refresh")
-	cmd.Flags().BoolVar(&unbounded, "unbounded", false, "Walk every page (disables the default 100-page / 10 000-board cap)")
-	cmdutil.ExtendRefreshFlags(cmd.Flags())
+	cmdutil.AddBoolVar(cmd.Flags(), &refresh, "refresh", false, "Force a re-prime even when the cache is fresh", clib.FlagExtra{Group: "Cache", Terse: "force re-prime"})
+	cmdutil.AddIntVar(cmd.Flags(), &ttlMinutes, "ttl-minutes", cachereg.TTLMinutesFor("boards"), "Freshness window before automatic refresh", clib.FlagExtra{Group: "Cache", Placeholder: "N", Terse: "freshness window"})
+	cmdutil.AddBoolVar(cmd.Flags(), &unbounded, "unbounded", false, "Walk every page (disables the default 100-page / 10 000-board cap)", clib.FlagExtra{Group: "Pagination", Terse: "fetch all pages"})
 	// No --dry-run: `boards list` always performs a live read and a
 	// cache write, so a "dry-run" flag here could not be honest.
 	return cmd

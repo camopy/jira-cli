@@ -76,3 +76,23 @@ func ExtendWatcherValidationFlags(flags *pflag.FlagSet) {
 	ExtendFlag(flags, "no-readback", clib.FlagExtra{Group: "Validation"})
 	ExtendFlag(flags, "validate-remote", clib.FlagExtra{Group: "Validation"})
 }
+
+// AddDryRunFlag declares the standard --dry-run preview flag bound to p with the
+// given usage text, grouped under Safety. Prefer this over a raw BoolVar so the
+// dry-run flag is grouped and described consistently across every mutation.
+func AddDryRunFlag(flags *pflag.FlagSet, p *bool, usage string) {
+	AddBoolVar(flags, p, "dry-run", false, usage, clib.FlagExtra{Group: "Safety", Terse: "preview only"})
+}
+
+// AddForceFlag declares the standard --force flag bound to p with the given
+// usage text, grouped under Safety.
+func AddForceFlag(flags *pflag.FlagSet, p *bool, usage string) {
+	AddBoolVar(flags, p, "force", false, usage, clib.FlagExtra{Group: "Safety", Terse: "confirm destructive action"})
+}
+
+// AddFileFlag declares a string flag bound to p that names a file-path input,
+// grouped under group with the given placeholder and a file value hint (for
+// shell completion). Prefer this for any flag whose value is a path.
+func AddFileFlag(flags *pflag.FlagSet, p *string, name, value, usage, group, placeholder string) {
+	AddStringVar(flags, p, name, value, usage, clib.FlagExtra{Group: group, Placeholder: placeholder, Hint: "file"})
+}

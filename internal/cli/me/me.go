@@ -16,8 +16,15 @@ import (
 // also offers `--save` and is intentionally namespaced under `auth`.
 func NewCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:     "me",
-		Short:   "Show the active profile's Jira identity",
+		Use:   "me",
+		Short: "Show the active profile's Jira identity",
+		Long: "Fetch `/myself` for the active profile and print the resolved Jira account " +
+			"identity. Use it for a quick read-only check of the profile selected by " +
+			"`--profile` or config.",
+		Example: `$ jira me
+
+# Check a non-active profile and keep output parseable
+$ jira --profile prod me --output=json`,
 		GroupID: "configuration",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

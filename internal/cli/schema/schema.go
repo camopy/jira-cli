@@ -318,6 +318,10 @@ func outputSchemas() map[string]any {
 								"type":        "string",
 								"description": "Workflow category key (new, indeterminate, done); empty when the status carries none.",
 							},
+							"status_color": map[string]any{
+								"type":        "string",
+								"description": "Status category color name; empty when the status carries none.",
+							},
 							"assignee": map[string]any{
 								"type": []string{"object", "null"},
 								"properties": map[string]any{
@@ -331,6 +335,25 @@ func outputSchemas() map[string]any {
 					},
 				},
 				"detail": map[string]any{"type": "boolean"},
+				"board_scope": map[string]any{
+					"type":        "object",
+					"description": "Present for board-scoped lists (--board / --board-id). Reports the resolved board and whether its scope was applied.",
+					"properties": map[string]any{
+						"applied":      map[string]any{"type": "boolean"},
+						"project_keys": map[string]any{"type": "array"},
+						"id":           map[string]any{"type": "integer"},
+						"name":         map[string]any{"type": "string"},
+						"type":         map[string]any{"type": "string"},
+					},
+				},
+				"jql": map[string]any{
+					"type":        "string",
+					"description": "Present for board-scoped lists; the JQL the query resolved to.",
+				},
+				"precedence": map[string]any{
+					"type":        "string",
+					"description": "Present for board-scoped lists; which scope source won when several were set.",
+				},
 				"succeeded_key_chunks": map[string]any{
 					"type":        "integer",
 					"description": "Present when chunked --key reads partially fail.",

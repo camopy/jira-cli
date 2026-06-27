@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/gechr/x/shell"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/cli/startup"
@@ -32,7 +33,15 @@ func aliasListCommand() *cobra.Command {
 		Use:     "list",
 		Aliases: []string{"ls"},
 		Short:   "List your aliases",
-		Args:    cobra.NoArgs,
+		Long: "List command aliases stored in the active config file. Use it to see the " +
+			"short names that are expanded before Cobra dispatches a command.\n\n" +
+			"Alias expansion is local config behavior. It happens before command parsing " +
+			"and never contacts Jira.",
+		Example: `$ jira alias list
+
+# Inspect aliases as a JSON map
+$ jira alias list --output=json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
@@ -51,15 +60,20 @@ func aliasSetCommand() *cobra.Command {
 $ jira alias set mine "issue list --assignee me"
 
 # Store a multi-word expansion as a single quoted string
-$ jira alias set bugs "search jql 'type = Bug AND status = Open'"`,
-		Long: "Create a shortcut for a jira command.\n\n" +
+$ jira alias set bugs "search jql 'type = Bug AND status = Open'"
+
+# Alias a JSON-friendly search for agents
+$ jira alias set mybugs "issue list --assignee me --output=json"`,
+		Long: "Store a local shortcut that expands to another jira command before Cobra " +
+			"parses argv. Use it for repeated searches, profile-specific workflows, or " +
+			"long flag combinations.\n\n" +
 			"The stored expansion is parsed back to an argv with POSIX shell grammar. " +
-			"When EXPANSION reaches `jira alias set` as a single shell-quoted " +
-			"string, it is stored verbatim. When EXPANSION arrives as multiple argv " +
-			"tokens, each token is quoted before storage so the round trip remains " +
-			"faithful. A hand-edited config alias must follow the same grammar: an " +
-			"unquoted `#` starts a comment and everything after it is dropped. Quote a " +
-			"literal `#` (e.g. `'#tag'`) to keep it.",
+			"When EXPANSION reaches `jira alias set` as a single shell-quoted string, it " +
+			"is stored verbatim. When EXPANSION arrives as multiple argv tokens, each " +
+			"token is quoted before storage so the round trip stays faithful.\n\n" +
+			"A hand-edited config alias must follow the same grammar: an unquoted `#` " +
+			"starts a comment and everything after it is dropped. Quote a literal `#`, " +
+			"for example `'#tag'`, to keep it.",
 		Args: cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := strings.TrimSpace(args[0])
@@ -85,14 +99,20 @@ $ jira alias set bugs "search jql 'type = Bug AND status = Open'"`,
 
 func aliasDeleteCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:               "delete NAME",
-		Aliases:           []string{"del", "rm"},
-		Short:             "Delete set aliases",
+		Use:     "delete NAME",
+		Aliases: []string{"del", "rm"},
+		Short:   "Delete an alias",
+		Long: "Remove one alias from the active config file. Use it when a shortcut is " +
+			"stale or conflicts with the command you now want to run.\n\n" +
+			"Deleting a missing alias still returns structured output showing that " +
+			"nothing was removed.",
 		Args:              cobra.ExactArgs(1),
 		Annotations:       map[string]string{"clib": "dynamic-args='alias'"},
 		ValidArgsFunction: completeAliasNames,
-		Example: `# Delete the "mine" alias
-$ jira alias delete mine`,
+		Example: `$ jira alias delete mine
+
+# Report whether the alias existed
+$ jira alias delete mine --output=json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
@@ -113,12 +133,19 @@ func aliasImportCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "import [FILENAME|-]",
 		Short: "Import aliases from a YAML file",
-		Args:  cobra.MaximumNArgs(1),
-		Example: `# Import aliases from a YAML file
-$ jira alias import aliases.yaml
+		Long: "Read alias definitions from a YAML map and merge them into the active config " +
+			"file. Use it to share a team alias set or restore aliases from a backup.\n\n" +
+			"Existing aliases are kept unless `--clobber` is set. Each imported " +
+			"expansion is validated against built-in commands or aliases already present " +
+			"in config; invalid entries are skipped and reported.",
+		Args: cobra.MaximumNArgs(1),
+		Example: `$ jira alias import aliases.yaml
 
-# Import from stdin, overwriting any existing aliases
-$ jira alias import - --clobber`,
+# Read YAML from stdin and replace existing names
+$ jira alias import - --clobber
+
+# Import into a non-default config file
+$ jira --config team-jira.yaml alias import aliases.yaml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filename := "-"
 			if len(args) > 0 {
@@ -168,8 +195,7 @@ $ jira alias import - --clobber`,
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&clobber, "clobber", false, "Overwrite existing aliases of the same name")
-	cmdutil.ExtendSafetyFlag(cmd.Flags(), "clobber")
+	cmdutil.AddBoolVar(cmd.Flags(), &clobber, "clobber", false, "Overwrite existing aliases of the same name", clib.FlagExtra{Group: "Safety", Terse: "overwrite existing"})
 	return cmd
 }
 

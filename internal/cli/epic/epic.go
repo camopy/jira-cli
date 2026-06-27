@@ -27,7 +27,15 @@ func epicListCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List epics",
-		Args:  cobra.NoArgs,
+		Long: "List visible Jira epics using the standard epic JQL for the active profile. " +
+			"Use it when you need epic keys for issue assignment or reporting.\n\n" +
+			"If no Jira profile is configured, the command still returns the JQL and an " +
+			"empty result set so agents can see the intended query shape.",
+		Example: `$ jira epic list
+
+# Return epic keys in a parseable shape
+$ jira epic list --output=json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
@@ -58,8 +66,18 @@ func epicListCommand() *cobra.Command {
 func epicBoardCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "board",
-		Short: "Open the epic board",
-		Args:  cobra.NoArgs,
+		Short: "Show epic status counts",
+		Long: "Build a compact epic board report by listing epics and counting each epic's " +
+			"child issues by status. Use it when you need a terminal summary rather than " +
+			"opening Jira in a browser.\n\n" +
+			"The command performs one child-issue lookup per epic and is capped by the " +
+			"epic list limit. If no Jira profile is configured, it returns empty rows and " +
+			"zero totals.",
+		Example: `$ jira epic board
+
+# Include per-epic counts for scripts
+$ jira epic board --output=json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
@@ -136,14 +154,18 @@ func epicAddCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add ISSUE_KEY... EPIC_KEY",
 		Short: "Add an issue to an epic",
-		Args:  cobra.MinimumNArgs(2),
-		Example: `# Add a single issue to an epic
-$ jira epic add PROJ-123 PROJ-100
+		Long: "Assign one or more issues to an epic. Use it when triaging work into a " +
+			"known epic key from `jira epic list` or Jira.\n\n" +
+			"`--dry-run` previews the issue-to-epic assignment locally and does not " +
+			"contact Jira. Multiple issue keys are processed with bounded parallelism and " +
+			"return per-key results.",
+		Args: cobra.MinimumNArgs(2),
+		Example: `$ jira epic add PROJ-123 PROJ-100
 
-# Add several issues to an epic at once
+# Apply one epic assignment to several issues
 $ jira epic add PROJ-123 PROJ-124 PROJ-125 PROJ-100
 
-# Preview the change without submitting it
+# Preview the assignment without contacting Jira
 $ jira epic add PROJ-123 PROJ-100 --dry-run`,
 		Annotations: epicIssueKeyArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -177,8 +199,7 @@ $ jira epic add PROJ-123 PROJ-100 --dry-run`,
 			return cmdutil.WriteEnvelope(cmd, "epic.add", epicAddData(keys[0], epicKey, true))
 		},
 	}
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
-	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
 }
@@ -226,12 +247,18 @@ func epicRemoveCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remove ISSUE_KEY...",
 		Short: "Remove an issue from its epic",
-		Args:  cobra.MinimumNArgs(1),
-		Example: `# Remove a single issue from its epic
-$ jira epic remove PROJ-123
+		Long: "Remove one or more issues from their current epic. Use it when work was " +
+			"assigned to the wrong epic or should stand alone.\n\n" +
+			"`--dry-run` previews the removals locally and does not contact Jira. Multiple " +
+			"issue keys are processed with bounded parallelism and return per-key results.",
+		Args: cobra.MinimumNArgs(1),
+		Example: `$ jira epic remove PROJ-123
 
-# Remove several issues from their epics at once
-$ jira epic remove PROJ-123 PROJ-124 PROJ-125`,
+# Apply the removal to several issues
+$ jira epic remove PROJ-123 PROJ-124 PROJ-125
+
+# Preview the removal without contacting Jira
+$ jira epic remove PROJ-123 --dry-run`,
 		Annotations: epicIssueKeyArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
@@ -263,8 +290,7 @@ $ jira epic remove PROJ-123 PROJ-124 PROJ-125`,
 			return cmdutil.WriteEnvelope(cmd, "epic.remove", epicRemoveData(keys[0], true))
 		},
 	}
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview mutation without submitting")
-	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
 }

@@ -37,14 +37,22 @@ func searchJQLCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "jql QUERY",
 		Short: "Run a JQL query",
-		Example: `# Run a JQL query and print the matching issues
-$ jira search jql "status = Done AND assignee = currentUser()"
+		Long: "Run an inline JQL query against Jira and print matching issues. Use it when " +
+			"you already have a query string from `jira jql build`, a saved filter, or a " +
+			"Jira URL.\n\n" +
+			"`--web` builds and opens the Jira search URL without running the query. " +
+			"`--count` asks Jira for an approximate match count without fetching issues. " +
+			"`--all` drains pages with default caps unless `--unbounded` is set.",
+		Example: `$ jira search jql "status = Done AND assignee = currentUser()"
 
 # Select only the fields you need
 $ jira search jql "project = PROJ" --fields summary,status
 
-# Return just the approximate match count
-$ jira search jql "project = PROJ" --count`,
+# Ask Jira for an approximate count without fetching issues
+$ jira search jql "project = PROJ" --count
+
+# Restrict fields and keep the result parseable
+$ jira search jql "project = PROJ AND status != Done" --fields key,summary,status --output=json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.web {
@@ -124,11 +132,18 @@ func searchSavedCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "saved NAME",
 		Short: "Run a saved JQL query",
-		Example: `# Run a saved query by name
-$ jira search saved my-open-bugs
+		Long: "Load a named query from the configured queries file and run it against Jira. " +
+			"Use it for team or personal searches that are too long to keep in shell " +
+			"history.\n\n" +
+			"The saved command uses the same output field selectors as inline search, but " +
+			"does not implement `--count` or full pagination controls.",
+		Example: `$ jira search saved my-open-bugs
 
 # Run a saved query and select only the fields you need
-$ jira search saved my-open-bugs --fields summary,status`,
+$ jira search saved my-open-bugs --fields summary,status
+
+# Keep saved-query results parseable
+$ jira search saved my-open-bugs --output=json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fields, detail, err := searchOutputFields(opts)
@@ -186,30 +201,27 @@ $ jira search saved my-open-bugs --fields summary,status`,
 }
 
 func addSearchOutputFlags(cmd *cobra.Command, opts *searchOptions) {
-	cmd.Flags().StringSliceVar(&opts.fields, "fields", nil, "Issue fields to request from Jira, comma-separated [example: summary,status,assignee]")
-	cmd.Flags().BoolVar(&opts.full, "full", false, "Request Jira's full issue payload (`*all` fields)")
-	cmd.Flags().BoolVar(&opts.web, "web", false, "Open the query in a browser instead of printing results")
+	fs := cmd.Flags()
+	cmdutil.AddStringSliceVar(fs, &opts.fields, "fields", nil, "Issue fields to request from Jira, comma-separated [example: summary,status,assignee]", clib.FlagExtra{Group: "Output", Placeholder: "FIELD", Complete: "predictor=cachefield,comma"})
+	cmdutil.AddBoolVar(fs, &opts.full, "full", false, "Request Jira's full issue payload (`*all` fields)", clib.FlagExtra{Group: "Output"})
+	cmdutil.AddBoolVar(fs, &opts.web, "web", false, "Open the query in a browser instead of printing results", clib.FlagExtra{Group: "Output"})
 	cmd.MarkFlagsMutuallyExclusive("fields", "full")
-	clib.Extend(cmd.Flags().Lookup("fields"), clib.FlagExtra{Group: "Output", Placeholder: "FIELD", Complete: "predictor=cachefield,comma"})
-	clib.Extend(cmd.Flags().Lookup("full"), clib.FlagExtra{Group: "Output"})
-	clib.Extend(cmd.Flags().Lookup("web"), clib.FlagExtra{Group: "Output"})
 }
 
 // addSearchPaginationFlags attaches --all/--limit/--unbounded. Like --count,
 // they live only on `search jql`, not the shared output flags, so `search
 // saved` doesn't publish flags its runner ignores.
 func addSearchPaginationFlags(cmd *cobra.Command, opts *searchOptions) {
-	cmd.Flags().BoolVar(&opts.all, "all", false, "Walk every page until `isLast` (bounded; use `--unbounded` to lift the caps)")
-	cmd.Flags().IntVar(&opts.limit, "limit", 50, "Page size requested from Jira")
-	cmd.Flags().BoolVar(&opts.unbounded, "unbounded", false, "With `--all`, lift the default 100-page / 10 000-issue caps")
+	fs := cmd.Flags()
+	cmdutil.AddBoolVar(fs, &opts.all, "all", false, "Walk every page until `isLast` (bounded; use `--unbounded` to lift the caps)", clib.FlagExtra{Group: "Pagination"})
+	cmdutil.AddIntVar(fs, &opts.limit, "limit", 50, "Page size requested from Jira", clib.FlagExtra{Group: "Pagination", Placeholder: "N"})
+	cmdutil.AddBoolVar(fs, &opts.unbounded, "unbounded", false, "With `--all`, lift the default 100-page / 10 000-issue caps", clib.FlagExtra{Group: "Pagination"})
 	// --count fetches nothing and --web opens a browser, so the page controls
 	// are meaningless alongside either.
 	cmd.MarkFlagsMutuallyExclusive("count", "all")
 	cmd.MarkFlagsMutuallyExclusive("count", "limit")
 	cmd.MarkFlagsMutuallyExclusive("web", "all")
 	cmd.MarkFlagsMutuallyExclusive("web", "limit")
-	cmdutil.ExtendPaginationFlags(cmd.Flags())
-	clib.Extend(cmd.Flags().Lookup("unbounded"), clib.FlagExtra{Group: "Pagination"})
 }
 
 // searchTruncationWarnings maps a bounded-drain truncation onto the envelope's
@@ -239,13 +251,12 @@ func searchTruncationWarnings(info jira.DrainInfo) []map[string]any {
 // it there would publish a flag the saved runner silently ignores. Must be
 // called after addSearchOutputFlags so the flags it conflicts with exist.
 func addSearchCountFlag(cmd *cobra.Command, opts *searchOptions) {
-	cmd.Flags().BoolVar(&opts.count, "count", false, "Return only the approximate match count, without fetching issues")
+	cmdutil.AddBoolVar(cmd.Flags(), &opts.count, "count", false, "Return only the approximate match count, without fetching issues", clib.FlagExtra{Group: "Output"})
 	// --count fetches no issues, so the field/full selectors and the browser
 	// opener are all meaningless alongside it.
 	cmd.MarkFlagsMutuallyExclusive("count", "fields")
 	cmd.MarkFlagsMutuallyExclusive("count", "full")
 	cmd.MarkFlagsMutuallyExclusive("count", "web")
-	clib.Extend(cmd.Flags().Lookup("count"), clib.FlagExtra{Group: "Output"})
 }
 
 // runSearchCount fetches Jira's approximate match count for jqlStr and emits it

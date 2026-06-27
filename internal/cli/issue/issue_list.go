@@ -20,23 +20,32 @@ func issueListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List issues",
-		Example: `# List open issues in a project, most recently updated first
-$ jira issue list --project PROJ --status '!Done'
+		Long: "Build an issue-search JQL query from flags, profile defaults, board scope, " +
+			"and optional custom JQL, then list matching Jira issues. Use it for the main " +
+			"terminal issue triage workflow.\n\n" +
+			"`--as-jql` is an offline preview that does not contact Jira or resolve " +
+			"credentials. `--count` calls Jira for an approximate match count without " +
+			"fetching issues. Issue-key ranges are expanded and chunked so large key lists " +
+			"return per-chunk errors without discarding successful chunks.",
+		Example: `$ jira issue list --project PROJ --status '!Done'
 
 # List your in-progress bugs updated in the last week
 $ jira issue list --assignee me --type Bug --status "In Progress" --updated -7d
 
-# Count matching issues from a custom JQL query
-$ jira issue list --jql "status = Done AND assignee = currentUser()" --count`,
+# Ask Jira for an approximate count without fetching issues
+$ jira issue list --jql "status = Done AND assignee = currentUser()" --count
+
+# Preview the generated JQL without contacting Jira
+$ jira issue list --project PROJ --status Done --as-jql --output=json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runIssueList(cmd, opts)
 		},
 	}
-	cmd.Flags().BoolVar(&opts.detail, "detail", false, "Fetch full issue records")
-	cmd.Flags().StringVar(&opts.jqlQuery, "jql", "", "Run a custom JQL query for the issue list [example: status = Done AND assignee = currentUser()]")
-	cmd.Flags().BoolVar(&opts.asJQL, "as-jql", false, "Print the built JQL query without calling Jira")
-	cmd.Flags().BoolVar(&opts.count, "count", false, "Return only the approximate match count, without fetching issues")
+	cmdutil.AddBoolVar(cmd.Flags(), &opts.detail, "detail", false, "Fetch full issue records", clib.FlagExtra{Group: "Output", Terse: "full records"})
+	cmdutil.AddStringVar(cmd.Flags(), &opts.jqlQuery, "jql", "", "Run a custom JQL query for the issue list [example: status = Done AND assignee = currentUser()]", clib.FlagExtra{Group: "Filters", Placeholder: "JQL", Terse: "custom JQL"})
+	cmdutil.AddBoolVar(cmd.Flags(), &opts.asJQL, "as-jql", false, "Print the built JQL query without calling Jira", clib.FlagExtra{Group: "Output", Terse: "print JQL"})
+	cmdutil.AddBoolVar(cmd.Flags(), &opts.count, "count", false, "Return only the approximate match count, without fetching issues", clib.FlagExtra{Group: "Output"})
 	clijql.AddJQLBuilderFlags(cmd, &opts.builder)
 	cmdutil.AddParallelismFlag(cmd, &opts.parallelism)
 	cmdutil.AddIssueColumnFlags(cmd.Flags(), &opts.columns, &opts.tsv)
@@ -44,6 +53,5 @@ $ jira issue list --jql "status = Done AND assignee = currentUser()" --count`,
 	// --as-jql is an offline preview; --count calls Jira. They short-circuit
 	// the runner differently, so they can't combine.
 	cmd.MarkFlagsMutuallyExclusive("as-jql", "count")
-	cmdutil.ExtendFlag(cmd.Flags(), "count", clib.FlagExtra{Group: "Output"})
 	return cmd
 }

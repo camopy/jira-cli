@@ -73,10 +73,14 @@ func NewCommand() *cobra.Command {
 func agentSchemaCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "schema",
-		Short: "Output the CLI command schema as JSON",
+		Short: "Emit the CLI command schema as JSON",
 		Long: "Emits the full command tree, flag signatures, and per-command output " +
 			"schemas for AI agent consumption. Use `--output=compact` for the JSON " +
 			"data payload without the envelope.",
+		Example: `$ jira agent schema
+
+# Drop the envelope and print only the JSON data payload
+$ jira agent schema --output=compact`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return schema.WriteSchema(cmd)
@@ -88,8 +92,17 @@ func agentSchemaCommand() *cobra.Command {
 func agentGuideCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "guide [section]",
-		Short: "Print the AI-agent steering guide for jira-cli",
-		Args:  cobra.MaximumNArgs(1),
+		Short: "Print the AI-agent steering guide",
+		Long: "Print embedded runbooks for using jira-cli from scripts and AI coding agents. " +
+			"Use it when an automated workflow needs the command contract, safe mutation " +
+			"rules, or task-specific guidance without reading the source tree.\n\n" +
+			"With no section, the command prints every guide in the canonical order. Pass a " +
+			"section slug, such as `safe_mutation`, to print only that workflow.",
+		Example: `$ jira agent guide
+
+# Print only one workflow section
+$ jira agent guide safe_mutation`,
+		Args: cobra.MaximumNArgs(1),
 		// Tab-complete the workflow slug. Cobra calls this with the
 		// partial arg; we filter the canonical order list and return
 		// matching slugs.
@@ -157,7 +170,22 @@ func agentADFMatrixCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "adf-matrix",
 		Short: "Emit the ADF support matrix as JSON",
-		Args:  cobra.NoArgs,
+		Long: "Print the Atlassian Document Format (ADF) nodes and marks that jira-cli knows " +
+			"how to read or write — the support matrix. ADF is the JSON rich-text format Jira " +
+			"uses for descriptions, comments, worklogs, and rich-text custom fields; reach for " +
+			"it before generating ADF by hand. For every node and mark it records which " +
+			"operations the CLI supports (author, render, preserve, validate, submit), and each " +
+			"row carries an `official_url` to the matching node in the Atlassian reference.\n\n" +
+			"The output is local registry data: it does not contact Jira, and it does not prove " +
+			"that a particular Jira field accepts every listed node.\n\n" +
+			"See the Atlassian ADF structure reference: " +
+			"<https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/>",
+		Example: `# Inspect local ADF support without contacting Jira
+$ jira agent adf-matrix
+
+# Emit the matrix as JSON for an agent
+$ jira agent adf-matrix --output=json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			rows := adf.Registry().All()
 			data := make([]any, 0, len(rows))
@@ -176,7 +204,18 @@ func agentFieldTypesCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "fieldtypes",
 		Short: "Emit the customfield type registry as JSON",
-		Args:  cobra.NoArgs,
+		Long: "Print jira-cli's local registry for Jira custom field schema types. Use it when " +
+			"building JSON payloads for create, edit, clone, or move commands and you need " +
+			"to know how a field value is encoded.\n\n" +
+			"The registry is a CLI encoding guide, not a live field list. Combine it with " +
+			"`jira issue create --field-help` or `jira issue edit --field-help` when you " +
+			"need the fields configured for one Jira project or issue.",
+		Example: `# Inspect local custom field encoding support
+$ jira agent fieldtypes
+
+# Emit the registry as JSON for an agent
+$ jira agent fieldtypes --output=json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			rows := customfield.Registry().All()
 			data := make([]any, 0, len(rows))

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cache"
@@ -39,16 +40,21 @@ func cacheRefreshCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "refresh [resource...]",
 		Short: "Refresh stale cache resources (or all with --force)",
-		Long: "Refreshes cached Jira metadata. With no argument, refreshes every resource; " +
-			"with resource names, only those. Fresh resources are skipped unless --force is given.",
-		Example: `# Refresh every stale resource
-$ jira cache refresh
+		Long: "Refresh cached Jira metadata for the active profile. With no arguments, it " +
+			"checks every registered resource; with resource names, it checks only those.\n\n" +
+			"Fresh resources are skipped unless `--force` is set. Resources are refreshed " +
+			"with bounded concurrency, and a failure for one resource is returned in the " +
+			"structured envelope without discarding successful refreshes.",
+		Example: `$ jira cache refresh
 
 # Refresh everything, ignoring freshness
 $ jira cache refresh --force
 
-# Refresh just boards and labels
-$ jira cache refresh boards labels`,
+# Limit the refresh to named resources
+$ jira cache refresh boards labels
+
+# Refresh every resource and keep the result parseable
+$ jira cache refresh --force --output=json`,
 		Annotations: map[string]string{"clib": "dynamic-args='cacheresource'"},
 		ValidArgsFunction: func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 			return registry.ResourceNames(), cobra.ShellCompDirectiveNoFileComp
@@ -96,10 +102,13 @@ $ jira cache refresh boards labels`,
 				})
 		},
 	}
-	cmd.Flags().BoolVar(&force, "force", false, "Refetch every resource regardless of freshness")
+	cmdutil.AddBoolVar(cmd.Flags(), &force, "force", false, "Refetch every resource regardless of freshness",
+		clib.FlagExtra{Group: "Cache", Terse: "ignore freshness"})
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
-	cmd.Flags().IntVar(&ttlOverride, "ttl-minutes", 0, "Freshness window override for all resources (0 = per-resource default)")
-	cmd.Flags().BoolVar(&unbounded, "unbounded", false, "For boards, walk every page (disables the default cap)")
+	cmdutil.AddIntVar(cmd.Flags(), &ttlOverride, "ttl-minutes", 0, "Freshness window override for all resources (0 = per-resource default)",
+		clib.FlagExtra{Group: "Cache", Placeholder: "N", Terse: "freshness window"})
+	cmdutil.AddBoolVar(cmd.Flags(), &unbounded, "unbounded", false, "For boards, walk every page (disables the default cap)",
+		clib.FlagExtra{Group: "Pagination", Terse: "walk every page"})
 	return cmd
 }
 

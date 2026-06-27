@@ -36,29 +36,25 @@ func issueLinkSubCommand() *cobra.Command {
 	var parallelism int
 	cmd := &cobra.Command{
 		Use:   "link KEY...",
-		Short: "Inspect, create, or remove issue links",
-		Long: `Manage Jira issue links.
-
-Sub-commands:
-  list KEY            List the links on an issue (inward + outward)
-  delete KEY LINK_ID  Remove a link by its global id
-  types               Show the configured link types in this Jira
-
-Default action — no sub-command:
-  jira issue link KEY --to OTHER --type NAME
-  Creates a link of the given type. KEY is the inward issue (the one
-  whose link page will show the relationship); --to is the outward
-  issue. Semantics depend on --type:
-    Blocks  — KEY blocks --to
-    Relates — KEY relates to --to
-    Cloners — KEY clones --to (or "is cloned by", per direction)`,
+		Short: "Manage issue links",
+		Long: "Create, list, delete, and discover Jira issue links. Use the default action " +
+			"`jira issue link KEY --to OTHER --type NAME` to create a link, or use the " +
+			"subcommands for reads and deletes.\n\n" +
+			"For create, `KEY` is the inward issue and `--to` is the outward issue. Link " +
+			"type semantics come from Jira, so confirm the configured type names with " +
+			"`jira issue link types` when direction matters.\n\n" +
+			"`--dry-run` previews create requests without contacting Jira. Link deletes " +
+			"are force-gated in headless, agent, and `--no-input` mode.",
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		Args:        cobra.ArbitraryArgs,
 		Example: `# Mark one issue as blocking another
 $ jira issue link PROJ-123 --to PROJ-456 --type Blocks
 
-# Relate two issues
-$ jira issue link PROJ-123 --to PROJ-456 --type Relates`,
+# Run 'jira issue link types' for the link types your site allows
+$ jira issue link PROJ-123 --to PROJ-456 --type Relates
+
+# Preview a link creation without contacting Jira
+$ jira issue link PROJ-123 --to PROJ-456 --type Blocks --dry-run`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return cmd.Help()
@@ -105,18 +101,15 @@ $ jira issue link PROJ-123 --to PROJ-456 --type Relates`,
 			}, resp)
 		},
 	}
-	cmd.Flags().StringVar(&to, "to", "", "Outward issue key")
-	cmd.Flags().StringVar(&linkType, "type", "", "Link type name (Blocks, Relates, Cloners, …)")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without creating the link")
+	cmdutil.AddStringVar(cmd.Flags(), &to, "to", "", "Outward issue key", clib.FlagExtra{Group: "Link", Placeholder: "KEY", Complete: "predictor=issuekey"})
+	// --type completion driven by the cachelinktype predictor.
+	// Cache primer: `jira cache linktypes`.
+	cmdutil.AddStringVar(cmd.Flags(), &linkType, "type", "", "Link type name (Blocks, Relates, Cloners, …)", clib.FlagExtra{Group: "Link", Placeholder: "NAME", Complete: "predictor=cachelinktype"})
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview without creating the link")
 	// A link needs both endpoints: passing one of --to / --type without
 	// the other is always a syntax error. Declared as Cobra metadata so
 	// the half-specified link is rejected before RunE.
 	cmd.MarkFlagsRequiredTogether("to", "type")
-	// --type completion driven by the cachelinktype predictor.
-	// Cache primer: `jira cache linktypes`.
-	cmdutil.ExtendFlag(cmd.Flags(), "to", clib.FlagExtra{Group: "Link", Placeholder: "KEY", Complete: "predictor=issuekey"})
-	cmdutil.ExtendFlag(cmd.Flags(), "type", clib.FlagExtra{Group: "Link", Placeholder: "NAME", Complete: "predictor=cachelinktype"})
-	cmdutil.ExtendDryRunFlag(cmd.Flags())
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 
 	cmd.AddCommand(issueLinkListCommand())
@@ -183,12 +176,19 @@ func issueLinkCreateData(key string, in issueLinkCreateInput, dryRun bool) map[s
 func issueLinkListCommand() *cobra.Command {
 	var parallelism int
 	cmd := &cobra.Command{
-		Use:         "list KEY...",
-		Short:       "List the links on an issue (inward + outward)",
+		Use:   "list KEY...",
+		Short: "List issue links",
+		Long: "List inward and outward links for one or more issues. Use it to inspect " +
+			"dependencies before adding or deleting links.\n\n" +
+			"The command flattens Jira's inward/outward link shape into a direction-aware " +
+			"array. Multiple issue keys are fetched with bounded parallelism.",
 		Args:        cobra.MinimumNArgs(1),
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		Example: `# List every link on an issue
-$ jira issue link list PROJ-123`,
+$ jira issue link list PROJ-123
+
+# List links for several issues as JSON
+$ jira issue link list PROJ-123 PROJ-124 --output=json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {
@@ -246,11 +246,19 @@ func issueLinkListData(key string, links []jira.IssueLinkView) map[string]any {
 func issueLinkDeleteCommand() *cobra.Command {
 	var force, dryRun bool
 	cmd := &cobra.Command{
-		Use:         "delete KEY LINK_ID",
-		Short:       "Remove an issue link by id",
+		Use:   "delete KEY LINK_ID",
+		Short: "Remove an issue link by id",
+		Long: "Delete an issue link by its global link ID. Use `issue link list` first when " +
+			"you need to find the ID for an issue.\n\n" +
+			"`KEY` is accepted for completion and context, but Jira deletes links by global " +
+			"ID. `--dry-run` previews the deletion and never contacts Jira. Live deletes " +
+			"require `--force` in headless, agent, or `--no-input` mode.",
 		Args:        cobra.ExactArgs(2),
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
-		Example: `# Remove a link by its global id without a prompt
+		Example: `# Preview deleting a link
+$ jira issue link delete PROJ-123 10001 --dry-run
+
+# Remove a link by its global id without a prompt
 $ jira issue link delete PROJ-123 10001 --force`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			noInput := cmdutil.NoInputRequested(cmd)
@@ -299,10 +307,8 @@ $ jira issue link delete PROJ-123 10001 --force`,
 			}, resp)
 		},
 	}
-	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive removal (required under `--no-input`)")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without removing the link")
-	cmdutil.ExtendForceFlag(cmd.Flags())
-	cmdutil.ExtendDryRunFlag(cmd.Flags())
+	cmdutil.AddForceFlag(cmd.Flags(), &force, "Confirm destructive removal (required under `--no-input`)")
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview without removing the link")
 	return cmd
 }
 
@@ -320,13 +326,21 @@ func issueLinkTypesCommand() *cobra.Command {
 	var ttlMinutes int
 	cmd := &cobra.Command{
 		Use:   "types",
-		Short: "Show the configured link types in this Jira instance",
-		Args:  cobra.NoArgs,
+		Short: "List configured issue link types",
+		Long: "List the issue link types configured in the active Jira site. Use it before " +
+			"creating links when you need the exact `--type` value and direction labels.\n\n" +
+			"The command reads the `linktypes` cache when fresh. On a cache miss, stale " +
+			"entry, or `--refresh`, it fetches Jira's issue-link type metadata and updates " +
+			"the per-profile cache.",
+		Args: cobra.NoArgs,
 		Example: `# Show the configured link types
 $ jira issue link types
 
 # Force a refresh past the cache
-$ jira issue link types --refresh`,
+$ jira issue link types --refresh
+
+# Return link types as JSON
+$ jira issue link types --output=json`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
@@ -356,9 +370,8 @@ $ jira issue link types --refresh`,
 			return cmdutil.WriteEnvelope(cmd, "issue.link.types", envelopeData)
 		},
 	}
-	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
-	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", cachereg.TTLMinutesFor("linktypes"), "Freshness window before automatic refresh")
-	cmdutil.ExtendRefreshFlags(cmd.Flags())
+	cmdutil.AddBoolVar(cmd.Flags(), &refresh, "refresh", false, "Force a fetch even when the cache is fresh", clib.FlagExtra{Group: "Cache"})
+	cmdutil.AddIntVar(cmd.Flags(), &ttlMinutes, "ttl-minutes", cachereg.TTLMinutesFor("linktypes"), "Freshness window before automatic refresh", clib.FlagExtra{Group: "Cache", Placeholder: "N"})
 	return cmd
 }
 

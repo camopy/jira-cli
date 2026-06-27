@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cache"
@@ -56,7 +57,20 @@ func newCachePrimerCommand(r registry.Resource) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   r.Name,
 		Short: r.Short,
-		Args:  cobra.NoArgs,
+		Long: "Cache and print one Jira metadata resource for the active profile. Use it " +
+			"when completions, agents, or later commands need a local copy of `" + r.Name + "`.\n\n" +
+			"The command serves a fresh cache entry when present. On a miss, stale entry, " +
+			"or `--refresh`, it contacts Jira, writes the per-profile cache file, and " +
+			"prints the cached list.",
+		Example: `# Use the cache if fresh, otherwise fetch from Jira
+$ jira cache ` + r.Name + `
+
+# Force a re-fetch even when the cache is fresh
+$ jira cache ` + r.Name + ` --refresh
+
+# Return the cached list in a parseable shape
+$ jira cache ` + r.Name + ` --output=json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
@@ -116,9 +130,10 @@ func newCachePrimerCommand(r registry.Resource) *cobra.Command {
 			return cmdutil.WriteEnvelope(cmd, "cache."+r.Name, envelopeData)
 		},
 	}
-	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
-	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", r.TTLMinutes, "Freshness window before automatic refresh")
-	cmdutil.ExtendRefreshFlags(cmd.Flags())
+	cmdutil.AddBoolVar(cmd.Flags(), &refresh, "refresh", false, "Force a fetch even when the cache is fresh",
+		clib.FlagExtra{Group: "Cache", Terse: "force fetch"})
+	cmdutil.AddIntVar(cmd.Flags(), &ttlMinutes, "ttl-minutes", r.TTLMinutes, "Freshness window before automatic refresh",
+		clib.FlagExtra{Group: "Cache", Placeholder: "N", Terse: "freshness window"})
 	return cmd
 }
 
@@ -146,8 +161,14 @@ func cacheBoardsCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "boards",
 		Short: "Cache and print the visible Jira agile boards",
-		Args:  cobra.NoArgs,
-		Example: `# Prime the boards cache (uses the cache if fresh)
+		Long: "Prime the per-profile boards cache and print its status. Use it before " +
+			"board-name completion, board-scoped issue listing, or any workflow that " +
+			"needs board IDs without repeated agile API calls.\n\n" +
+			"The command serves a fresh cache entry unless `--refresh` is set. Large " +
+			"sites are capped by default; use `--unbounded` when you need every board and " +
+			"are prepared for a longer live read.",
+		Args: cobra.NoArgs,
+		Example: `# Use the boards cache if fresh, otherwise fetch from Jira
 $ jira cache boards
 
 # Force a re-fetch even when the cache is still fresh
@@ -210,10 +231,12 @@ $ jira cache boards --unbounded`,
 			return cmdutil.WriteEnvelopeWithRawWarnings(cmd, "cache.boards", data, warnings)
 		},
 	}
-	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force a fetch even when the cache is fresh")
-	cmd.Flags().IntVar(&ttlMinutes, "ttl-minutes", registry.TTLMinutesFor("boards"), "Freshness window before automatic refresh")
-	cmd.Flags().BoolVar(&unbounded, "unbounded", false, "Walk every page (disables the default 100-page / 10 000-board cap)")
-	cmdutil.ExtendRefreshFlags(cmd.Flags())
+	cmdutil.AddBoolVar(cmd.Flags(), &refresh, "refresh", false, "Force a fetch even when the cache is fresh",
+		clib.FlagExtra{Group: "Cache", Terse: "force fetch"})
+	cmdutil.AddIntVar(cmd.Flags(), &ttlMinutes, "ttl-minutes", registry.TTLMinutesFor("boards"), "Freshness window before automatic refresh",
+		clib.FlagExtra{Group: "Cache", Placeholder: "N", Terse: "freshness window"})
+	cmdutil.AddBoolVar(cmd.Flags(), &unbounded, "unbounded", false, "Walk every page (disables the default 100-page / 10 000-board cap)",
+		clib.FlagExtra{Group: "Pagination", Terse: "walk every page"})
 	// No --dry-run: the cache primer's whole purpose is a live fetch
 	// plus a cache write, so a "dry-run" flag here could not be honest.
 	return cmd
@@ -275,14 +298,20 @@ func emitCachedBoardsEnvelope(cmd *cobra.Command, profileName string, entry cach
 func cacheClearCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "clear [resource]",
-		Short: "Remove cached data (a single resource, or the whole profile)",
-		Long:  "With no argument, removes every cache file under the active profile. With a resource name (`labels`, `projects`, `epics`, …), removes just that file.",
-		Args:  cobra.MaximumNArgs(1),
-		Example: `# Clear every cached resource for the active profile
-$ jira cache clear
+		Short: "Remove cached metadata",
+		Long: "Remove local cache files for the active profile. Use it when cached metadata " +
+			"is stale, malformed, or should be rebuilt on the next command.\n\n" +
+			"With no argument, the command removes every cache file under the profile. " +
+			"With a resource name such as `labels`, `projects`, or `boards`, it removes " +
+			"only that cache file.",
+		Args: cobra.MaximumNArgs(1),
+		Example: `$ jira cache clear
 
-# Clear just the cached boards
-$ jira cache clear boards`,
+# Target a single cached resource
+$ jira cache clear boards
+
+# Report whether a resource cache file was removed
+$ jira cache clear labels --output=json`,
 		Annotations: map[string]string{"clib": "dynamic-args='cacheresource'"},
 		ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 			if len(args) > 0 {

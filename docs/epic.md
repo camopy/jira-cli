@@ -1,7 +1,7 @@
 # Epic
 
 Browse and manage Jira epics — list them, add or remove child issues,
-or jump to the agile board for an epic. `jira epic` is a thin
+or get a status-count summary across epics. `jira epic` is a thin
 convenience layer on top of the underlying issue API; for the full
 `epic` issue type's lifecycle (create / edit / transition) use the
 [`issue`](issues.md) commands with `--type Epic`.
@@ -12,13 +12,11 @@ Add `-d` / `--debug` to print the HTTP request/response trace on stderr
 
 ## list
 
-Page through every epic visible to the active profile. The default
-projection returns the summary fields (`status`, `summary`); pass
-`--detail` for the full issue payload per epic.
+Page through every epic visible to the active profile. Each epic is
+returned with its summary fields (`status`, `summary`).
 
 ```sh
 jira epic list
-jira epic list --detail
 ```
 
 === "Human"
@@ -156,12 +154,18 @@ isn't attached to any epic still returns `removed: true`.
 
 ## board
 
-Open the agile board scoped to a specific epic in the system browser.
-Interactive only — there's no JSON output.
+Build a compact board report: list epics and count each epic's child
+issues by status. Use it for a terminal summary instead of opening Jira
+in a browser. It takes no arguments.
 
 ```sh
-jira epic board <EPIC_KEY>
+jira epic board
 ```
+
+The command runs one child-issue lookup per epic (capped by the epic
+list limit). Pass `--output=json` for the machine-readable counts —
+per-epic rows under `data.epics` and the roll-up under `data.totals`.
+With no profile configured it returns empty rows and zero totals.
 
 ## See also
 

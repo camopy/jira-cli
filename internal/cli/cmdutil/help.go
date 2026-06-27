@@ -86,6 +86,13 @@ func groupRank(title string) int {
 	return unrankedGroupRank
 }
 
+// GroupRank returns the canonical task-flow sort rank for a flag-group title.
+// It is exported so the docs generator can order flag groups identically to the
+// terminal help, keeping the reference site and `--help` in step.
+func GroupRank(title string) int {
+	return groupRank(title)
+}
+
 // orderFlagGroups sorts the flag-group sections into the canonical task-flow
 // order (flagGroupRank) while leaving structural sections — Usage, Examples,
 // subcommand lists — exactly where they are. Only sections that carry a flag
