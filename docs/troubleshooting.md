@@ -27,7 +27,7 @@ If it isn't what you expect:
 *   `JIRA_DEFAULT_PROFILE` environment variable overrides the file default.
 *   `default_profile` in `~/.config/jira-cli/config.toml` is the file default.
 
-See [Configuration › Precedence](config.md#precedence) for the full
+See [Configuration › Precedence](config.md#what-overrides-what) for the full
 resolution order.
 
 ## 3. Are credentials wired correctly?
@@ -44,7 +44,7 @@ Map the per-profile `error` value to the next step:
 
 `credential not found`
 :   The keyring (or 1Password) doesn't have an entry for this profile.
-    Run [`jira auth login`](auth.md#auth-login). If `secret_backend = "env"`,
+    Run [`jira auth login`](auth.md#log-in). If `secret_backend = "env"`,
     set `JIRA_TOKEN_<PROFILE>` (uppercase, `-` → `_`).
 
 `auth_failed` (HTTP 401)
@@ -116,7 +116,7 @@ See [Cache](cache.md) for the full resource list.
 `exit 2` with `not_found`
 :   Issue / project / board / user doesn't exist *for this token*. A
     403 sometimes surfaces as 404 — check
-    [`auth status`](auth.md#auth-status) to rule out a permission
+    [`auth status`](auth.md#when-access-fails) to rule out a permission
     issue first.
 
 `exit 4` with `rate_limit`
@@ -126,7 +126,7 @@ See [Cache](cache.md) for the full resource list.
     fail on the first 429. The envelope carries
     `errors[0].retry_after_seconds`. Raise `--max-retry-wait` (or
     `JIRA_MAX_RETRY_WAIT`), or wait for the window to reset. See
-    [Configuration › Rate-limit retry](config.md#rate-limit-retry).
+    [Configuration › Rate-limit retry](config.md#behaviour-toggles).
 
 `exit 5` with `server_error`
 :   Jira's side, or a local IO failure (cache directory not writable,
@@ -138,7 +138,7 @@ See [Cache](cache.md) for the full resource list.
 :   The command refuses to write unless both `--base-url` and `--email`
     are passed; either flag missing is a validation error (exit 3),
     not a silent overwrite. Re-run with both flags. See
-    [Configuration › init](config.md#init).
+    [Configuration › init](config.md#profiles).
 
 ## Debug invocation
 
@@ -156,7 +156,7 @@ side; quote it when filing a Jira support ticket.
 
 ## See also
 
-*   [Auth › Troubleshooting access](auth.md#troubleshooting-access) — the error taxonomy from auth.md's perspective.
+*   [Auth › Troubleshooting access](auth.md#when-access-fails) — the error taxonomy from auth.md's perspective.
 *   [Output › Exit codes](output.md#exit-codes) — the typed-exit-code contract.
 *   [Agents › `core_contract`](agent.md#guides) — the same recovery surface from an agent-runbook angle.
 *   [Configuration](config.md) — env vars and config keys this page references.

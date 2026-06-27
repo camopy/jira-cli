@@ -11,7 +11,7 @@ binary, see [Installation](installation.md).
 A source checkout is the right path when you need any of:
 
 *   The `1password` credential backend (requires CGO, which release archives
-    don't ship). See [auth › Backends](auth.md#backends).
+    don't ship). See [auth › Backends](auth.md#where-the-token-is-stored).
 *   Accurate `jira version` output (`go install` doesn't supply the
     compile-time ldflags that the version package reads).
 *   To hack on the code.

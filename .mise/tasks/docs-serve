@@ -1,18 +1,10 @@
 #!/usr/bin/env bash
 # Serve the docs site locally with live reload.
+#
+# Serves the committed zensical.toml directly — no throwaway config is written,
+# so nothing lands in the working tree. site_url stays the production URL, which
+# means instant navigation falls back to full page loads locally; links still
+# work. Args pass through: add `--dev-addr 0.0.0.0:8000` to reach it from a
+# phone on the LAN, or `-o` to open a browser.
 set -euo pipefail
-
-published_site_url="https://matcra587.github.io/jira-cli/"
-local_site_url="http://localhost:8000/"
-tmp_config="zensical.serve.tmp.toml"
-
-cleanup() { rm -f "$tmp_config"; }
-trap cleanup EXIT
-trap 'cleanup; exit 130' INT TERM
-
-awk -v pub="$published_site_url" -v loc="$local_site_url" '
-  $0 == "site_url = \"" pub "\"" { print "site_url = \"" loc "\""; next }
-  { print }
-' zensical.toml > "$tmp_config"
-
-uvx --from zensical zensical serve -f "$tmp_config" "$@"
+exec uvx --from zensical zensical serve -f zensical.toml "$@"

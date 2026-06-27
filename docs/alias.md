@@ -183,5 +183,5 @@ alias. With `--clobber`, existing-name conflicts are overwritten and
 
 ## See also
 
-*   [Configuration › Aliases](config.md#aliases) — the `[aliases]` TOML key the alias commands read and write.
+*   [Configuration › Aliases](config.md#top-level-keys) — the `[aliases]` TOML key the alias commands read and write.
 *   [Search › search saved](search.md#search-saved) — for queries you reuse repeatedly, a saved JQL file beats an alias because it lives outside the shell-quoting layer.

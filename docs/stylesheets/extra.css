@@ -1,0 +1,35 @@
+/* Custom site overrides — component, layout and content tweaks.
+ *
+ * theme.css holds the Catppuccin -> Material colour palette; this file is the
+ * home for everything that isn't the colour theme.
+ */
+
+/* Clickable cards.
+ *
+ * Each grid card holds exactly one link — the bold title. Material only makes
+ * that link itself clickable, so the rest of the card is dead space. Stretch
+ * the title link's hit area over the whole card with an ::after overlay, so a
+ * tap or click anywhere on the card navigates. Relies on one link per card
+ * (true for every card grid here); a second link would sit under the overlay.
+ */
+.md-typeset .grid.cards > ul > li {
+  position: relative;
+}
+
+.md-typeset .grid.cards > ul > li > p:first-child > a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+/* Hover affordance: lift the whole card and accent its border. */
+.md-typeset .grid.cards > ul > li {
+  transition:
+    border-color 125ms,
+    box-shadow 125ms;
+}
+
+.md-typeset .grid.cards > ul > li:hover {
+  border-color: var(--md-accent-fg-color);
+  box-shadow: 0 0 0 1px var(--md-accent-fg-color);
+}

@@ -1,101 +1,112 @@
-# Configuration
+---
+title: Configure
+description: How jira-cli is configured — one TOML file plus a few JIRA_* environment variables. Profiles, defaults, secret backends, themes, and the full key reference.
+icon: material/cog-outline
+---
 
-`jira-cli` reads one TOML file and a small set of environment variables.
-This page is the reference for what's in that file, what overrides it,
-and what each setting does. Skim [Basics](#basics), reach for
-[Advanced](#advanced) when you outgrow a single profile, and jump to
-[Reference](#reference) or [Sample](#sample) when you need exhaustive
-detail.
+# :gear: Configure
+
+jira-cli reads one TOML file and a small set of `JIRA_*` environment variables.
+This page covers where that file lives, what overrides what, and the settings
+worth knowing. Tokens are the one thing that never live here — they sit in your
+keyring or 1Password; see [Authenticate](auth.md) for that.
+
+For the exact flags on each `config` subcommand, see the command reference:
+[`config init`](reference/jira/config/init.md),
+[`config get`](reference/jira/config/get.md),
+[`config set`](reference/jira/config/set.md),
+[`config profile`](reference/jira/config/profile.md),
+[`config theme`](reference/jira/config/theme.md).
 
 ## Where it lives
 
-```text
-~/.config/jira-cli/config.toml
-```
+`--config <path>` overrides the location on any command, and `config init`
+creates the file on first run.
 
-The base directory resolves OS-natively:
-
-| Platform | Config file |
-|----------|-------------|
-| Linux/macOS | `$XDG_CONFIG_HOME/jira-cli/config.toml` if `XDG_CONFIG_HOME` is set to an absolute path, else `~/.config/jira-cli/config.toml` |
-| Windows | `%AppData%\jira-cli\config.toml` (e.g. `C:\Users\You\AppData\Roaming\jira-cli\config.toml`); `XDG_CONFIG_HOME` is honored when set to an absolute path |
-
-Override with `--config <path>` on any command. The directory is created
-on first run by [`config init`](#init). Tokens never live in the config
-file: they sit in the OS keyring, 1Password, or an environment variable,
-addressed by the per-profile `secret_backend` setting (see
-[Auth](auth.md) for the full secret-storage story).
-
-## Precedence
-
-Highest first:
-
-1.  CLI flag (e.g. `--output=json`, `--config <path>`).
-2.  Environment variable (`JIRA_*`).
-3.  Per-profile entry under `[[profiles]]`.
-4.  Top-level key in `config.toml`.
-5.  Hardcoded default.
-
-## Basics
-
-The 80% case: one Jira site, one profile, defaults you set once and
-forget.
-
-### init
-
-Create or rewrite the config file with a `default` profile shell.
-Non-interactive: pass `--base-url` and `--email` as flags. The command
-does not prompt and does not write credentials — run
-[`auth login`](auth.md) next to populate the keyring.
-
-```sh
-jira config init --base-url https://example.atlassian.net --email john.doe@example.com
-```
-
-`config init` requires both `--base-url` and `--email`; either flag missing
-exits with `required_flag_missing` (exit 3) before any write, so a stray
-invocation can't silently blank an existing profile. For the interactive
-walkthrough that prompts for site, email, and credential, use
-[`auth login`](auth.md) instead.
-
-=== "Human"
+=== "macOS"
 
     ```text
-    INF ℹ️ auth_type=token base_url=https://example.atlassian.net profile=default stored_auth=false
+    ~/.config/jira-cli/config.toml
     ```
 
-=== "JSON"
+    `$XDG_CONFIG_HOME` is honoured when set to an absolute path.
 
-    ```json
-    {
-      "ok": true,
-      "meta": { "command": "config.init", "timestamp": "…", "request_id": "…" },
-      "data": {
-        "auth_type": "token",
-        "base_url": "https://example.atlassian.net",
-        "profile": "default",
-        "stored_auth": false
-      },
-      "errors": [],
-      "warnings": []
-    }
+=== "Linux"
+
+    ```text
+    ~/.config/jira-cli/config.toml
     ```
 
-`stored_auth: false` reflects that `config init` never writes credentials;
-run [`auth login`](auth.md) next.
+    `$XDG_CONFIG_HOME` is honoured when set to an absolute path.
 
-### Default profile
+=== "Windows"
 
-The `default_profile` top-level key picks which `[[profiles]]` block is
-active when `--profile` and `JIRA_DEFAULT_PROFILE` are both unset:
+    ```text
+    %AppData%\jira-cli\config.toml
+    ```
 
-```toml
-default_profile = "work"
-```
+    For example `C:\Users\You\AppData\Roaming\jira-cli\config.toml`.
+    `XDG_CONFIG_HOME` is honoured when set to an absolute path.
 
-### Common per-profile keys
+## What overrides what
 
-Set these once and most commands stop needing repetitive flags:
+When the same setting is set in more than one place, the highest wins:
+
+1. CLI flag — `--output=json`, `--config <path>`, `--profile <name>`.
+2. Environment variable — the `JIRA_*` set below.
+3. Per-profile entry under `[[profiles]]`.
+4. Top-level key in `config.toml`.
+5. Built-in default.
+
+## Profiles
+
+A profile is one Jira site. The `default` profile covers the common case; add
+more when you point at several sites.
+
+=== "One profile"
+
+    `config init` writes the profile shell; `auth login` fills in the token.
+
+    ```sh
+    jira config init --base-url https://example.atlassian.net --email you@example.com
+    ```
+
+    `config init` needs both `--base-url` and `--email`, never prompts, and never
+    writes a credential — run [`auth login`](auth.md) next.
+
+=== "Several profiles"
+
+    Each `[[profiles]]` block is one site; `name` is the key `--profile` and
+    `JIRA_DEFAULT_PROFILE` look up. `default_profile` picks the active one.
+
+    ```toml
+    default_profile = "work"
+
+    [[profiles]]
+      name = "work"
+      base_url = "https://example.atlassian.net"
+      email = "you@example.com"
+      auth_type = "token"
+      secret_backend = "keyring"
+
+    [[profiles]]
+      name = "personal"
+      base_url = "https://side-project.atlassian.net"
+      email = "you@example.com"
+      auth_type = "token"
+      secret_backend = "1password"
+      onepassword_account = "my.1password.com"
+      vault = "Private"
+      item = "jira-personal"
+    ```
+
+    Switch per command with `--profile personal`, or for a whole shell with
+    `export JIRA_DEFAULT_PROFILE=personal`. `jira config profile` lists them and
+    marks the active one.
+
+## Defaults you set once
+
+Set these on a profile and most commands stop needing the repetitive flags:
 
 ```sh
 jira config set profiles.default.default_project ENG
@@ -103,213 +114,101 @@ jira config set profiles.default.default_issue_type Task
 jira config set profiles.default.default_board "Engineering Sprint"
 ```
 
-After this, `jira issue list` scopes to ENG, `jira issue create` picks
-Task as the type, and `--board` resolves from `default_board`. See the
-[Per-profile keys](#per-profile-keys) reference for the full set.
-
-## Advanced
-
-Reach for these once one profile isn't enough or you want to bend
-default behaviour.
-
-### Multiple profiles
-
-Each `[[profiles]]` block describes one Jira site. The `name` is the
-lookup key used by `--profile` and `JIRA_DEFAULT_PROFILE`:
-
-```toml
-default_profile = "work"
-
-[[profiles]]
-  name = "work"
-  base_url = "https://example.atlassian.net"
-  email = "john.doe@example.com"
-  auth_type = "token"
-  secret_backend = "keyring"
-
-[[profiles]]
-  name = "personal"
-  base_url = "https://side-project.atlassian.net"
-  email = "john.doe@example.com"
-  auth_type = "token"
-  secret_backend = "onepassword"
-  onepassword_account = "my.1password.com"
-  vault = "Private"
-  item = "jira-personal"
-```
-
-Switch per command with `--profile <name>` or globally for a shell with
-`export JIRA_DEFAULT_PROFILE=personal`. Inspect what's active:
-
-=== "Human"
-
-    ```text
-    INF ℹ️ active_profile=work profiles="[2 items]"
-    ```
-
-=== "JSON"
-
-    ```json
-    {
-      "ok": true,
-      "meta": { "command": "config.profile", "timestamp": "…", "request_id": "…" },
-      "data": {
-        "active_profile": "work",
-        "profiles": [
-          { "name": "work", "active": true },
-          { "name": "personal", "active": false }
-        ]
-      },
-      "errors": [],
-      "warnings": []
-    }
-    ```
-
-### Secret backends
-
-`secret_backend` on each profile picks where the API token lives:
-
-*   `keyring` (default): OS keychain via `libsecret` / Keychain / Credential Manager.
-*   `onepassword`: looked up by `onepassword_account` + `vault` + `item`.
-*   `env`: read from `JIRA_TOKEN_<PROFILE>` (uppercase, `-` → `_`).
-
-Migrate between backends with [`auth migrate`](auth.md); the secret
-never lands in the TOML.
-
-### Aliases
-
-User-defined command aliases live under the `[aliases]` table. The
-value is the full command line minus the leading `jira`:
-
-```toml
-[aliases]
-  todo = "issue list --status \"To Do\""
-  mine = "issue list --assignee me"
-```
-
-`jira todo` runs `jira issue list --status "To Do"`. Manage the table
-through the [`jira alias`](alias.md) commands rather than editing the
-TOML by hand — `alias set`, `alias delete`, and `alias import` keep
-the file shape stable.
-
-### Themes
+After this, `jira issue list` scopes to ENG, `jira issue create` defaults the
+type to Task, and `--board` resolves from `default_board`. `config get` reads a
+value back by its dotted key:
 
 ```sh
-jira config theme --name catppuccin-mocha
-jira config theme --path ~/my-theme.toml
+jira config get profiles.default.default_project --output=json
+```
+
+!!! note "Dotted keys only"
+    `config get` / `set` address values by full dotted path
+    (`profiles.default.default_project`), not bare names — the same name can
+    exist at profile and top level. An unknown key exits 3
+    (`validation_failed`); a `set` rewrites the file in place, preserving the
+    formatting and comments around the touched key.
+
+## Where the token lives
+
+`secret_backend` on each profile decides where the API token is stored — never
+the TOML. The token itself is covered in [Authenticate](auth.md); the backends:
+
+| `secret_backend` | What it is |
+|---|---|
+| `keyring` | Default. OS keychain — Keychain (macOS), Credential Manager (Windows), libsecret (Linux). |
+| `1password` | A 1Password item, addressed by `onepassword_account` + `vault` + `item`. |
+
+Move a credential between backends with [`auth migrate`](auth.md); it never lands
+in the config file.
+
+Either backend can be overridden for one run with `JIRA_TOKEN_<PROFILE>` (see
+the [environment variables](#environment-variables) below) — it's checked before
+the stored backend, whichever backend the profile uses.
+
+## Themes
+
+```sh
+jira config theme --name catppuccin-mocha   # a bundled theme by name
+jira config theme --path ~/my-theme.toml     # a custom TOML theme
 ```
 
 Bundled names: `auto`, `dark`, `light`, `catppuccin-{frappe,latte,macchiato,mocha}`,
-`dracula`, `gruvbox-{dark,light}`, `monochrome-{dark,light}`, `monokai`,
-`nord`, `one-dark`, `plain-{dark,light}`, `synthwave`,
-`solarized-{dark,light}`, `tokyo-night` — the set clib provides. Setting an
-unknown name is rejected; a name already in a config that clib no longer knows
-(e.g. a pre-v0.5 `default`) is tolerated on load and falls back to `dark`.
+`dracula`, `gruvbox-{dark,light}`, `monochrome-{dark,light}`, `monokai`, `nord`,
+`one-dark`, `plain-{dark,light}`, `synthwave`, `solarized-{dark,light}`,
+`tokyo-night`. `JIRA_THEME=<name>` overrides the configured theme for one
+process.
 
-`auto` detects the terminal background and picks the matching light or dark
-theme, so hash-coloured fields (status, priority, assignee) stay readable on
-either surface — a fix for light terminals where the dark palette's bright
-colours wash out. Detection needs a real terminal: when output is piped or
-`--color=never`/`NO_COLOR` is set, `auto` falls back to the dark theme and
-runs no detection. If your terminal is misdetected, pin `light` or `dark`
-explicitly. `auto` applies to both one-shot output and the dashboard.
+??? note "How `auto` detects the terminal"
+    `auto` reads the terminal background and picks the matching light or dark
+    theme, so hash-coloured fields (status, priority, assignee) stay readable on
+    either surface. Detection needs a real terminal: when output is piped, or
+    `--color=never` / `NO_COLOR` is set, `auto` falls back to the dark theme and
+    runs no detection. If your terminal is misdetected, pin `light` or `dark`.
 
-Override per-process with `JIRA_THEME=<name>`, which wins over the configured
-theme (including `auto`).
+## Behaviour toggles
 
-=== "Human"
+??? info "Read-only mode"
+    `read_only = true` on a profile refuses every mutation in that profile;
+    `JIRA_READ_ONLY=1` enforces the same for the current process regardless of
+    profile. Use it when pointing an exploratory shell at a shared or production
+    tenant.
 
-    ```text
-    INF ℹ️ changed=true name=catppuccin-mocha path=
-    ```
+??? info "Editor for `issue edit`"
+    The editor resolves in order: `JIRA_EDITOR`, the profile's `editor`, the
+    top-level `editor`, then `$EDITOR`. Editors that fork and return (e.g. `code`
+    without `--wait`) are refused at spawn — set `editor = "code --wait"` or use
+    `nvim --wait`.
 
-    `jira config theme` with no flags reports the current state with
-    `changed=false`; passing `--name` or `--path` updates the config
-    and flips the flag.
+??? info "ADF strict mode"
+    Mutations validate ADF strictly by default. `JIRA_ADF_STRICT=0` falls back to
+    best-effort (warnings instead of exit 3). See [ADF](adf.md) for what's lossy.
 
-=== "JSON"
-
-    ```json
-    {
-      "ok": true,
-      "meta": { "command": "config.theme", "timestamp": "…", "request_id": "…" },
-      "data": {
-        "changed": true,
-        "name": "catppuccin-mocha",
-        "path": ""
-      },
-      "errors": [],
-      "warnings": []
-    }
-    ```
-
-### Read-only mode
-
-`read_only = true` on a profile refuses every mutation in that profile.
-`JIRA_READ_ONLY=1` enforces the same in the current process regardless
-of profile setting. Use it when pointing at a shared / production
-tenant from an exploratory shell.
-
-### Editor
-
-The editor for `issue edit` resolves in this order:
-
-1.  `JIRA_EDITOR` (process)
-2.  `editor` on the active profile
-3.  `editor` at the top level of `config.toml`
-4.  `$EDITOR`
-
-Editors that fork-and-return (e.g. `code` without `--wait`) are refused
-at spawn time. Set `editor = "code --wait"` or use `nvim --wait`.
-
-### ADF strict mode
-
-Mutations validate ADF strictly by default. Set `JIRA_ADF_STRICT=0` to
-fall back to best-effort (degrades silently with warnings instead of
-exit 3). See [ADF](adf.md) for what's lossy.
-
-### Rate-limit retry
-
-When Jira rate-limits a read (HTTP 429, or a 503 carrying `Retry-After`),
-the CLI waits and resends rather than failing on the first refusal. It
-honours `Retry-After` when present and otherwise backs off with jitter,
-up to a few attempts. Mutations (create, edit, transition, comment,
-worklog, attachment upload, …) are never auto-retried, because a resent
-write could duplicate.
-
-`--max-retry-wait` caps how long a single request will wait out a limit;
-the default is `30s`. Set it to `0` to disable auto-retry and fail on the
-first 429. `JIRA_MAX_RETRY_WAIT` sets the same budget; an explicit
-`--max-retry-wait` wins. Both take a Go duration (`45s`, `2m`).
-
-The budget is always capped by `--timeout`: the retry never pushes a
-command past its overall deadline. If the limit outlasts the budget, the
-request fails with `exit 4` (`rate_limit`). Run with `--debug` to see each
-backoff and the reason the CLI gave up.
-
-When Jira flags a *successful* response as nearing the limit (its
-`X-RateLimit-NearLimit` header), the command still succeeds but adds a
-`rate_limit_near` warning — a cue to slow down or lower `--parallelism`
-before the next call turns into a 429.
+??? info "Rate-limit retry"
+    On a rate-limited **read** (HTTP 429, or a 503 with `Retry-After`), the CLI
+    waits and resends; it honours `Retry-After`, otherwise backs off with jitter.
+    Mutations are never auto-retried — a resent write could duplicate.
+    `--max-retry-wait` (or `JIRA_MAX_RETRY_WAIT`, a Go duration like `45s`) caps a
+    single wait; `0` disables retry. The budget is always capped by `--timeout`.
 
 ## Reference
 
 ### Per-profile keys
 
 | Key | Purpose |
-|-----|---------|
+|---|---|
 | `name` | Lookup key; matches `--profile` and `JIRA_DEFAULT_PROFILE` |
 | `base_url` | Jira site URL (e.g. `https://example.atlassian.net`) |
-| `email` | Atlassian account email; used as the auth username with API tokens |
-| `auth_type` | `token` is the only supported value (covers both classic and scoped API tokens) |
-| `cloud_id` | Atlassian cloudId for a [scoped (granular) token](auth.md#scoped-granular-api-tokens); normally set automatically by `auth login` token detection. Present = route through the gateway; empty = classic, site-addressed token |
-| `account_id` | Filled in by [`auth login`](auth.md); enables `--assignee me` |
-| `secret_backend` | `keyring`, `onepassword`, or `env` |
-| `onepassword_account`, `vault`, `item` | 1Password addressing when `secret_backend = "onepassword"` |
+| `email` | Atlassian account email; the auth username with API tokens |
+| `auth_type` | `token` is the only value (covers classic and scoped API tokens) |
+| `cloud_id` | Atlassian cloudId for a scoped token; normally set by `auth login`. Present = route via the gateway; empty = classic, site-addressed |
+| `account_id` | Filled by `auth login`; enables `--assignee me` |
+| `secret_backend` | `keyring` (default) or `1password` |
+| `onepassword_account`, `vault`, `item` | 1Password addressing when `secret_backend = "1password"` |
 | `default_project` | Used when `--project` is omitted on `issue list` / `create` |
 | `default_issue_type` | Used when `--type` is omitted on `issue create` |
 | `default_board` | Used when `--board` is omitted on `issue list` / `jql build` |
-| `read_only` | When `true`, the CLI refuses every mutation in this profile |
+| `read_only` | When `true`, refuses every mutation in this profile |
 | `editor` | Override `$EDITOR` for `issue edit`; falls back to top-level `editor` |
 | `refresh_interval` | TUI refresh cadence (seconds) |
 | `timeout` | HTTP request timeout (seconds) |
@@ -318,115 +217,32 @@ before the next call turns into a 429.
 ### Top-level keys
 
 | Key | Purpose |
-|-----|---------|
-| `default_profile` | Profile to use when `--profile` and `JIRA_DEFAULT_PROFILE` are both unset |
-| `queries_path` | Where [`search saved`](search.md#search-saved) looks for `.jql` files |
+|---|---|
+| `default_profile` | Active profile when `--profile` and `JIRA_DEFAULT_PROFILE` are unset |
+| `queries_path` | Where [`search saved`](search.md) looks for `.jql` files |
 | `editor` | Default editor for `issue edit` (per-profile `editor` wins) |
-| `[theme]` | Output and TUI theme; see [`config theme`](#themes) |
-| `[tui]` | Dashboard configuration: tabs, lenses, custom JQL sections, preview dock, keybindings, refresh — see [TUI](tui.md#configuration) |
-| `[aliases]` | User-defined command aliases; managed via [`jira alias`](alias.md) |
+| `[theme]` | Output and TUI theme; see [Themes](#themes) |
+| `[tui]` | Dashboard config: tabs, lenses, sections, preview, keybindings — see [TUI](tui.md) |
+| `[aliases]` | Command aliases; manage via [`jira alias`](alias.md), not by hand |
 
 ### Environment variables
 
 | Variable | Effect |
-|----------|--------|
+|---|---|
 | `JIRA_DEFAULT_PROFILE` | Override the active profile |
-| `JIRA_TOKEN_<PROFILE>` | Supply the API token inline. Highest priority for `secret_backend = "env"` |
+| `JIRA_TOKEN_<PROFILE>` | Supply the API token inline (profile name uppercased); checked before the stored backend, for any backend |
 | `JIRA_ADF_STRICT` | `1`/`true` forces strict ADF validation; `0` enables best-effort fallback |
 | `JIRA_EDITOR` | Override the editor for `issue edit` |
-| `JIRA_KEYRING_SERVICE` | Override the keyring service name. Test-only; leave unset in production |
-| `JIRA_MAX_RETRY_WAIT` | Rate-limit retry budget as a Go duration (`30s`, `2m`); `0` disables auto-retry. `--max-retry-wait` wins |
+| `JIRA_MAX_RETRY_WAIT` | Rate-limit retry budget (Go duration); `0` disables. `--max-retry-wait` wins |
 | `JIRA_NO_COLOR` | Disable ANSI colour in Human output |
-| `JIRA_READ_ONLY` | `1`/`true` refuses every mutation regardless of profile setting |
+| `JIRA_READ_ONLY` | `1`/`true` refuses every mutation regardless of profile |
 | `JIRA_THEME` | Override `[theme].name` for the current process |
+| `JIRA_KEYRING_SERVICE` | Override the keyring service name. Test-only; leave unset in production |
 
-### get
+## Sample config.toml
 
-Read a single value by **dotted key**. Bare names are rejected because
-the same name can exist at multiple levels (profile vs. top-level).
-
-```sh
-jira config get profiles.default.default_project --output=json
-jira config get default_profile --output=json
-```
-
-=== "Human"
-
-    ```text
-    INF ℹ️ key=profiles.default.default_project
-    ```
-
-    Human output prints only the key. The value lives in the JSON
-    envelope's `data.value` field; pass `--output=json` when scripting.
-
-=== "JSON"
-
-    ```json
-    {
-      "ok": true,
-      "meta": { "command": "config.get", "timestamp": "…", "request_id": "…" },
-      "data": { "key": "profiles.default.default_project", "value": "" },
-      "errors": [],
-      "warnings": []
-    }
-    ```
-
-Unknown keys exit 3 with `validation_failed`:
-
-```json
-{
-  "ok": false,
-  "meta": { "command": "config.get", "exit_code": 3, "timestamp": "…", "request_id": "…" },
-  "data": null,
-  "errors": [
-    {
-      "type": "validation",
-      "code": "validation_failed",
-      "message": "unknown config key \"base_url\"",
-      "hint": "",
-      "retryable": false
-    }
-  ],
-  "warnings": []
-}
-```
-
-### set
-
-Write a single value by dotted key. The file is rewritten in place;
-TOML formatting and comments outside the touched key are preserved.
-
-```sh
-jira config set profiles.default.default_project <PROJECT_KEY>
-jira config set profiles.default.default_board "Example board"
-jira config set default_profile personal
-```
-
-=== "Human"
-
-    ```text
-    INF ℹ️ key=profiles.default.default_project
-    ```
-
-=== "JSON"
-
-    ```json
-    {
-      "ok": true,
-      "meta": { "command": "config.set", "timestamp": "…", "request_id": "…" },
-      "data": {
-        "key": "profiles.default.default_project",
-        "value": "<PROJECT_KEY>"
-      },
-      "errors": [],
-      "warnings": []
-    }
-    ```
-
-## Sample
-
-A complete `config.toml` covering two profiles, a theme, aliases, and
-TUI defaults. Copy, adapt, drop into `~/.config/jira-cli/config.toml`.
+A complete file covering two profiles, a theme, aliases, and TUI defaults. Copy,
+adapt, drop into `~/.config/jira-cli/config.toml`.
 
 ```toml
 default_profile = "work"
@@ -436,7 +252,7 @@ editor          = "nvim --wait"
 [[profiles]]
   name = "work"
   base_url = "https://example.atlassian.net"
-  email = "john.doe@example.com"
+  email = "you@example.com"
   auth_type = "token"
   secret_backend = "keyring"
   default_project = "ENG"
@@ -450,9 +266,9 @@ editor          = "nvim --wait"
 [[profiles]]
   name = "personal"
   base_url = "https://side-project.atlassian.net"
-  email = "john.doe@example.com"
+  email = "you@example.com"
   auth_type = "token"
-  secret_backend = "onepassword"
+  secret_backend = "1password"
   onepassword_account = "my.1password.com"
   vault = "Private"
   item = "jira-personal"
@@ -467,12 +283,10 @@ editor          = "nvim --wait"
   preview = "right"
   preview_size = 40
 
-# Replace the Issues tab's quick-filter chips — see the TUI docs
 [[tui.lenses]]
   title = "Team"
-  jql = "project = JCT AND statusCategory != Done ORDER BY updated DESC"
+  jql = "project = ENG AND statusCategory != Done ORDER BY updated DESC"
 
-# Add your own dashboard tabs
 [[tui.sections]]
   title = "Needs review"
   jql = "status = 'In Review' ORDER BY updated DESC"
@@ -487,8 +301,7 @@ editor          = "nvim --wait"
 
 ## See also
 
-*   [TUI](tui.md): everything under `[tui]` — tabs, lenses, sections, preview, keybindings — in depth.
-*   [Auth](auth.md): API tokens, keyring vs 1Password vs env, `auth login` and `auth migrate`.
-*   [`search saved`](search.md#search-saved): `queries_path` points here.
-*   [Cache](cache.md): cached metadata lives under `~/.cache/jira-cli/<profile>-<hash>/`, scoped by profile + base URL + config path.
-*   [Output](output.md): `--output` and `JIRA_NO_COLOR` shape what every command emits.
+- [Authenticate](auth.md) — API tokens, keyring vs 1Password vs env, `auth login` and `auth migrate`.
+- [TUI](tui.md) — everything under `[tui]`: tabs, lenses, sections, preview, keybindings.
+- [Output and scripting](output.md) — `--output` and `JIRA_NO_COLOR` shape what every command emits.
+- [Cache](cache.md) — cached metadata lives under `~/.cache/jira-cli/<profile>-<hash>/`, scoped by profile, base URL, and config path.

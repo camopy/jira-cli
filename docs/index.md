@@ -1,110 +1,86 @@
-# Overview
+---
+title: jira-cli
+description: Manage Jira from your terminal. A CLI for developers and agents.
+icon: material/rocket-launch-outline
+---
 
-`jira` is a terminal-first Jira CLI for developers and agents. One binary,
-machine-readable JSON envelopes, every command driveable from flags,
-stdin, JSON input files, or environment variables. The binary is `jira`;
-the repo and Go module are `jira-cli`.
+# jira-cli
 
-## Quick start
+Manage your Jira issues from the command line.
+
+jira-cli brings Jira into your terminal: read and search issues, create and edit
+them, move them through their workflow, and add comments, links, and
+attachments, all without switching to the browser. Drop into a full-screen
+dashboard to work a whole queue, or run a single command in a script. Both go
+through the same commands.
+
+Every command can also return a stable JSON envelope with typed exit codes, so a
+script or an AI agent reads the result exactly as a person would. That makes
+jira-cli as comfortable to automate as it is to drive by hand.
+
+## First run
+
+Install jira-cli ([all methods](installation.md)), then point it at your site and
+make your first read:
 
 ```sh
-brew install matcra587/tap/jira                    # 1. install
-jira config init --base-url https://example.atlassian.net --email john.doe@example.com
-jira auth login                                    # 2. authenticate (interactive on a TTY)
-jira issue list --assignee me                      # 3. first read
+jira config init --base-url https://example.atlassian.net --email you@example.com
+jira auth login                 # store the API token (interactive on a TTY)
+jira issue list --assignee me   # first read
 ```
 
-Other install paths (one-line installer, `go install`, pre-built
-tarballs) live in [Installation](installation.md). For the headless
-flow (CI / scripted bootstrap), see [`auth login`](auth.md#auth-login).
+See [Authenticate](auth.md) for the 1Password backend and the headless (CI) flow.
 
-## What it does
-
-*   **Triage interactively** in a full-screen dashboard: tabbed JQL views, quick-filter lenses, single-key verbs, bulk actions. → [TUI](tui.md)
-*   **Read and search** issues, comments, attachments, watchers, worklog. → [Issues](issues.md), [Search](search.md), [JQL](jql.md)
-*   **Create, edit, transition, link** issues with rich-text ADF payloads and dry-run preview. → [Issues](issues.md)
-*   **Cache** project, field, board, label, and link-type metadata so completion and validation don't pay a round trip. → [Cache](cache.md)
-*   **Stream structured output** for scripts and CI. JSON envelope with `ok` / `meta` / `data` / `errors[]` / `warnings[]`, typed exit codes. → [Output](output.md)
-*   **Author rich text** in Atlassian Document Format directly, with strict validation before submission. → [ADF](adf.md)
-*   **Drive from an LLM agent.** Machine-readable command schema, per-workflow runbooks, live ADF coverage matrix. → [Agents](agent.md)
-
-## Common commands
-
-| I want to… | Command |
-|---|---|
-| Work a queue in a persistent dashboard | [`jira tui`](tui.md) |
-| Authenticate against a Jira tenant | [`jira auth login`](auth.md#auth-login) |
-| Switch between configured profiles | [`jira auth switch`](auth.md#auth-switch) or `--profile/-P` |
-| Find issues by filter flags | [`jira issue list`](issues.md#list) |
-| Find issues with raw JQL | [`jira search jql`](search.md#search-jql) |
-| Save and re-run a JQL query | [`jira search saved`](search.md#search-saved) |
-| Build JQL without memorising operators | [`jira jql build`](jql.md#build) |
-| Preview a mutation without contacting Jira | `--dry-run` on any mutating command |
-| Apply a batch of edits from a file | [`--json-input <file>`](issues.md#edit) |
-| Cache project / field / board metadata | [`jira cache <resource>`](cache.md) |
-| Store credentials in 1Password | [`jira auth login --backend 1password`](auth.md#backends) |
-| Get a machine-readable command tree | [`jira agent schema`](agent.md) |
-| Get an LLM-readable runbook | [`jira agent guide <slug>`](agent.md) |
-| Log time spent on an issue | [`jira worklog add`](worklog.md#add) |
-| Browse epics or attach an issue to one | [`jira epic`](epic.md) |
-| Shorten a long command into a name | [`jira alias set`](alias.md#set) |
-| Identify the active profile and user | [`jira me`](auth.md#auth-whoami) |
-| Correlate a CLI invocation with Jira logs | `--output=json`, then `meta.request_id` |
-
-!!! tip "Prefer a dashboard?"
-    `jira tui` (or `jira -i`) opens a persistent, full-screen
-    dashboard over the same data: tabbed JQL views, quick-filter
-    lenses, an issue preview, and single-key triage verbs with bulk
-    actions. It's in **alpha** — see [TUI](tui.md) for the tour and
-    every `[tui]` config key.
-
-## Output modes
-
-`--output` (default `auto`) is the single shape control. On a TTY without
-an agent it renders human-readable clog output; piped or under a
-detected agent / CI environment (`CLAUDECODE`, `CURSOR_TERMINAL`,
-`GITHUB_ACTIONS`, etc.) it switches to compact JSON. The full envelope
-shape, every per-command example, and the exit-code taxonomy live on
-[Output](output.md).
-
-## Where to next
+## Explore
 
 <div class="grid cards" markdown>
 
-* :rocket: **Install**
+*   :package:{ .lg .middle } [**Install**](installation.md)
 
     ---
 
-    Platform-specific paths, the one-line installer, version pinning,
-    and uninstall.
+    Install on macOS, Windows, or Linux.
 
-    [Read more →](installation.md)
-
-* :key: **Authenticate**
+*   :key:{ .lg .middle } [**Authenticate**](auth.md)
 
     ---
 
-    OS keyring and 1Password backends, the `JIRA_TOKEN_<PROFILE>`
-    override, credential precedence, and CI patterns.
+    Create a profile and store an API token in the OS keyring or 1Password.
 
-    [Read more →](auth.md)
-
-* :gear: **Configure**
+*   :gear:{ .lg .middle } [**Configure**](config.md)
 
     ---
 
-    Per-profile defaults, multi-profile setup, aliases, themes, env
-    vars, and the full config.toml reference.
+    Profiles, defaults, aliases, themes, and the full config reference.
 
-    [Read more →](config.md)
-
-* :robot: **For agents**
+*   :memo:{ .lg .middle } [**Work with issues**](issues.md)
 
     ---
 
-    Machine-readable command schema, per-workflow runbooks, and the
-    live ADF coverage matrix for structured tool integration.
+    Read, create, edit, transition, comment, link, and attach.
 
-    [Read more →](agent.md)
+*   :mag:{ .lg .middle } [**Search and JQL**](search.md)
+
+    ---
+
+    Find issues with filter flags, raw JQL, or saved queries.
+
+*   :desktop_computer:{ .lg .middle } [**Use the TUI dashboard**](tui.md)
+
+    ---
+
+    Triage interactively with tabbed views, quick-filter lenses, and single-key verbs.
+
+*   :outbox_tray:{ .lg .middle } [**Output and scripting**](output.md)
+
+    ---
+
+    The JSON envelope, exit codes, and compact mode for scripts and agents.
+
+*   :robot:{ .lg .middle } [**Drive it from an agent**](agent.md)
+
+    ---
+
+    Machine-readable command schema, per-workflow runbooks, and the live ADF matrix.
 
 </div>

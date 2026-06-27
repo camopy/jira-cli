@@ -13,14 +13,14 @@ Copyright &copy; 2026 Matt Craven &middot; MIT licence.<br>
 docs_dir = "docs"
 site_dir = "site"
 
-extra_css = ["stylesheets/theme.css"]
+extra_css = ["stylesheets/theme.css", "stylesheets/extra.css"]
 
 nav = [
-    { "Setup & access" = [
+    { "Getting Started" = [
         { Overview = "index.md" },
-        { Installation = "installation.md" },
-        { Auth = "auth.md" },
-        { Configuration = "config.md" },
+        { Install = "installation.md" },
+        { Authenticate = "auth.md" },
+        { Configure = "config.md" },
     ] },
     { "Working with Jira" = [
         { TUI = "tui.md" },
@@ -259,6 +259,8 @@ permalink = true
 [project.markdown_extensions.pymdownx.caret]
 [project.markdown_extensions.pymdownx.details]
 [project.markdown_extensions.pymdownx.emoji]
+emoji_index = "zensical.extensions.emoji.twemoji"
+emoji_generator = "zensical.extensions.emoji.to_svg"
 [project.markdown_extensions.pymdownx.inlinehilite]
 [project.markdown_extensions.pymdownx.keys]
 [project.markdown_extensions.pymdownx.mark]
