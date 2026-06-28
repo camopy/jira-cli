@@ -127,9 +127,9 @@ becomes `JIRA_TOKEN_WORK`), then the backend recorded on the profile.
 !!! note "1Password on macOS and Linux needs a CGO build"
     The Windows release binary includes the `1password` backend. The macOS and
     Linux release binaries are built without CGO, which the backend needs on
-    those platforms, so there either
-    [build from source](contributing.md) or
-    set `JIRA_TOKEN_<PROFILE>` and skip the backend.
+    those platforms, so either install with CGO enabled
+    (`CGO_ENABLED=1 go install github.com/matcra587/jira-cli/cmd/jira@latest`)
+    or set `JIRA_TOKEN_<PROFILE>` and skip the backend.
 
 ## When access fails
 

@@ -8,7 +8,7 @@ icon: material/tray-arrow-down
 
 jira-cli ships as a single static Go binary. Pick a method below; each tab is
 self-contained. Working on jira itself? See
-[Contributing](contributing.md) instead.
+[Contributing](https://github.com/matcra587/jira-cli/blob/main/CONTRIBUTING.md) instead.
 
 ## Install methods
 
@@ -117,8 +117,7 @@ self-contained. Working on jira itself? See
         This path embeds limited version metadata: `jira version` reports `dev`
         or git-derived values because the version package relies on compile-time
         `-X` ldflag overrides that `go install` does not supply. For accurate
-        `jira version` output, use Homebrew, mise, or the pre-built binaries, or
-        [build from a checkout](contributing.md#building-from-source).
+        `jira version` output, use Homebrew, mise, or the pre-built binaries.
 
 === "Pre-built binaries"
 

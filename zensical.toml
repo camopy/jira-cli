@@ -37,7 +37,6 @@ nav = [
         { ADF = "adf.md" },
         { "Custom fields" = "custom-fields.md" },
     ] },
-    { Contributing = "contributing.md" },
     # >>> gen-docs:reference-nav (generated — do not edit by hand)
     { Reference = [
         { "jira" = [
