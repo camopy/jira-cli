@@ -28,6 +28,9 @@ linters:
     - sqlclosecheck
     - nolintlint
 
+    - gocheckcompilerdirectives  # catch malformed //go: build-tag directives
+    - testifylint                # idiomatic testify assertions
+
     # gocritic is enabled ONLY to run our ruleguard rule (see settings below);
     # all its tag-grouped style/diagnostic checks stay off, so it adds no noise.
     - gocritic
