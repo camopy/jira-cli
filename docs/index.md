@@ -25,9 +25,11 @@ make your first read:
 
 ```sh
 jira config init --base-url https://example.atlassian.net --email you@example.com
-jira auth login                 # store the API token (interactive on a TTY)
-jira issue list --assignee me   # first read
+jira auth login  # (1)!
+jira issue list --assignee me
 ```
+
+1.  Prompts for your API token and stores it (interactive on a TTY).
 
 See [Authenticate](auth.md) for the 1Password backend and the headless (CI) flow.
 
@@ -53,23 +55,23 @@ See [Authenticate](auth.md) for the 1Password backend and the headless (CI) flow
 
     Profiles, defaults, aliases, themes, and the full config reference.
 
-*   :memo:{ .lg .middle } [**Work with issues**](issues.md)
+*   :memo:{ .lg .middle } [**Work with issues**](issue/read.md)
 
     ---
 
     Read, create, edit, transition, comment, link, and attach.
-
-*   :mag:{ .lg .middle } [**Search and JQL**](search.md)
-
-    ---
-
-    Find issues with filter flags, raw JQL, or saved queries.
 
 *   :desktop_computer:{ .lg .middle } [**Use the TUI dashboard**](tui.md)
 
     ---
 
     Triage interactively with tabbed views, quick-filter lenses, and single-key verbs.
+
+*   :mag:{ .lg .middle } [**Search and JQL**](search.md)
+
+    ---
+
+    Find issues with filter flags, raw JQL, or saved queries.
 
 *   :outbox_tray:{ .lg .middle } [**Output and scripting**](output.md)
 

@@ -1,114 +1,71 @@
-# Worklog
+---
+title: Worklog
+description: Record and inspect time-tracking entries with worklog add and worklog list — duration formats, the dry-run preview, and JSON input.
+icon: material/timer-outline
+---
 
-Record and inspect time-tracking entries on a Jira issue. The two
-subcommands (`add`, `list`) share the standard envelope and `--output`
-modes. `worklog add` accepts the same `--dry-run` preview path as the
-issue mutations.
+# :stopwatch: Worklog
 
-Add `-d` / `--debug` to print the HTTP request/response trace on stderr
-(token redacted); stdout keeps the clean envelope. See
-[Output](output.md#debug).
+Two verbs: `add` logs time against an issue, `list` pages through what's already
+logged. Both take issue-key lists and ranges with `-p` / `--parallelism`, and
+`add` runs the same `--dry-run` preview as the issue mutations. JSON examples
+below show the `data` block only — the envelope and exit codes live on
+[Output](output.md), and each command links to its reference page for the full
+flag and output-field tables.
 
 ## add
 
-Log time against an issue. `--time-spent` accepts compact Jira-style
-durations (`1h30m`, `45m`, `2d`). `1d` resolves via the profile's
-`workday_seconds` (default `28800` = 8h); set it under `[profiles.<name>]`
-in the config if your team's workday differs.
+Log time against an issue. `--time-spent` takes compact Jira-style durations
+(`1h30m`, `45m`, `2d`). `1d` resolves via the profile's `workday_seconds`
+(default `28800` = 8h); set it under `[profiles.<name>]` if your team's workday
+differs.
 
 ```sh
-jira worklog add <ISSUE_KEY> --time-spent "1h30m" --comment-markdown "Investigating regression"
-jira worklog add <PROJECT_KEY>-1..10 -p 4 --time-spent "15m" --comment-markdown "Bulk triage"
-jira worklog add <ISSUE_KEY> --time-spent "2h" --started "2026-05-27T09:00:00.000-0400"
-jira worklog add <ISSUE_KEY> --json-input worklog.json
+jira worklog add PROJ-123 --time-spent "1h30m" --comment-markdown "Investigating regression"
+jira worklog add PROJ-1..PROJ-10 -p 4 --time-spent "15m" --comment-markdown "Bulk triage"
+jira worklog add PROJ-123 --time-spent "2h" --started "2026-05-27T09:00:00.000-0400"
+jira worklog add PROJ-123 --json-input worklog.json --dry-run
 ```
 
-!!! warning "Duration format is space-free"
-    `--time-spent "1h 30m"` (with a space) fails with `invalid duration`.
-    Use the compact form `"1h30m"`. Fractional units (`"1.5h"`) are
-    rejected as `unsupported duration unit`; combine integer units
-    instead.
-
-=== "Human"
-
-    ```text
-    INF ℹ️ added worklog dry_run=false issue=<ISSUE_KEY> worklog={...}
-    ```
-
-=== "JSON"
-
-    ```json
-    {
-      "ok": true,
-      "meta": {
-        "command": "worklog.add",
-        "timestamp": "…",
-        "request_id": "…",
-        "pagination": { "startAt": 0, "maxResults": 0, "total": 0, "isLast": true }
-      },
-      "data": {
-        "dry_run": false,
-        "issue": "<ISSUE_KEY>",
-        "worklog": {
-          "id": "10169",
-          "timeSpentSeconds": 60,
-          "started": "2026-05-27T17:28:53.802-0400",
-          "comment": {
-            "type": "doc", "version": 1,
-            "content": [
-              { "type": "paragraph", "content": [{ "type": "text", "text": "Investigating regression" }] }
-            ]
-          }
-        }
-      },
-      "errors": [],
-      "warnings": []
-    }
-    ```
-
-!!! note "Dry-run vs submit field naming differs"
-    The dry-run preview returns `time_spent_seconds` (snake_case) while a
-    real submit returns `timeSpentSeconds` (camelCase). Scripts that
-    diff dry-run output against the persisted record need to handle
-    both keys until that asymmetry is reconciled upstream.
-
-### Dry-run
-
-`--dry-run` runs the full validation pipeline (duration parsing, ADF
-encoding of the comment) but stops before the worklog POST. The resolved
-payload echoes under `data.worklog` so you can verify the converted
-duration before committing.
+A live add returns `data.worklog` with Jira's `id`, `timeSpentSeconds`,
+`started`, and the ADF `comment`. A `--dry-run` runs the full pipeline (duration
+parsing, ADF encoding) but stops before the POST, echoing the resolved payload
+so you can check the converted duration first:
 
 ```json
 {
-  "ok": true,
-  "meta": { "command": "worklog.add", "timestamp": "…", "request_id": "…" },
-  "data": {
-    "dry_run": true,
-    "issue": "<ISSUE_KEY>",
-    "worklog": {
-      "time_spent_seconds": 5400,
-      "started": "",
-      "comment": { "type": "doc", "version": 1, "content": [ … ] }
-    }
-  },
-  "errors": [],
-  "warnings": []
+  "dry_run": true,
+  "issue": "PROJ-123",
+  "worklog": {
+    "time_spent_seconds": 5400,
+    "started": "",
+    "comment": { "type": "doc", "version": 1, "content": [ … ] }
+  }
 }
 ```
 
-### JSON input
+!!! warning "Duration format is space-free"
+    `--time-spent "1h 30m"` (with a space) fails with `invalid duration`. Use
+    the compact `"1h30m"`. Fractional units (`"1.5h"`) are rejected as
+    `unsupported duration unit` — combine integer units instead.
 
-Pass `--json-input <file>` (or `--json-input -` for stdin) to author the
-payload directly. The duration goes under `time_spent` as a Jira-style
-string (same grammar as `--time-spent`), not as a seconds integer:
+!!! note "Dry-run and submit name the duration field differently"
+    The dry-run preview returns `time_spent_seconds` (snake_case); a real submit
+    returns `timeSpentSeconds` (camelCase). A script that diffs dry-run output
+    against the persisted record needs to handle both keys until that asymmetry
+    is reconciled upstream.
+
+To author the payload directly, pass `--json-input <file>` (or `--json-input -`
+for stdin). The duration goes under `time_spent` as a Jira-style string (same
+grammar as `--time-spent`), not a seconds integer:
 
 ```json
 {
   "time_spent": "1h30m",
   "started": "2026-05-27T09:00:00.000-0400",
   "comment": {
-    "type": "doc", "version": 1,
+    "type": "doc",
+    "version": 1,
     "content": [
       { "type": "paragraph", "content": [{ "type": "text", "text": "Investigating regression" }] }
     ]
@@ -118,65 +75,43 @@ string (same grammar as `--time-spent`), not as a seconds integer:
 
 For the comment body's ADF shape see [ADF](adf.md).
 
+[Full flags & output fields →](reference/jira/worklog/add.md)
+
 ## list
 
-Page through every worklog on an issue. Returns an empty array when no
-time has been logged.
+Page through every worklog on an issue — an empty array when no time has been
+logged. A single key keeps the `data.issue` shape below; multiple keys return
+ordered `data.results[]` entries, each with `key`, `ok`, and either per-key
+`data` or `error`.
 
 ```sh
-jira worklog list <ISSUE_KEY>
-jira worklog list <PROJECT_KEY>-1..10 -p 4
+jira worklog list PROJ-123
+jira worklog list PROJ-1..PROJ-10 -p 4
 ```
 
-`worklog add` and `worklog list` accept issue-key lists and ranges, and
-`-p N` / `--parallelism N` runs up to `N` per-issue Jira calls
-concurrently. Single-key output keeps the existing `data.issue` shape.
-Multi-key output returns ordered `data.results[]` entries with `key`,
-`ok`, and either per-key `data` or `error`.
-
-=== "Human"
-
-    ```text
-    INF ℹ️ listed worklogs issue=<ISSUE_KEY> worklogs="[3 items]"
-    ```
-
-=== "JSON"
-
-    ```json
+```json
+{
+  "issue": "PROJ-123",
+  "worklogs": [
     {
-      "ok": true,
-      "meta": {
-        "command": "worklog.list",
-        "timestamp": "…",
-        "request_id": "…",
-        "pagination": { "startAt": 0, "maxResults": 0, "total": 0, "isLast": true }
-      },
-      "data": {
-        "issue": "<ISSUE_KEY>",
-        "worklogs": [
-          {
-            "id": "10169",
-            "timeSpentSeconds": 60,
-            "started": "2026-05-27T17:28:53.802-0400",
-            "comment": {
-              "type": "doc", "version": 1,
-              "content": [
-                { "type": "paragraph", "content": [{ "type": "text", "text": "Investigating regression" }] }
-              ]
-            }
-          }
-        ]
-      },
-      "errors": [],
-      "warnings": []
+      "id": "10169",
+      "timeSpentSeconds": 60,
+      "started": "2026-05-27T17:28:53.802-0400",
+      "comment": { "type": "doc", "version": 1, "content": [ … ] }
     }
-    ```
+  ]
+}
+```
 
-Pagination meta is populated even on a single-worklog return; the
-`total` and `maxResults` fields don't reflect the array length.
+Pagination meta rides along even on a single-worklog return; its `total` and
+`maxResults` don't reflect the array length.
+
+[Full flags & output fields →](reference/jira/worklog/list.md)
 
 ## See also
 
-*   [Agents › `log_work`](agent.md#guides) — the agent-runbook view of the same flow.
-*   [ADF](adf.md) — comment body shape for `--json-input`.
-*   [Configuration](config.md) — `workday_seconds` per profile.
+*   [Agents › `log_work`](agent.md#guides) — the agent-runbook view of this flow
+*   [ADF](adf.md) — the comment body shape for `--json-input`
+*   [Configuration](config.md) — `workday_seconds` per profile
+*   [Output](output.md) — the JSON envelope and exit codes
+</content>

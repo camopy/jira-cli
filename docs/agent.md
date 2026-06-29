@@ -1,3 +1,9 @@
+---
+title: For agents
+description: Drive jira from an AI agent — the machine-readable schema, embedded runbooks, and the ADF matrix.
+icon: material/robot-outline
+---
+
 # Agents
 
 `jira agent` exposes the CLI's machine-readable metadata and the

@@ -1,6 +1,6 @@
 # ADF
 
-Atlassian Document Format is the canonical rich-text input for issue
+ADF is the canonical rich-text input for issue
 descriptions, comments, and worklog comments.
 
 ## Native ADF

@@ -1,3 +1,9 @@
+---
+title: Troubleshooting
+description: Diagnose a misbehaving jira invocation with a four-step decision tree.
+icon: material/lifebuoy
+---
+
 # Troubleshooting
 
 Single decision tree for diagnosing a misbehaving `jira` invocation.
@@ -44,8 +50,8 @@ Map the per-profile `error` value to the next step:
 
 `credential not found`
 :   The keyring (or 1Password) doesn't have an entry for this profile.
-    Run [`jira auth login`](auth.md#log-in). If `secret_backend = "env"`,
-    set `JIRA_TOKEN_<PROFILE>` (uppercase, `-` → `_`).
+    Run [`jira auth login`](auth.md#log-in), or supply the token inline with
+    `JIRA_TOKEN_<PROFILE>` (the profile name, uppercased).
 
 `auth_failed` (HTTP 401)
 :   Token is wrong or expired. Rotate it at
@@ -103,7 +109,7 @@ See [Cache](cache.md) for the full resource list.
 `exit 3` with `screen schema could not be resolved in strict mode`
 :   `issue create --json-input` got the edit-shape payload
     (`{"fields": {...}}`) instead of the flat-alias shape
-    (`{"project_key": ..., "issue_type": ...}`). See [Issues › `## create`](issues.md#create)
+    (`{"project_key": ..., "issue_type": ...}`). See [Issues › `## create`](issue/create-edit.md#create)
     for the payload-shape warning.
 
 `exit 3` with `validation: --json-input payload has no recognized fields`

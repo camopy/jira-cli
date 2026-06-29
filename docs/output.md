@@ -143,7 +143,7 @@ parse contract.
 ## Per-command output
 
 Each command page documents its own Human and JSON examples, see
-[`auth`](auth.md), [`issue`](issues.md), [`cache`](cache.md), and so on. The
+[`auth`](auth.md), [`issue`](issue/read.md), [`cache`](cache.md), and so on. The
 envelope shape above is constant; only the `data` payload varies per command.
 
 ## Further reading

@@ -1,4 +1,10 @@
-# TUI
+---
+title: The TUI
+description: The persistent full-screen dashboard — tabs, lenses, triage verbs, bulk actions, the JQL workbench, and its config.
+icon: material/view-dashboard-outline
+---
+
+# :desktop_computer: The TUI
 
 !!! warning "Alpha"
     The dashboard is in **alpha**: actively developed, keybindings and
@@ -12,9 +18,9 @@ queries, an always-visible issue preview, single-key triage verbs with
 optimistic updates, multi-select bulk actions, and a JQL search
 workbench. It is built on Bubble Tea.
 
-```bash
+```sh
 jira tui
-jira -i        # shorthand
+jira -i
 ```
 
 Everything below is configurable in `config.toml` under `[tui]` — see

@@ -26,10 +26,10 @@ stale, or `--refresh` is passed.
 | `epics` | `--epic` completion in the issue create flow | 4 hours |
 | `projects` | `--project` completion | 7 days |
 | `fields` | `customfield_*` resolution in the ADF field map, `--field` completion | 14 days |
-| `boards` | `--board` completion, board-scoped JQL in [`issue list`](issues.md#list) and [`jql build`](jql.md#build) | 28 days |
+| `boards` | `--board` completion, board-scoped JQL in [`issue list`](issue/read.md#list) and [`jql build`](jql.md#build) | 28 days |
 | `issuetypes` | `--type` completion (the instance-wide type list) | 30 days |
 | `statuses` | `--status` completion | 30 days |
-| `linktypes` | `--type` completion for [`issue link`](issues.md#link-create) | 90 days |
+| `linktypes` | `--type` completion for [`issue link`](issue/links.md#link) | 90 days |
 | `priorities` | `--priority` completion | 90 days |
 
 Every primer accepts the same two flags:
@@ -652,12 +652,12 @@ diagnostic flow.
 
 ## See also
 
-*   [`issue list`](issues.md#list): filter flags rely on the cached
+*   [`issue list`](issue/read.md#list): filter flags rely on the cached
   `projects`, `issuetypes`, `labels`, and `boards` resources for
   completion and validation.
 *   [`jql build`](jql.md#build): `--board` resolution reads from the
   cached `boards.json`.
-*   [`issue link`](issues.md#link-create): `--type` completion reads
+*   [`issue link`](issue/links.md#link): `--type` completion reads
   from the cached `link_types`.
 *   [Custom fields](custom-fields.md): the `fields` cache backs
   `customfield_*` resolution when building ADF payloads.
