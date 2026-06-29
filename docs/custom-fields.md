@@ -1,10 +1,16 @@
-# Custom Fields
+---
+title: Custom fields
+description: How jira-cli addresses custom fields by ID, the field cache, and the type registry that encodes a bare value into Jira's wire shape.
+icon: material/form-textbox
+---
+
+# :jigsaw: Custom fields
 
 Jira custom fields are addressed by their API IDs, such as
 `customfield_10010`. Use the field cache and agent registry to map IDs to
 names and input shapes.
 
-## Field Cache
+## Field cache
 
 ```sh
 jira cache fields --refresh --output=json
@@ -14,11 +20,12 @@ jira cache fields --output=json
 The field cache helps completion and lets agents map human field names to
 `customfield_NNNN` keys before editing payloads.
 
-## Field-Type Registry
+## Field-type registry
 
-The CLI recognizes these custom-field types and encodes a bare value into the
-wire shape Jira expects. An explicit object (`{"id":...}` or `{"value":...}`)
-is always passed through unchanged.
+The CLI recognizes these custom-field types. Where a type lifts a bare value, it
+encodes that value into the wire shape Jira expects; the object-only types take
+the wire shape directly. An explicit object in the type's accepted shape is
+passed through unchanged.
 
 | Type | Bare input | Wire shape |
 |------|-----------|------------|
@@ -32,12 +39,12 @@ is always passed through unchanged.
 | `user` | `"<accountId>"` | `{"accountId":"<id>"}` |
 | `multiuser` | `["<id1>","<id2>"]` | array of `{"accountId":...}` |
 | `group` / `multigroup` | group name(s) | `{"name":...}` / array |
-| `components` | component name(s) | array of `{"name":...}` |
-| `version` / `fixversions` | version name(s) | version array |
+| `components` | — (pass objects) | `[{"name":"<component>"}]` |
+| `version` / `fixversions` | — (pass objects) | `[{"name":"<version>"}]` |
 | `versionpicker` / `multiversionpicker` | version name(s) | `{"name":...}` / array |
 | `projectpicker` | project key | `{"key":"<project>"}` |
-| `parent` | `"<PARENT_ISSUE_KEY>"` | parent issue link |
-| `cascadingselect` |, | `{"value":"<top>","child":{"value":"<sub>"}}` |
+| `parent` | — (pass the object) | `{"key":"PROJ-123"}` |
+| `cascadingselect` | — (pass the object) | `{"value":"<top>","child":{"value":"<sub>"}}` |
 
 ```sh
 jira agent fieldtypes --output=json
@@ -46,7 +53,7 @@ jira agent fieldtypes --output=json
 `agent fieldtypes` emits the live registry as JSON, including the encoding
 notes above, so an agent can resolve a field shape without parsing prose.
 
-## JSON Input
+## JSON input
 
 ```json
 {
@@ -58,7 +65,7 @@ notes above, so an agent can resolve a field shape without parsing prose.
 ```
 
 ```sh
-jira issue edit <ISSUE_KEY> --json-input fields.json --output=json
+jira issue edit PROJ-123 --json-input fields.json --output=json
 ```
 
 Unknown customfield types are forwarded and reported with structured warnings

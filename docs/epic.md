@@ -43,7 +43,7 @@ jira epic list
 
 The result is cached locally so later `--epic <key>` resolutions on
 [`issue list`](issue/read.md#list) and [`jql build`](jql.md#build) skip the round
-trip. See [Cache › epics](cache.md#epics) for the mechanics.
+trip. See [Cache › epics](cache.md#the-list-primers) for the mechanics.
 
 [Full flags & output fields →](reference/jira/epic/list.md)
 
@@ -118,7 +118,7 @@ It runs one child lookup per epic (capped by the epic list limit). The JSON
 ## See also
 
 *   [Issues](issue/read.md) — create an epic with `--type Epic`; transition or edit it via the issue commands
-*   [Cache › epics](cache.md#epics) — the local epic-key cache `--epic` filters use
+*   [Cache › epics](cache.md#the-list-primers) — the local epic-key cache `--epic` filters use
 *   [JQL](jql.md) — `issuetype = Epic` is the query behind `epic list`
 *   [Output](output.md) — the JSON envelope and exit codes
 </content>

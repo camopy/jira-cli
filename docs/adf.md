@@ -1,4 +1,10 @@
-# ADF
+---
+title: ADF
+description: Atlassian Document Format — the rich-text input for descriptions and comments, its validation modes, and the supported node and mark set.
+icon: material/file-document-outline
+---
+
+# :page_facing_up: ADF
 
 ADF is the canonical rich-text input for issue
 descriptions, comments, and worklog comments.
@@ -24,10 +30,10 @@ Use it through JSON payloads:
 
 ```sh
 jira issue create --no-input --json-input payload.json --output=json
-jira issue comment add <ISSUE_KEY> --json-input adf.json --no-input --output=json
+jira issue comment add PROJ-123 --json-input adf.json --no-input --output=json
 ```
 
-## Validation Modes
+## Validation modes
 
 `--adf-strict` treats lossy conversion as an error. `--adf-best-effort`
 preserves unknown nodes or marks where possible and reports warnings.
@@ -35,6 +41,12 @@ preserves unknown nodes or marks where possible and reports warnings.
 ```sh
 jira --adf-strict issue create --no-input --json-input payload.json
 ```
+
+The default depends on the operation: submitting a mutation — and a `--dry-run`
+preview of one — defaults to **strict**, so a lossy conversion fails before it
+reaches Jira; reads and renders default to **best-effort**. Override the default
+with the `JIRA_ADF_STRICT` environment variable or the profile's `adf_strict`
+setting; an explicit `--adf-strict` / `--adf-best-effort` flag wins over both.
 
 ## Supported nodes and marks
 

@@ -1,4 +1,10 @@
-# Output
+---
+title: Output & exit codes
+description: The one --output selector, the JSON envelope, typed exit codes, and the debug trace — the contract every command shares.
+icon: material/code-json
+---
+
+# :outbox_tray: Output & exit codes
 
 `jira` has one global output selector, `--output` (short `-o`), with four
 values:
@@ -19,9 +25,9 @@ jira issue list -o compact
 | `json` | Full envelope on stdout with `ok`, `meta`, `data`, `errors[]`, `warnings[]`. |
 | `compact` | The envelope's `data` payload only, no wrapper, with null-valued keys dropped. |
 
-Under `auto`, JSON / compact JSON is selected when stdout is not a TTY or when
-jira detects an agent / CI environment (e.g. `CLAUDECODE`, `CURSOR_TERMINAL`,
-`AGENT=amp`, `GITHUB_ACTIONS`, `CI`).
+Under `auto`, jira emits compact JSON when it detects an agent (e.g.
+`CLAUDECODE`, `CURSOR_TERMINAL`, `AGENT=amp`), the full JSON envelope on any
+other non-TTY stream (a pipe, CI), and human output on an interactive terminal.
 
 `compact` is the lean, token-economical view for agents: it emits only the
 `data` payload and drops every `null`-valued key, recursively. An absent key
@@ -31,11 +37,11 @@ included) for consumers that rely on a fixed shape.
 
 ```mermaid
 flowchart LR
-    Input(["--output=auto"]) --> TTY{"stdout a TTY?"}
-    TTY -- No --> JSON(["JSON envelope"])
-    TTY -- Yes --> Agent{"agent or CI<br>detected?"}
+    Input(["--output=auto"]) --> Agent{"agent detected?"}
     Agent -- Yes --> Compact(["compact JSON"])
-    Agent -- No --> Human(["human clog output"])
+    Agent -- No --> TTY{"stdout a TTY?"}
+    TTY -- No --> JSON(["JSON envelope"])
+    TTY -- Yes --> Human(["human clog output"])
 
     classDef decision stroke:#d97706,stroke-width:2px
     classDef jsonOut  stroke:#2563eb,stroke-width:2px
@@ -60,8 +66,7 @@ on stderr.
   "meta": {
     "command": "issue.list",
     "timestamp": "2026-05-26T05:03:18Z",
-    "request_id": "337f5bd1-a5f2-4bb8-8da5-510cb801f62d",
-    "exit_code": 0
+    "request_id": "337f5bd1a5f24bb88da5510cb801f62d"
   },
   "data": {},
   "errors": [],
@@ -70,22 +75,31 @@ on stderr.
 ```
 
 *   **`ok`**, true on success, false on any non-zero exit.
-*   **`meta.exit_code`**, same value as the process exit (see table below).
-*   **`meta.request_id`**, UUID for correlating CLI invocations with logs.
+*   **`meta.exit_code`**, present only on failure, equal to the process exit
+  code (see table below).
+*   **`meta.request_id`**, a 32-character hex id for correlating CLI invocations
+  with logs.
 *   **`data`**, command-specific payload. `compact` emits only this value.
-*   **`errors[]`**, populated on failure: `{type, message, exit_code, …}`.
+*   **`errors[]`**, populated on failure: `{type, code, message, hint,
+  retryable, …}`. Agents branch on `code` (stable snake_case), never on
+  `message`.
 *   **`warnings[]`**, non-fatal advisories (e.g. ADF conversion approximations).
 
 ## Exit codes
 
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | `auth_failure` (`invalid_token`, expired, missing credential) |
-| 2 | `not_found` (issue, project, board, user) |
-| 3 | `validation_error` (bad flags, malformed input, Jira rejected the value) |
-| 4 | `rate_limit` (Jira 429; `retry_after_seconds` on the error record) |
-| 5 | `server_error` (Jira 5xx or local filesystem / runtime failure) |
+| Code | `code` | Meaning |
+|------|--------|---------|
+| 0 | — | Success |
+| 1 | `auth_failed` | Invalid, expired, or missing credential |
+| 2 | `not_found` | Issue, project, board, or user doesn't exist for this token |
+| 3 | `validation_failed` | Bad flags, malformed input, or Jira rejected the value |
+| 4 | `rate_limited` | Jira 429; `retry_after_seconds` rides on the error record |
+| 5 | `server_error` | Jira 5xx, or a local filesystem / runtime failure |
+| 6 | `canceled` | The operation was cancelled (e.g. Ctrl-C) |
+| 7 | `timeout` | The operation exceeded its deadline |
+
+The `code` column is the stable branch key on `errors[]`; the matching error
+`type` values are `auth`, `not_found`, `validation`, `rate_limit`, and `server`.
 
 The action label (e.g. `Issue created`) goes to stdout only on success. JSON
 mode keeps the same envelope on success and failure.
@@ -112,7 +126,7 @@ jira me --output=json --debug
       "ok": true,
       "meta": { "command": "me", "timestamp": "…", "request_id": "…" },
       "data": {
-        "account_id": "<ACCOUNT_ID>",
+        "account_id": "712020:1a2b3c…",
         "display_name": "Example User",
         "email_address": "you@example.com",
         "profile": "default",
@@ -131,7 +145,7 @@ jira me --output=json --debug
     DBG 🐞 output detection mode=json agent=…
     DBG 🐞 jira request method=GET url=https://your-site.atlassian.net/rest/api/3/myself headers.Accept=application/json headers.Authorization=REDACTED
     DBG 🐞 jira response status_code=200 status="200 OK" headers.X-Ratelimit-Remaining=349 …
-    DBG 🐞 jira response body body="{\"accountId\":\"<ACCOUNT_ID>\",\"displayName\":\"Example User\",…}"
+    DBG 🐞 jira response body body="{\"accountId\":\"712020:1a2b3c…\",\"displayName\":\"Example User\",…}"
     DBG 🐞 fetched account time=287ms
     ```
 
@@ -142,9 +156,10 @@ parse contract.
 
 ## Per-command output
 
-Each command page documents its own Human and JSON examples, see
-[`auth`](auth.md), [`issue`](issue/read.md), [`cache`](cache.md), and so on. The
-envelope shape above is constant; only the `data` payload varies per command.
+Each command page shows its own output, with a JSON `data` example where the
+shape isn't obvious — see [`auth`](auth.md), [`issue`](issue/read.md),
+[`cache`](cache.md), and so on. The envelope above is constant; only the `data`
+payload varies per command.
 
 ## Further reading
 
