@@ -4,19 +4,42 @@ description: Drive jira from an AI agent — the machine-readable schema, embedd
 icon: material/robot-outline
 ---
 
-# Agents
+# :robot: For agents
 
-`jira agent` exposes the CLI's machine-readable metadata and the
-embedded runbooks an LLM-driven agent (Claude, Codex, Cursor, etc.)
-needs to drive `jira` non-interactively without re-discovering the
-contract on every session.
+`jira agent` exposes the CLI's machine-readable metadata and the embedded
+runbooks an LLM-driven agent (Claude, Codex, Cursor, etc.) needs to drive `jira`
+non-interactively without re-discovering the contract on every session.
+
+## What an agent can rely on
+
+*   **One stable envelope, on success and failure alike.** Both return the same
+    JSON shape on stdout — branch on `meta.exit_code` and `errors[].code`, never
+    on prose. See [Output](output.md#envelope).
+*   **A token-economical mode.** `--output=compact` drops the wrapper and every
+    `null` key, recursively ([Output › Modes](output.md#modes)); narrow reads
+    further with `--fields` on [search](search.md#search-jql) and
+    [`issue list`](issue/read.md#list).
+*   **Raw payloads, not just flags.** Every mutation takes `--json-input` (or `-`
+    for stdin) alongside the convenience flags, so an agent submits a structured
+    body directly. See [Creating & editing](issue/create-edit.md).
+*   **Runtime introspection.** Discover the contract from the binary, not
+    pre-stuffed docs: [`agent schema`](#schema), [`agent fieldtypes`](#registries),
+    and [`agent adf-matrix`](#registries) below, plus live instance metadata from
+    [`jql reference`](jql.md#reference).
+*   **A preview before every write.** `--dry-run` validates and echoes the
+    resolved payload without contacting Jira — see the [`safe_mutation`](#guides)
+    runbook.
+*   **Auto-detection.** Under `--output=auto`, a detected agent gets compact JSON
+    with no flag needed ([Output › Modes](output.md#modes)).
+
+The subcommands, each detailed below:
 
 ```sh
-jira agent schema --output=json              # full command tree + flag + I/O schema
-jira agent guide                             # print the embedded steering guide
-jira agent guide <slug>                      # one section (see Guides below)
-jira agent adf-matrix --output=json          # live ADF node/mark coverage
-jira agent fieldtypes --output=json          # customfield type registry
+jira agent schema --output=json
+jira agent guide
+jira agent guide <slug>
+jira agent adf-matrix --output=json
+jira agent fieldtypes --output=json
 ```
 
 ## schema
