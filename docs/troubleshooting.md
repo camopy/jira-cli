@@ -4,7 +4,7 @@ description: Diagnose a misbehaving jira invocation with a four-step decision tr
 icon: material/lifebuoy
 ---
 
-# Troubleshooting
+# :wrench: Troubleshooting
 
 Single decision tree for diagnosing a misbehaving `jira` invocation.
 Walk the four checks in order — most failures fall out by step 3.
@@ -82,11 +82,11 @@ jira cache fields --refresh --output=json
 jira cache issuetypes --refresh --output=json
 ```
 
-Or nuke and re-prime:
+Or nuke and re-prime — any read repopulates what's needed:
 
 ```sh
 jira cache clear --output=json
-jira issue list --project <PROJECT_KEY> --output=json   # any read repopulates what's needed
+jira issue list --project PROJ --output=json
 ```
 
 See [Cache](cache.md) for the full resource list.
@@ -145,6 +145,67 @@ See [Cache](cache.md) for the full resource list.
     are passed; either flag missing is a validation error (exit 3),
     not a silent overwrite. Re-run with both flags. See
     [Configuration › init](config.md#profiles).
+
+## It looks broken, but it's the contract
+
+Behaviours that read like bugs but are deliberate. Check here before filing one.
+
+**Compact output is missing a field I expected.**
+:   `--output=compact` drops every `null`-valued key, recursively, to stay
+    token-lean — so an absent key means the value *was* null, not that the field
+    doesn't exist. Re-run with `--output=json` for the full schema, nulls kept.
+    See [Output › Modes](output.md#modes).
+
+**A create succeeded but `.data.key` is empty.**
+:   The new key is at `data.issue.key`, not `data.key` — create wraps the issue
+    object. (A `--dry-run` returns `data.preview` instead, with `dry_run: true`.)
+
+**One bad key failed a multi-key command — did it roll back?**
+:   No. Multi-key commands have no rollback; the good keys were committed. Read
+    the per-key `data.results[]` (`ok` / `error`) and retry only the failures —
+    a blind retry double-applies the ones that already succeeded.
+
+**A search returns rows but `meta.pagination.total` is `0`.**
+:   Jira's token-paginated `/search/jql` returns no reliable total. Paginate on
+    `meta.pagination.isLast`, never on `total`; add `--all` to drain (bounded to
+    100 pages / 10 000 issues, `--unbounded` lifts the caps). See [Search](search.md#search-jql).
+
+**`--time-spent "1h 30m"` fails with `invalid duration`.**
+:   Durations are space-free: `1h30m`, `2d4h`, `45m`. Units are `d` / `h` / `m`
+    only, and fractional values (`1.5h`) are rejected — combine whole units.
+
+**A Markdown body lost its @mentions, dates, or panels, with no warning.**
+:   Those ADF constructs have no Markdown spelling, so `--body-markdown` /
+    `description_markdown` can't emit them — and `--adf-strict` can't flag what
+    never enters the pipeline. Author rich bodies as native ADF via
+    `--json-input`; keep Markdown for plain prose. See [ADF](adf.md).
+
+**`--dry-run` passed but the real submit failed with a 400 / `INVALID_INPUT`.**
+:   Dry-run validates local shape only; it never contacts Jira. The server
+    applies its own rules on write — required custom fields, its ADF schema, an
+    unknown node that round-tripped fine on read. A clean dry-run means
+    "well-formed", not "Jira will accept it".
+
+**`--assignee you@example.com --dry-run` fails, but works on a real submit.**
+:   An email assignee is resolved through a live `/user/search`, which dry-run
+    won't call. Pre-resolve to `accountId:<id>` for the preview, or drop
+    `--dry-run` for the email path.
+
+**`JIRA_PROFILE=…` doesn't change which profile runs.**
+:   There is no bare `JIRA_PROFILE` selector. Pick the profile with `--profile
+    <name>`, `JIRA_DEFAULT_PROFILE`, or `default_profile` in the config.
+    (`JIRA_PROFILE_<NAME>_*` is a different feature — per-profile field overrides.)
+
+**`issue edit KEY` exits 3 under an agent or in a pipe.**
+:   The bare form opens `$EDITOR` on the description, which needs a terminal, so
+    a non-TTY or agent context refuses it rather than hang. Pass `--summary`,
+    `--assignee`, or `--json-input`.
+
+**A destructive command refuses without `--force`.**
+:   `--no-input` removes the confirmation prompt, so `--force` is its explicit
+    replacement on `delete` / `clone` / `move` / the `*-delete` verbs. Multi-key
+    delete needs `--force` even at an interactive terminal. Add
+    `--delete-subtasks` for a parent that has subtasks.
 
 ## Debug invocation
 
