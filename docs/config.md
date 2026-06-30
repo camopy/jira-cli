@@ -52,11 +52,11 @@ creates the file on first run.
 
 When the same setting is set in more than one place, the highest wins:
 
-1. CLI flag — `--output=json`, `--config <path>`, `--profile <name>`.
-2. Environment variable — the `JIRA_*` set below.
-3. Per-profile entry under `[[profiles]]`.
-4. Top-level key in `config.toml`.
-5. Built-in default.
+1.  CLI flag — `--output=json`, `--config <path>`, `--profile <name>`.
+2.  Environment variable — the `JIRA_*` set below.
+3.  Per-profile entry under `[[profiles]]`.
+4.  Top-level key in `config.toml`.
+5.  Built-in default.
 
 ## Profiles
 
@@ -301,7 +301,7 @@ editor          = "nvim --wait"
 
 ## See also
 
-- [Authenticate](auth.md) — API tokens, keyring vs 1Password vs env, `auth login` and `auth migrate`.
-- [TUI](tui.md) — everything under `[tui]`: tabs, lenses, sections, preview, keybindings.
-- [Output and scripting](output.md) — `--output` and `JIRA_NO_COLOR` shape what every command emits.
-- [Cache](cache.md) — cached metadata lives under `~/.cache/jira-cli/<profile>-<hash>/`, scoped by profile, base URL, and config path.
+*   [Authenticate](auth.md) — API tokens, keyring vs 1Password vs env, `auth login` and `auth migrate`.
+*   [TUI](tui.md) — everything under `[tui]`: tabs, lenses, sections, preview, keybindings.
+*   [Output and scripting](output.md) — `--output` and `JIRA_NO_COLOR` shape what every command emits.
+*   [Cache](cache.md) — cached metadata lives under `~/.cache/jira-cli/<profile>-<hash>/`, scoped by profile, base URL, and config path.

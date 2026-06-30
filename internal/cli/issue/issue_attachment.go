@@ -250,7 +250,7 @@ $ jira issue attachment add PROJ-123 ./report.pdf --dry-run`,
 	// StringArrayVar, not StringSliceVar: a slice flag splits each value
 	// on commas, which would shatter a legitimate filename like
 	// "report,final.pdf" into two bogus paths. Each --file is one path.
-	cmdutil.AddStringArrayVar(cmd.Flags(), &files, "file", nil, "Path to attach (repeatable)", clib.FlagExtra{Group: "Input", Placeholder: "FILE", Hint: "file"})
+	cmdutil.AddStringArrayVar(cmd.Flags(), &files, "file", nil, "Path to attach (repeatable)", clib.FlagExtra{Group: "Input", Placeholder: "PATH", Hint: "file"})
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview without uploading")
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd

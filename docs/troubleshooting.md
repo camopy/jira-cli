@@ -199,7 +199,7 @@ Behaviours that read like bugs but are deliberate. Check here before filing one.
 **`issue edit KEY` exits 3 under an agent or in a pipe.**
 :   The bare form opens `$EDITOR` on the description, which needs a terminal, so
     a non-TTY or agent context refuses it rather than hang. Pass `--summary`,
-    `--assignee`, or `--json-input`.
+    `--assignee`, `--description-markdown`, or `--json-input`.
 
 **A destructive command refuses without `--force`.**
 :   `--no-input` removes the confirmation prompt, so `--force` is its explicit

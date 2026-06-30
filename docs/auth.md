@@ -21,9 +21,9 @@ jira picks one.
 
 Have these ready:
 
-- An Atlassian Cloud site, such as `https://example.atlassian.net`.
-- The account email for that site.
-- An
+*   An Atlassian Cloud site, such as `https://example.atlassian.net`.
+*   The account email for that site.
+*   An
   [API token](https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/)
   for that account. Both scoped and classic tokens work.
 
@@ -135,10 +135,10 @@ becomes `JIRA_TOKEN_WORK`), then the backend recorded on the profile.
 
 `auth status` tells a bad token apart from a missing permission:
 
-- **401** (`jira_unauthorized`): the token is missing, revoked, mistyped, or for
+*   **401** (`jira_unauthorized`): the token is missing, revoked, mistyped, or for
   a different site than the profile's base URL. Run `jira auth login` to store a
   fresh one.
-- **403** (`jira_forbidden`): the token authenticates fine but lacks permission
+*   **403** (`jira_forbidden`): the token authenticates fine but lacks permission
   for that project or field. That one is resolved on the Jira side.
 
 ```sh
@@ -148,7 +148,7 @@ jira auth logout <profile>         # remove a stored credential
 
 ## See also
 
-- [Configure](config.md) for profiles,
+*   [Configure](config.md) for profiles,
   defaults, and the full config reference.
-- [Output and scripting](output.md) for the
+*   [Output and scripting](output.md) for the
   JSON envelope and exit codes.

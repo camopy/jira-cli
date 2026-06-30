@@ -49,6 +49,7 @@ disable = [
     "MD044",  # Proper name capitalisation - not worth maintaining a list
     "MD046",  # Code block style - content-tab fences are 4-space indented and read as indented blocks
     "MD054",  # Link style consistency - mixed inline/reference is legitimate
+    "MD057",  # Relative-link existence - docs link into docs/reference, a generated/gitignored tree absent at lint time; zensical --strict owns link validation
     "MD059",  # Descriptive link text - too many false positives
     "MD060",  # Table column alignment - creates diff noise
     "MD063",  # Heading capitalisation - fights sentence-case style

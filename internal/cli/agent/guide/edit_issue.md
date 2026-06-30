@@ -9,7 +9,8 @@ When: one or more fields on an existing issue need new values; the bare-form `ji
 
 # scope
 - Single field, fast path: a field flag (`--summary`, `--assignee`, etc.).
-- Multiple fields or ADF body: `--json-input payload.json` with a `fields` envelope.
+- Rich description (or any ADF field): `--json-input payload.json` with a `fields` envelope carrying native ADF — the canonical, lossless path, and the only one that can express mentions, dates, panels, status, and tables. Prefer this in agent context. See → `adf_reference`.
+- Description from Markdown, lossy shortcut: `--description-markdown "..."` (or a `description_markdown` key inside `fields`) converts Markdown to ADF with the same converter `create` uses. Use only for plain prose you can afford to flatten — it silently cannot emit mentions/dates/panels/status/tables; strict mode aborts on any lossy node, `--adf-best-effort` keeps the rest with a warning.
 - Interactive humans only (NOT agents): bare `jira issue edit KEY` opens `$EDITOR` on the description.
 
 # guard
@@ -19,6 +20,7 @@ When: one or more fields on an existing issue need new values; the bare-form `ji
 **Run**
 - Canonical (bulk JSON): `jira issue edit KEY --no-input --json-input fields.json --output=json`
 - Single field: `jira issue edit KEY --no-input --summary "New title" --output=json`
+- Description from Markdown: `jira issue edit KEY --no-input --description-markdown "## Notes\n\nUpdated." --output=json`
 - Multi-key single field: `jira issue edit <PROJECT_KEY>-1..10 -p 4 --no-input --summary "New title" --output=json`
 - Reassign: `jira issue edit KEY --no-input --assignee me --output=json` (also accepts `none`, a bare `accountId`, or an email — an `@` value must be a bare valid address, resolved to an account id via a live `/user/search`, so it is rejected under `--dry-run`)
 - Stdin variant: `cat fields.json | jira issue edit KEY --no-input --json-input - --output=json`
@@ -59,7 +61,7 @@ Bulk edit payload shape:
   jira issue edit KEY --no-input --summary X # ✓ ok
   ```
 
-- ADF rules from → `create_issue` apply to `fields.description` (and other ADF fields) verbatim — pass the bare field name with the ADF doc as its value; detection is by value shape, not key suffix.
+- ADF rules from → `create_issue` apply to `fields.description` (and other ADF fields) verbatim — pass the bare field name with the ADF doc as its value; detection is by value shape, not key suffix. Native ADF is the agent path for full node coverage. `--description-markdown` / the `description_markdown` payload key are the lossy plain-prose shortcut (same converter as create) — use only when the loss is acceptable; the flag wins over a payload `description` / `description_markdown`.
 
 **Behavior**
 - For interactive humans only: the bare form opens `$EDITOR` on the description. Editors that fork-and-return (e.g. `code` without `--wait`) are refused at spawn time with a one-line fix (`set EDITOR='code --wait'`) — silent strikethrough-and-data-loss is gone. See → `configure_editor` for the full editor resolution chain.

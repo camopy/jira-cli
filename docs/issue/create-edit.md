@@ -30,7 +30,8 @@ jira issue create --json-input new-issue.json --output=json
 ```
 
 The `--json-input` file uses flat CLI-alias keys (`description` is an ADF
-document; pass `description_markdown` instead to hand in Markdown):
+document; `description_markdown` takes Markdown instead — a lossy shortcut that
+can't carry mentions, dates, panels, or tables):
 
 ```json
 {
@@ -69,9 +70,10 @@ custom fields) with `dry_run: true`.
 
 ## edit
 
-Change one or more fields on an existing issue. Use `--summary` or `--assignee`
-for single-field tweaks; pass `--json-input` for everything else (an ADF
-description, custom fields, several fields at once). The JSON payload follows
+Change one or more fields on an existing issue. Use `--summary`, `--assignee`,
+or `--description-markdown` for single-field tweaks; pass `--json-input` for
+everything else (an ADF description, custom fields, several fields at once). The
+JSON payload follows
 [Atlassian's `editIssue`](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-put)
 shape — a top-level `fields` object of bare field names. `edit` accepts issue-key
 lists and ranges with `-p` / `--parallelism` for bulk field changes.
@@ -79,19 +81,34 @@ lists and ranges with `-p` / `--parallelism` for bulk field changes.
 Bare `jira issue edit PROJ-123` (no field flags) opens `$EDITOR` on the
 description. That works for a human at a terminal; under `--no-input` the CLI
 refuses it rather than hang on a TTY prompt, and asks for `--summary`,
-`--assignee`, or `--json-input` instead.
+`--assignee`, `--description-markdown`, or `--json-input` instead.
 
 ```sh
 jira issue edit PROJ-123 --summary "new title"
 jira issue edit PROJ-123 --assignee me
+jira issue edit PROJ-123 --description-markdown "## Steps\n\n1. Repro\n2. Fix"
 jira issue edit PROJ-1..PROJ-10 -p 4 --summary "bulk title"
 jira issue edit PROJ-123 --json-input fields.json --dry-run --output=json
 ```
+
+`--description-markdown` is the headless way to replace the description without
+the editor. It converts Markdown to ADF with the same lossy converter
+[`create` uses](#create), so GFM features beyond the supported set degrade — in
+the default strict mode a lossy conversion aborts before submission; add
+`--adf-best-effort` to keep the converted document and surface a warning. The
+same effect is available inside a `--json-input` payload through the
+`description_markdown` key. For mentions, dates, panels, status, or tables —
+constructs Markdown can't express — pass native ADF under `fields.description`
+instead; that round-trips losslessly.
 
 The `--json-input` file wraps the fields:
 
 ```json
 { "fields": { "summary": "new title", "labels": ["regression"] } }
+```
+
+```json
+{ "fields": { "description_markdown": "## Steps\n\n1. Repro\n2. Fix" } }
 ```
 
 A live edit returns `data.fields` (the validated submission), `data.result`

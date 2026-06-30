@@ -1138,14 +1138,19 @@ func extractDescriptionDoc(payload map[string]any) (doc adf.Document, present bo
 
 func issueEditCommand() *cobra.Command {
 	var dryRun bool
-	var jsonInput, summary, assignee string
+	var jsonInput, summary, assignee, descriptionMarkdown string
 	var parallelism int
 	cmd := &cobra.Command{
 		Use:   "edit KEY...",
 		Short: "Edit an issue",
 		Long: "Edit one or more Jira issues. With no field flags, a single-key edit opens " +
 			"the configured external editor on the issue description. Use `--summary`, " +
-			"`--assignee`, or `--json-input` for headless and multi-key edits.\n\n" +
+			"`--assignee`, `--description-markdown`, or `--json-input` for headless and " +
+			"multi-key edits.\n\n" +
+			"`--description-markdown` is the headless way to set the description: it " +
+			"converts Markdown to ADF with the same lossy converter `issue create` uses " +
+			"and replaces the issue description. A `--json-input` payload may carry the " +
+			"`description_markdown` key for the same effect.\n\n" +
 			"All field changes run through the validate-and-encode mutation pipeline before " +
 			"submission. `--dry-run` previews the validated fields and does not submit.\n\n" +
 			"In headless mode (`--no-input`), at least one field flag or `--json-input` " +
@@ -1155,8 +1160,11 @@ func issueEditCommand() *cobra.Command {
 # Reassign an issue to yourself
 $ jira issue edit PROJ-123 --assignee me
 
-# Preview an edit without contacting Jira
-$ jira issue edit PROJ-123 --summary "Draft title" --dry-run
+# Replace the description from Markdown (headless, no editor)
+$ jira issue edit PROJ-123 --description-markdown "## Steps\n\n1. Repro\n2. Fix"
+
+# Preview a Markdown description as encoded ADF without contacting Jira
+$ jira issue edit PROJ-123 --description-markdown "Done." --dry-run --output=json
 
 # Apply JSON fields to several issues at once
 $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=json`,
@@ -1186,6 +1194,17 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 			}
 			if v := strings.TrimSpace(summary); v != "" {
 				fields["summary"] = v
+			}
+			// --description-markdown is the headless equivalent of the editor
+			// flow: a Markdown string converted to ADF via the SAME resolver
+			// the create path uses (extractDescriptionDoc below). It is stored
+			// under the create alias `description_markdown` so a flag and a
+			// `--json-input` payload key share one routing path. The flag wins
+			// over a payload key, matching --summary / --assignee layering; the
+			// resolver then prefers Markdown over any literal `description`,
+			// mirroring create-side behavior.
+			if descriptionMarkdown != "" {
+				fields["description_markdown"] = descriptionMarkdown
 			}
 			assigneeWire, assigneeEmail, assigneeSet, aerr := resolveAssigneeField(assignee, profile)
 			if aerr != nil {
@@ -1228,27 +1247,44 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 					return fmt.Errorf(`validation: --json-input payload has no recognized fields; wrap issue fields under a top-level "fields" object, e.g. {"fields": {"summary": "New"}}`)
 				}
 				if noInput {
-					return fmt.Errorf("validation: the issue edit editor needs an interactive terminal; in a non-interactive context, provide --summary, --assignee, or --json-input")
+					return fmt.Errorf("validation: the issue edit editor needs an interactive terminal; in a non-interactive context, provide --summary, --assignee, --description-markdown, or --json-input")
 				}
 				if len(keys) > 1 {
-					return fmt.Errorf("validation: multi-key issue edit requires --summary, --assignee, or --json-input")
+					return fmt.Errorf("validation: multi-key issue edit requires --summary, --assignee, --description-markdown, or --json-input")
 				}
 				return issueEditWithEditor(cmd, keys[0], dryRun)
 			}
-			// Any ADF-shaped value in the fields object (e.g. a raw
-			// `description` document supplied via --json-input) MUST be
+			// The issue description is the primary ADF document for this
+			// mutation. Whether it arrived as `description_markdown` (the
+			// --description-markdown flag or a --json-input key) or as a raw
+			// ADF `description`, it is pulled out of the fields map here and
+			// fed to the pipeline as ADFDoc so stage 2 (ValidateDoc +
+			// ApplyCompatibility) runs on it BEFORE submission. The
+			// post-pipeline SubmitADF is the only description that reaches the
+			// wire. This mirrors the create path exactly.
+			descriptionDoc, descriptionPresent, descMarkdownWarnings, descErr := extractDescriptionDoc(fields)
+			if descErr != nil {
+				return descErr
+			}
+			// Any remaining ADF-shaped value in the fields object (e.g. an
+			// `environment` document supplied via --json-input) MUST be
 			// validated by stage 2 before submission — otherwise garbage
 			// nested ADF would only be checked structurally by the
 			// customfield encoder, which does not enforce ADF rules.
+			// `description` was already removed above, so it is not
+			// double-validated here.
 			namedADF, adfParseErr := extractNamedADFDocs(fields)
 			if adfParseErr != nil {
 				return adfParseErr
 			}
 			if len(keys) > 1 {
 				return runIssueEditMany(cmd, keys, parallelism, issueEditManyInput{
-					Fields:       fields,
-					NamedADFDocs: namedADF,
-					DryRun:       dryRun,
+					Fields:           fields,
+					NamedADFDocs:     namedADF,
+					DryRun:           dryRun,
+					DescriptionDoc:   descriptionDoc,
+					DescriptionSet:   descriptionPresent,
+					MarkdownWarnings: descMarkdownWarnings,
 				})
 			}
 			// For a live edit, resolve the client up front and attach an
@@ -1268,10 +1304,18 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 			}
 			// Thread the mutation through the 5-stage pipeline.
 			editIn := pipeline.MutationInput{
-				Mode:         cmdutil.ADFModeFor(cmd, true),
-				Fields:       fields,
-				NamedADFDocs: namedADF,
-				DryRun:       dryRun,
+				Mode:             cmdutil.ADFModeFor(cmd, true),
+				Fields:           fields,
+				NamedADFDocs:     namedADF,
+				DryRun:           dryRun,
+				MarkdownWarnings: descMarkdownWarnings,
+			}
+			if descriptionPresent {
+				// FieldCompat is left with InlineCardSupported=true: a Jira
+				// Cloud `description` accepts inlineCard, so no compatibility
+				// degradation applies. Same envelope as create.
+				editIn.ADFDoc = &descriptionDoc
+				editIn.FieldCompat = &adf.FieldCompatibility{Field: "description", InlineCardSupported: true}
 			}
 			if editClient != nil && !cmdutil.ReadOnlyEnabled(cmd) {
 				editIn.SchemaFetcher = newEditScreenSchemaFetcher(
@@ -1288,6 +1332,12 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 			submitFields := pipeOut.SubmitFields
 			if submitFields == nil {
 				submitFields = map[string]any{}
+			}
+			// The validated, compatibility-applied description from the
+			// pipeline replaces whatever the payload carried — Markdown and
+			// raw ADF are now handled identically.
+			if descriptionPresent && pipeOut.SubmitADF != nil {
+				submitFields["description"] = *pipeOut.SubmitADF
 			}
 			if !dryRun {
 				var (
@@ -1318,6 +1368,7 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
 	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read issue edit payload from JSON file", "Input", "FILE")
 	cmdutil.AddStringVar(cmd.Flags(), &summary, "summary", "", "Replace the issue summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
+	cmdutil.AddStringVar(cmd.Flags(), &descriptionMarkdown, "description-markdown", "", "Replace the description with Markdown (lossy convenience layer, converted to ADF)", clib.FlagExtra{Group: "Fields", Placeholder: "MARKDOWN"})
 	cmdutil.AddStringVar(cmd.Flags(), &assignee, "assignee", "", "Set assignee: `me`, `none`/`unassigned`, an email, or a Jira account ID", clib.FlagExtra{Group: "Fields", Placeholder: "USER", Terse: "assignee", Enum: []string{"me", "none"}, EnumTerse: []string{"current user", "unassign"}})
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
@@ -1327,6 +1378,14 @@ type issueEditManyInput struct {
 	Fields       map[string]any
 	NamedADFDocs map[string]adf.Document
 	DryRun       bool
+	// DescriptionDoc is the primary ADF document (from
+	// --description-markdown or a `description` / `description_markdown`
+	// payload key) routed as the pipeline's ADFDoc. DescriptionSet reports
+	// whether it is populated; MarkdownWarnings carries any lossy
+	// Markdown-conversion warnings so strict mode can abort.
+	DescriptionDoc   adf.Document
+	DescriptionSet   bool
+	MarkdownWarnings []adf.Warning
 }
 
 func runIssueEditMany(cmd *cobra.Command, keys []string, parallelism int, in issueEditManyInput) error {
@@ -1346,10 +1405,18 @@ func runIssueEditMany(cmd *cobra.Command, keys []string, parallelism int, in iss
 	}
 	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "issue.edit", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		editIn := pipeline.MutationInput{
-			Mode:         cmdutil.ADFModeFor(cmd, true),
-			Fields:       cmdutil.CopyAnyMap(in.Fields),
-			NamedADFDocs: in.NamedADFDocs,
-			DryRun:       in.DryRun,
+			Mode:             cmdutil.ADFModeFor(cmd, true),
+			Fields:           cmdutil.CopyAnyMap(in.Fields),
+			NamedADFDocs:     in.NamedADFDocs,
+			DryRun:           in.DryRun,
+			MarkdownWarnings: in.MarkdownWarnings,
+		}
+		if in.DescriptionSet {
+			// Give each fan-out goroutine its own copy of the description so
+			// the shared input is never aliased across pipeline runs.
+			doc := in.DescriptionDoc
+			editIn.ADFDoc = &doc
+			editIn.FieldCompat = &adf.FieldCompatibility{Field: "description", InlineCardSupported: true}
 		}
 		if editClient != nil && !cmdutil.ReadOnlyEnabled(cmd) {
 			editIn.SchemaFetcher = newEditScreenSchemaFetcher(
@@ -1364,6 +1431,9 @@ func runIssueEditMany(cmd *cobra.Command, keys []string, parallelism int, in iss
 		submitFields := pipeOut.SubmitFields
 		if submitFields == nil {
 			submitFields = map[string]any{}
+		}
+		if in.DescriptionSet && pipeOut.SubmitADF != nil {
+			submitFields["description"] = *pipeOut.SubmitADF
 		}
 		data := map[string]any{
 			"issue":   key,

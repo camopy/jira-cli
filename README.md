@@ -34,7 +34,7 @@ jira issue list
 ```
 
 For issue creation, editing, comments, and ADF payloads, start with
-[docs/issues.md](docs/issues.md). For classic API tokens, auth backends, and
+[docs/issue/read.md](docs/issue/read.md). For classic API tokens, auth backends, and
 1Password, use [docs/auth.md](docs/auth.md).
 
 ## Configuration
@@ -173,7 +173,7 @@ Use `--output=compact` for jq-friendly data-only JSON and
 | Command | Docs |
 |---------|------|
 | `auth`, `config` | [auth.md](docs/auth.md), [config.md](docs/config.md) |
-| `issue`, `epic` | [issues.md](docs/issues.md), [epic.md](docs/epic.md) |
+| `issue`, `epic` | [issue/read.md](docs/issue/read.md), [epic.md](docs/epic.md) |
 | `jql`, `search` | [jql.md](docs/jql.md), [search.md](docs/search.md) |
 | `worklog` | [worklog.md](docs/worklog.md) |
 | `cache` | [cache.md](docs/cache.md) |

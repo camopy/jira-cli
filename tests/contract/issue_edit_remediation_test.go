@@ -136,7 +136,7 @@ func TestIssueEditNoFieldInputKeepsDistinctMissingInputMessage(t *testing.T) {
 	if err == nil {
 		t.Fatalf("issue edit accepted empty no-input edit:\n%s", out)
 	}
-	if !strings.Contains(string(out), "provide --summary, --assignee, or --json-input") {
+	if !strings.Contains(string(out), "provide --summary, --assignee, --description-markdown, or --json-input") {
 		t.Fatalf("empty-input remediation changed or disappeared:\n%s", out)
 	}
 	if strings.Contains(string(out), `top-level "fields" object`) {

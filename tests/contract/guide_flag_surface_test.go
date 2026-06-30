@@ -12,6 +12,12 @@ import (
 	"testing"
 )
 
+// agentGuideDir is the repo-relative directory of the embedded agent
+// guide. The guide is split into one `<slug>.md` file per workflow plus
+// `_preamble.md`. Several contract tests read these files; the helper
+// readAgentGuide (in the docs_alignment-tagged tests) concatenates them.
+const agentGuideDir = "../../internal/cli/agent/guide"
+
 func TestAgentGuideCommandFlagsExistOnHelpSurface(t *testing.T) {
 	bin := buildJiraBinary(t)
 	schema := loadCommandSurfaceSchema(t, bin)

@@ -80,6 +80,13 @@ run = "go test -v -race -cover ./..."
 description = "Run integration tests"
 run = "go test -v -tags=integration ./tests/integration -count=1 -timeout 60s"
 
+["test:docs"]
+description = "Run the docs-alignment contract tests (README, agent guide, docs site)"
+# Gated behind the docs_alignment build tag so they stay out of the default
+# `go test ./...` and the release preflight. They assert doc *content*, not
+# code, so a docs edit should never block a release.
+run = "go test -v -tags=docs_alignment ./tests/contract -run 'Artifacts|Readme|HumanDocs|AgentGuide|JQLDocs|DocsSite|OnePassword' -count=1"
+
 ["test:live"]
 description = "Run every live Jira end-to-end suite (needs JIRA_LIVETEST_PROJECT and a configured profile)"
 run = "go test -v -tags live -count=1 -timeout 20m ./tests/live/..."
