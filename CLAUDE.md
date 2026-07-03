@@ -1,27 +1,38 @@
-# jira-cli — agent notes
+# jira-cli
 
-Terminal-first Jira CLI for developer and agent workflows, built in Go
-with Cobra.
+Terminal-first Go/Cobra CLI for Jira Cloud, built for developer and agent
+workflows. The headless commands are the stable surface; `jira tui` is the
+alpha full-screen dashboard.
 
-## Layout
+## Commands
 
-- `cmd/jira/` — command wiring, the embedded agent guide, and the
-  manpage source.
-- `internal/` — runtime, config, credential backends, output rendering,
-  the mutation pipeline, the editor, and the TUI.
-- `internal/jira/` — the Jira REST client and typed services.
-- `internal/adf/` — Atlassian Document Format parsing, validation, rendering.
-- `tests/` — `contract`, `integration`, `unit`, and `guardrails` suites.
-- `tests/live/` — the `live`-tagged end-to-end suite that drives the
-  binary against a real Jira tenant; excluded from `go test ./...`, run
-  with `mise run test:live`.
+*   `mise run check` (fmt + lint + rumdl + vet + unit) · `mise run test` ·
+    `mise run test:integration` · `mise run fix` (auto-fixes)
+*   `mise run ci` before proposing a change (macOS/Linux/WSL only — it fails
+    on Windows)
+*   `mise run test:live` — end-to-end against a real tenant's probe project
+    (`JIRA_LIVETEST_PROJECT`)
 
-## Conventions
+## Architecture
 
-- Output is one `--output` flag: `auto`, `human`, `json`, or `compact`.
-  Non-TTY and recognized agent environments emit JSON envelopes.
-- Mutations route through the validate-and-encode pipeline. `--dry-run`
-  is a local-only preview and never contacts Jira.
-- `internal/tui/` is the persistent dashboard — leave it alone unless a
-  change is explicitly about the TUI.
-- Run `mise run ci` before proposing a change.
+*   **`internal/cli/<domain>/`** — cobra commands (issue, epic, auth, config,
+    …). Flags register through `cmdutil.Add*` so clib metadata is mandatory;
+    success output returns through `cmdutil.WriteEnvelope`.
+*   **Output contract** — one `--output` flag (`auto|human|json|compact`);
+    `auto` resolves agent env → compact, non-TTY → json. Envelopes on stdout
+    via `cli.WriteEnvelope` only; human status on stderr through clog.
+*   **`internal/jira/`** — REST client + typed services; read-only mode blocks
+    writes at the transport. **`internal/adf/`** — registry-driven ADF
+    parse/validate/render.
+*   **Mutations** route through the validate-and-encode pipeline; `--dry-run`
+    is a local-only preview and never contacts Jira.
+*   The embedded agent guide and schema (`jira agent guide`,
+    `jira agent schema`) are the authoritative CLI behavior spec — update
+    them with any behavior change; do not restate them elsewhere.
+
+Area-specific conventions auto-load from `.claude/rules/`.
+
+## Git
+
+*   Conventional-commit PR titles (squash-merged); signed commits; `gh` CLI
+    for PRs.
