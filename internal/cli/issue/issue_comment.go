@@ -638,7 +638,7 @@ $ jira issue comment edit PROJ-123 10042 --body-markdown "Draft update." --dry-r
 		},
 	}
 	cmdutil.AddStringVar(cmd.Flags(), &flags.markdown, "body-markdown", "", "New body as Markdown", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
-	cmdutil.AddFileFlag(cmd.Flags(), &flags.jsonInput, "json-input", "", "New body as native ADF JSON file", "Input", "FILE")
+	cmdutil.AddFileFlag(cmd.Flags(), &flags.jsonInput, "json-input", "", "New body as native ADF JSON file (canonical for agents)", "Input", "FILE")
 	cmdutil.AddStringVar(cmd.Flags(), &flags.visRole, "visibility-role", "", "Replace visibility with a Jira role", clib.FlagExtra{Group: "Visibility", Placeholder: "ROLE"})
 	cmdutil.AddStringVar(cmd.Flags(), &flags.visGroup, "visibility-group", "", "Replace visibility with a Jira group", clib.FlagExtra{Group: "Visibility", Placeholder: "GROUP"})
 	cmdutil.AddBoolVar(cmd.Flags(), &flags.visClear, "clear-visibility", false, "Remove any existing visibility restriction", clib.FlagExtra{Group: "Visibility"})

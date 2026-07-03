@@ -935,7 +935,7 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 	}
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
 	cmdutil.AddStringVar(cmd.Flags(), &summary, "summary", "", "Issue summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
-	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read issue create payload from JSON file", "Input", "FILE")
+	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read issue create payload from JSON file (canonical for agents)", "Input", "FILE")
 	cmdutil.AddStringVar(cmd.Flags(), &assignee, "assignee", "", "Assign on creation: `me`, an email, or a Jira account ID", clib.FlagExtra{Group: "Fields", Placeholder: "USER", Terse: "assignee", Enum: []string{"me"}, EnumTerse: []string{"current user"}})
 	cmdutil.AddStringVar(cmd.Flags(), &project, "project", "", "Project key (overrides the profile default)", clib.FlagExtra{Group: "Fields", Placeholder: "KEY", Complete: "predictor=cacheproject"})
 	cmdutil.AddStringVar(cmd.Flags(), &issueType, "type", "", "Issue type name (overrides the profile default)", clib.FlagExtra{Group: "Fields", Placeholder: "NAME", Terse: "issue type", Complete: "predictor=cacheissuetype"})
@@ -1366,7 +1366,7 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 		},
 	}
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
-	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read issue edit payload from JSON file", "Input", "FILE")
+	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read issue edit payload from JSON file (canonical for agents)", "Input", "FILE")
 	cmdutil.AddStringVar(cmd.Flags(), &summary, "summary", "", "Replace the issue summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
 	cmdutil.AddStringVar(cmd.Flags(), &descriptionMarkdown, "description-markdown", "", "Replace the description with Markdown (lossy convenience layer, converted to ADF)", clib.FlagExtra{Group: "Fields", Placeholder: "MARKDOWN"})
 	cmdutil.AddStringVar(cmd.Flags(), &assignee, "assignee", "", "Set assignee: `me`, `none`/`unassigned`, an email, or a Jira account ID", clib.FlagExtra{Group: "Fields", Placeholder: "USER", Terse: "assignee", Enum: []string{"me", "none"}, EnumTerse: []string{"current user", "unassign"}})
@@ -1967,7 +1967,7 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 	}
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
 	cmdutil.AddForceFlag(cmd.Flags(), &force, "Confirm destructive mutation")
-	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read mutation payload from JSON file", "Input", "FILE")
+	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read mutation payload from JSON file (canonical for agents)", "Input", "FILE")
 	if name == "delete" {
 		cmdutil.AddBoolVar(cmd.Flags(), &deleteSubtasks, "delete-subtasks", false, "Also delete the issue's subtasks (Jira refuses delete otherwise when subtasks exist)", clib.FlagExtra{Group: "Safety"})
 	}

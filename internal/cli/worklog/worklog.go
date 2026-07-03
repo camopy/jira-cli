@@ -161,7 +161,7 @@ $ jira worklog add PROJ-123 --json-input worklog.json --dry-run --output=json`,
 	cmdutil.AddStringVar(fs, &timeSpent, "time-spent", "", "Human-readable time spent [example: 2h30m]", clib.FlagExtra{Group: "Worklog", Placeholder: "DURATION"})
 	cmdutil.AddStringVar(fs, &started, "started", "", "Worklog start timestamp", clib.FlagExtra{Group: "Worklog", Placeholder: "TIME"})
 	cmdutil.AddStringVar(fs, &commentMarkdown, "comment-markdown", "", "Worklog comment as Markdown", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
-	cmdutil.AddFileFlag(fs, &jsonInput, "json-input", "", "Read worklog payload from JSON file", "Input", "FILE")
+	cmdutil.AddFileFlag(fs, &jsonInput, "json-input", "", "Read worklog payload from JSON file (canonical for agents)", "Input", "FILE")
 	cmdutil.AddDryRunFlag(fs, &dryRun, "Preview mutation without submitting")
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
