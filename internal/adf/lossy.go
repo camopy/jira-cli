@@ -55,6 +55,12 @@ var renderableMarkdownNodes = map[string]bool{
 	"mediaSingle": true, // labeled [attachment: …] placeholder
 	"mediaGroup":  true,
 	"media":       true,
+	"taskList":    true, // GFM task-list items
+	"taskItem":    true,
+	// blockTaskItem flattens its block content onto the checkbox line.
+	"blockTaskItem": true,
+	"decisionList":  true, // bullet items led by the "<>" decision marker
+	"decisionItem":  true,
 }
 
 // renderableMarkdownMarks is the set of mark types the renderer in

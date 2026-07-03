@@ -62,6 +62,14 @@ func collectPlain(parts *[]string, node Node) {
 		}
 	case "media":
 		*parts = append(*parts, "[attachment: "+attrStr(node.Attrs, "alt", attrStr(node.Attrs, "id", "file"))+"]")
+	case "taskItem", "blockTaskItem":
+		if attrStr(node.Attrs, "state", "TODO") == "DONE" {
+			*parts = append(*parts, "[x]")
+		} else {
+			*parts = append(*parts, "[ ]")
+		}
+	case "decisionItem":
+		*parts = append(*parts, "<>")
 	}
 	if node.Text != "" {
 		*parts = append(*parts, node.Text)
@@ -118,6 +126,14 @@ func markdownBlock(node Node) string {
 		return ""
 	case "table":
 		return markdownTable(node)
+	case "taskList":
+		return markdownTaskList(node)
+	case "taskItem", "blockTaskItem":
+		return markdownTaskLine(node)
+	case "decisionList":
+		return markdownDecisionList(node)
+	case "decisionItem":
+		return "<> " + markdownChildren(node)
 	case "mediaSingle", "mediaGroup":
 		return joinBlocks(node.Content)
 	case "media":
@@ -150,6 +166,62 @@ func quoteLines(s string) string {
 			lines[i] = ">"
 		} else {
 			lines[i] = "> " + line
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// markdownTaskList renders an ADF taskList as GFM task-list items. A
+// nested taskList child renders indented two spaces so GFM re-nests it
+// under the preceding item on the way back in.
+func markdownTaskList(node Node) string {
+	var lines []string
+	for _, child := range node.Content {
+		switch child.Type {
+		case "taskItem", "blockTaskItem":
+			lines = append(lines, "- "+markdownTaskLine(child))
+		case "taskList":
+			lines = append(lines, indentLines(markdownTaskList(child), "  "))
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// markdownTaskLine renders one task item as its GFM checkbox plus content.
+// blockTaskItem holds block content, which flattens to one line — a GFM
+// list item's continuation lines would need indentation guarantees the
+// surrounding join does not provide.
+func markdownTaskLine(node Node) string {
+	box := "[ ] "
+	if attrStr(node.Attrs, "state", "TODO") == "DONE" {
+		box = "[x] "
+	}
+	if node.Type == "blockTaskItem" {
+		return box + strings.Join(strings.Fields(joinBlocks(node.Content)), " ")
+	}
+	return box + markdownChildren(node)
+}
+
+// markdownDecisionList renders an ADF decisionList as a bullet list whose
+// items lead with the "<>" decision marker — the shortcut Atlassian's own
+// editor uses to author a decision.
+func markdownDecisionList(node Node) string {
+	var lines []string
+	for _, child := range node.Content {
+		if child.Type != "decisionItem" {
+			continue
+		}
+		lines = append(lines, "- "+markdownBlock(child))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// indentLines prefixes every non-empty line with prefix.
+func indentLines(s, prefix string) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		if line != "" {
+			lines[i] = prefix + line
 		}
 	}
 	return strings.Join(lines, "\n")

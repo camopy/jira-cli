@@ -74,13 +74,13 @@ func TestADFToMarkdownLossyMultipleConstructsSortedUnique(t *testing.T) {
 			{Type: "paragraph", Content: []adf.Node{{Type: "text", Text: "hidden"}}},
 		}},
 		{Type: "paragraph", Content: []adf.Node{
-			{Type: "decisionItem"},
+			{Type: "placeholder"},
 			{Type: "text", Text: " and "},
-			{Type: "decisionItem"}, // duplicate dedupes
+			{Type: "placeholder"}, // duplicate dedupes
 		}},
 	}}
 	res := adf.ToMarkdownLossy(doc)
-	want := []string{"decisionItem", "expand"}
+	want := []string{"expand", "placeholder"}
 	if !reflect.DeepEqual(res.LossyConstructs, want) {
 		t.Fatalf("LossyConstructs = %v, want %v (sorted unique)", res.LossyConstructs, want)
 	}

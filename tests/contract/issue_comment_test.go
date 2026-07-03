@@ -516,7 +516,7 @@ func TestCommentListEmitsLossyWarningPerComment(t *testing.T) {
 	page := `{
 		"comments":[
 			{"id":"200","body":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"text","text":"plain"}]}]},"author":{"accountId":"u","displayName":"A"},"created":"2026-04-01T10:00:00.000+0000","updated":"2026-04-01T10:00:00.000+0000"},
-			{"id":"201","body":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"decisionItem"},{"type":"text","text":"see"}]}]},"author":{"accountId":"u","displayName":"A"},"created":"2026-04-02T10:00:00.000+0000","updated":"2026-04-02T10:00:00.000+0000"}
+			{"id":"201","body":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"placeholder","attrs":{"text":"p"}},{"type":"text","text":"see"}]}]},"author":{"accountId":"u","displayName":"A"},"created":"2026-04-02T10:00:00.000+0000","updated":"2026-04-02T10:00:00.000+0000"}
 		],
 		"startAt":0,"maxResults":50,"total":2,"isLast":true
 	}`
@@ -542,12 +542,12 @@ func TestCommentListEmitsLossyWarningPerComment(t *testing.T) {
 			}
 			found := false
 			for _, c := range lc {
-				if c == "decisionItem" {
+				if c == "placeholder" {
 					found = true
 				}
 			}
 			if !found {
-				t.Errorf("lossy_constructs missing decisionItem: %v", lc)
+				t.Errorf("lossy_constructs missing placeholder: %v", lc)
 			}
 		}
 	}

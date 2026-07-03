@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	xstrings "github.com/gechr/x/strings"
+	"github.com/google/uuid"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
@@ -13,13 +14,20 @@ import (
 	"github.com/yuin/goldmark/text"
 )
 
-// markdownParser parses GFM with the table and strikethrough
+// markdownParser parses GFM with the table, strikethrough, and task-list
 // extensions enabled. Enabling the table extension means a pipe table
 // is parsed as a real Table node that converts to an ADF table, rather
-// than rendering as literal pipe-laden paragraph text.
+// than rendering as literal pipe-laden paragraph text; the task-list
+// extension parses `- [ ]` / `- [x]` items as real checkboxes that
+// convert to ADF taskList/taskItem nodes.
 var markdownParser = goldmark.New(
-	goldmark.WithExtensions(extension.Table, extension.Strikethrough),
+	goldmark.WithExtensions(extension.Table, extension.Strikethrough, extension.TaskList),
 ).Parser()
+
+// newLocalID generates the localId attr ADF requires on every
+// taskList/taskItem/decisionList node. A package variable so tests can
+// pin deterministic ids.
+var newLocalID = func() string { return uuid.NewString() }
 
 // FromMarkdownLossy converts GFM Markdown to an ADF document and reports
 // every Markdown construct it could not represent faithfully in the
@@ -74,6 +82,11 @@ type mdConverter struct {
 	// FromMarkdownLossy drains it after each top-level block, so the
 	// node re-enters the document at the nearest valid position.
 	hoisted []Node
+	// inTaskItem is set while converting a task item's inline content,
+	// where the leading GFM checkbox is consumed by the taskItem's state
+	// attr. Outside a task item (a checkbox in a mixed list) the checkbox
+	// degrades to literal text instead.
+	inTaskItem bool
 }
 
 // warn records one lossy-conversion warning naming an unsupported
@@ -232,8 +245,25 @@ func (c *mdConverter) blockquoteChildren(n ast.Node) []Node {
 	return out
 }
 
-// list converts a bullet or ordered list, recursing into list items.
+// list converts a bullet or ordered list, recursing into list items. An
+// unordered list whose every item leads with a GFM task checkbox becomes an
+// ADF taskList; any other list with checkboxes keeps its shape and the
+// checkboxes degrade to literal text (ADF forbids taskItem outside a pure
+// taskList), reported as a non-lossy downgrade.
 func (c *mdConverter) list(list *ast.List) (Node, bool) {
+	pure, hasCheckboxes := taskListShape(list)
+	if pure {
+		return c.taskList(list), true
+	}
+	if hasCheckboxes {
+		c.warnDowngrade(list, "task items in a mixed or ordered list", "checkboxes rendered as literal text")
+	}
+	// The items of a non-task list convert outside any surrounding task
+	// context: their checkboxes (if any) must degrade to text, not vanish.
+	prev := c.inTaskItem
+	c.inTaskItem = false
+	defer func() { c.inTaskItem = prev }()
+
 	nodeType := "bulletList"
 	var attrs map[string]any
 	if list.IsOrdered() {
@@ -250,6 +280,108 @@ func (c *mdConverter) list(list *ast.List) (Node, bool) {
 		items = append(items, Node{Type: "listItem", Content: c.listItemChildren(child)})
 	}
 	return Node{Type: nodeType, Attrs: attrs, Content: items}, true
+}
+
+// taskListShape reports whether a list is a pure task list (every item
+// leads with a GFM checkbox — convertible to ADF taskList) and whether any
+// item carries a checkbox at all. Ordered lists are never task lists: ADF
+// task lists are inherently unordered.
+func taskListShape(list *ast.List) (pure, hasCheckboxes bool) {
+	if list.FirstChild() == nil {
+		return false, false
+	}
+	pure = !list.IsOrdered()
+	for child := list.FirstChild(); child != nil; child = child.NextSibling() {
+		if child.Kind() != ast.KindListItem {
+			continue
+		}
+		if taskCheckbox(child) != nil {
+			hasCheckboxes = true
+		} else {
+			pure = false
+		}
+	}
+	return pure && hasCheckboxes, hasCheckboxes
+}
+
+// taskCheckbox returns the GFM checkbox leading a list item's first
+// paragraph, or nil when the item is not a task item.
+func taskCheckbox(item ast.Node) *extast.TaskCheckBox {
+	first := item.FirstChild()
+	if first == nil || (first.Kind() != ast.KindTextBlock && first.Kind() != ast.KindParagraph) {
+		return nil
+	}
+	if cb, ok := first.FirstChild().(*extast.TaskCheckBox); ok {
+		return cb
+	}
+	return nil
+}
+
+// taskList converts a pure GFM task list to the ADF taskList shape:
+// taskItem children carrying the checkbox state, with nested task lists
+// as taskList siblings (ADF nests them inside the parent taskList, not
+// inside the inline-only taskItem).
+func (c *mdConverter) taskList(list *ast.List) Node {
+	out := Node{Type: "taskList", Attrs: map[string]any{"localId": newLocalID()}}
+	for child := list.FirstChild(); child != nil; child = child.NextSibling() {
+		if child.Kind() != ast.KindListItem {
+			continue
+		}
+		out.Content = append(out.Content, c.taskItemNodes(child)...)
+	}
+	return out
+}
+
+// taskItemNodes converts one GFM task item into an ADF taskItem plus any
+// sibling nodes that must live beside it in the parent taskList. The
+// taskItem is inline-only: extra paragraphs join its inline run after a
+// hardBreak, a nested pure task list becomes a taskList sibling, and any
+// other block content is hoisted after the enclosing list with a
+// downgrade warning — the content survives, only its nesting moves.
+func (c *mdConverter) taskItemNodes(item ast.Node) []Node {
+	state := "TODO"
+	if cb := taskCheckbox(item); cb != nil && cb.IsChecked {
+		state = "DONE"
+	}
+	task := Node{Type: "taskItem", Attrs: map[string]any{"localId": newLocalID(), "state": state}}
+	var siblings []Node
+	for child := item.FirstChild(); child != nil; child = child.NextSibling() {
+		switch child.Kind() {
+		case ast.KindTextBlock, ast.KindParagraph:
+			run := c.taskItemInline(child)
+			if len(task.Content) > 0 && len(run) > 0 {
+				task.Content = append(task.Content, Node{Type: "hardBreak"})
+			}
+			task.Content = append(task.Content, run...)
+		case ast.KindList:
+			nested := child.(*ast.List)
+			if pure, _ := taskListShape(nested); pure {
+				siblings = append(siblings, c.taskList(nested))
+				continue
+			}
+			// ADF taskList children are task nodes only; a non-task nested
+			// list converts cleanly, so it moves after the enclosing list.
+			c.warnDowngrade(child, "list nested under a task item", "moved after the enclosing task list")
+			if node, ok := c.list(nested); ok {
+				c.hoisted = append(c.hoisted, node)
+			}
+		default:
+			c.warnDowngrade(child, "block content inside a task item", "moved after the enclosing task list")
+			if node, ok := c.block(child); ok {
+				c.hoisted = append(c.hoisted, node)
+			}
+		}
+	}
+	return append([]Node{task}, siblings...)
+}
+
+// taskItemInline converts a task item paragraph's inline children with the
+// leading checkbox consumed (it became the taskItem's state attr).
+func (c *mdConverter) taskItemInline(n ast.Node) []Node {
+	prev := c.inTaskItem
+	c.inTaskItem = true
+	defer func() { c.inTaskItem = prev }()
+	return c.inlineChildren(n)
 }
 
 // listItemChildren converts a list item's children. A list item's
@@ -437,6 +569,20 @@ func (c *mdConverter) inline(n ast.Node, marks []Mark) []Node {
 		return []Node{{Type: "text", Text: url, Marks: append(cloneMarks(marks), mark)}}
 	case extast.KindStrikethrough:
 		return c.inlineRun(n, append(cloneMarks(marks), Mark{Type: "strike"}))
+	case extast.KindTaskCheckBox:
+		// Inside a task item the checkbox became the taskItem state attr;
+		// in a mixed list it degrades to the literal GFM text (the list
+		// carries one downgrade warning).
+		if c.inTaskItem {
+			return nil
+		}
+		// The literal carries the separator space: goldmark strips the
+		// space between "]" and the item text from the following segment.
+		box := "[ ] "
+		if n.(*extast.TaskCheckBox).IsChecked {
+			box = "[x] "
+		}
+		return []Node{{Type: "text", Text: box, Marks: cloneMarks(marks)}}
 	case ast.KindImage:
 		return c.image(n.(*ast.Image), marks)
 	case ast.KindRawHTML:

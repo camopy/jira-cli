@@ -9,7 +9,16 @@
 
 package adf
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"maps"
+	"slices"
+)
+
+// nodeRuleNames / markRuleNames are the validated universes in stable
+// order — the names Registry() synthesizes rows for.
+func nodeRuleNames() []string { return slices.Sorted(maps.Keys(nodeRules)) }
+func markRuleNames() []string { return slices.Sorted(maps.Keys(markRules)) }
 
 // Kind tags whether a registry row describes a node or a mark.
 type Kind int
@@ -90,88 +99,190 @@ func kindKey(k Kind, name string) string { return k.String() + ":" + name }
 const (
 	adfDocsBase  = "https://developer.atlassian.com/cloud/jira/platform/apis/document/nodes/"
 	adfMarksBase = "https://developer.atlassian.com/cloud/jira/platform/apis/document/marks/"
+	// adfStructureURL documents nodes the Atlassian prose docs omit (the
+	// task/decision family and other schema-only nodes) — the structure
+	// page is the closest official source.
+	adfStructureURL = "https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/"
 )
 
-// nodeRow / markRow keep the table below visually scannable.
-func nodeRow(name string, caps Capabilities, status Status, notes string) Entry {
+// authorableNodes is the set of node types the Markdown convenience layer
+// (FromMarkdownLossy) can emit. It feeds the computed Author capability in
+// the matrix, and the corpus contract test in registry_capability_test.go
+// fails when it drifts from the converter's actual behavior in either
+// direction.
+var authorableNodes = map[string]bool{
+	"doc":         true,
+	"paragraph":   true,
+	"text":        true,
+	"heading":     true,
+	"bulletList":  true,
+	"orderedList": true,
+	"listItem":    true,
+	"codeBlock":   true,
+	"blockquote":  true,
+	"hardBreak":   true,
+	"rule":        true,
+	"table":       true,
+	"tableRow":    true,
+	"tableCell":   true,
+	"tableHeader": true,
+	"taskList":    true,
+	"taskItem":    true,
+}
+
+// authorableMarks is the mark counterpart of authorableNodes, under the
+// same corpus contract test.
+var authorableMarks = map[string]bool{
+	"strong": true,
+	"em":     true,
+	"strike": true,
+	"code":   true,
+	"link":   true,
+}
+
+// nodeRow / markRow keep the curated table below visually scannable.
+// Capabilities are not curated: Registry() computes them from the
+// authorable/renderable sets so a row can never claim more or less than
+// the code does.
+func nodeRow(name string, status Status, notes string) Entry {
 	return Entry{
 		Kind:              KindNode,
 		Name:              name,
 		Status:            status,
-		Capabilities:      caps,
 		OfficialURL:       adfDocsBase + name + "/",
 		Notes:             notes,
 		SubmitDescription: "ADF: included in a Jira rich-text field payload after validation passes.",
 	}
 }
 
-func markRow(name string, caps Capabilities, status Status, notes string) Entry {
+// nodeRowAt is nodeRow with an explicit official URL, for nodes the
+// Atlassian prose docs omit.
+func nodeRowAt(name, url string, status Status, notes string) Entry {
+	e := nodeRow(name, status, notes)
+	e.OfficialURL = url
+	return e
+}
+
+func markRow(name string, status Status, notes string) Entry {
 	return Entry{
 		Kind:              KindMark,
 		Name:              name,
 		Status:            status,
-		Capabilities:      caps,
 		OfficialURL:       adfMarksBase + name + "/",
 		Notes:             notes,
 		SubmitDescription: "ADF: applied to text inside a rich-text field payload after validation passes.",
 	}
 }
 
-// fullSupport / authorOnly are the most common capability presets used in
-// the table below. preserveOnly is reserved for opaque-passthrough rows
-// (currently empty since full MVP support is mandated).
-var (
-	fullSupport = Capabilities{Author: true, Render: true, Preserve: true, Validate: true, Submit: true}
-	// renderOnly is for nodes whose author surface lives elsewhere (e.g.,
-	// tableRow is built by table authoring, not directly).
-	renderOnly = Capabilities{Render: true, Preserve: true, Validate: true, Submit: true}
-)
-
-// registry holds all MVP rows. Adding a new entry MUST also update
-// the customfield registry per the "new shared keys land in both"
-// rule.
+// registryEntries holds the curated rows: status, notes, and doc URL.
+// Rows for everything else in the validated universe are synthesized by
+// Registry() as preserve-only, so the matrix always covers every node and
+// mark the validator accepts.
 var registryEntries = []Entry{
 	// MVP nodes.
-	nodeRow("doc", fullSupport, StatusMVP, "ADF root."),
-	nodeRow("paragraph", fullSupport, StatusMVP, ""),
-	nodeRow("text", fullSupport, StatusMVP, ""),
-	nodeRow("heading", fullSupport, StatusMVP, "attrs.level required (1-6)."),
-	nodeRow("bulletList", fullSupport, StatusMVP, ""),
-	nodeRow("orderedList", fullSupport, StatusMVP, ""),
-	nodeRow("listItem", renderOnly, StatusMVP, "Authored as part of a bullet/ordered list."),
-	nodeRow("codeBlock", fullSupport, StatusMVP, "attrs.language optional."),
-	nodeRow("blockquote", fullSupport, StatusMVP, ""),
-	nodeRow("hardBreak", fullSupport, StatusMVP, ""),
-	nodeRow("rule", fullSupport, StatusMVP, ""),
-	nodeRow("mention", fullSupport, StatusMVP, "attrs.id (accountId) and attrs.text required."),
-	nodeRow("emoji", fullSupport, StatusMVP, "attrs.shortName required."),
-	nodeRow("date", fullSupport, StatusMVP, "attrs.timestamp required (epoch ms as string)."),
-	nodeRow("status", fullSupport, StatusMVP, "attrs.text and attrs.color required."),
-	nodeRow("inlineCard", Capabilities{Author: true, Render: true, Preserve: true, Validate: true, Submit: true}, StatusMVP, "Field compatibility enforced; degrades to text+link in best-effort."),
-	nodeRow("panel", fullSupport, StatusMVP, "attrs.panelType required (info/warning/error/success/note)."),
-	nodeRow("table", fullSupport, StatusMVP, ""),
-	nodeRow("tableRow", renderOnly, StatusMVP, "Authored as part of a table."),
-	nodeRow("tableCell", renderOnly, StatusMVP, "Authored as part of a table."),
-	nodeRow("tableHeader", renderOnly, StatusMVP, "Authored as part of a table."),
+	nodeRow("doc", StatusMVP, "ADF root."),
+	nodeRow("paragraph", StatusMVP, ""),
+	nodeRow("text", StatusMVP, ""),
+	nodeRow("heading", StatusMVP, "attrs.level required (1-6)."),
+	nodeRow("bulletList", StatusMVP, ""),
+	nodeRow("orderedList", StatusMVP, ""),
+	nodeRow("listItem", StatusMVP, "Authored as part of a bullet/ordered list."),
+	nodeRow("codeBlock", StatusMVP, "attrs.language optional."),
+	nodeRow("blockquote", StatusMVP, ""),
+	nodeRow("hardBreak", StatusMVP, ""),
+	nodeRow("rule", StatusMVP, ""),
+	nodeRow("mention", StatusMVP, "attrs.id (accountId) and attrs.text required."),
+	nodeRow("emoji", StatusMVP, "attrs.shortName required."),
+	nodeRow("date", StatusMVP, "attrs.timestamp required (epoch ms as string)."),
+	nodeRow("status", StatusMVP, "attrs.text and attrs.color required."),
+	nodeRow("inlineCard", StatusMVP, "Field compatibility enforced; degrades to text+link in best-effort."),
+	nodeRow("panel", StatusMVP, "attrs.panelType required (info/warning/error/success/note)."),
+	nodeRow("table", StatusMVP, ""),
+	nodeRow("tableRow", StatusMVP, "Authored as part of a table."),
+	nodeRow("tableCell", StatusMVP, "Authored as part of a table."),
+	nodeRow("tableHeader", StatusMVP, "Authored as part of a table."),
+	nodeRowAt("taskList", adfStructureURL, StatusMVP,
+		"Action-item (checkbox) list. Authored from GFM task-list Markdown (`- [ ]` / `- [x]`); attrs.localId is generated during conversion."),
+	nodeRowAt("taskItem", adfStructureURL, StatusMVP,
+		"Authored as part of a task list; attrs.state (TODO|DONE) carries the checkbox state."),
+	nodeRowAt("blockTaskItem", adfStructureURL, StatusMVP,
+		"Jira-authored task item with block content; rendered and preserved, not authored from Markdown."),
+	nodeRowAt("decisionList", adfStructureURL, StatusMVP,
+		"Decision list. No Markdown authoring surface — author as native ADF; renders as `- <>` items."),
+	nodeRowAt("decisionItem", adfStructureURL, StatusMVP,
+		"Rendered with the `<>` decision marker; authored as part of a native-ADF decisionList."),
 
 	// MVP marks.
-	markRow("strong", fullSupport, StatusMVP, ""),
-	markRow("em", fullSupport, StatusMVP, ""),
-	markRow("strike", fullSupport, StatusMVP, ""),
-	markRow("code", fullSupport, StatusMVP, "Combines only with the link mark; any other mark on code text is invalid."),
-	markRow("link", fullSupport, StatusMVP, "attrs.href required."),
-	markRow("textColor", fullSupport, StatusMVP, "attrs.color required (#RRGGBB)."),
-	markRow("backgroundColor", fullSupport, StatusMVP, "attrs.color required (#RRGGBB)."),
-	markRow("subsup", fullSupport, StatusMVP, "attrs.type=sub|sup."),
-	markRow("underline", fullSupport, StatusMVP, ""),
+	markRow("strong", StatusMVP, ""),
+	markRow("em", StatusMVP, ""),
+	markRow("strike", StatusMVP, ""),
+	markRow("code", StatusMVP, "Combines only with the link mark; any other mark on code text is invalid."),
+	markRow("link", StatusMVP, "attrs.href required."),
+	markRow("textColor", StatusMVP, "attrs.color required (#RRGGBB)."),
+	markRow("backgroundColor", StatusMVP, "attrs.color required (#RRGGBB)."),
+	markRow("subsup", StatusMVP, "attrs.type=sub|sup."),
+	markRow("underline", StatusMVP, ""),
 }
 
-// Registry returns the read-only registry view. The view is built once on
-// first call (lazy index build) and shared.
+// capabilitiesFor computes a row's capability flags from the code that
+// implements them: Author from the Markdown converter's emit set, Render
+// from the Markdown renderer's node set, and Preserve/Validate/Submit
+// unconditionally — knownNodeType/knownMarkType grants exactly those three
+// to every registered type.
+func capabilitiesFor(kind Kind, name string) Capabilities {
+	caps := Capabilities{Preserve: true, Validate: true, Submit: true}
+	switch kind {
+	case KindNode:
+		caps.Author = authorableNodes[name]
+		caps.Render = renderableMarkdownNodes[name]
+	case KindMark:
+		caps.Author = authorableMarks[name]
+		caps.Render = renderableMarkdownMarks[name]
+	}
+	return caps
+}
+
+// Registry returns the read-only registry view: the curated rows with
+// computed capabilities, plus a synthesized preserve-only row for every
+// validated node/mark that has no curated entry. The matrix therefore
+// covers the validator's full universe by construction — it cannot
+// under-report what the CLI accepts.
 func Registry() RegistryView {
-	idx := make(map[string]Entry, len(registryEntries))
+	entries := make([]Entry, 0, len(nodeRules)+len(markRules))
+	curated := make(map[string]bool, len(registryEntries))
 	for _, e := range registryEntries {
+		e.Capabilities = capabilitiesFor(e.Kind, e.Name)
+		curated[kindKey(e.Kind, e.Name)] = true
+		entries = append(entries, e)
+	}
+	entries = append(entries, synthesizedRows(KindNode, nodeRuleNames(), curated)...)
+	entries = append(entries, synthesizedRows(KindMark, markRuleNames(), curated)...)
+
+	idx := make(map[string]Entry, len(entries))
+	for _, e := range entries {
 		idx[kindKey(e.Kind, e.Name)] = e
 	}
-	return RegistryView{entries: registryEntries, index: idx}
+	return RegistryView{entries: entries, index: idx}
+}
+
+// synthesizedRows builds sorted preserve-only rows for every name without
+// a curated entry.
+func synthesizedRows(kind Kind, names []string, curated map[string]bool) []Entry {
+	var out []Entry
+	for _, name := range names {
+		if curated[kindKey(kind, name)] {
+			continue
+		}
+		out = append(out, Entry{
+			Kind:         kind,
+			Name:         name,
+			Status:       StatusPreserveOnly,
+			Capabilities: capabilitiesFor(kind, name),
+			OfficialURL:  adfStructureURL,
+			Notes:        "Accepted, validated, and preserved as native ADF; no Markdown authoring surface.",
+			SubmitDescription: "ADF: included in a Jira rich-text field payload after " +
+				"validation passes.",
+		})
+	}
+	return out
 }

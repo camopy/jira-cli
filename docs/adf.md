@@ -39,8 +39,9 @@ Every rich-text surface also accepts GFM Markdown as a convenience layer
 (`--markdown` inline, `--markdown-file` from a file or stdin, or a
 `description_markdown` payload key) and converts it client-side.
 Paragraphs, headings, bold/italic/strike, inline code, links, bullet and
-ordered lists, fenced code blocks, blockquotes, tables, and horizontal rules
-convert faithfully. A few constructs degrade by design:
+ordered lists, task lists (`- [ ]` / `- [x]` become real Jira checkboxes),
+fenced code blocks, blockquotes, tables, and horizontal rules convert
+faithfully. A few constructs degrade by design:
 
 | Markdown | Converts to | Strict mode |
 |---|---|---|
@@ -119,14 +120,16 @@ setting; an explicit `--adf-strict` / `--adf-best-effort` flag wins over both.
 
 ## Supported nodes and marks
 
-The CLI authors and renders a core subset of ADF. Unknown nodes are still
-validated and either rejected (`--adf-strict`) or preserved with a warning
-(`--adf-best-effort`).
+The CLI knows every node and mark of the pinned ADF schema: all of them
+validate, submit, and round-trip as native ADF. A curated core additionally
+authors from Markdown and renders in `issue view`; the rest are
+preserve-only. `jira agent adf-matrix` lists the per-row capabilities.
 
-Nodes: `doc`, `paragraph`, `text`, `heading` (level 1-6), `bulletList`,
+Core nodes: `doc`, `paragraph`, `text`, `heading` (level 1-6), `bulletList`,
 `orderedList`, `listItem`, `codeBlock`, `blockquote`, `hardBreak`, `rule`,
 `mention`, `emoji`, `date`, `status`, `inlineCard`, `panel`, `table`,
-`tableRow`, `tableCell`, `tableHeader`.
+`tableRow`, `tableCell`, `tableHeader`, `taskList`, `taskItem`,
+`blockTaskItem`, `decisionList`, `decisionItem`.
 
 Marks: `strong`, `em`, `strike`, `code`, `link`, `textColor`,
 `backgroundColor`, `subsup`, `underline`. The `code` mark combines only with
@@ -135,8 +138,10 @@ Marks: `strong`, `em`, `strike`, `code`, `link`, `textColor`,
 A few nodes carry required attributes: `heading` needs `level` (1-6),
 `panel` needs `panelType` (`info`/`warning`/`error`/`success`/`note`),
 `mention` needs `id` and `text`, `date` needs an epoch-millisecond
-`timestamp`. `listItem`, `tableRow`, `tableCell`, and `tableHeader` are
-authored as part of their parent list or table.
+`timestamp`, and the task/decision family needs a unique `localId` per node
+(generated for you when authoring from Markdown). `listItem`, `tableRow`,
+`tableCell`, and `tableHeader` are authored as part of their parent list or
+table; `taskItem` as part of its `taskList`.
 
 For the full ADF specification, see Atlassian's
 [node reference](https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/).

@@ -318,6 +318,36 @@ var nodeRules = map[string]nodeRule{
 	// valid document carrying them is not rejected as an unknown node.
 	"caption":      {},
 	"nestedExpand": {},
+	// The remaining nodes of the pinned schema, registered so a document
+	// Jira produced always round-trips: the CLI preserves and resubmits
+	// them rather than rejecting them as unknown. Attr rules follow the
+	// schema's `required` lists.
+	"expand": {
+		optionalAttrs: []attrRule{{key: "title", typ: attrString}},
+		content:       contentRule{minItems: 1},
+	},
+	"placeholder": {
+		requiredAttrs: []attrRule{{key: "text", typ: attrString}},
+	},
+	"layoutSection": {
+		content: contentRule{allowed: map[string]bool{"layoutColumn": true}},
+	},
+	"layoutColumn": {
+		requiredAttrs: []attrRule{{key: "width", typ: attrNumber, min: 0, max: 100, hasRange: true}},
+		content:       contentRule{minItems: 1},
+	},
+	"syncBlock": {
+		requiredAttrs: []attrRule{
+			{key: "resourceId", typ: attrString},
+			{key: "localId", typ: attrString},
+		},
+	},
+	"bodiedSyncBlock": {
+		requiredAttrs: []attrRule{
+			{key: "resourceId", typ: attrString},
+			{key: "localId", typ: attrString},
+		},
+	},
 }
 
 // markRules maps mark type → strict-validation rule.
@@ -337,6 +367,19 @@ var markRules = map[string]markRule{
 		{key: "size", typ: attrNumber, min: 1, max: 3, hasRange: true},
 		{key: "color", typ: attrString, hexColor: true, allowAlpha: true},
 	}},
+	// The remaining marks of the pinned schema, registered so a document
+	// Jira produced always round-trips. annotation is the inline-comment
+	// mark — comments the CLI reads and resubmits routinely carry it.
+	"annotation": {requiredAttrs: []attrRule{
+		{key: "id", typ: attrString},
+		{key: "annotationType", typ: attrString, enum: []string{"inlineComment"}},
+	}},
+	"breakout": {requiredAttrs: []attrRule{
+		{key: "mode", typ: attrString, enum: []string{"wide", "full-width"}},
+	}},
+	"dataConsumer": {requiredAttrs: []attrRule{{key: "sources", typ: attrAny}}},
+	"fontSize":     {requiredAttrs: []attrRule{{key: "fontSize", typ: attrString, enum: []string{"small"}}}},
+	"fragment":     {requiredAttrs: []attrRule{{key: "localId", typ: attrString, nonEmpty: true}}},
 }
 
 // blockLegalMarks is the set of marks the schema permits on block nodes
@@ -349,6 +392,9 @@ var blockLegalMarks = map[string]bool{
 	"border":      true,
 	"breakout":    true,
 	"fontSize":    true,
+	// dataConsumer and fragment decorate extension/table block nodes.
+	"dataConsumer": true,
+	"fragment":     true,
 }
 
 // codeExclusiveMarks is the set of decorative text marks the schema

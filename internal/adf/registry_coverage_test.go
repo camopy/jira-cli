@@ -13,6 +13,7 @@ var mvpNodes = []string{
 	"codeBlock", "blockquote", "hardBreak", "rule",
 	"mention", "emoji", "date", "status", "inlineCard",
 	"panel", "table", "tableRow", "tableCell", "tableHeader",
+	"taskList", "taskItem", "blockTaskItem", "decisionList", "decisionItem",
 }
 
 // MVP mark set.

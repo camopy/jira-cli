@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-// issueViewADFServer serves a single issue whose description carries an
-// decisionItem node — a construct the ADF->Markdown renderer cannot fully
+// issueViewADFServer serves a single issue whose description carries a
+// placeholder node — a construct the ADF->Markdown renderer cannot fully
 // express, so the HUMAN renderer drops detail rendering it.
 func issueViewADFServer(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -24,7 +24,7 @@ func issueViewADFServer(t *testing.T) *httptest.Server {
 				"content": [
 					{"type": "paragraph", "content": [
 						{"type": "text", "text": "see "},
-						{"type": "decisionItem"}
+						{"type": "placeholder", "attrs": {"text": "p"}}
 					]}
 				]
 			}
@@ -78,7 +78,7 @@ func TestIssueViewJSONDoesNotEmitFalseADFWarning(t *testing.T) {
 		}
 	}
 	// The full ADF must still be present in the data payload.
-	if !strings.Contains(string(env.Data.Issue.Fields.Description), "decisionItem") {
+	if !strings.Contains(string(env.Data.Issue.Fields.Description), "placeholder") {
 		t.Fatalf("json issue view did not carry the full ADF: %s", out)
 	}
 	if env.Data.Issue.Key != "PROJ-1" || env.Data.Issue.Fields.Summary != "card issue" {
@@ -89,7 +89,7 @@ func TestIssueViewJSONDoesNotEmitFalseADFWarning(t *testing.T) {
 	}
 }
 
-// Human output flattens ADF to text and genuinely loses the decisionItem
+// Human output flattens ADF to text and genuinely loses the placeholder
 // detail, so it MUST surface the render-loss warning on stderr.
 func TestIssueViewHumanEmitsRealADFWarning(t *testing.T) {
 	srv := issueViewADFServer(t)
@@ -102,7 +102,7 @@ func TestIssueViewHumanEmitsRealADFWarning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("issue view --output=human error = %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), "adf_lossy_render") && !strings.Contains(string(out), "decisionItem") {
+	if !strings.Contains(string(out), "adf_lossy_render") && !strings.Contains(string(out), "placeholder") {
 		t.Fatalf("human issue view did not surface the real ADF render-loss warning:\n%s", out)
 	}
 }

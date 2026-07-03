@@ -77,17 +77,26 @@ normalized text, not the original paste.
 
 ### The full supported set
 
-These are every node and mark the CLI can author, validate, and submit — the
-complete menu when you build ADF by hand. `jira agent adf-matrix --output=json`
-is the machine-readable source of truth (per-row capabilities and the official
-spec URL); each shape is documented in the sections below. Anything not on this
-list is out of the MVP set: on author/submit it is rejected (strict) or carried
-through opaquely (best-effort) — see *Opaque preservation* — so do not rely on
-nodes such as `expand`, `mediaSingle`, `taskList`, `decisionList`, or `layout`.
+`jira agent adf-matrix --output=json` is the machine-readable source of truth,
+and it covers every node and mark of the pinned ADF schema — one row each,
+with per-row capabilities and the official spec URL. Two tiers appear there:
+
+- **`mvp` rows** are the curated set below: authorable (most of them from
+  Markdown), rendered in `issue view`, validated, and submitted.
+- **`preserve-only` rows** are everything else in the schema (`expand`,
+  `mediaSingle`, `layoutSection`, …): the CLI validates, submits, and
+  round-trips them as native ADF, but has no Markdown authoring surface and
+  renders them as their child text only. Author these as native ADF via
+  `--json-input`.
+
+The curated set, each shape documented in the sections below:
 
 - **Structure:** `doc` (root), `paragraph`, `heading` (level 1-6), `text`,
   `hardBreak`, `rule`
 - **Lists:** `bulletList`, `orderedList`, `listItem`
+- **Tasks and decisions:** `taskList`, `taskItem` (checkboxes — authorable
+  from GFM `- [ ]` / `- [x]` Markdown), `blockTaskItem`, `decisionList`,
+  `decisionItem` (native-ADF authoring only)
 - **Blocks:** `blockquote`, `codeBlock`, `panel`
 - **Tables:** `table`, `tableRow`, `tableHeader`, `tableCell`
 - **Inline nodes:** `mention`, `emoji`, `date`, `status`, `inlineCard`
@@ -116,6 +125,20 @@ nodes such as `expand`, `mediaSingle`, `taskList`, `decisionList`, or `layout`.
 
 // rule (horizontal divider, no content)
 {"type": "rule"}
+
+// taskList / taskItem (checkboxes). attrs.localId is any unique string;
+// state = TODO | DONE. In description_markdown, `- [ ]` / `- [x]` items
+// author this shape with localIds generated for you.
+{"type": "taskList", "attrs": {"localId": "a1"}, "content": [
+  {"type": "taskItem", "attrs": {"localId": "a2", "state": "TODO"},
+   "content": [{"type": "text", "text": "open item"}]}
+]}
+
+// decisionList / decisionItem (native-ADF authoring only; no Markdown syntax)
+{"type": "decisionList", "attrs": {"localId": "d1"}, "content": [
+  {"type": "decisionItem", "attrs": {"localId": "d2", "state": "DECIDED"},
+   "content": [{"type": "text", "text": "ship it"}]}
+]}
 
 // panel (panelType = info | warning | error | success | note)
 {"type": "panel", "attrs": {"panelType": "info"}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "info panel"}]}]}
@@ -374,10 +397,10 @@ profile TOML. Precedence: flag > env > profile > per-path default.
 
 ### Opaque preservation
 
-Unknown ADF nodes/marks (anything outside the CLI's MVP set) round-trip
-through the CLI byte-equivalently — the typed model preserves them via
-opaque passthrough. **However**: Jira's create endpoint validates the
-posted document against its own ADF schema and will reject truly unknown
-node types with `INVALID_INPUT (400)`. The opaque path is for
-preserving fidelity on read; submit paths are bounded by what Jira
-itself accepts.
+Every node and mark of the pinned ADF schema is known to the CLI (see the
+`preserve-only` matrix rows) and round-trips byte-equivalently. Anything
+outside the schema entirely round-trips via opaque passthrough on read.
+**However**: Jira's create endpoint validates the posted document against
+its own ADF schema and will reject truly unknown node types with
+`INVALID_INPUT (400)`. The opaque path is for preserving fidelity on read;
+submit paths are bounded by what Jira itself accepts.
