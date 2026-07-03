@@ -1841,7 +1841,7 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 					var id string
 					if err := cmdutil.Spin(cmd, "issue.transition", func(ctx context.Context) error {
 						var e error
-						id, e = resolveTransitionForPayload(ctx, service, key, target, !payload.empty())
+						id, e = resolveTransitionValidated(ctx, service, key, target, !payload.empty())
 						return e
 					}); err != nil {
 						return err
@@ -2134,6 +2134,15 @@ func resolveTransitionForPayload(ctx context.Context, service jira.IssueService,
 	if !hasPayload {
 		return resolveTransitionID(ctx, service, key, target)
 	}
+	return resolveTransitionValidated(ctx, service, key, target, true)
+}
+
+// resolveTransitionValidated always fetches the issue's transition list and
+// matches the target against it — no numeric fast path, because the whole
+// point is proving the id exists on THIS issue. requireScreen additionally
+// applies the screenless-payload refusal. This is the --validate-remote
+// resolver; a bogus all-digit id must fail here, never echo back "validated".
+func resolveTransitionValidated(ctx context.Context, service jira.IssueService, key, target string, requireScreen bool) (string, error) {
 	transitions, _, err := service.Transitions(ctx, key)
 	if err != nil {
 		return "", err
@@ -2142,14 +2151,16 @@ func resolveTransitionForPayload(ctx context.Context, service jira.IssueService,
 	if err != nil {
 		return "", err
 	}
-	for _, t := range transitions {
-		if t.ID == nil || *t.ID != id {
-			continue
+	if requireScreen {
+		for _, t := range transitions {
+			if t.ID == nil || *t.ID != id {
+				continue
+			}
+			if t.HasScreen != nil && !*t.HasScreen {
+				return "", fmt.Errorf("validation: this workflow's %q transition has no screen, and Jira silently discards fields and comments sent with a screenless transition; run the transition bare, then add the comment with `jira issue comment add`", target)
+			}
+			break
 		}
-		if t.HasScreen != nil && !*t.HasScreen {
-			return "", fmt.Errorf("validation: this workflow's %q transition has no screen, and Jira silently discards fields and comments sent with a screenless transition; run the transition bare, then add the comment with `jira issue comment add`", target)
-		}
-		break
 	}
 	return id, nil
 }
@@ -2257,7 +2268,7 @@ func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, 
 			}
 			service := cmdutil.ServicesForClient(client).Issue()
 			results, rerr := cmdutil.FanOutKeysProgress(cmd.Context(), "issue.transition", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
-				id, resolveErr := resolveTransitionForPayload(ctx, service, key, target, !payload.empty())
+				id, resolveErr := resolveTransitionValidated(ctx, service, key, target, !payload.empty())
 				if resolveErr != nil {
 					return nil, resolveErr
 				}
