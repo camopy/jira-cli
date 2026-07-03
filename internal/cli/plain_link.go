@@ -19,7 +19,7 @@ func WriteLinkListPlain(w io.Writer, command string, data any, opts ...PlainOpti
 
 	m, ok := data.(map[string]any)
 	if !ok {
-		return writeGenericPlain(logger, messageForCommand(command), data)
+		return writeGenericPlain(logger, cfg, messageForCommand(command), data)
 	}
 	links := normalizeMapList(m["links"])
 	style := authPlainStyle{tty: cfg.tty, theme: cfg.theme}
@@ -106,7 +106,7 @@ func WriteLinkTypesPlain(w io.Writer, command string, data any, opts ...PlainOpt
 
 	m, ok := data.(map[string]any)
 	if !ok {
-		return writeGenericPlain(logger, messageForCommand(command), data)
+		return writeGenericPlain(logger, cfg, messageForCommand(command), data)
 	}
 	types := normalizeMapList(m["link_types"])
 	style := authPlainStyle{tty: cfg.tty, theme: cfg.theme}

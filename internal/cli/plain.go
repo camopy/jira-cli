@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"io"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -109,7 +110,7 @@ func newPlainLogger(w io.Writer) *clog.Logger {
 }
 
 func WritePlain(w io.Writer, data any) error {
-	return writeGenericPlain(newPlainLogger(w), "result", data)
+	return writeGenericPlain(newPlainLogger(w), defaultPlainConfig(), "result", data)
 }
 
 // PlainRenderer renders a single command's typed output as human text.
@@ -157,9 +158,9 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 	case "issue.list.count", "search.count":
 		return writeCountPlain(logger, data, cfg)
 	case "jql.validate":
-		return writeValidatePlain(logger, data)
+		return writeValidatePlain(logger, data, cfg)
 	case "jql.reference":
-		return writeReferencePlain(logger, data)
+		return writeReferencePlain(logger, data, cfg)
 	case "issue.view":
 		return WriteIssueViewPlain(w, command, data, opts...)
 	case "issue.transitions":
@@ -177,7 +178,7 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 	case "boards.list":
 		return WriteBoardListPlain(w, command, data, opts...)
 	default:
-		return writeGenericPlain(logger, messageForCommand(command), data)
+		return writeGenericPlain(logger, cfg, messageForCommand(command), data)
 	}
 }
 
@@ -190,13 +191,20 @@ func defaultPlainConfig() plainConfig {
 	}
 }
 
-func writeGenericPlain(logger *clog.Logger, message string, data any) error {
+func writeGenericPlain(logger *clog.Logger, cfg plainConfig, message string, data any) error {
 	fields := plainFields(data)
 	if len(fields) == 0 {
 		return nil
 	}
 	event := logger.Info()
 	for _, field := range fields {
+		// An issue-key value becomes a clickable link to its browse URL.
+		// clog owns the fallback: off a TTY (or with hyperlinks disabled)
+		// the field renders as plain text.
+		if url, key := issueBrowseURL(cfg, field.value); url != "" {
+			event = event.Link(field.key, url, key)
+			continue
+		}
 		event = event.Any(field.key, field.value)
 	}
 	// An empty message means the command's data fields already carry the
@@ -316,15 +324,15 @@ func writeIssueListPlain(logger *clog.Logger, data any, cfg plainConfig) error {
 	msg := messageForCommand("issue.list")
 	m, ok := data.(map[string]any)
 	if !ok {
-		return writeGenericPlain(logger, msg, data)
+		return writeGenericPlain(logger, cfg, msg, data)
 	}
 	rawIssues, detail, jql, ok := issueListPlainData(m)
 	if !ok {
-		return writeGenericPlain(logger, msg, data)
+		return writeGenericPlain(logger, cfg, msg, data)
 	}
 	issues, ok := normalizeIssueRows(rawIssues)
 	if !ok {
-		return writeGenericPlain(logger, msg, data)
+		return writeGenericPlain(logger, cfg, msg, data)
 	}
 	if cfg.tsv {
 		return writeIssueTSV(logger, issues, cfg)
@@ -363,11 +371,11 @@ func writeIssueListPlain(logger *clog.Logger, data any, cfg plainConfig) error {
 func writeJQLPreviewPlain(logger *clog.Logger, data any, cfg plainConfig) error {
 	m, ok := data.(map[string]any)
 	if !ok {
-		return writeGenericPlain(logger, "", data)
+		return writeGenericPlain(logger, cfg, "", data)
 	}
 	query, _ := m["jql"].(string)
 	if xstrings.IsBlank(query) {
-		return writeGenericPlain(logger, "", data)
+		return writeGenericPlain(logger, cfg, "", data)
 	}
 	if cfg.debug {
 		// Flatten through the shared plain-field helper so the diagnostic uses
@@ -396,7 +404,7 @@ func writeJQLPreviewPlain(logger *clog.Logger, data any, cfg plainConfig) error 
 func writeCountPlain(logger *clog.Logger, data any, cfg plainConfig) error {
 	m, ok := data.(map[string]any)
 	if !ok {
-		return writeGenericPlain(logger, "", data)
+		return writeGenericPlain(logger, cfg, "", data)
 	}
 	if cfg.debug {
 		event := logger.Info()
@@ -412,14 +420,14 @@ func writeCountPlain(logger *clog.Logger, data any, cfg plainConfig) error {
 // writeValidatePlain renders `jql validate` output: one line per query stating
 // whether it is valid, with the parse errors (or warnings) appended. The query
 // text is included so a multi-query run is legible.
-func writeValidatePlain(logger *clog.Logger, data any) error {
+func writeValidatePlain(logger *clog.Logger, data any, cfg plainConfig) error {
 	m, ok := data.(map[string]any)
 	if !ok {
-		return writeGenericPlain(logger, "", data)
+		return writeGenericPlain(logger, cfg, "", data)
 	}
 	queries := normalizeMapList(m["queries"])
 	if len(queries) == 0 {
-		return writeGenericPlain(logger, "", data)
+		return writeGenericPlain(logger, cfg, "", data)
 	}
 	for _, q := range queries {
 		query, _ := q["query"].(string)
@@ -439,14 +447,14 @@ func writeValidatePlain(logger *clog.Logger, data any) error {
 // writeReferencePlain renders `jql reference`: one line per queryable field,
 // "value — displayName", so the field set (including custom fields) is legible
 // and greppable. Functions and reserved words ride along in --output=json.
-func writeReferencePlain(logger *clog.Logger, data any) error {
+func writeReferencePlain(logger *clog.Logger, data any, cfg plainConfig) error {
 	m, ok := data.(map[string]any)
 	if !ok {
-		return writeGenericPlain(logger, "", data)
+		return writeGenericPlain(logger, cfg, "", data)
 	}
 	fields := normalizeMapList(m["fields"])
 	if len(fields) == 0 {
-		return writeGenericPlain(logger, "", data)
+		return writeGenericPlain(logger, cfg, "", data)
 	}
 	for _, f := range fields {
 		value, _ := f["value"].(string)
@@ -483,20 +491,28 @@ func coerceStringSlice(v any) []string {
 // source of truth for how every terminal link in the CLI is styled. On a TTY
 // the display text is underlined so the link reads as a link; off a TTY (or
 // when url is empty) the bare text is returned unchanged, keeping output
-// copy/paste- and pipe-safe.
+// copy/paste- and pipe-safe. The link itself comes from clog's hyperlink
+// primitive — one implementation across ADF rendering and plain output.
 func hyperlink(cfg plainConfig, url, text string) string {
-	if url == "" {
+	if url == "" || !cfg.tty {
 		return text
 	}
-	if cfg.tty {
-		text = lipgloss.NewStyle().Underline(true).Render(text)
-	}
-	a := termansi.New(
-		termansi.WithTerminal(cfg.tty),
-		termansi.WithHyperlinkFallback(termansi.HyperlinkFallbackText),
-	)
-	return a.Hyperlink(url, text)
+	styled := lipgloss.NewStyle().Underline(true).Render(SanitizeTerminalText(text))
+	return HyperlinkPreStyled(SanitizeTerminalText(url), styled)
 }
+
+// issueBrowseURL returns the browse URL and the key when v is an issue-key
+// string and the profile's base URL is known; empty strings otherwise.
+func issueBrowseURL(cfg plainConfig, v any) (string, string) {
+	s, ok := v.(string)
+	if !ok || cfg.baseURL == "" || !plainIssueKeyPattern.MatchString(s) {
+		return "", ""
+	}
+	return browser.IssueURL(cfg.baseURL, s), s
+}
+
+// plainIssueKeyPattern matches a bare Jira issue key ("PROJ-123").
+var plainIssueKeyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]*-[0-9]+$`)
 
 // writeIssueTSV emits the issue list as tab-separated values: one header line
 // of column names plus one line per issue, with no status line, ANSI, or box.
@@ -1174,14 +1190,14 @@ func writeAuthStatusPlain(logger *clog.Logger, data any, cfg plainConfig) error 
 	authMsg := messageForCommand("auth.status")
 	m, ok := data.(map[string]any)
 	if !ok {
-		return writeGenericPlain(logger, authMsg, data)
+		return writeGenericPlain(logger, cfg, authMsg, data)
 	}
 	active, _ := m["active_profile"].(string)
 	profiles := normalizeMapList(m["profiles"])
 	if len(profiles) == 0 {
 		// nothing to render — fall back to the generic dump so we at least
 		// surface the envelope shape.
-		return writeGenericPlain(logger, authMsg, data)
+		return writeGenericPlain(logger, cfg, authMsg, data)
 	}
 
 	th := cfg.theme

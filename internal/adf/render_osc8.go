@@ -1,11 +1,11 @@
 package adf
 
 import (
-	"io"
 	"regexp"
 	"strings"
 
 	"github.com/gechr/clog"
+	"github.com/gechr/clog/field/hyperlink"
 )
 
 // RenderOptions configure RenderActivatable.
@@ -71,9 +71,13 @@ func Hyperlink(url, text string) string { return osc8(url, text) }
 func osc8(url, text string) string {
 	url = stripControlBytes(url)
 	text = stripControlBytes(text)
-	logger := clog.New(clog.NewOutput(io.Discard, clog.ColorAlways))
-	logger.SetFieldFormats(clog.Default.FieldFormats())
-	return logger.Output().Hyperlink(url, text)
+	// Honor the user-level hyperlink switch on the default logger, then
+	// emit through clog's primitive — no logger construction per link.
+	// Emission is deliberately TTY-independent; callers gate on TTY.
+	if !clog.Default.FieldFormats().HyperlinkEnabled {
+		return text
+	}
+	return hyperlink.OSC8(url, text)
 }
 
 // stripControlBytes drops C0 and C1 control characters. Tab, newline and

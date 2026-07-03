@@ -50,7 +50,7 @@ func WriteCommentListPlain(w io.Writer, command string, data any, opts ...PlainO
 
 	m, ok := data.(map[string]any)
 	if !ok {
-		return writeGenericPlain(logger, messageForCommand(command), data)
+		return writeGenericPlain(logger, cfg, messageForCommand(command), data)
 	}
 	comments := normalizeMapList(m["comments"])
 	style := authPlainStyle{tty: cfg.tty, theme: cfg.theme}

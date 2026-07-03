@@ -18,7 +18,7 @@ func WriteKeyedResultsPlain(w io.Writer, command string, data any, opts ...Plain
 	logger := newPlainLogger(w)
 	results := keyedResultRows(data)
 	if len(results) == 0 {
-		return writeGenericPlain(logger, messageForCommand(command), data)
+		return writeGenericPlain(logger, cfg, messageForCommand(command), data)
 	}
 	total, succeeded, failed := keyedResultCounts(data, len(keyedFailureKeys(data)))
 	event := logger.Info().

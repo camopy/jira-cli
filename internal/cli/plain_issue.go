@@ -19,18 +19,18 @@ func WriteIssueViewPlain(w io.Writer, command string, data any, opts ...PlainOpt
 
 	m := mapFromAny(data)
 	if len(m) == 0 {
-		return writeGenericPlain(logger, messageForCommand(command), data)
+		return writeGenericPlain(logger, cfg, messageForCommand(command), data)
 	}
 	if rawResults, ok := m["results"]; ok {
 		results := normalizeMapList(rawResults)
 		if results == nil {
-			return writeGenericPlain(logger, messageForCommand(command), data)
+			return writeGenericPlain(logger, cfg, messageForCommand(command), data)
 		}
 		return writeIssueViewManyPlain(logger, command, results, cfg)
 	}
 	issue := mapFromAny(m["issue"])
 	if len(issue) == 0 {
-		return writeGenericPlain(logger, messageForCommand(command), data)
+		return writeGenericPlain(logger, cfg, messageForCommand(command), data)
 	}
 	fields := mapFromAny(issue["fields"])
 	style := authPlainStyle{tty: cfg.tty, theme: cfg.theme}
@@ -211,7 +211,7 @@ func WriteIssueTransitionsPlain(w io.Writer, command string, data any, opts ...P
 
 	m, ok := data.(map[string]any)
 	if !ok {
-		return writeGenericPlain(logger, messageForCommand(command), data)
+		return writeGenericPlain(logger, cfg, messageForCommand(command), data)
 	}
 	transitions := normalizeMapList(m["transitions"])
 	style := authPlainStyle{tty: cfg.tty, theme: cfg.theme}

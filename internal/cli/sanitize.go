@@ -1,10 +1,10 @@
 package cli
 
 import (
-	"io"
 	"strings"
 
 	"github.com/gechr/clog"
+	clhyperlink "github.com/gechr/clog/field/hyperlink"
 	termansi "github.com/gechr/x/ansi"
 )
 
@@ -62,9 +62,22 @@ func SanitizeCompletionField(s string) string {
 func Hyperlink(url, text string) string {
 	url = SanitizeTerminalText(url)
 	text = SanitizeTerminalText(text)
-	logger := clog.New(clog.NewOutput(io.Discard, clog.ColorAlways))
-	logger.SetFieldFormats(clog.Default.FieldFormats())
-	return logger.Output().Hyperlink(url, text)
+	// Honor the user-level hyperlink switch on the default logger, then
+	// emit through clog's primitive — no logger construction per link.
+	// Emission is deliberately TTY-independent; callers gate on TTY.
+	return HyperlinkPreStyled(url, text)
+}
+
+// HyperlinkPreStyled links display text that already carries ANSI styling
+// (which sanitization would strip). Callers sanitize the raw content BEFORE
+// styling; the URL must already be sanitized too. Honors the user-level
+// hyperlink switch on the default logger and emits through clog's
+// primitive — no logger construction per link.
+func HyperlinkPreStyled(url, styledText string) string {
+	if !clog.Default.FieldFormats().HyperlinkEnabled {
+		return styledText
+	}
+	return clhyperlink.OSC8(url, styledText)
 }
 
 // isControlRune reports whether r is a C0 or C1 control character (the
