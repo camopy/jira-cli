@@ -131,6 +131,8 @@ var operationVerbs = map[string]OperationVerb{
 	"search.count":              {"counting", "counted", "count", "issues"},
 	"search.jql":                {"searching", "searched", "search", "issues"},
 	"search.saved":              {"searching", "searched", "search", "issues"},
+	"update":                    {"updating", "updated", "update", "jira-cli"},
+	"update.check":              {"checking", "checked", "check", "for updates"},
 	"user.resolve":              {"resolving", "resolved", "resolve", "user"},
 	"worklog.add":               {"adding", "added", "add", "worklog"},
 	"worklog.list":              {"listing", "listed", "list", "worklogs"},

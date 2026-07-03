@@ -13,6 +13,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli/me"
 	"github.com/matcra587/jira-cli/internal/cli/search"
 	"github.com/matcra587/jira-cli/internal/cli/tui"
+	"github.com/matcra587/jira-cli/internal/cli/update"
 	"github.com/matcra587/jira-cli/internal/cli/version"
 	"github.com/matcra587/jira-cli/internal/cli/worklog"
 	"github.com/spf13/cobra"
@@ -25,6 +26,7 @@ func registerCommands(root *cobra.Command) {
 		cache.NewCommand(),
 		me.NewCommand(),
 		version.NewCommand(),
+		update.NewCommand(),
 		auth.NewCommand(),
 		issue.NewCommand(),
 		issue.NewOpenCommand(),

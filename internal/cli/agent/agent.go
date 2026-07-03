@@ -54,6 +54,7 @@ var workflowOrder = []string{
 	"clone_issue",
 	"move_issue",
 	"delete_issue",
+	"self_update",
 	"adf_reference",
 	"jql_reference",
 }

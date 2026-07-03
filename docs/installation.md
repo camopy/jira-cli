@@ -230,6 +230,12 @@ handle this for you; the one-line installer prints a PATH-fix hint; for
 
 ## Update jira
 
+`jira update` detects how the binary was installed and either updates it
+directly (Homebrew, release-archive installs) or prints the installer command
+to run (Scoop, mise, `go install`). `jira update --dry-run` reports the
+installed and latest versions without changing anything. The equivalent
+per-channel commands:
+
 === "Homebrew"
 
     ```sh
