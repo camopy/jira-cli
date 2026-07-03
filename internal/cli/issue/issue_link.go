@@ -13,11 +13,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/spf13/cobra"
 
+	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli"
 	cachereg "github.com/matcra587/jira-cli/internal/cli/cache/registry"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
@@ -31,7 +33,7 @@ import (
 // the top level (cobra's `RunE`) so today's invocation keeps working
 // alongside the new `link list/delete/types` sub-commands.
 func issueLinkSubCommand() *cobra.Command {
-	var to, linkType string
+	var to, linkType, jsonInput string
 	var dryRun bool
 	var parallelism int
 	cmd := &cobra.Command{
@@ -43,6 +45,9 @@ func issueLinkSubCommand() *cobra.Command {
 			"For create, `KEY` is the inward issue and `--to` is the outward issue. Link " +
 			"type semantics come from Jira, so confirm the configured type names with " +
 			"`jira issue link types` when direction matters.\n\n" +
+			"`--json-input` accepts the native POST /rest/api/3/issueLink body — `type`, " +
+			"`inwardIssue`, `outwardIssue`, and an optional `comment` — so an API-shaped " +
+			"payload needs no translation to flags.\n\n" +
 			"`--dry-run` previews create requests without contacting Jira. Link deletes " +
 			"are force-gated in headless, agent, and `--no-input` mode.",
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
@@ -53,31 +58,37 @@ $ jira issue link PROJ-123 --to PROJ-456 --type Blocks
 # Run 'jira issue link types' for the link types your site allows
 $ jira issue link PROJ-123 --to PROJ-456 --type Relates
 
+# Create a link from a native Jira REST body
+$ jira issue link --json-input link.json
+
 # Preview a link creation without contacting Jira
 $ jira issue link PROJ-123 --to PROJ-456 --type Blocks --dry-run`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
+			if len(args) == 0 && jsonInput == "" {
 				return cmd.Help()
 			}
-			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+			var in issueLinkCreateInput
+			var keys []string
+			var err error
+			if jsonInput != "" {
+				in, keys, err = issueLinkInputFromJSON(jsonInput, args)
+			} else {
+				keys, err = issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+				if err == nil && (to == "" || linkType == "") {
+					err = fmt.Errorf("validation: --to and --type are required (or supply the native body via --json-input)")
+				}
+				in = issueLinkCreateInput{To: to, Type: linkType}
+			}
 			if err != nil {
 				return err
 			}
-			if to == "" || linkType == "" {
-				return fmt.Errorf("validation: --to and --type are required")
-			}
+			in.DryRun = dryRun
+			in.Command = "issue.link"
 			if len(keys) > 1 {
-				return runIssueLinkCreateMany(cmd, keys, parallelism, issueLinkCreateInput{
-					To:      to,
-					Type:    linkType,
-					DryRun:  dryRun,
-					Command: "issue.link",
-				})
+				return runIssueLinkCreateMany(cmd, keys, parallelism, in)
 			}
 			if dryRun {
-				return cmdutil.WriteEnvelope(cmd, "issue.link", map[string]any{
-					"inward_issue": keys[0], "outward_issue": to, "type": linkType, "dry_run": true,
-				})
+				return cmdutil.WriteEnvelope(cmd, "issue.link", issueLinkCreateData(keys[0], in, true))
 			}
 			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
@@ -89,27 +100,27 @@ $ jira issue link PROJ-123 --to PROJ-456 --type Blocks --dry-run`,
 			var resp *jira.Response
 			if err := cmdutil.Spin(cmd, "issue.link", func(ctx context.Context) error {
 				var e error
-				resp, e = cmdutil.ServicesForClient(client).IssueLink().Create(ctx, &jira.IssueLinkRequest{
-					Type: linkType, InwardIssue: keys[0], OutwardIssue: to,
-				})
+				resp, e = cmdutil.ServicesForClient(client).IssueLink().Create(ctx, issueLinkRequestFor(keys[0], in))
 				return e
 			}); err != nil {
 				return err
 			}
-			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.link", map[string]any{
-				"inward_issue": keys[0], "outward_issue": to, "type": linkType, "dry_run": false,
-			}, resp)
+			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.link", issueLinkCreateData(keys[0], in, false), resp)
 		},
 	}
 	cmdutil.AddStringVar(cmd.Flags(), &to, "to", "", "Outward issue key", clib.FlagExtra{Group: "Link", Placeholder: "KEY", Complete: "predictor=issuekey"})
 	// --type completion driven by the cachelinktype predictor.
 	// Cache primer: `jira cache linktypes`.
 	cmdutil.AddStringVar(cmd.Flags(), &linkType, "type", "", "Link type name (Blocks, Relates, Cloners, …)", clib.FlagExtra{Group: "Link", Placeholder: "NAME", Complete: "predictor=cachelinktype"})
+	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read the native issueLink create body from a JSON file (type, inwardIssue, outwardIssue, comment)", "Input", "FILE")
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview without creating the link")
 	// A link needs both endpoints: passing one of --to / --type without
 	// the other is always a syntax error. Declared as Cobra metadata so
-	// the half-specified link is rejected before RunE.
+	// the half-specified link is rejected before RunE. The native body
+	// carries its own endpoints, so it excludes both flags.
 	cmd.MarkFlagsRequiredTogether("to", "type")
+	cmd.MarkFlagsMutuallyExclusive("json-input", "to")
+	cmd.MarkFlagsMutuallyExclusive("json-input", "type")
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 
 	cmd.AddCommand(issueLinkListCommand())
@@ -119,10 +130,114 @@ $ jira issue link PROJ-123 --to PROJ-456 --type Blocks --dry-run`,
 }
 
 type issueLinkCreateInput struct {
-	To      string
-	Type    string
+	To   string
+	Type string
+	// TypeID addresses the link type by id when the native body uses
+	// {"type": {"id": ...}} instead of a name.
+	TypeID string
+	// Comment is the native REST comment block (ADF body already
+	// validated), forwarded verbatim with the link.
+	Comment map[string]any
 	Command string
 	DryRun  bool
+}
+
+// issueLinkRequestFor builds the wire request for one inward issue key.
+func issueLinkRequestFor(key string, in issueLinkCreateInput) *jira.IssueLinkRequest {
+	return &jira.IssueLinkRequest{
+		Type:         in.Type,
+		TypeID:       in.TypeID,
+		InwardIssue:  key,
+		OutwardIssue: in.To,
+		Comment:      in.Comment,
+	}
+}
+
+// issueLinkInputFromJSON parses the native POST /rest/api/3/issueLink body.
+// The payload may carry its own inwardIssue.key; a positional KEY is also
+// accepted, and setting both to different values is a conflict — the CLI
+// cannot know which one was meant. With no inwardIssue in the body, each
+// positional key becomes the inward issue, so the body acts as a template
+// for bulk linking.
+func issueLinkInputFromJSON(jsonInput string, args []string) (issueLinkCreateInput, []string, error) {
+	var in issueLinkCreateInput
+	payload := map[string]any{}
+	if err := cmdutil.ReadJSONFile(jsonInput, &payload); err != nil {
+		return in, nil, err
+	}
+	// A typo'd top-level key would otherwise vanish silently — the body
+	// has exactly four sections, so anything else is refused loudly.
+	for k := range payload {
+		switch k {
+		case "type", "inwardIssue", "outwardIssue", "comment":
+		default:
+			return in, nil, fmt.Errorf("validation: issue link --json-input does not recognize %q; the native body carries type, inwardIssue, outwardIssue, and comment", k)
+		}
+	}
+	switch v := payload["type"].(type) {
+	case string:
+		in.Type = strings.TrimSpace(v)
+	case map[string]any:
+		if name, ok := v["name"].(string); ok {
+			in.Type = strings.TrimSpace(name)
+		}
+		if id, ok := v["id"].(string); ok {
+			in.TypeID = strings.TrimSpace(id)
+		}
+	}
+	if in.Type == "" && in.TypeID == "" {
+		return in, nil, fmt.Errorf("validation: issue link --json-input needs a type name or id, matching the Jira REST issueLink body")
+	}
+	in.To = issueLinkEndpointKey(payload["outwardIssue"])
+	if in.To == "" {
+		return in, nil, fmt.Errorf("validation: issue link --json-input needs an outwardIssue key, matching the Jira REST issueLink body")
+	}
+	if raw, ok := payload["comment"]; ok {
+		comment, isMap := raw.(map[string]any)
+		if !isMap {
+			return in, nil, fmt.Errorf("validation: issue link --json-input comment must be an object with an ADF body")
+		}
+		// The comment body is rich text: parse it as ADF now so a
+		// malformed document fails locally instead of as an opaque 400.
+		if bodyRaw, hasBody := comment["body"]; hasBody {
+			encoded, merr := json.Marshal(bodyRaw)
+			if merr != nil {
+				return in, nil, merr
+			}
+			if _, _, perr := adf.Parse(encoded); perr != nil {
+				return in, nil, fmt.Errorf("issue link --json-input comment body: %w", perr)
+			}
+		}
+		in.Comment = comment
+	}
+	inward := issueLinkEndpointKey(payload["inwardIssue"])
+	keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+	if err != nil {
+		return in, nil, err
+	}
+	switch {
+	case inward == "" && len(keys) == 0:
+		return in, nil, fmt.Errorf("validation: issue link needs an inward issue — pass a KEY argument or an inwardIssue key in the payload")
+	case inward != "" && len(keys) > 0 && (len(keys) != 1 || !strings.EqualFold(keys[0], inward)):
+		return in, nil, fmt.Errorf("validation: the inward issue is set twice — issue keys on the command line and inwardIssue %s in the payload; supply it once or align the values", inward)
+	case len(keys) == 0:
+		keys = []string{inward}
+	}
+	return in, keys, nil
+}
+
+// issueLinkEndpointKey reads a native link endpoint: {"key": "PROJ-1"} or a
+// bare issue-key string.
+func issueLinkEndpointKey(raw any) string {
+	switch v := raw.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case map[string]any:
+		if key, ok := v["key"].(string); ok {
+			return strings.TrimSpace(key)
+		}
+	}
+	return ""
 }
 
 func runIssueLinkCreateMany(cmd *cobra.Command, keys []string, parallelism int, in issueLinkCreateInput) error {
@@ -142,11 +257,7 @@ func runIssueLinkCreateMany(cmd *cobra.Command, keys []string, parallelism int, 
 	}
 	service := cmdutil.ServicesForClient(client).IssueLink()
 	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
-		if _, err := service.Create(ctx, &jira.IssueLinkRequest{
-			Type:         in.Type,
-			InwardIssue:  key,
-			OutwardIssue: in.To,
-		}); err != nil {
+		if _, err := service.Create(ctx, issueLinkRequestFor(key, in)); err != nil {
 			return nil, err
 		}
 		return issueLinkCreateData(key, in, false), nil
@@ -158,12 +269,19 @@ func runIssueLinkCreateMany(cmd *cobra.Command, keys []string, parallelism int, 
 }
 
 func issueLinkCreateData(key string, in issueLinkCreateInput, dryRun bool) map[string]any {
-	return map[string]any{
+	data := map[string]any{
 		"inward_issue":  key,
 		"outward_issue": in.To,
 		"type":          in.Type,
 		"dry_run":       dryRun,
 	}
+	if in.TypeID != "" {
+		data["type_id"] = in.TypeID
+	}
+	if len(in.Comment) > 0 {
+		data["comment"] = in.Comment
+	}
+	return data
 }
 
 // issueLinkListCommand wires `jira issue link list KEY`.

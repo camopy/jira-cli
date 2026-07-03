@@ -60,15 +60,10 @@ func (s *issueLinkService) List(ctx context.Context, key string) ([]IssueLinkVie
 }
 
 func (s *issueLinkService) Create(ctx context.Context, reqBody *IssueLinkRequest) (*Response, error) {
-	if reqBody == nil || reqBody.Type == "" || reqBody.InwardIssue == "" || reqBody.OutwardIssue == "" {
+	if reqBody == nil || (reqBody.Type == "" && reqBody.TypeID == "") || reqBody.InwardIssue == "" || reqBody.OutwardIssue == "" {
 		return nil, errors.New("issue link create: type, inwardIssue, and outwardIssue are required")
 	}
-	body := map[string]any{
-		"type":         map[string]string{"name": reqBody.Type},
-		"inwardIssue":  map[string]string{"key": reqBody.InwardIssue},
-		"outwardIssue": map[string]string{"key": reqBody.OutwardIssue},
-	}
-	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issueLink"), body)
+	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issueLink"), reqBody.payload())
 	if err != nil {
 		return nil, err
 	}

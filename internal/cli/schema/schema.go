@@ -455,9 +455,31 @@ func inputSchemas() map[string]any {
 		},
 		"issue.edit": map[string]any{
 			"type":        "object",
-			"description": "issue edit --json-input payload. {\"fields\": {...}} is canonical; bare field keys at the top level are accepted as the field set. ADF-shaped values inside fields (e.g. fields.description) are validated as canonical ADF documents.",
+			"description": "issue edit --json-input payload. {\"fields\": {...}} is canonical; bare field keys at the top level are accepted as the field set. ADF-shaped values inside fields (e.g. fields.description) are validated as canonical ADF documents. A top-level update block — the native PUT /rest/api/3/issue body's sibling section of add/set/remove operations — is forwarded verbatim; Jira validates the operation verbs.",
 			"properties": map[string]any{
 				"fields": map[string]any{"type": "object"},
+				"update": map[string]any{"type": "object", "description": "Native REST add/set/remove operation block, sent as a sibling of fields."},
+			},
+		},
+		"issue.transition": map[string]any{
+			"type":        "object",
+			"description": "issue transition --json-input payload. Accepts the exact POST /rest/api/3/issue/{key}/transitions body: a transition section naming the target ({\"id\": ...} or {\"name\": ...}), a fields object, and an update operation block — plus the convenience comment key (an ADF document posted atomically with the status change). The target may come from the payload or the command line; setting both to different values is an error.",
+			"properties": map[string]any{
+				"transition": map[string]any{"type": "object", "description": "Target transition by id or name; equivalent to the positional STATUS."},
+				"fields":     map[string]any{"type": "object"},
+				"update":     map[string]any{"type": "object", "description": "Native REST operation block, forwarded verbatim; mutually exclusive with the comment key when it carries comment operations."},
+				"comment":    map[string]any{"$ref": "#/data/input_schemas/adf_document"},
+			},
+		},
+		"issue.link": map[string]any{
+			"type":        "object",
+			"description": "issue link --json-input payload: the exact POST /rest/api/3/issueLink body. inwardIssue may come from the payload or the positional KEY; setting both to different values is an error. The optional comment block's ADF body is validated before submission.",
+			"required":    []string{"type", "outwardIssue"},
+			"properties": map[string]any{
+				"type":         map[string]any{"type": "object", "description": "Link type by name or id: {\"name\": \"Blocks\"} or {\"id\": \"10003\"}."},
+				"inwardIssue":  map[string]any{"type": "object", "description": "{\"key\": ...}; optional when the KEY argument supplies it."},
+				"outwardIssue": map[string]any{"type": "object", "description": "{\"key\": ...}."},
+				"comment":      map[string]any{"type": "object", "description": "Native comment block; its body is a canonical ADF document."},
 			},
 		},
 		"issue.comment": map[string]any{

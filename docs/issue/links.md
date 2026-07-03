@@ -31,6 +31,21 @@ jira issue link PROJ-123 --to PROJ-456 --type Blocks --dry-run
 1.  A key range or list links every issue to the same `--to` target; `-p` /
    `--parallelism` fans the writes out (default `1`, max `16`).
 
+`--json-input` accepts the exact `POST /rest/api/3/issueLink` body — `type` by
+name or id, `inwardIssue`, `outwardIssue`, and an optional `comment` block, the
+only path to a link comment. The inward issue may come from the payload or the
+positional `KEY`; setting both to different values is refused, and a body
+without `inwardIssue` acts as a template applied to every positional key.
+
+```json
+{
+  "type": { "name": "Blocks" },
+  "inwardIssue": { "key": "PROJ-123" },
+  "outwardIssue": { "key": "PROJ-456" },
+  "comment": { "body": { "type": "doc", "version": 1, "content": [] } }
+}
+```
+
 Human output confirms the relationship that was recorded:
 
 ```text

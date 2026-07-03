@@ -108,6 +108,15 @@ The `--json-input` file wraps the fields:
 { "fields": { "description_markdown": "## Steps\n\n1. Repro\n2. Fix" } }
 ```
 
+The payload may also be the exact `PUT /rest/api/3/issue/{key}` body, including
+a top-level `update` block of add/set/remove operations as a sibling of
+`fields`. The block is forwarded verbatim — Jira validates the operation verbs —
+and appears in the envelope as `data.update`:
+
+```json
+{ "update": { "labels": [{ "add": "triage" }] } }
+```
+
 A live edit returns `data.fields` (the validated submission), `data.result`
 (Jira's response, usually empty on a 204), and `dry_run: false`. A `--dry-run`
 returns the same `data.fields` with `dry_run: true` and no `result` — the call

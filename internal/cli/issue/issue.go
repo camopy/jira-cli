@@ -8,6 +8,7 @@ import (
 	"net/mail"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 
 	"charm.land/huh/v2"
@@ -885,6 +886,12 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 				DryRun:           dryRun,
 				NamedADFDocs:     namedADF,
 				MarkdownWarnings: descMarkdownWarnings,
+				// The identity wire fields are structural: Jira accepts
+				// project / issuetype on every create regardless of screen
+				// configuration, but createmeta does not list them on every
+				// tenant. A native REST body must never lose its identity
+				// keys to screen validation.
+				ScreenValidationExemptFields: map[string]bool{"project": true, "issuetype": true},
 			}
 			if client != nil && !cmdutil.ReadOnlyEnabled(cmd) {
 				// Skip the schema fetch in read-only mode: the client
@@ -1197,6 +1204,15 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 					return err
 				}
 			}
+			// A native REST edit body carries its add/set/remove operations
+			// in a top-level `update` block, a sibling of `fields`. Pull it
+			// out BEFORE the field-set normalization would fold it into the
+			// fields map, and forward it verbatim — Jira validates the
+			// operation verbs server-side.
+			updateSection, uerr := popUpdateSection(payload)
+			if uerr != nil {
+				return uerr
+			}
 			// Accept the Jira-native {"fields": {...}} shape (canonical) or
 			// bare field keys at the top level — one payload contract across
 			// create and edit.
@@ -1262,7 +1278,7 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 			// --no-input, an agent harness, or a piped/redirected stdin — but
 			// stays false for `jira issue edit KEY | tee out.json`, which pipes
 			// stdout yet keeps an interactive stdin, so that editor still opens.
-			if len(fields) == 0 {
+			if len(fields) == 0 && len(updateSection) == 0 {
 				if noInput {
 					return fmt.Errorf("validation: the issue edit editor needs an interactive terminal; in a non-interactive context, provide --summary, --assignee, --markdown, or --json-input")
 				}
@@ -1297,6 +1313,7 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 			if len(keys) > 1 {
 				return runIssueEditMany(cmd, keys, parallelism, issueEditManyInput{
 					Fields:           fields,
+					Update:           updateSection,
 					NamedADFDocs:     namedADF,
 					DryRun:           dryRun,
 					DescriptionDoc:   descriptionDoc,
@@ -1363,23 +1380,31 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 				)
 				if err := cmdutil.Spin(cmd, "issue.edit", func(ctx context.Context) error {
 					var e error
-					issue, resp, e = cmdutil.ServicesForClient(editClient).Issue().Update(ctx, keys[0], &jira.IssueUpdateRequest{Fields: submitFields})
+					issue, resp, e = cmdutil.ServicesForClient(editClient).Issue().Update(ctx, keys[0], &jira.IssueUpdateRequest{Fields: submitFields, Update: updateSection})
 					return e
 				}); err != nil {
 					return err
 				}
-				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.edit", map[string]any{
+				data := map[string]any{
 					"issue":   keys[0],
 					"result":  issue,
 					"dry_run": false,
 					"fields":  submitFields,
-				}, resp, pipeOut.Warnings)
+				}
+				if len(updateSection) > 0 {
+					data["update"] = updateSection
+				}
+				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.edit", data, resp, pipeOut.Warnings)
 			}
-			return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.edit", map[string]any{
+			data := map[string]any{
 				"issue":   keys[0],
 				"dry_run": true,
 				"fields":  submitFields,
-			}, pipeOut.Warnings)
+			}
+			if len(updateSection) > 0 {
+				data["update"] = updateSection
+			}
+			return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.edit", data, pipeOut.Warnings)
 		},
 	}
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
@@ -1392,7 +1417,10 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 }
 
 type issueEditManyInput struct {
-	Fields       map[string]any
+	Fields map[string]any
+	// Update is the native REST add/set/remove operation block, applied
+	// identically to every key alongside the fields.
+	Update       map[string]any
 	NamedADFDocs map[string]adf.Document
 	DryRun       bool
 	// DescriptionDoc is the primary ADF document (from
@@ -1457,13 +1485,16 @@ func runIssueEditMany(cmd *cobra.Command, keys []string, parallelism int, in iss
 			"dry_run": in.DryRun,
 			"fields":  submitFields,
 		}
+		if len(in.Update) > 0 {
+			data["update"] = in.Update
+		}
 		if len(pipeOut.Warnings) > 0 {
 			data["warnings"] = pipeOut.Warnings
 		}
 		if in.DryRun {
 			return data, nil
 		}
-		issue, _, err := service.Update(ctx, key, &jira.IssueUpdateRequest{Fields: submitFields})
+		issue, _, err := service.Update(ctx, key, &jira.IssueUpdateRequest{Fields: submitFields, Update: in.Update})
 		if err != nil {
 			return nil, err
 		}
@@ -1602,13 +1633,20 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 			if len(keys) == 0 {
 				return fmt.Errorf("validation: issue transition requires an issue key")
 			}
+			payload, perr := resolveTransitionPayload(jsonInput, markdownInput, markdownFile)
+			if perr != nil {
+				return perr
+			}
+			// A native REST body may name its own target in the payload's
+			// transition section; reconcile it with the CLI target before
+			// any branch reads it.
+			target, err = mergeTransitionTarget(target, payload.target)
+			if err != nil {
+				return err
+			}
 			if len(keys) > 1 {
 				if target != "" {
-					bulkPayload, bperr := resolveTransitionPayload(jsonInput, markdownInput, markdownFile)
-					if bperr != nil {
-						return bperr
-					}
-					return runIssueTransitionMany(cmd, keys, parallelism, target, dryRun, bulkPayload)
+					return runIssueTransitionMany(cmd, keys, parallelism, target, dryRun, payload)
 				}
 				client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 				if err != nil {
@@ -1630,10 +1668,6 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 				})
 			}
 			key := keys[0]
-			payload, perr := resolveTransitionPayload(jsonInput, markdownInput, markdownFile)
-			if perr != nil {
-				return perr
-			}
 			if !payload.empty() && target == "" {
 				return fmt.Errorf("validation: a transition payload needs a target status — fields and comments are applied atomically with the status change")
 			}
@@ -1668,6 +1702,9 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 				}
 				if comment != nil {
 					data["comment"] = *comment
+				}
+				if len(payload.update) > 0 {
+					data["update"] = payload.update
 				}
 				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", data, pipeOut.Warnings)
 			}
@@ -1710,7 +1747,7 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 				if e != nil {
 					return e
 				}
-				resp, e = service.Transition(ctx, key, &jira.TransitionRequest{ID: id, Fields: submitFields, Comment: comment})
+				resp, e = service.Transition(ctx, key, &jira.TransitionRequest{ID: id, Fields: submitFields, Comment: comment, Update: payload.update})
 				return e
 			}); err != nil {
 				return err
@@ -1727,19 +1764,30 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 }
 
 // transitionPayload carries the optional field updates and comment a
-// transition submits atomically with the status change.
+// transition submits atomically with the status change, plus the target
+// and update block a native REST transition body may name itself.
 type transitionPayload struct {
-	fields   map[string]any
-	comment  *adf.Document
+	fields  map[string]any
+	comment *adf.Document
+	// update is the native REST update block, forwarded verbatim.
+	update map[string]any
+	// target is the transition named by the payload's own `transition`
+	// section (an id or a name); reconciled with the CLI target.
+	target   string
 	warnings []adf.Warning
 }
 
-func (p transitionPayload) empty() bool { return len(p.fields) == 0 && p.comment == nil }
+func (p transitionPayload) empty() bool {
+	return len(p.fields) == 0 && p.comment == nil && len(p.update) == 0
+}
 
 // resolveTransitionPayload builds the transition payload from --markdown /
-// --markdown-file (the comment) and --json-input (fields in either payload
-// shape, plus an optional ADF `comment` key). The flag mutexes guarantee at
-// most one comment source.
+// --markdown-file (the comment) and --json-input. The JSON path accepts the
+// exact POST /rest/api/3/issue/{key}/transitions body — `transition`,
+// `fields`, and `update` — as well as the flat field shape and the ADF
+// `comment` convenience key. The flag mutexes guarantee at most one comment
+// source between the flags; a payload that carries both an update.comment
+// operation and a comment is refused below for the same reason.
 func resolveTransitionPayload(jsonInput, markdown, markdownFile string) (transitionPayload, error) {
 	var p transitionPayload
 	md, err := cmdutil.ResolveMarkdownInput(markdown, markdownFile)
@@ -1761,6 +1809,25 @@ func resolveTransitionPayload(jsonInput, markdown, markdownFile string) (transit
 	if err := cmdutil.ReadJSONFile(jsonInput, &payload); err != nil {
 		return p, err
 	}
+	// The native sections are siblings of `fields` and must come out
+	// BEFORE the field-set normalization would fold them into the field
+	// map as bogus issue fields.
+	if raw, ok := payload["transition"]; ok {
+		delete(payload, "transition")
+		target, terr := transitionTargetFromPayload(raw)
+		if terr != nil {
+			return p, terr
+		}
+		p.target = target
+	}
+	if raw, ok := payload["update"]; ok {
+		delete(payload, "update")
+		section, isMap := raw.(map[string]any)
+		if !isMap {
+			return p, fmt.Errorf("validation: transition --json-input update must be an object of field operations, matching the Jira REST update section")
+		}
+		p.update = section
+	}
 	if raw, ok := payload["comment"]; ok {
 		delete(payload, "comment")
 		encoded, merr := json.Marshal(raw)
@@ -1773,10 +1840,69 @@ func resolveTransitionPayload(jsonInput, markdown, markdownFile string) (transit
 		}
 		p.comment = &doc
 	}
+	if _, hasUpdateComment := p.update["comment"]; hasUpdateComment && p.comment != nil {
+		return p, fmt.Errorf("validation: the transition comment is set twice — as an update.comment operation and as a comment input; supply it once")
+	}
 	if fields := pipeline.FieldsFromPayload(payload); len(fields) > 0 {
 		p.fields = fields
 	}
 	return p, nil
+}
+
+// transitionTargetFromPayload reads a native REST `transition` section:
+// {"id": "31"}, {"name": "Done"}, or a bare string. A numeric JSON id is
+// accepted too — agents copying API examples write both spellings.
+func transitionTargetFromPayload(raw any) (string, error) {
+	switch v := raw.(type) {
+	case string:
+		if s := strings.TrimSpace(v); s != "" {
+			return s, nil
+		}
+	case map[string]any:
+		switch id := v["id"].(type) {
+		case string:
+			if s := strings.TrimSpace(id); s != "" {
+				return s, nil
+			}
+		case float64:
+			return strconv.FormatInt(int64(id), 10), nil
+		}
+		if name, ok := v["name"].(string); ok && strings.TrimSpace(name) != "" {
+			return strings.TrimSpace(name), nil
+		}
+	}
+	return "", fmt.Errorf("validation: transition --json-input transition must carry an id or a name, matching the Jira REST transition section")
+}
+
+// mergeTransitionTarget reconciles the CLI target (positional STATUS or
+// --transition) with a native payload's transition section. Either spot may
+// name the target and agreement is not a conflict; two different values are —
+// the CLI cannot know which one was meant.
+func mergeTransitionTarget(flagTarget, payloadTarget string) (string, error) {
+	switch {
+	case payloadTarget == "":
+		return flagTarget, nil
+	case flagTarget == "" || strings.EqualFold(flagTarget, payloadTarget):
+		return payloadTarget, nil
+	}
+	return "", fmt.Errorf("validation: the transition target is set twice — %q on the command line and %q in the payload's transition section; supply it once or align the values", flagTarget, payloadTarget)
+}
+
+// popUpdateSection removes a native REST `update` block (add / set / remove
+// operations) from a --json-input payload before the field-set normalization
+// would fold it into the fields map. The block is forwarded verbatim as a
+// sibling of fields; Jira validates the operation verbs server-side.
+func popUpdateSection(payload map[string]any) (map[string]any, error) {
+	raw, ok := payload["update"]
+	if !ok {
+		return nil, nil
+	}
+	section, isMap := raw.(map[string]any)
+	if !isMap {
+		return nil, fmt.Errorf("validation: the update block must be an object of field operations, matching the Jira REST update section")
+	}
+	delete(payload, "update")
+	return section, nil
 }
 
 // splitTransitionTarget separates the transition target (a status name or id)
@@ -1937,6 +2063,9 @@ func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, 
 			if comment != nil {
 				value["comment"] = *comment
 			}
+			if len(payload.update) > 0 {
+				value["update"] = payload.update
+			}
 			results[i] = cmdutil.KeyResult[map[string]any]{Key: key, Value: value}
 		}
 		return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.transition", results, cmdutil.KeyedDataWithWarnings(pipeOut.Warnings))
@@ -1956,7 +2085,7 @@ func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, 
 		if err != nil {
 			return nil, err
 		}
-		if _, err := service.Transition(ctx, key, &jira.TransitionRequest{ID: id, Fields: submitFields, Comment: comment}); err != nil {
+		if _, err := service.Transition(ctx, key, &jira.TransitionRequest{ID: id, Fields: submitFields, Comment: comment, Update: payload.update}); err != nil {
 			return nil, err
 		}
 		return map[string]any{

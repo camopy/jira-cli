@@ -47,6 +47,21 @@ jira issue transition PROJ-123 Done --markdown "released in v1.2.3"
 jira issue transition PROJ-1..PROJ-5 Done -p 4 --markdown "released in v1.2.3"
 ```
 
+`--json-input` also accepts the exact `POST /rest/api/3/issue/{key}/transitions`
+body: a `transition` section naming the target by id or name, a `fields` object,
+and an `update` operation block forwarded verbatim. When the payload names its
+own target, no positional status is needed; naming it in both places with
+different values is refused, as is a payload carrying both `update.comment`
+operations and a `comment` key.
+
+```json
+{
+  "transition": { "id": "31" },
+  "fields": { "resolution": { "name": "Done" } },
+  "update": { "labels": [{ "add": "released" }] }
+}
+```
+
 The no-target form is a read; its `data` is the available-transition list (the
 shape an agent picks an id from). `meta.command` is `issue.transitions` (plural)
 for the list and `issue.transition` (singular) for an executed move:

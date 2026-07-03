@@ -13,6 +13,7 @@ When: two issues need a typed relationship (blocks, relates, is-blocked-by, etc.
 
 # subcommand
 - Create: `jira issue link KEY... --to OTHER --type <Name>` (with optional `--dry-run`).
+- Create from a native REST body: `jira issue link --json-input link.json` accepts the exact `POST /rest/api/3/issueLink` body — `type` (name or id), `inwardIssue`, `outwardIssue`, and an optional `comment` block (the only path to a link comment; no flag expresses it). `inwardIssue` may come from the payload or the positional KEY; different values in both places are refused, and a body without `inwardIssue` acts as a template for bulk linking across positional keys.
 - List existing links on an issue: `jira issue link list KEY`.
 - List links for several issues/ranges: `jira issue link list KEY... -p N`; multi-key output uses `data.results[]`.
 - Delete by link id: `jira issue link delete KEY <link-id> --force`.
@@ -27,6 +28,7 @@ When: two issues need a typed relationship (blocks, relates, is-blocked-by, etc.
 - Bulk create blocker: `jira issue link <PROJECT_KEY>-1..10 -p 4 --to <BLOCKER_ISSUE_KEY> --type Blocks --output=json`
 - Create undirected: `jira issue link <BLOCKED_ISSUE_KEY> --to <BLOCKER_ISSUE_KEY> --type Relates --output=json`
 - Preview: `jira issue link <BLOCKED_ISSUE_KEY> --to <BLOCKER_ISSUE_KEY> --type Blocks --dry-run --output=json`
+- Native body with a comment: `jira issue link --json-input link.json --output=json` where link.json is `{"type": {"name": "Blocks"}, "inwardIssue": {"key": "<BLOCKED>"}, "outwardIssue": {"key": "<BLOCKER>"}, "comment": {"body": <adf_document>}}`
 - List on issue: `jira issue link list KEY --output=json`
 - Multi-key list: `jira issue link list <PROJECT_KEY>-1..10 -p 4 --output=json`
 - Delete: `jira issue link delete KEY 9001 --force --output=json`

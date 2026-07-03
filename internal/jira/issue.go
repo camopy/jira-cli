@@ -52,9 +52,32 @@ type IssueDeleteOptions struct {
 // InwardIssue and OutwardIssue are issue keys; semantics depend on the
 // type ("Blocks" → outwardIssue is blocked by inwardIssue).
 type IssueLinkRequest struct {
-	Type         string
+	Type string
+	// TypeID addresses the link type by id instead of name; when both
+	// are set the id wins, matching Jira's own precedence.
+	TypeID       string
 	InwardIssue  string
 	OutwardIssue string
+	// Comment, when non-empty, is the native REST comment block posted
+	// with the link. The CLI validates its ADF body before it gets
+	// here; the wire forwards it verbatim.
+	Comment map[string]any
+}
+
+func (r *IssueLinkRequest) payload() map[string]any {
+	linkType := map[string]string{"name": r.Type}
+	if r.TypeID != "" {
+		linkType = map[string]string{"id": r.TypeID}
+	}
+	body := map[string]any{
+		"type":         linkType,
+		"inwardIssue":  map[string]string{"key": r.InwardIssue},
+		"outwardIssue": map[string]string{"key": r.OutwardIssue},
+	}
+	if len(r.Comment) > 0 {
+		body["comment"] = cloneJSONMap(r.Comment)
+	}
+	return body
 }
 
 // RemoteLinkRequest creates a "web link" via
@@ -130,6 +153,10 @@ func (r *IssueCreateRequest) payload() map[string]any {
 
 type IssueUpdateRequest struct {
 	Fields map[string]any `json:"fields"`
+	// Update, when non-empty, is the native REST update block of
+	// add/set/remove operations, sent as a sibling of fields. Jira
+	// validates the operation verbs server-side.
+	Update map[string]any `json:"update,omitempty"`
 	DryRun bool           `json:"-"`
 }
 
@@ -137,7 +164,11 @@ func (r *IssueUpdateRequest) payload() map[string]any {
 	if r == nil {
 		return map[string]any{"fields": map[string]any{}}
 	}
-	return map[string]any{"fields": cloneJSONMap(r.Fields)}
+	body := map[string]any{"fields": cloneJSONMap(r.Fields)}
+	if len(r.Update) > 0 {
+		body["update"] = cloneJSONMap(r.Update)
+	}
+	return body
 }
 
 type IssueCloneRequest struct {
@@ -163,7 +194,12 @@ type TransitionRequest struct {
 	// Comment, when non-nil, is posted atomically with the status change
 	// via the transition body's update block.
 	Comment *adf.Document
-	DryRun  bool
+	// Update, when non-empty, is a native REST update block forwarded
+	// verbatim into the transition body. The CLI refuses a payload that
+	// sets both Update's comment operations and Comment, so the two
+	// never collide here.
+	Update map[string]any
+	DryRun bool
 }
 
 type CommentAddRequest struct {
@@ -268,10 +304,15 @@ func (s *issueService) Transition(ctx context.Context, key string, reqBody *Tran
 	if len(reqBody.Fields) > 0 {
 		payload["fields"] = cloneJSONMap(reqBody.Fields)
 	}
+	update := map[string]any{}
+	if len(reqBody.Update) > 0 {
+		update = cloneJSONMap(reqBody.Update)
+	}
 	if reqBody.Comment != nil {
-		payload["update"] = map[string]any{
-			"comment": []map[string]any{{"add": map[string]any{"body": *reqBody.Comment}}},
-		}
+		update["comment"] = []map[string]any{{"add": map[string]any{"body": *reqBody.Comment}}}
+	}
+	if len(update) > 0 {
+		payload["update"] = update
 	}
 	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issue", key, "transitions"), payload)
 	if err != nil {
@@ -299,15 +340,10 @@ func (s *issueService) Delete(ctx context.Context, key string, opts *IssueDelete
 // bulk-edit endpoint refuses `issuelinks` updates; this is the
 // canonical path.
 func (s *issueService) Link(ctx context.Context, reqBody *IssueLinkRequest) (*Response, error) {
-	if reqBody == nil || reqBody.Type == "" || reqBody.InwardIssue == "" || reqBody.OutwardIssue == "" {
+	if reqBody == nil || (reqBody.Type == "" && reqBody.TypeID == "") || reqBody.InwardIssue == "" || reqBody.OutwardIssue == "" {
 		return nil, errors.New("Link: type, inwardIssue, and outwardIssue are required")
 	}
-	body := map[string]any{
-		"type":         map[string]string{"name": reqBody.Type},
-		"inwardIssue":  map[string]string{"key": reqBody.InwardIssue},
-		"outwardIssue": map[string]string{"key": reqBody.OutwardIssue},
-	}
-	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issueLink"), body)
+	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issueLink"), reqBody.payload())
 	if err != nil {
 		return nil, err
 	}
