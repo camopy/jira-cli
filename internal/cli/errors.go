@@ -117,6 +117,9 @@ func MapError(err error) Error {
 	if out, ok := mapCredentialError(err); ok {
 		return out
 	}
+	if out, ok := mapProfileError(err); ok {
+		return out
+	}
 	if out, ok := mapJiraAPIError(err); ok {
 		return out
 	}
@@ -222,6 +225,31 @@ func mapCredentialError(err error) (Error, bool) {
 		out.UpstreamStatus = ce.Upstream.UpstreamStatus
 	}
 	return out, true
+}
+
+// mapProfileError adapts the typed profile-resolution failures: a profile
+// that is not defined, or one defined without a base URL. Both map to the
+// contract's exit-2 not-found class with the stable profile_not_found code,
+// so an agent's typoed or unprovisioned --profile fails closed instead of
+// degrading into fabricated empty results. Recognizing them here via
+// errors.As keeps them off the substring classifier, where "is not defined"
+// carries no stable code.
+func mapProfileError(err error) (Error, bool) {
+	var notDefined config.ProfileNotDefinedError
+	if errors.As(err, &notDefined) {
+		out := NewError(ErrorTypeNotFound, notDefined.Error())
+		out.Code = "profile_not_found"
+		out.Hint = "List profiles with `jira config profile`; create one with `jira auth login --profile <name>`."
+		return out, true
+	}
+	var incomplete config.ProfileIncompleteError
+	if errors.As(err, &incomplete) {
+		out := NewError(ErrorTypeNotFound, incomplete.Error())
+		out.Code = "profile_not_found"
+		out.Hint = "Complete the profile with `jira auth login --profile <name>`; live commands need a base URL."
+		return out, true
+	}
+	return Error{}, false
 }
 
 // mapJiraAPIError adapts a *jira.APIError. Jira exposes no stable

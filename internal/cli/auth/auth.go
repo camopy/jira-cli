@@ -1001,8 +1001,22 @@ $ jira auth status --output=json`,
 			if err != nil {
 				return err
 			}
-			profiles := make([]map[string]any, 0, len(cfg.Profiles))
-			for _, profile := range cfg.Profiles {
+			// An explicit --profile scopes the report to that profile and
+			// fails closed when it does not resolve; silently reporting the
+			// default set would hide exactly the misconfiguration a
+			// preflight comes here to observe.
+			checked := cfg.Profiles
+			activeProfile := cfg.DefaultProfile
+			if name := cmdutil.RequestedProfile(cmd); name != "" {
+				requested, err := cfg.ResolveProfile(name)
+				if err != nil {
+					return err
+				}
+				checked = []config.Profile{requested}
+				activeProfile = requested.Name
+			}
+			profiles := make([]map[string]any, 0, len(checked))
+			for _, profile := range checked {
 				entry := map[string]any{"profile": profile.Name, "token_type": tokenType(profile)}
 				if profile.CloudID != "" {
 					entry["cloud_id"] = profile.CloudID
@@ -1043,7 +1057,7 @@ $ jira auth status --output=json`,
 				profiles = append(profiles, entry)
 			}
 			data := map[string]any{
-				"active_profile": cfg.DefaultProfile,
+				"active_profile": activeProfile,
 				"profiles":       profiles,
 			}
 			statusErrors := authStatusErrors(profiles)

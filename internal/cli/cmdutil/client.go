@@ -102,6 +102,21 @@ func JiraClientForCommand(cmd *cobra.Command) (*jira.Client, config.Profile, boo
 	if err != nil {
 		return nil, config.Profile{}, false, err
 	}
+	// An explicitly requested profile fails closed: a typo or an
+	// unprovisioned name must never fall through to the ok=false path,
+	// where commands degrade to empty results the caller reads as
+	// success. Only the implicit default keeps that helpful degrade
+	// (a fresh install with nothing configured).
+	if name := RequestedProfile(cmd); name != "" {
+		profile, err := cfg.ResolveProfile(name)
+		if err != nil {
+			return nil, config.Profile{}, false, err
+		}
+		if profile.BaseURL == "" && profile.CloudID == "" {
+			return nil, config.Profile{}, false, config.ProfileIncompleteError{Name: profile.Name}
+		}
+		return JiraClientForProfile(cmd, profile)
+	}
 	return JiraClientForProfile(cmd, ActiveProfile(cmd, cfg))
 }
 

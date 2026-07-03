@@ -125,6 +125,7 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 |---|---|---|
 | Exit 1 | Authentication failure | → `auth_setup` |
 | Exit 2 | Not found (issue key, attachment id, link id, profile, etc.) | Re-resolve the identifier; check `auth_setup` if the resource should exist |
+| Exit 2, `code=profile_not_found` | `--profile` names a profile that is undefined or has no base URL | `jira config profile` to list; `jira auth login --profile <name>` to create or complete it |
 | Exit 3, `code=flag_unknown` | Unrecognized flag (often a removed legacy boolean like `--json`/`--compact`/`--plain`/`--raw`) | Drop the flag; use `--output=json|compact` |
 | Exit 3, `code=flag_value_missing` | A flag that needs a value was given none | Supply the value |
 | Exit 3, `code=flag_value_invalid` | Flag value failed type or range parsing | Match the documented value set |
