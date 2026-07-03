@@ -9,7 +9,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/adf"
 )
 
-// The pinned @atlaskit/adf-schema artifact (testdata/adf-schema-v52.11.3.json)
+// The pinned @atlaskit/adf-schema artifact (testdata/adf-schema-v56.0.15.json)
 // is the ground truth the validation rules were derived from. This test
 // walks every node and mark definition in it and demands each one is (a) a
 // type the validator recognizes and (b) a row in the agent support matrix.
@@ -84,7 +84,7 @@ func normalizeSchemaDef(def string) (name string, kind adf.Kind, ok bool) {
 
 func schemaUniverse(t *testing.T) map[adf.Kind]map[string]bool {
 	t.Helper()
-	raw, err := os.ReadFile("testdata/adf-schema-v52.11.3.json")
+	raw, err := os.ReadFile("testdata/adf-schema-v56.0.15.json")
 	if err != nil {
 		t.Fatalf("read pinned schema artifact: %v", err)
 	}

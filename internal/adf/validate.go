@@ -14,7 +14,7 @@ import (
 // a structurally invalid root cannot be sent to Jira in any mode.
 //
 // Validation is registry-backed: the rules in schema_rules.go encode the
-// pinned ADF JSON schema (@atlaskit/adf-schema 52.11.3). In ModeStrict (the
+// pinned ADF JSON schema (@atlaskit/adf-schema 56.0.15). In ModeStrict (the
 // mutation-submit default) every rule violation is a fatal error naming the
 // offending field path. In ModeBestEffort every violation is a non-fatal
 // Warning and the document is forwarded as-is.

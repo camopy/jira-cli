@@ -3,7 +3,7 @@ package adf_test
 // Strict registry-backed validation tests.
 //
 // These exercise the validation rules derived from the pinned ADF JSON
-// schema (@atlaskit/adf-schema 52.11.3): required attrs, attr types,
+// schema (@atlaskit/adf-schema 56.0.15): required attrs, attr types,
 // content/nesting rules, and per-node mark rules. Strict mode rejects;
 // best-effort mode warns.
 

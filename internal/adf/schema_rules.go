@@ -1,7 +1,7 @@
 // Package adf — registry-backed strict-validation rules.
 //
 // These tables encode the structural contract of the pinned ADF JSON
-// schema (@atlaskit/adf-schema 52.11.3, draft-04). They are derived
+// schema (@atlaskit/adf-schema 56.0.15, draft-04). They are derived
 // strictly from the local JSON schema, not the Atlassian prose docs:
 // the prose docs omit nodes, omit required attrs, and list narrower
 // enums. Where the two
