@@ -149,14 +149,21 @@ func (c *mdConverter) listItemChildren(item ast.Node) []Node {
 	return out
 }
 
-// codeBlock converts an indented or fenced code block, preserving the
-// fence language hint.
+// codeBlock converts an indented or fenced code block. The language attr is
+// always present — empty string when the fence has no hint — because Jira
+// renders an attr-less codeBlock with its default language (java) instead of
+// plain text. An empty block carries no content array at all: the ADF schema
+// requires text nodes to be non-empty, so an empty text child would be
+// rejected. Trailing newlines are trimmed — the fence's closing newline is
+// Markdown syntax, not code, and Jira renders it as a spurious blank line.
 func (c *mdConverter) codeBlock(n ast.Node) Node {
-	node := Node{Type: "codeBlock", Content: []Node{{Type: "text", Text: codeBlockText(n, c.source)}}}
+	lang := ""
 	if fenced, ok := n.(*ast.FencedCodeBlock); ok {
-		if lang := string(fenced.Language(c.source)); lang != "" {
-			node.Attrs = map[string]any{"language": lang}
-		}
+		lang = string(fenced.Language(c.source))
+	}
+	node := Node{Type: "codeBlock", Attrs: map[string]any{"language": lang}}
+	if text := strings.TrimRight(codeBlockText(n, c.source), "\n"); text != "" {
+		node.Content = []Node{{Type: "text", Text: text}}
 	}
 	return node
 }

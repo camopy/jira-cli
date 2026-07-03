@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/matcra587/jira-cli/internal/adf"
+	"github.com/matcra587/jira-cli/internal/cli/adfmode"
 )
 
 // Markdown-input layer: a fenced ```lang block in Markdown MUST
@@ -38,19 +39,97 @@ func TestFromMarkdownPreservesFencedCodeLanguage(t *testing.T) {
 	}
 }
 
-// Bare (non-fenced) code blocks have no language hint — attrs.language
-// MUST be absent (not present-but-empty) so downstream renderers can
-// distinguish "no language" from "language=”".
-func TestFromMarkdownIndentedCodeHasNoLanguage(t *testing.T) {
-	doc, _, err := adf.FromMarkdownLossy("    indented code\n    second line\n")
+// Unhinted code blocks (indented, or fenced without a language) MUST carry
+// attrs.language as an explicit empty string: Jira renders an attr-less
+// codeBlock with its default language (java), so "no attr" silently
+// java-highlights arbitrary output.
+func TestFromMarkdownUnhintedCodeCarriesEmptyLanguage(t *testing.T) {
+	for name, md := range map[string]string{
+		"indented":       "    indented code\n    second line\n",
+		"fenced-no-hint": "```\nplain output\n```",
+	} {
+		t.Run(name, func(t *testing.T) {
+			doc, _, err := adf.FromMarkdownLossy(md)
+			if err != nil {
+				t.Fatalf("FromMarkdownLossy: %v", err)
+			}
+			block := findCodeBlock(t, doc)
+			lang, has := block.Attrs["language"]
+			if !has {
+				t.Fatalf("code block must carry attrs.language (Jira defaults attr-less blocks to java); got %v", block.Attrs)
+			}
+			if lang != "" {
+				t.Fatalf("attrs.language = %q, want empty string for an unhinted block", lang)
+			}
+		})
+	}
+}
+
+// An empty fenced block must produce a codeBlock with NO content array —
+// the ADF schema requires text nodes to be non-empty, so an empty text
+// child is a validation rejection waiting to happen.
+func TestFromMarkdownEmptyCodeBlockHasNoTextChild(t *testing.T) {
+	for name, md := range map[string]string{
+		"empty":        "```\n```",
+		"newline-only": "```go\n\n```",
+	} {
+		t.Run(name, func(t *testing.T) {
+			doc, _, err := adf.FromMarkdownLossy(md)
+			if err != nil {
+				t.Fatalf("FromMarkdownLossy: %v", err)
+			}
+			block := findCodeBlock(t, doc)
+			if len(block.Content) != 0 {
+				t.Fatalf("empty code block must have no content; got %+v", block.Content)
+			}
+		})
+	}
+}
+
+// The fence's trailing newline is Markdown syntax, not code: the text child
+// must not carry it, or Jira renders a spurious blank line.
+func TestFromMarkdownCodeBlockTrimsTrailingNewline(t *testing.T) {
+	doc, _, err := adf.FromMarkdownLossy("```go\nfunc main() {}\n```")
 	if err != nil {
 		t.Fatalf("FromMarkdownLossy: %v", err)
 	}
+	block := findCodeBlock(t, doc)
+	if len(block.Content) != 1 {
+		t.Fatalf("code block content = %+v, want one text child", block.Content)
+	}
+	if got, want := block.Content[0].Text, "func main() {}"; got != want {
+		t.Fatalf("code block text = %q, want %q", got, want)
+	}
+}
+
+// Every shape this converter emits for code blocks must pass strict ADF
+// validation — the whole point of the fixes is surviving Jira's schema.
+func TestFromMarkdownCodeBlocksPassStrictValidation(t *testing.T) {
+	for name, md := range map[string]string{
+		"hinted":   "```go\nfunc main() {}\n```",
+		"unhinted": "```\nplain\n```",
+		"empty":    "```\n```",
+		"indented": "    indented code\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			doc, _, err := adf.FromMarkdownLossy(md)
+			if err != nil {
+				t.Fatalf("FromMarkdownLossy: %v", err)
+			}
+			if _, err := adf.ValidateDoc(doc, adfmode.ModeStrict); err != nil {
+				t.Fatalf("strict validation rejected converter output: %v", err)
+			}
+		})
+	}
+}
+
+func findCodeBlock(t *testing.T, doc adf.Document) adf.Node {
+	t.Helper()
 	for _, n := range doc.Content {
 		if n.Type == "codeBlock" {
-			if _, has := n.Attrs["language"]; has {
-				t.Fatalf("indented code block must NOT carry attrs.language; got %v", n.Attrs)
-			}
+			return n
 		}
 	}
+	t.Fatal("no codeBlock node in converted document")
+	return adf.Node{}
 }
