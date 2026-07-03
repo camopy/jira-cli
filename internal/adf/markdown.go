@@ -28,11 +28,20 @@ var markdownParser = goldmark.New(
 // callers — and strict-mode abort gates — can act on the content loss
 // instead of letting it slip through silently.
 func FromMarkdownLossy(markdown string) (Document, []Warning, error) {
+	var dialectWarnings []Warning
+	wikiEmoji := false
+	if detectDialect(markdown) == dialectWiki {
+		normalized := normalizeWikiMarkup(markdown)
+		markdown = normalized.text
+		wikiEmoji = true
+		dialectWarnings = append(dialectWarnings, wikiNormalizationWarning(normalized.constructs))
+	}
+
 	source := []byte(markdown)
 	reader := text.NewReader(source)
 	root := markdownParser.Parse(reader)
 
-	conv := &mdConverter{source: source}
+	conv := &mdConverter{source: source, wikiEmoji: wikiEmoji, warnings: dialectWarnings}
 	doc := Document{Type: "doc", Version: 1}
 	for child := root.FirstChild(); child != nil; child = child.NextSibling() {
 		if node, ok := conv.block(child); ok {
@@ -46,10 +55,14 @@ func FromMarkdownLossy(markdown string) (Document, []Warning, error) {
 }
 
 // mdConverter carries the Markdown source plus the running warning list
-// through the recursive goldmark walk.
+// through the recursive goldmark walk. wikiEmoji is set when the input was
+// normalized from Jira wiki markup, enabling emoticon-shortcut expansion in
+// plain text runs — never inside code spans or code blocks, which take
+// different paths through the walk.
 type mdConverter struct {
-	source   []byte
-	warnings []Warning
+	source    []byte
+	warnings  []Warning
+	wikiEmoji bool
 }
 
 // warn records one lossy-conversion warning naming an unsupported
@@ -331,15 +344,29 @@ func (c *mdConverter) inline(n ast.Node, marks []Mark) []Node {
 		t := n.(*ast.Text)
 		nodes := []Node{}
 		if seg := string(t.Segment.Value(c.source)); seg != "" {
-			nodes = append(nodes, Node{Type: "text", Text: seg, Marks: cloneMarks(marks)})
+			if c.wikiEmoji {
+				if split := splitWikiEmoji(seg, marks); split != nil {
+					nodes = append(nodes, split...)
+				} else {
+					nodes = append(nodes, Node{Type: "text", Text: seg, Marks: cloneMarks(marks)})
+				}
+			} else {
+				nodes = append(nodes, Node{Type: "text", Text: seg, Marks: cloneMarks(marks)})
+			}
 		}
 		// A trailing hard break inside a paragraph is a real ADF node.
 		if t.HardLineBreak() {
 			nodes = append(nodes, Node{Type: "hardBreak"})
 		} else if t.SoftLineBreak() {
-			// Soft breaks render as a space in ADF inline flow.
-			if len(nodes) > 0 {
-				nodes[len(nodes)-1].Text += " "
+			// Soft breaks render as a space in ADF inline flow. When the
+			// run ends on an emoji node the space needs its own text node —
+			// an emoji carries no top-level text.
+			if last := len(nodes) - 1; last >= 0 {
+				if nodes[last].Type == "text" {
+					nodes[last].Text += " "
+				} else {
+					nodes = append(nodes, Node{Type: "text", Text: " "})
+				}
 			}
 		}
 		return nodes

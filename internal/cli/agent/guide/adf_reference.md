@@ -50,6 +50,31 @@ can't represent at all never enters the pipeline to be caught. Prefer ADF up
 front for any rich body; use `--dry-run` to confirm the exact doc before
 committing.
 
+### Accepted Markdown dialects
+
+Every Markdown input path (`--body-markdown`, `*_markdown` payload keys,
+`jira adf convert`) accepts two dialects:
+
+- **CommonMark / GFM** — the primary dialect, converted exactly as written.
+- **Jira wiki markup** — content pasted from Jira itself (old descriptions,
+  Server/DC exports, colleagues' comments). Detected automatically and
+  normalized before conversion: `hN.` headings, `# item` ordered lists,
+  `*bold*`, `[text|url]` links, `{{monospace}}`, `||header||` tables,
+  `{noformat}` / `{code:lang}` blocks, and emoticon shortcuts (`(/)`,
+  `(x)`, `(!)`, `(y)`, `:)`, …) which become real `emoji` nodes — the one
+  Markdown-side spelling that produces them.
+
+Detection is all-or-nothing per document and CommonMark wins every tie: any
+unambiguous CommonMark construct (a fence, a `##` heading, `**bold**`, a
+`[text](url)` link, a GFM table separator) pins the whole input as
+CommonMark and nothing is rewritten — pure Markdown converts byte-identically
+to a build without the normalizer. A completed normalization is announced by
+a non-lossy `markdown_dialect_normalized` warning in the envelope naming the
+rewritten constructs; strict mode does not abort on it. Two caveats: wiki
+syntax inside code (fences, `{{...}}`, `{noformat}`) always stays literal,
+and line/col positions in any warnings after the dialect notice refer to the
+normalized text, not the original paste.
+
 ### The full supported set
 
 These are every node and mark the CLI can author, validate, and submit — the

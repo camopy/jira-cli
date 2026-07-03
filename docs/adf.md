@@ -55,6 +55,25 @@ Conversion diagnostics are source-mapped: an error or warning names the
 Markdown line and column and quotes the offending snippet, and failures carry
 the stable `markdown_lossy_conversion` code.
 
+### Jira wiki markup
+
+Content pasted from Jira itself — old descriptions, Server/DC exports,
+colleagues' comments — is often written in Jira's wiki markup rather than
+Markdown. The Markdown paths detect that dialect and normalize it before
+conversion, so `h2.` headings, `# item` ordered lists, `*bold*`,
+`[text|url]` links, `{{monospace}}`, `||header||` tables, and
+`{noformat}` / `{code:lang}` blocks all convert to their intended ADF
+shapes, and emoticon shortcuts such as `(/)`, `(x)`, and `(!)` become real
+emoji nodes.
+
+Detection is all-or-nothing per document and Markdown always wins a tie: any
+unambiguous Markdown construct — a code fence, a `##` heading, `**bold**`, a
+`[text](url)` link — pins the whole input as Markdown and nothing is
+rewritten, so pure Markdown converts exactly as it always has. When a
+normalization does run, the envelope announces it with a non-lossy
+`markdown_dialect_normalized` warning naming the rewritten constructs.
+Wiki syntax inside code blocks and code spans always stays literal.
+
 ## Convert and lint
 
 `jira adf convert` runs the same converter, normalizer, and validator the
