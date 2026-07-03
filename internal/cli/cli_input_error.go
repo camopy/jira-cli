@@ -90,11 +90,41 @@ func (e *CLIInputError) hint() string {
 	return base
 }
 
+// foreignFlagHints teaches a caller arriving with another Jira CLI's
+// muscle memory: each entry names the flag's origin and this CLI's
+// actual contract. Only flags with NO equivalent anywhere in this CLI
+// belong here — a flag that exists on some commands (raw, columns,
+// web) would produce a misleading scope claim, and a flag the failing
+// command accepts never reaches flag_unknown at all.
+var foreignFlagHints = map[string]string{
+	"plain":       "--plain is an ankitpokhrel/jira-cli flag; this CLI prints human text with --output=human and machine JSON with --output=json.",
+	"gjq":         "--gjq is an ankitpokhrel/jira-cli flag; this CLI has no built-in query language — pipe --output=json through jq instead.",
+	"template":    "--template is a go-jira flag; this CLI has no template output — use --output=json and format downstream.",
+	"no-headers":  "--no-headers is an ankitpokhrel/jira-cli flag; use --output=json for machine-stable output.",
+	"no-truncate": "--no-truncate is an ankitpokhrel/jira-cli flag; --output=json never truncates.",
+	"paginate":    "--paginate is an ankitpokhrel/jira-cli flag; page with --limit/--all and resume via --cursor from meta.pagination.nextCursor.",
+}
+
+// foreignFlagHint resolves a flag name against the foreign-CLI table,
+// tolerating leading dashes and case drift in how the parser reported it.
+func foreignFlagHint(flag string) string {
+	name := strings.ToLower(strings.TrimLeft(strings.TrimSpace(flag), "-"))
+	if hint, ok := foreignFlagHints[name]; ok {
+		return hint + " Run `jira agent guide core_contract` for the output contract."
+	}
+	return ""
+}
+
 // baseHint is the per-kind remediation, independent of any suggestion.
 func (e *CLIInputError) baseHint() string {
 	switch e.Kind {
 	case InputFlagUnknown:
-		return "Remove the flag or correct its name; run the command with --help to list its flags."
+		// A flag borrowed from another Jira CLI gets a teaching hint —
+		// correcting the caller's mental model, not just the attempt.
+		if foreign := foreignFlagHint(e.Flag); foreign != "" {
+			return foreign
+		}
+		return "Remove the flag or correct its name; run the command with --help to list its flags, or read `jira agent schema --output=compact` for the machine-readable surface."
 	case InputFlagValueMissing:
 		return "Supply the flag's value, e.g. --flag=value."
 	case InputFlagValueInvalid:
@@ -108,7 +138,7 @@ func (e *CLIInputError) baseHint() string {
 	case InputArgValueInvalid:
 		return "Pass one of the documented positional argument values; run the command with --help for valid choices."
 	case InputCommandUnknown:
-		return "Run `jira --help` to list the available commands."
+		return "Run `jira --help` to list the available commands, or read `jira agent schema --output=compact` for the live machine-readable command surface."
 	default:
 		return "Review the command-line input and retry."
 	}
