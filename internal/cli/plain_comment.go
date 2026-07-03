@@ -7,6 +7,7 @@ import (
 	"github.com/gechr/clog"
 	"github.com/gechr/x/human"
 	xstrings "github.com/gechr/x/strings"
+	"github.com/matcra587/jira-cli/internal/adf"
 )
 
 // WriteCommentListPlain renders the `data` payload from `comment list` as
@@ -73,7 +74,7 @@ func WriteCommentListPlain(w io.Writer, command string, data any, opts ...PlainO
 
 func commentPlainLine(c map[string]any, style authPlainStyle) string {
 	id, _ := c["id"].(string)
-	body, _ := c["body"].(string)
+	body := commentBodyText(c["body"])
 	created, _ := c["created"].(string)
 	updated, _ := c["updated"].(string)
 
@@ -104,6 +105,23 @@ func commentPlainLine(c map[string]any, style authPlainStyle) string {
 		parts = append(parts, preview)
 	}
 	return strings.Join(parts, "  ")
+}
+
+// commentBodyText flattens a comment body for the one-line preview. Bodies
+// arrive as native ADF documents (machine-mode parity with issue view);
+// strings pass through for any legacy shape.
+func commentBodyText(v any) string {
+	switch b := v.(type) {
+	case string:
+		return b
+	case adf.Document:
+		return adf.ToMarkdown(b)
+	case *adf.Document:
+		if b != nil {
+			return adf.ToMarkdown(*b)
+		}
+	}
+	return ""
 }
 
 // flattenPreview collapses whitespace and truncates `s` to at most n runes

@@ -1,5 +1,5 @@
 ## list_comments
-Goal: Walk an issue's comment thread oldest-first, paginating through every page, and detect lossy-ADF surfaces before quoting comment bodies.
+Goal: Walk an issue's comment thread oldest-first, paginating through every page, with bodies as native ADF for lossless reuse.
 When: the comment thread on an issue must be reviewed end-to-end before quoting or editing any single comment, or when summarising activity on an issue.
 
 **Decide**
@@ -29,7 +29,7 @@ When: the comment thread on an issue must be reviewed end-to-end before quoting 
 {
   "data": {
     "comments": [
-      {"id": "10101", "body": "Markdown rendered text…",
+      {"id": "10101", "body": {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "…"}]}]},
        "author": {"account_id": "...", "display_name": "Alice"},
        "update_author": null,
        "created": "2026-04-01T10:00:00.000+0000",
@@ -45,12 +45,12 @@ When: the comment thread on an issue must be reviewed end-to-end before quoting 
 ```
 
 - `data.comments[].id` [string, required] — pass to `comment edit` or `comment delete`.
-- `data.comments[].body` [string, required] — markdown rendering; check `warnings[]` for any lossy entries before treating as canonical.
+- `data.comments[].body` [object, required] — the native ADF document as stored (mention accountIds, status lozenges, cards all intact; `null` for an empty body). Reusable verbatim as `--json-input` for `comment edit`/`comment add`. Matches `read_issue`'s comment representation.
 - `data.comments[].author` / `data.comments[].update_author` [object, optional] — `update_author` is `null` when the comment has never been edited.
 - `data.comments[].visibility` [object, optional] — `null` for public, otherwise `{type, value}` (role/group restriction).
 - `data.pagination.is_last` [bool, required] — stop when `true`.
 - `data.pagination.next_page_token` [string, optional] — feed back as paging cursor until `is_last=true`.
-- `warnings[].comment_id` + `warnings[].lossy_constructs[]` [array, optional] — if a comment id appears here, its `body` is a degraded markdown projection — re-read with native ADF tooling when fidelity matters.
+- `warnings[].comment_id` + `warnings[].lossy_constructs[]` [array, optional] — the named comment contains constructs that degrade in markdown/human renderings (the one-line human preview, or any markdown flatten you apply). The JSON `body` itself is native and lossless.
 - Multi-key list: `data.results[]` [array, required] — ordered by requested key; each successful entry has `data.comments`, `data.pagination`, and optional per-key `data.warnings`.
 
 `comment delete KEY ID --force`:
@@ -67,14 +67,14 @@ When: the comment thread on an issue must be reviewed end-to-end before quoting 
 - `comment delete --force` is mandatory under `--no-input`; without `--force` the command exits 3.
 
 **Behavior**
-- `warnings[]` does not change the exit code — the response is still successful; treat lossy markers as a signal to switch to ADF reads, not as failure.
+- `warnings[]` does not change the exit code — the response is still successful; lossy markers describe markdown/human renderings only, the JSON `body` is native.
 - Pagination is cursor-based via `next_page_token`; do not assume `start_at + max_results` is enough.
 - `-p` / `--parallelism` is bounded to 1..16 and only affects multi-key reads.
 
 **Recover**
 | Symptom | Cause | Next |
 |---|---|---|
-| `warnings[].type = adf-lossy-comment` | Comment contained an ADF construct without a markdown mapping | Re-fetch with ADF tooling (see → `adf_reference`) before quoting |
+| `warnings[].type = adf-lossy-comment` | Comment contains an ADF construct without a markdown mapping | The JSON `body` is already native and lossless; the warning only concerns markdown/human renderings (see → `adf_reference`) |
 | exit 3 on delete | `--no-input` without `--force` | Re-run with `--force` |
 | exit 2 (`not_found`) on delete | Wrong issue key or comment id | Re-list and copy `data.comments[].id` verbatim |
 

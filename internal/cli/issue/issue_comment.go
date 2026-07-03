@@ -238,8 +238,9 @@ func commentListPagination(resp *jira.Response, all bool, rateLimitHit *jira.API
 }
 
 // commentListData renders each comment with snake-case keys per
-// envelope-shapes.md, converting ADF body to Markdown for the default
-// (non --raw) path.
+// envelope-shapes.md. Bodies stay native ADF — read/reuse parity with
+// issue view, so mention accountIds, cards, and every other node survive;
+// the plain renderer flattens for human display.
 func commentListData(comments []*jira.Comment) []map[string]any {
 	out := make([]map[string]any, 0, len(comments))
 	for _, c := range comments {
@@ -257,9 +258,9 @@ func commentToMap(c *jira.Comment) map[string]any {
 		m["id"] = *c.ID
 	}
 	if c.Body != nil {
-		m["body"] = adf.ToMarkdown(*c.Body)
+		m["body"] = *c.Body
 	} else {
-		m["body"] = ""
+		m["body"] = nil
 	}
 	m["author"] = userToMap(c.Author)
 	m["update_author"] = userToMap(c.UpdateAuthor)
