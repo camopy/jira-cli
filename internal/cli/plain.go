@@ -1023,6 +1023,10 @@ func formatAssignee(value any) string {
 				return s
 			}
 		}
+		// A user object with no recognizable identity is unassigned as
+		// far as a human cell is concerned — never leak fmt's Go-map
+		// rendering ("map[]") into the table.
+		return ""
 	}
 	return formatHumanField(value)
 }
