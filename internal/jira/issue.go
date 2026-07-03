@@ -160,7 +160,10 @@ func (r *IssueMoveRequest) payload() map[string]any {
 type TransitionRequest struct {
 	ID     string
 	Fields map[string]any
-	DryRun bool
+	// Comment, when non-nil, is posted atomically with the status change
+	// via the transition body's update block.
+	Comment *adf.Document
+	DryRun  bool
 }
 
 type CommentAddRequest struct {
@@ -264,6 +267,11 @@ func (s *issueService) Transition(ctx context.Context, key string, reqBody *Tran
 	payload := map[string]any{"transition": map[string]string{"id": reqBody.ID}}
 	if len(reqBody.Fields) > 0 {
 		payload["fields"] = cloneJSONMap(reqBody.Fields)
+	}
+	if reqBody.Comment != nil {
+		payload["update"] = map[string]any{
+			"comment": []map[string]any{{"add": map[string]any{"body": *reqBody.Comment}}},
+		}
 	}
 	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issue", key, "transitions"), payload)
 	if err != nil {

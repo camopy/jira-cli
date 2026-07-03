@@ -21,6 +21,9 @@ When: an issue must move to a new workflow state (e.g. To Do → In Progress →
 - Execute the chosen transition: `jira issue transition KEY --transition <id> --output=json`
 - Bulk execute: `jira issue transition <PROJECT_KEY>-1..10 -p 4 --transition <id> --output=json`
 - Preview only: `jira issue transition KEY --transition <id> --dry-run --output=json`
+- With a comment, posted atomically: `jira issue transition KEY Done --markdown "released in v1.2.3" --output=json` (or `--markdown-file`)
+- With transition-screen fields (e.g. resolution) and/or an ADF comment: `jira issue transition KEY Done --json-input payload.json` where the payload carries `fields` (either payload shape) and an optional ADF `comment` key
+- Screen rule: fields and comments ride the transition only when the workflow's transition **has a screen**. On a screenless transition (the norm in team-managed projects) Jira accepts the request and silently discards the payload, so the CLI refuses with exit 3 instead — transition bare, then → `add_comment`.
 
 **Save**
 > Requires `--output=json`.

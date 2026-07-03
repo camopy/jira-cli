@@ -33,6 +33,20 @@ jira issue transition PROJ-1..PROJ-5 Done -p 4 --output=json
 2.  Target as a trailing positional; the name is resolved per issue.
 3.  `--transition` takes the same value — a status name or a numeric id.
 
+A transition can carry a payload, applied atomically with the status change:
+`--markdown` / `--markdown-file` attach a comment, and `--json-input` submits
+transition-screen fields (such as `resolution`) plus an optional ADF `comment`
+key. This only works when the workflow's transition **has a screen**: Jira
+silently discards payloads sent to a screenless transition (the norm in
+team-managed projects), so the CLI refuses those with a validation error
+rather than letting the content vanish — transition bare, then comment with
+`issue comment add`.
+
+```sh
+jira issue transition PROJ-123 Done --markdown "released in v1.2.3"
+jira issue transition PROJ-1..PROJ-5 Done -p 4 --markdown "released in v1.2.3"
+```
+
 The no-target form is a read; its `data` is the available-transition list (the
 shape an agent picks an id from). `meta.command` is `issue.transitions` (plural)
 for the list and `issue.transition` (singular) for an executed move:

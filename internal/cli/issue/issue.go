@@ -1571,7 +1571,7 @@ func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
 
 func issueTransitionCommand() *cobra.Command {
 	var dryRun bool
-	var transitionID string
+	var transitionID, jsonInput, markdownInput, markdownFile string
 	var parallelism int
 	returnCmd := &cobra.Command{
 		Use:   "transition KEY... [STATUS]",
@@ -1604,7 +1604,11 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 			}
 			if len(keys) > 1 {
 				if target != "" {
-					return runIssueTransitionMany(cmd, keys, parallelism, target, dryRun)
+					bulkPayload, bperr := resolveTransitionPayload(jsonInput, markdownInput, markdownFile)
+					if bperr != nil {
+						return bperr
+					}
+					return runIssueTransitionMany(cmd, keys, parallelism, target, dryRun, bulkPayload)
 				}
 				client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 				if err != nil {
@@ -1626,21 +1630,46 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 				})
 			}
 			key := keys[0]
+			payload, perr := resolveTransitionPayload(jsonInput, markdownInput, markdownFile)
+			if perr != nil {
+				return perr
+			}
+			if !payload.empty() && target == "" {
+				return fmt.Errorf("validation: a transition payload needs a target status — fields and comments are applied atomically with the status change")
+			}
 			// A workflow transition is a Jira mutation and MUST run
-			// through the 5-stage pipeline. No fields/ADF doc to
-			// validate today (transitions don't carry payload here),
-			// but the parse + dry-run gating still apply.
-			pipeOut := pipeline.RunMutation(pipeline.MutationInput{
-				Mode:   cmdutil.ADFModeFor(cmd, true),
-				DryRun: dryRun,
-			})
+			// through the 5-stage pipeline: fields validate and encode,
+			// a Markdown comment converts with strict/best-effort gating.
+			pipeIn := pipeline.MutationInput{
+				Mode:             cmdutil.ADFModeFor(cmd, true),
+				Fields:           payload.fields,
+				DryRun:           dryRun,
+				MarkdownWarnings: payload.warnings,
+			}
+			if payload.comment != nil {
+				pipeIn.ADFDoc = payload.comment
+				pipeIn.FieldCompat = &adf.FieldCompatibility{Field: "comment", InlineCardSupported: true}
+			}
+			pipeOut := pipeline.RunMutation(pipeIn)
 			if pipeOut.Aborted {
 				return pipeOut.Err
+			}
+			submitFields := pipeOut.SubmitFields
+			comment := payload.comment
+			if pipeOut.SubmitADF != nil {
+				comment = pipeOut.SubmitADF
 			}
 			if dryRun {
 				// Dry-run is local: echo the requested target without
 				// resolving a name to an id (that needs a live list).
-				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", map[string]any{"issue": key, "transition": target, "dry_run": dryRun}, pipeOut.Warnings)
+				data := map[string]any{"issue": key, "transition": target, "dry_run": dryRun}
+				if len(submitFields) > 0 {
+					data["fields"] = submitFields
+				}
+				if comment != nil {
+					data["comment"] = *comment
+				}
+				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", data, pipeOut.Warnings)
 			}
 			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
@@ -1677,11 +1706,11 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 			)
 			if err := cmdutil.Spin(cmd, "issue.transition", func(ctx context.Context) error {
 				var e error
-				id, e = resolveTransitionID(ctx, service, key, target)
+				id, e = resolveTransitionForPayload(ctx, service, key, target, !payload.empty())
 				if e != nil {
 					return e
 				}
-				resp, e = service.Transition(ctx, key, &jira.TransitionRequest{ID: id})
+				resp, e = service.Transition(ctx, key, &jira.TransitionRequest{ID: id, Fields: submitFields, Comment: comment})
 				return e
 			}); err != nil {
 				return err
@@ -1691,8 +1720,63 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 	}
 	cmdutil.AddDryRunFlag(returnCmd.Flags(), &dryRun, "Preview mutation without submitting")
 	cmdutil.AddStringVar(returnCmd.Flags(), &transitionID, "transition", "", "Transition id or status name (or pass the status as a positional argument)", clib.FlagExtra{Group: "Transition", Placeholder: "STATUS"})
+	cmdutil.AddFileFlag(returnCmd.Flags(), &jsonInput, "json-input", "", "Read transition payload from JSON file (canonical for agents)", "Input", "FILE")
+	cmdutil.AddMarkdownFlag(returnCmd, &markdownInput, &markdownFile, "Transition comment as Markdown, posted atomically with the status change", "")
 	cmdutil.AddParallelismFlag(returnCmd, &parallelism)
 	return returnCmd
+}
+
+// transitionPayload carries the optional field updates and comment a
+// transition submits atomically with the status change.
+type transitionPayload struct {
+	fields   map[string]any
+	comment  *adf.Document
+	warnings []adf.Warning
+}
+
+func (p transitionPayload) empty() bool { return len(p.fields) == 0 && p.comment == nil }
+
+// resolveTransitionPayload builds the transition payload from --markdown /
+// --markdown-file (the comment) and --json-input (fields in either payload
+// shape, plus an optional ADF `comment` key). The flag mutexes guarantee at
+// most one comment source.
+func resolveTransitionPayload(jsonInput, markdown, markdownFile string) (transitionPayload, error) {
+	var p transitionPayload
+	md, err := cmdutil.ResolveMarkdownInput(markdown, markdownFile)
+	if err != nil {
+		return p, err
+	}
+	if md != "" {
+		doc, warns, cerr := adf.FromMarkdownLossy(md)
+		if cerr != nil {
+			return p, cerr
+		}
+		p.comment = &doc
+		p.warnings = warns
+	}
+	if jsonInput == "" {
+		return p, nil
+	}
+	payload := map[string]any{}
+	if err := cmdutil.ReadJSONFile(jsonInput, &payload); err != nil {
+		return p, err
+	}
+	if raw, ok := payload["comment"]; ok {
+		delete(payload, "comment")
+		encoded, merr := json.Marshal(raw)
+		if merr != nil {
+			return p, merr
+		}
+		doc, _, perr := adf.Parse(encoded)
+		if perr != nil {
+			return p, fmt.Errorf("transition --json-input comment: %w", perr)
+		}
+		p.comment = &doc
+	}
+	if fields := pipeline.FieldsFromPayload(payload); len(fields) > 0 {
+		p.fields = fields
+	}
+	return p, nil
 }
 
 // splitTransitionTarget separates the transition target (a status name or id)
@@ -1736,6 +1820,36 @@ func resolveTransitionID(ctx context.Context, service jira.IssueService, key, ta
 		return "", err
 	}
 	return matchTransition(transitions, target, key)
+}
+
+// resolveTransitionForPayload resolves the target like resolveTransitionID,
+// but a payload-carrying transition always fetches the transition list —
+// even for a numeric target — so the screen check can run: Jira accepts a
+// fields/update block on a screenless transition and silently discards it
+// (the norm in team-managed projects), which is exactly the silent loss
+// this CLI refuses to pass along.
+func resolveTransitionForPayload(ctx context.Context, service jira.IssueService, key, target string, hasPayload bool) (string, error) {
+	if !hasPayload {
+		return resolveTransitionID(ctx, service, key, target)
+	}
+	transitions, _, err := service.Transitions(ctx, key)
+	if err != nil {
+		return "", err
+	}
+	id, err := matchTransition(transitions, strings.TrimSpace(target), key)
+	if err != nil {
+		return "", err
+	}
+	for _, t := range transitions {
+		if t.ID == nil || *t.ID != id {
+			continue
+		}
+		if t.HasScreen != nil && !*t.HasScreen {
+			return "", fmt.Errorf("validation: this workflow's %q transition has no screen, and Jira silently discards fields and comments sent with a screenless transition; run the transition bare, then add the comment with `jira issue comment add`", target)
+		}
+		break
+	}
+	return id, nil
 }
 
 // matchTransition finds the id of the transition whose name (case-insensitive)
@@ -1787,25 +1901,43 @@ func transitionNames(transitions []*jira.Transition) string {
 	return strings.Join(names, ", ")
 }
 
-func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, target string, dryRun bool) error {
-	pipeOut := pipeline.RunMutation(pipeline.MutationInput{
-		Mode:   cmdutil.ADFModeFor(cmd, true),
-		DryRun: dryRun,
-	})
+func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, target string, dryRun bool, payload transitionPayload) error {
+	// One payload, applied identically to every key — the bulk form of
+	// "close these with the same resolution note".
+	pipeIn := pipeline.MutationInput{
+		Mode:             cmdutil.ADFModeFor(cmd, true),
+		Fields:           payload.fields,
+		DryRun:           dryRun,
+		MarkdownWarnings: payload.warnings,
+	}
+	if payload.comment != nil {
+		pipeIn.ADFDoc = payload.comment
+		pipeIn.FieldCompat = &adf.FieldCompatibility{Field: "comment", InlineCardSupported: true}
+	}
+	pipeOut := pipeline.RunMutation(pipeIn)
 	if pipeOut.Aborted {
 		return pipeOut.Err
+	}
+	submitFields := pipeOut.SubmitFields
+	comment := payload.comment
+	if pipeOut.SubmitADF != nil {
+		comment = pipeOut.SubmitADF
 	}
 	if dryRun {
 		results := make([]cmdutil.KeyResult[map[string]any], len(keys))
 		for i, key := range keys {
-			results[i] = cmdutil.KeyResult[map[string]any]{
-				Key: key,
-				Value: map[string]any{
-					"issue":      key,
-					"transition": target,
-					"dry_run":    true,
-				},
+			value := map[string]any{
+				"issue":      key,
+				"transition": target,
+				"dry_run":    true,
 			}
+			if len(submitFields) > 0 {
+				value["fields"] = submitFields
+			}
+			if comment != nil {
+				value["comment"] = *comment
+			}
+			results[i] = cmdutil.KeyResult[map[string]any]{Key: key, Value: value}
 		}
 		return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.transition", results, cmdutil.KeyedDataWithWarnings(pipeOut.Warnings))
 	}
@@ -1820,11 +1952,11 @@ func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, 
 	// Resolve the target per issue: the same status name can map to
 	// different transition ids across issues in different workflow states.
 	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "issue.transition", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
-		id, err := resolveTransitionID(ctx, service, key, target)
+		id, err := resolveTransitionForPayload(ctx, service, key, target, !payload.empty())
 		if err != nil {
 			return nil, err
 		}
-		if _, err := service.Transition(ctx, key, &jira.TransitionRequest{ID: id}); err != nil {
+		if _, err := service.Transition(ctx, key, &jira.TransitionRequest{ID: id, Fields: submitFields, Comment: comment}); err != nil {
 			return nil, err
 		}
 		return map[string]any{

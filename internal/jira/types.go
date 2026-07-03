@@ -134,6 +134,10 @@ type Visibility struct {
 type Transition struct {
 	ID   *string `json:"id,omitempty"`
 	Name *string `json:"name,omitempty"`
+	// HasScreen reports whether the transition presents a screen. Jira
+	// silently discards fields and update blocks sent to a screenless
+	// transition, so payload-carrying transitions must check it.
+	HasScreen *bool `json:"hasScreen,omitempty"`
 }
 
 type ProjectFieldSchema struct {
