@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	"github.com/gechr/clog"
@@ -23,19 +22,20 @@ type KeyResult[T any] struct {
 }
 
 // FanOutKeysProgress runs FanOutKeys with user feedback for the operation named
-// by op (a cli.VerbFor key like "issue.delete"): a determinate progress bar
-// while keys complete, plus a per-key debug lifecycle that records each key's
-// elapsed time and, on failure, the HTTP status and reason as fields:
+// by op (a cli.VerbFor key like "issue.delete"): a live multi-line block with
+// one row per key (finished rows scroll away, a footer ticks done/total), plus
+// a per-key debug lifecycle that records each key's elapsed time and, on
+// failure, the HTTP status and reason as fields:
 //
 //	DBG Deleting issue key=ABC-1
 //	DBG Deleted issue key=ABC-1 time=210ms
 //	DBG Failed to delete issue key=ABC-2 time=95ms status=404 reason="..."
 //
-// The bar mirrors the auth-login spinner's gating: NonTTYSilent suppresses it
-// whenever stderr is not a terminal — piped, redirected, or captured by an
-// agent — and clog writes status to stderr, so a stdout JSON envelope stays
-// clean even under --output=json. The debug lines surface only under --debug. A
-// single key gets the debug lifecycle but no bar.
+// The block mirrors the auth-login spinner's gating: NonTTYSilent suppresses
+// every row whenever stderr is not a terminal — piped, redirected, or captured
+// by an agent — and clog writes status to stderr, so a stdout JSON envelope
+// stays clean even under --output=json. The debug lines surface only under
+// --debug. A single key gets the debug lifecycle but no rendered block.
 func FanOutKeysProgress[T any](
 	ctx context.Context,
 	op string,
@@ -77,32 +77,69 @@ func FanOutKeysProgress[T any](
 		return FanOutKeys(ctx, keys, parallelism, traced)
 	}
 
-	var (
-		results []KeyResult[T]
-		fanErr  error
-		done    atomic.Int64
+	// The keys render as a live multi-line block: one row per key,
+	// finished rows scroll away (WithHideDone), and a footer ticks the
+	// done/total count. Each row is registered with fx.Manual, which
+	// spawns no goroutine and consumes no group parallelism slot —
+	// FanOutKeys stays the sole concurrency owner; clog only renders.
+	// The footer label is user-facing UI, so it is Sentence-cased; the
+	// per-key debug lifecycle in traced stays lower case as a structured
+	// log. Every row is NonTTYSilent so a piped or captured stderr sees
+	// nothing, exactly like the aggregate bar this block replaces.
+	label := cli.SentenceCase(verb.GerundPlural())
+	group := clog.Group(
+		ctx,
+		fx.WithHideDone(),
+		fx.WithFooter(
+			clog.Spinner(label),
+			func(done, total int, u *fx.Update) {
+				u.Msg(label).Str("progress", fmt.Sprintf("%d/%d", done, total)).Send()
+			},
+		),
 	)
-	// SetProgress stores to an atomic, so reporting from the parallel workers is
-	// race-free; the bar reads the latest count on each animation frame.
-	// The bar label is user-facing UI, so it is Sentence-cased; the per-key
-	// debug lifecycle in traced stays lower case as a structured log.
-	waitErr := clog.Bar(cli.SentenceCase(verb.GerundPlural()), len(keys)).
-		NonTTYSilent(true).
-		Progress(ctx, func(ctx context.Context, u *fx.Update) error {
-			tracked := func(ctx context.Context, key string) (T, error) {
-				value, err := traced(ctx, key)
-				u.SetProgress(int(done.Add(1)))
-				return value, err
-			}
-			results, fanErr = FanOutKeys(ctx, keys, parallelism, tracked)
-			return fanErr
-		}).
-		Silent()
-	// Progress returns the task's error verbatim; it is the same fanErr, so
-	// either is correct to return.
-	if waitErr != nil {
-		return results, waitErr
+	finishers := make([]func(error), len(keys))
+	// Duplicate keys are legal in a key expression; hand each worker its
+	// own row by queueing row indices per key and popping one per call.
+	rowIndex := make(map[string]chan int, len(keys))
+	for i, key := range keys {
+		_, finish := group.Add(clog.Spinner(key).NonTTYSilent(true)).Manual()
+		finishers[i] = finish
+		if rowIndex[key] == nil {
+			rowIndex[key] = make(chan int, len(keys))
+		}
+		rowIndex[key] <- i
 	}
+	// The render loop lives inside Wait, so it must run concurrently with
+	// the fan-out for the block to animate while keys complete.
+	waited := make(chan struct{})
+	go func() {
+		defer close(waited)
+		// The group's aggregate error is deliberately discarded: per-key
+		// errors live in the fan-out results and fanErr is authoritative;
+		// a completion line here would double-report them.
+		_ = group.Wait().Silent()
+	}()
+	tracked := func(ctx context.Context, key string) (T, error) {
+		value, err := traced(ctx, key)
+		select {
+		case i := <-rowIndex[key]:
+			finishers[i](err)
+		default:
+		}
+		return value, err
+	}
+	results, fanErr := FanOutKeys(ctx, keys, parallelism, tracked)
+	// A canceled fan-out can leave rows unfinished, which would wedge
+	// Wait forever. finish is idempotent (sync.Once inside clog), so
+	// sweep every row with its final per-key error.
+	for i := range finishers {
+		err := results[i].Err
+		if err == nil && fanErr != nil {
+			err = fanErr
+		}
+		finishers[i](err)
+	}
+	<-waited
 	return results, fanErr
 }
 

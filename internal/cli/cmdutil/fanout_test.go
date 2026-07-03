@@ -220,6 +220,53 @@ func TestFanOutKeysProgressStaysSilentInNonTTY(t *testing.T) {
 	}
 }
 
+// Duplicate keys are legal in a key expression; every occurrence must get
+// its own rendered row and finish exactly once, or the group Wait would
+// wedge on an unfinished task.
+func TestFanOutKeysProgressHandlesDuplicateKeys(t *testing.T) {
+	keys := []string{"A-1", "A-1", "A-2"}
+	var calls atomic.Int64
+	res, err := FanOutKeysProgress(context.Background(), "issue.view", keys, 2, func(_ context.Context, key string) (string, error) {
+		calls.Add(1)
+		return key + "-v", nil
+	})
+	if err != nil {
+		t.Fatalf("FanOutKeysProgress() error = %v", err)
+	}
+	if int(calls.Load()) != len(keys) || len(res) != len(keys) {
+		t.Fatalf("calls=%d results=%d, want %d each", calls.Load(), len(res), len(keys))
+	}
+	for i, key := range keys {
+		if res[i].Key != key || res[i].Value != key+"-v" {
+			t.Fatalf("result %d = %+v, want key %s", i, res[i], key)
+		}
+	}
+}
+
+// A cancellation that stops the fan-out before every key ran must not
+// wedge the render-group Wait — unfinished rows are swept with the
+// terminal error and the call returns.
+func TestFanOutKeysProgressReturnsOnCancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	keys := []string{"A-1", "A-2", "A-3", "A-4", "A-5", "A-6"}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, err := FanOutKeysProgress(ctx, "issue.view", keys, 2, func(ctx context.Context, key string) (string, error) {
+			cancel()
+			return key, ctx.Err()
+		})
+		if err == nil {
+			t.Errorf("canceled fan-out must surface the context error")
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("FanOutKeysProgress wedged after context cancellation")
+	}
+}
+
 func TestFanOutKeysProgressDelegatesForTrivialInputs(t *testing.T) {
 	res, err := FanOutKeysProgress(context.Background(), "issue.view", []string{"A-1"}, 1, func(_ context.Context, key string) (string, error) {
 		return key + "-v", nil
