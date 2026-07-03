@@ -56,7 +56,14 @@ jobs:
           restore-keys: |
             go-${{ runner.os }}-
 
+      # -count=1 disables Go's test-result caching (build caching is
+      # unaffected). Several contract tests exec a binary built from the
+      # tree; the test cache hashes only the test package's source, so a
+      # restored cache could replay a stale pass after the binary's
+      # behavior changed.
       - name: Run CI gate
+        env:
+          GOFLAGS: -count=1
         run: mise run ci
 
       # Catches cross-compile breakage (platform-specific code) at push time
