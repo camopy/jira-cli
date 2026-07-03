@@ -33,6 +33,54 @@ jira issue create --no-input --json-input payload.json --output=json
 jira issue comment add PROJ-123 --json-input adf.json --no-input --output=json
 ```
 
+## Markdown input
+
+Every rich-text surface also accepts GFM Markdown as a convenience layer
+(`--body-markdown`, `description_markdown`) and converts it client-side.
+Paragraphs, headings, bold/italic/strike, inline code, links, bullet and
+ordered lists, fenced code blocks, blockquotes, tables, and horizontal rules
+convert faithfully. A few constructs degrade by design:
+
+| Markdown | Converts to | Strict mode |
+|---|---|---|
+| `![alt](url)` image | Alt-text link to the URL | Passes (non-lossy downgrade) |
+| Blockquote inside a list item (`- >text`) | Quoted content hoisted into the item | Passes (non-lossy downgrade) |
+| Decorative mark on inline code (``**`code`**``) | Code mark kept, decoration dropped | **Fails** with the offending line |
+| Raw HTML | Dropped | **Fails** with the offending line |
+
+Constructs with no Markdown spelling at all — mentions, panels, status
+lozenges, cards — never enter the converter; author them as native ADF.
+
+Conversion diagnostics are source-mapped: an error or warning names the
+Markdown line and column and quotes the offending snippet, and failures carry
+the stable `markdown_lossy_conversion` code.
+
+## Convert and lint
+
+`jira adf convert` runs the same converter, normalizer, and validator the
+mutation pipeline runs — without touching Jira — so rich text can be authored
+and linted in isolation, then submitted anywhere `--json-input` is accepted.
+`jira adf render` is the reverse projection for *reviewing* existing ADF as
+Markdown; it is lossy by design and its output is never meant to be submitted
+back.
+
+Lint on its own — exit `0` means the submit cannot fail conversion — or chain
+author → convert → submit in one pipe:
+
+```sh
+jira adf convert --input notes.md --output=json
+jira adf convert --input notes.md --output=compact | jira issue comment add PROJ-123 --json-input -
+```
+
+Review an existing body as Markdown (lossy, read-only):
+
+```sh
+jira adf render --input body.json --output=json
+```
+
+Both subcommands are local-only — no profile, no network — and honor the same
+`--adf-strict` / `--adf-best-effort` modes as mutations.
+
 ## Validation modes
 
 `--adf-strict` treats lossy conversion as an error. `--adf-best-effort`
@@ -60,7 +108,8 @@ Nodes: `doc`, `paragraph`, `text`, `heading` (level 1-6), `bulletList`,
 `tableRow`, `tableCell`, `tableHeader`.
 
 Marks: `strong`, `em`, `strike`, `code`, `link`, `textColor`,
-`backgroundColor`, `subsup`, `underline`.
+`backgroundColor`, `subsup`, `underline`. The `code` mark combines only with
+`link`; any other mark on code text is invalid.
 
 A few nodes carry required attributes: `heading` needs `level` (1-6),
 `panel` needs `panelType` (`info`/`warning`/`error`/`success`/`note`),
@@ -87,4 +136,6 @@ and mark, with its capabilities and the Atlassian documentation link.
 *   [ADF JSON Schema](https://go.atlassian.com/adf-json-schema):
     the machine-readable schema Atlassian publishes for validation.
 *   [`agent adf-matrix`](agent.md): the CLI's live coverage matrix.
+*   [`adf convert` reference](reference/jira/adf/convert.md) and
+    [`adf render` reference](reference/jira/adf/render.md): full flag tables.
 *   [`custom-fields`](custom-fields.md): rich-text custom fields that accept ADF.

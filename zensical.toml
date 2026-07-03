@@ -51,6 +51,11 @@ nav = [
     { Reference = [
         { "jira" = [
             "reference/jira/index.md",
+            { "adf" = [
+                "reference/jira/adf/index.md",
+                { "convert" = "reference/jira/adf/convert.md" },
+                { "render" = "reference/jira/adf/render.md" },
+            ] },
             { "agent" = [
                 "reference/jira/agent/index.md",
                 { "adf-matrix" = "reference/jira/agent/adf-matrix.md" },
@@ -164,6 +169,7 @@ nav = [
                 { "saved" = "reference/jira/search/saved.md" },
             ] },
             { "tui" = "reference/jira/tui.md" },
+            { "update" = "reference/jira/update.md" },
             { "version" = "reference/jira/version.md" },
             { "worklog" = [
                 "reference/jira/worklog/index.md",

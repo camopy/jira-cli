@@ -230,11 +230,20 @@ handle this for you; the one-line installer prints a PATH-fix hint; for
 
 ## Update jira
 
-`jira update` detects how the binary was installed and either updates it
-directly (Homebrew, release-archive installs) or prints the installer command
-to run (Scoop, mise, `go install`). `jira update --dry-run` reports the
-installed and latest versions without changing anything. The equivalent
-per-channel commands:
+The binary updates itself — reach for `jira update` first, or pass `--dry-run`
+to report the installed and latest versions without changing anything:
+
+```sh
+jira update
+jira update --dry-run
+```
+
+It detects how the binary was installed: Homebrew and release-archive installs
+are updated directly (checksum-verified, rollback-safe), while Scoop, mise, and
+`go install` binaries are owned by their installer — `jira update` prints the
+exact command to run instead of touching them.
+
+Prefer to drive the installer yourself? The per-channel commands:
 
 === "Homebrew"
 

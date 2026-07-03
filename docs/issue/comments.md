@@ -8,7 +8,8 @@ icon: material/comment-text-outline
 
 Four verbs for the conversation on an issue: `add` writes one, `list` reads the
 thread, `edit` rewrites one by id, `delete` removes one. Comment bodies are
-[ADF](../adf.md) — pass Markdown for convenience or native ADF JSON for exact
+[ADF](../adf.md) — pass Markdown for convenience, pre-flight it with
+[`adf convert`](../adf.md#convert-and-lint), or send native ADF JSON for exact
 control. JSON examples below show the `data` block only; the envelope wrapper and
 exit codes live on [Output](../output.md), and each command links to its
 reference page for the full flag and field tables.
@@ -25,6 +26,7 @@ validated ADF and never contacts Jira.
 jira issue comment add PROJ-123 --body-markdown "Deployed to staging."
 jira issue comment add PROJ-1..10 -p 4 --body-markdown "Release note"
 jira issue comment add PROJ-123 --json-input ./comment.json
+jira adf convert --input notes.md --output=compact | jira issue comment add PROJ-123 --json-input -
 jira issue comment add PROJ-123 --body-markdown "Internal note." --visibility-role Developers
 jira issue comment add PROJ-123 --body-markdown "Draft." --dry-run --output=json
 ```
@@ -34,14 +36,14 @@ jira issue comment add PROJ-123 --body-markdown "Draft." --dry-run --output=json
    fans the writes out (default `1`, max `16`).
 
 The `data.comment` object carries the created comment with snake-case keys; the
-ADF body comes back rendered to Markdown:
+`body` is the native ADF document as Jira stored it:
 
 ```json
 {
   "issue": "PROJ-123",
   "comment": {
     "id": "10244",
-    "body": "Deployed to staging.\n",
+    "body": { "type": "doc", "version": 1, "content": [ { "type": "paragraph", "content": [ { "type": "text", "text": "Deployed to staging." } ] } ] },
     "author": { "account_id": "712020:…", "display_name": "John Doe", "email_address": "john.doe@example.com" },
     "update_author": { "…": "same shape as author" },
     "visibility": null,
@@ -83,12 +85,13 @@ Comments  (2 comments)
 #10245    John Doe       2026-05-27T07:13:03.697-0400  Rollout complete.
 ```
 
-The JSON `data` carries the rendered comments and a pagination block:
+The JSON `data` carries each comment with its native ADF body and a pagination
+block:
 
 ```json
 {
   "comments": [
-    { "id": "10244", "body": "Deployed to staging.\n", "author": { "…": "…" }, "update_author": { "…": "…" }, "visibility": null, "created": "…", "updated": "…" }
+    { "id": "10244", "body": { "type": "doc", "version": 1, "content": [ "…" ] }, "author": { "…": "…" }, "update_author": { "…": "…" }, "visibility": null, "created": "…", "updated": "…" }
   ],
   "pagination": { "is_last": false, "max_results": 50, "next_page_token": "", "start_at": 0, "total": 2 }
 }
@@ -97,12 +100,20 @@ The JSON `data` carries the rendered comments and a pagination block:
 Multiple keys return `data.results[]`; each successful entry's `data` holds that
 issue's `comments`, `pagination`, and any per-key `warnings`.
 
-!!! warning "Lossy ADF renders surface as warnings"
-    Bodies are rendered to Markdown for human and JSON output. A comment whose
-    ADF can't round-trip cleanly is listed under `warnings[]` (`type:
-    adf-lossy-comment`) with the constructs that were dropped. If `--all` stops on a
-    rate limit, `pagination.is_last` stays `false`, `next_page_token` carries the
-    resume cursor, and a `rate-limit-during-paginate` warning is added.
+!!! tip "Bodies round-trip losslessly"
+    `body` is the document exactly as Jira stores it — mentions keep their
+    `accountId`, status lozenges and cards survive — so it can be fed straight
+    back to [`comment edit`](#comment-edit) via `--json-input`, or reviewed as
+    Markdown with [`adf render`](../adf.md#convert-and-lint). Human output
+    flattens each body to a one-line preview for display only.
+
+!!! warning "Lossy Markdown renderings surface as warnings"
+    A comment containing constructs with no Markdown spelling is listed under
+    `warnings[]` (`type: adf-lossy-comment`) naming them — the JSON `body` is
+    unaffected; the warning concerns the human preview and any Markdown
+    projection you apply. If `--all` stops on a rate limit,
+    `pagination.is_last` stays `false`, `next_page_token` carries the resume
+    cursor, and a `rate-limit-during-paginate` warning is added.
 
 [Full flags & output fields →](../reference/jira/issue/comment/list.md)
 
