@@ -113,7 +113,7 @@ func newApp(svc core.Services, cfg *config.Config, profile config.Profile, base 
 	ctx.Board = profile.DefaultBoard
 	ctx.BaseURL = profile.BaseURL
 	ctx.WorkdaySeconds = profile.WorkdaySeconds
-	ctx.Version = version.Version
+	ctx.Version = version.Version()
 	ctx.ConfigPath = cfgPath
 	if cfg != nil {
 		ctx.SetPreviewFromConfig(cfg.TUI.Preview)

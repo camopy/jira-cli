@@ -32,12 +32,14 @@ builds:
         goarch: amd64
     flags:
       - -trimpath
+    # Version resolution is delegated to clive, so the version ldflag targets
+    # clive's injection point. Commit and build time come from the VCS
+    # metadata Go embeds at build time; Branch and BuildBy stay on
+    # internal/version (clive does not model them).
     ldflags:
       - -s -w
-      - -X '{{ .ModulePath }}/internal/version.Version={{ .Version }}'
-      - -X '{{ .ModulePath }}/internal/version.Commit={{ .ShortCommit }}'
+      - -X 'github.com/gechr/clive.version={{ .Version }}'
       - -X '{{ .ModulePath }}/internal/version.Branch={{ .Branch }}'
-      - -X '{{ .ModulePath }}/internal/version.BuildTime={{ .CommitDate }}'
       - -X '{{ .ModulePath }}/internal/version.BuildBy=goreleaser'
 
 archives:

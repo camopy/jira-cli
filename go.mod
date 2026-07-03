@@ -13,10 +13,10 @@ require (
 	github.com/agnivade/levenshtein v1.2.1
 	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/charmbracelet/x/exp/teatest/v2 v2.0.0-20260608090822-c3ad58c6c9e5
-	github.com/gechr/clib v0.5.4
-	github.com/gechr/clog v0.11.2
-	github.com/gechr/primer v0.0.14
-	github.com/gechr/x v0.1.4
+	github.com/gechr/clib v0.5.8
+	github.com/gechr/clog v0.11.12
+	github.com/gechr/primer v0.0.16
+	github.com/gechr/x v0.1.14
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/knadh/koanf/parsers/toml v0.1.0
 	github.com/knadh/koanf/providers/confmap v1.0.0
@@ -116,6 +116,7 @@ require (
 	github.com/firefart/nonamedreturns v1.0.7 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/fzipp/gocyclo v0.6.0 // indirect
+	github.com/gechr/clive v0.2.4 // indirect
 	github.com/ghostiam/protogetter v0.3.21 // indirect
 	github.com/go-critic/go-critic v0.14.3 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
@@ -211,7 +212,7 @@ require (
 	github.com/openai/openai-go/v3 v3.39.0 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
-	github.com/pelletier/go-toml/v2 v2.4.0 // indirect
+	github.com/pelletier/go-toml/v2 v2.4.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
@@ -287,10 +288,10 @@ require (
 	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
-	golang.org/x/telemetry v0.0.0-20260616164902-4de325e0180d // indirect
+	golang.org/x/telemetry v0.0.0-20260625142307-59b4966ccb57 // indirect
 	golang.org/x/term v0.44.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
-	golang.org/x/tools v0.46.0 // indirect
+	golang.org/x/tools v0.47.0 // indirect
 	golang.org/x/vuln v1.3.0 // indirect
 	google.golang.org/api v0.285.0 // indirect
 	google.golang.org/genai v1.60.0 // indirect

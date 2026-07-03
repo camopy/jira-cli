@@ -166,7 +166,7 @@ func (s OnePasswordStore) client(ctx context.Context, ref SecretRef) (onePasswor
 // credential error rather than a generic SDK failure.
 func newOnePasswordSDKClient(ctx context.Context, ref SecretRef) (onePasswordClient, error) {
 	opts := []onepassword.ClientOption{
-		onepassword.WithIntegrationInfo("jira-cli", version.Version),
+		onepassword.WithIntegrationInfo("jira-cli", version.Version()),
 	}
 	switch {
 	case os.Getenv(onePasswordServiceAccountTokenEnv) != "":

@@ -11,30 +11,24 @@ jira_version() {
 	jira_git_value dev describe --tags --always --dirty
 }
 
-jira_commit() {
-	jira_git_value unknown rev-parse --short HEAD
-}
-
 jira_branch() {
 	jira_git_value unknown rev-parse --abbrev-ref HEAD
-}
-
-jira_build_time() {
-	date -u +%Y-%m-%dT%H:%M:%SZ
 }
 
 jira_build_by() {
 	whoami
 }
 
+# Version resolution is delegated to clive, so the version ldflag targets
+# clive's injection point. Commit and build time are no longer injected —
+# internal/version reads them from the VCS metadata Go embeds at build time.
+# Branch and BuildBy stay on internal/version (clive does not model them).
 jira_ldflags() {
 	local module="${MODULE:?MODULE is required}"
 
 	printf "%s" "-s -w"
-	printf " -X '%s/internal/version.Version=%s'" "$module" "$(jira_version)"
-	printf " -X '%s/internal/version.Commit=%s'" "$module" "$(jira_commit)"
+	printf " -X 'github.com/gechr/clive.version=%s'" "$(jira_version)"
 	printf " -X '%s/internal/version.Branch=%s'" "$module" "$(jira_branch)"
-	printf " -X '%s/internal/version.BuildTime=%s'" "$module" "$(jira_build_time)"
 	printf " -X '%s/internal/version.BuildBy=%s'" "$module" "$(jira_build_by)"
 }
 

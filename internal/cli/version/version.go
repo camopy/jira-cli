@@ -23,10 +23,10 @@ $ jira version --output=json`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmdutil.WriteEnvelope(cmd, "version", map[string]any{
-				"version":    version.Version,
-				"commit":     version.Commit,
+				"version":    version.Version(),
+				"commit":     version.Commit(),
 				"branch":     version.Branch,
-				"build_time": version.BuildTime,
+				"build_time": version.BuildTime(),
 				"build_by":   version.BuildBy,
 				"summary":    version.String(),
 			})

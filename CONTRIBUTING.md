@@ -25,7 +25,7 @@ mise --cd jira-cli run install --locked
 jira version
 ```
 
-`--cd` runs in the freshly cloned directory, so there's no separate `cd`. `mise run install` auto-provisions the pinned toolchain before the task (`--locked` requires it to be pre-resolved in `mise.lock`), then runs `go install ./cmd/jira` with the version ldflags set, so `jira version` reports a real build that plain `go install` can't. A source build is also the only way to get the `1password` backend, which needs the CGO that release archives don't ship.
+`--cd` runs in the freshly cloned directory, so there's no separate `cd`. `mise run install` auto-provisions the pinned toolchain before the task (`--locked` requires it to be pre-resolved in `mise.lock`), then runs `go install ./cmd/jira` with the version ldflags set, so `jira version` reports the exact `git describe` build (any build reports a real version via Go build info, but only the ldflags carry branch and builder). A source build is also the only way to get the `1password` backend, which needs the CGO that release archives don't ship.
 
 > [!TIP]
 > `mise run build` writes a release-shaped binary to `./dist/jira-<goos>-<goarch>`. Use it to inspect the exact shape the release pipeline produces.

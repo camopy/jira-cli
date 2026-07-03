@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/gechr/x/human"
+	xfilepath "github.com/gechr/x/filepath"
 	"gopkg.in/yaml.v3"
 )
 
@@ -98,5 +98,5 @@ func cutFrontmatter(body, delimiter string) (string, string, bool) {
 }
 
 func expandHome(path string) string {
-	return human.ExpandPath(path)
+	return xfilepath.Expand(path)
 }
