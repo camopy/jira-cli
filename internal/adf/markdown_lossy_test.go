@@ -29,15 +29,19 @@ func TestFromMarkdownLossy_TableConvertsWithoutWarning(t *testing.T) {
 	}
 }
 
-// An image is not a supported authoring node — must warn.
-func TestFromMarkdownLossy_ImageWarns(t *testing.T) {
+// An image degrades to an alt-text link and reports the downgrade as a
+// non-lossy warning — the reference survives, so strict mode is not blocked.
+func TestFromMarkdownLossy_ImageWarnsWithoutBlockingStrict(t *testing.T) {
 	md := "![alt](https://example.com/p.png)\n"
 	_, warnings, err := adf.FromMarkdownLossy(md)
 	if err != nil {
 		t.Fatalf("FromMarkdownLossy: %v", err)
 	}
-	if len(warnings) == 0 {
-		t.Fatal("expected a warning for an unsupported Markdown image")
+	if len(warnings) != 1 {
+		t.Fatalf("warnings = %+v, want exactly the image downgrade notice", warnings)
+	}
+	if warnings[0].Lossy {
+		t.Error("image downgrade must be Lossy=false: the link preserves the reference")
 	}
 }
 

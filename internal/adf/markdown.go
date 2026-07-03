@@ -262,8 +262,7 @@ func (c *mdConverter) inline(n ast.Node, marks []Mark) []Node {
 	case extast.KindStrikethrough:
 		return c.inlineRun(n, append(cloneMarks(marks), Mark{Type: "strike"}))
 	case ast.KindImage:
-		c.warn("image", "inline image dropped")
-		return nil
+		return c.image(n.(*ast.Image), marks)
 	case ast.KindRawHTML:
 		c.warn("inline raw HTML", "")
 		return nil
@@ -271,6 +270,43 @@ func (c *mdConverter) inline(n ast.Node, marks []Mark) []Node {
 		c.warn("inline "+n.Kind().String(), "")
 		return nil
 	}
+}
+
+// image degrades a Markdown image to its alt text (the URL when the alt is
+// empty) carrying a link mark to the image URL. ADF cannot embed external
+// images by URL — media nodes need attachment IDs — so the clickable
+// reference is the faithful fallback. The downgrade is reported with
+// Lossy=false: the reference survives in full, so a strict mutation is not
+// aborted (only silently-dropped content trips the strict gate).
+func (c *mdConverter) image(img *ast.Image, marks []Mark) []Node {
+	url := string(img.Destination)
+	if url == "" {
+		c.warn("image", "image with no URL dropped")
+		return nil
+	}
+	alt := imageAltText(img, c.source)
+	if alt == "" {
+		alt = url
+	}
+	c.warnings = append(c.warnings, Warning{
+		Type:     "markdown_lossy_conversion",
+		Message:  "Markdown image was downgraded to a link during ADF conversion: " + url,
+		NodeType: "image",
+		Lossy:    false,
+	})
+	mark := Mark{Type: "link", Attrs: map[string]any{"href": url}}
+	return []Node{{Type: "text", Text: alt, Marks: append(cloneMarks(marks), mark)}}
+}
+
+// imageAltText collects the image's child text runs (the [alt] part).
+func imageAltText(img *ast.Image, source []byte) string {
+	var b strings.Builder
+	for child := img.FirstChild(); child != nil; child = child.NextSibling() {
+		if t, ok := child.(*ast.Text); ok {
+			b.Write(t.Segment.Value(source))
+		}
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // inlineRun converts the children of an inline container (emphasis,
