@@ -1,5 +1,5 @@
-amends "package://github.com/jdx/hk/releases/download/v1.44.3/hk@1.44.3#/Config.pkl"
-import "package://github.com/jdx/hk/releases/download/v1.44.3/hk@1.44.3#/Builtins.pkl"
+amends "package://github.com/jdx/hk/releases/download/v1.48.0/hk@1.48.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.48.0/hk@1.48.0#/Builtins.pkl"
 
 min_hk_version = "1.44.0"
 
@@ -31,6 +31,9 @@ local linters = new Mapping<String, Step> {
     }
     ["actionlint"] = Builtins.actionlint
     ["zizmor"] = Builtins.zizmor
+    // Honors BETTERLEAKS_CONFIG, so user-level rule extensions apply on top
+    // of the default secret rules without living in the repo.
+    ["betterleaks"] = Builtins.betterleaks
 }
 
 local linters_with_security = (linters) {
@@ -56,6 +59,9 @@ hooks {
     ["commit-msg"] {
         steps {
             ["conventional"] = Builtins.check_conventional_commit
+            ["betterleaks"] = new Step {
+                check = "betterleaks stdin --no-banner < {{commit_msg_file}}"
+            }
         }
     }
 }
