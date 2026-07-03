@@ -78,7 +78,10 @@ run = "go test -v -race -cover ./..."
 
 ["test:integration"]
 description = "Run integration tests"
-run = "go test -v -tags=integration ./tests/integration -count=1 -timeout 60s"
+# The quickstart test builds the CLI; under a parallel `mise run ci` the Go
+# build locks and CPU are contended, so the budget must absorb a full cold
+# build, not just test runtime.
+run = "go test -v -tags=integration ./tests/integration -count=1 -timeout 300s"
 
 ["test:docs"]
 description = "Run the docs-alignment contract tests (README, agent guide, docs site)"
