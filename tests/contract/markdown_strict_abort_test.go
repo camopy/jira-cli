@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// issue create --description-markdown that drops content during ADF
+// issue create --markdown that drops content during ADF
 // conversion (raw HTML has no authoring path) must abort in the
 // default strict mode rather than silently submitting a document with
 // the block missing.

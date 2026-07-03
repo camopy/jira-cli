@@ -17,7 +17,7 @@ Every ADF doc starts with the root:
 
 Body flags come in two forms: native ADF via `--json-input` (the `description`
 / comment / `*_markdown`-free payload), and the Markdown convenience
-(`--body-markdown`, or a `*_markdown` key in a JSON payload). They are not
+(`--markdown`, or a `*_markdown` key in a JSON payload). They are not
 equivalent.
 
 **Default to native ADF.** It is the canonical wire format and round-trips
@@ -28,7 +28,7 @@ and silently drops anything outside it.
 Markdown converts faithfully for: paragraphs, headings, **bold** / *italic* /
 `code` / ~~strike~~ / links, bullet and ordered lists, fenced code blocks,
 blockquotes, horizontal rules, and tables. If your message is only these,
-`--body-markdown` is fine and saves you hand-writing ADF.
+`--markdown` is fine and saves you hand-writing ADF.
 
 Markdown **cannot express** — these have no Markdown spelling, so the converter
 omits them entirely. Author them as native ADF (every one is in the supported
@@ -52,7 +52,7 @@ committing.
 
 ### Accepted Markdown dialects
 
-Every Markdown input path (`--body-markdown`, `*_markdown` payload keys,
+Every Markdown input path (`--markdown`, `*_markdown` payload keys,
 `jira adf convert`) accepts two dialects:
 
 - **CommonMark / GFM** — the primary dialect, converted exactly as written.

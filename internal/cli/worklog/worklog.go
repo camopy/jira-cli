@@ -32,7 +32,7 @@ func worklogAddCommand() *cobra.Command {
 		Example: `$ jira worklog add PROJ-123 --time-spent 2h30m
 
 # Include a Markdown comment in the worklog
-$ jira worklog add PROJ-123 --time-spent 1h --comment-markdown "Pairing session"
+$ jira worklog add PROJ-123 --time-spent 1h --markdown "Pairing session"
 
 # Preview parsing and ADF validation without contacting Jira
 $ jira worklog add PROJ-123 --time-spent 45m --dry-run
@@ -69,7 +69,9 @@ $ jira worklog add PROJ-123 --json-input worklog.json --dry-run --output=json`,
 				if input.Started != "" && !cmd.Flags().Changed("started") {
 					started = input.Started
 				}
-				if input.CommentMarkdown != "" && !cmd.Flags().Changed("comment-markdown") {
+				// The markdown flags are mutually exclusive with --json-input,
+				// so a payload comment_markdown can never race a flag value.
+				if input.CommentMarkdown != "" {
 					commentMarkdown = input.CommentMarkdown
 				}
 				// `comment` is the canonical ADF document shape — the
@@ -160,9 +162,9 @@ $ jira worklog add PROJ-123 --json-input worklog.json --dry-run --output=json`,
 	fs := cmd.Flags()
 	cmdutil.AddStringVar(fs, &timeSpent, "time-spent", "", "Human-readable time spent [example: 2h30m]", clib.FlagExtra{Group: "Worklog", Placeholder: "DURATION"})
 	cmdutil.AddStringVar(fs, &started, "started", "", "Worklog start timestamp", clib.FlagExtra{Group: "Worklog", Placeholder: "TIME"})
-	cmdutil.AddStringVar(fs, &commentMarkdown, "comment-markdown", "", "Worklog comment as Markdown", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
 	cmdutil.AddFileFlag(fs, &jsonInput, "json-input", "", "Read worklog payload from JSON file (canonical for agents)", "Input", "FILE")
 	cmdutil.AddDryRunFlag(fs, &dryRun, "Preview mutation without submitting")
+	cmdutil.AddMarkdownFlag(cmd, &commentMarkdown, "Worklog comment as Markdown", "comment-markdown")
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
 }

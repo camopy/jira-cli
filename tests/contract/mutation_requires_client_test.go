@@ -20,7 +20,7 @@ func TestNonDryRunMutationsRequireConfiguredJiraClient(t *testing.T) {
 	}{
 		{"issue create", []string{"issue", "create", "--no-input", "--json-input", createPayload, "--output=json"}},
 		{"issue edit", []string{"issue", "edit", "PROJ-1", "--no-input", "--json-input", editPayload, "--output=json"}},
-		{"issue comment", []string{"issue", "comment", "PROJ-1", "--body-markdown", "hello", "--no-input", "--output=json"}},
+		{"issue comment", []string{"issue", "comment", "PROJ-1", "--markdown", "hello", "--no-input", "--output=json"}},
 		{"worklog add", []string{"worklog", "add", "PROJ-1", "--time-spent", "45m", "--no-input", "--output=json"}},
 		{"epic add", []string{"epic", "add", "PROJ-1", "EPIC-1", "--no-input", "--output=json"}},
 		{"epic remove", []string{"epic", "remove", "PROJ-1", "--no-input", "--output=json"}},

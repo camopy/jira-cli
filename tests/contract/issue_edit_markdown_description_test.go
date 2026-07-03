@@ -1,7 +1,7 @@
 package contract
 
 // Coverage for `issue edit` Markdown descriptions. A description supplied
-// via the --description-markdown flag, or via a `description_markdown` key
+// via the --markdown flag, or via a `description_markdown` key
 // inside a --json-input `{fields:{...}}` payload, MUST be converted to ADF
 // through the same lossy converter the create path uses and routed through
 // pipeline.RunMutation. The validated ADF document is what reaches the wire;
@@ -80,7 +80,7 @@ func assertConvertedADF(t *testing.T, desc map[string]any, wantBody string) {
 }
 
 // TestIssueEditDescriptionMarkdownFlagSubmitsValidatedADF proves the
-// --description-markdown flag is converted to ADF and submitted as a
+// --markdown flag is converted to ADF and submitted as a
 // structured document on the live PUT, with the raw convenience key absent.
 func TestIssueEditDescriptionMarkdownFlagSubmitsValidatedADF(t *testing.T) {
 	cap := &captureServer{}
@@ -99,7 +99,7 @@ func TestIssueEditDescriptionMarkdownFlagSubmitsValidatedADF(t *testing.T) {
 	cfg := jiraConfig(t, srv.URL)
 	stdout, stderr, code := runJira(t, "--config", cfg,
 		"issue", "edit", "PROJ-1", "--no-input",
-		"--description-markdown", "# Heading\n\nBody paragraph", "--output=json")
+		"--markdown", "# Heading\n\nBody paragraph", "--output=json")
 	if code != 0 {
 		t.Fatalf("exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
 	}
@@ -175,7 +175,7 @@ func TestIssueEditDescriptionMarkdownJSONKeySubmitsValidatedADF(t *testing.T) {
 func TestIssueEditDescriptionMarkdownDryRunPreview(t *testing.T) {
 	cmd := exec.Command("go", "run", "../../cmd/jira",
 		"issue", "edit", "PROJ-1", "--dry-run", "--no-input",
-		"--description-markdown", "# Title\n\nText body", "--output=json")
+		"--markdown", "# Title\n\nText body", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue edit dry-run error = %v\n%s", err, out)
@@ -208,7 +208,7 @@ func TestIssueEditDescriptionMarkdownDryRunPreview(t *testing.T) {
 func TestIssueEditDescriptionMarkdownMultiKeyDryRun(t *testing.T) {
 	cmd := exec.Command("go", "run", "../../cmd/jira",
 		"issue", "edit", "PROJ-1", "PROJ-2", "--dry-run", "--no-input",
-		"--description-markdown", "# Shared\n\nBody para", "--output=json")
+		"--markdown", "# Shared\n\nBody para", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("multi-key dry-run error = %v\n%s", err, out)
@@ -238,10 +238,11 @@ func TestIssueEditDescriptionMarkdownMultiKeyDryRun(t *testing.T) {
 	}
 }
 
-// TestIssueEditDescriptionMarkdownFlagOverridesPayload proves the flag wins
-// over a --json-input `description_markdown` key, matching the documented
-// --summary / --assignee layering.
-func TestIssueEditDescriptionMarkdownFlagOverridesPayload(t *testing.T) {
+// TestIssueEditMarkdownExcludesJSONInput proves --markdown and --json-input
+// reject the combination outright: they are two ways to set the same field,
+// so the earlier silent flag-over-payload precedence is now a clear error
+// declared as Cobra flag metadata.
+func TestIssueEditMarkdownExcludesJSONInput(t *testing.T) {
 	payload := `{"fields":{"description_markdown":"# From payload\n\npayload body"}}`
 	path := filepath.Join(t.TempDir(), "edit.json")
 	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
@@ -250,29 +251,13 @@ func TestIssueEditDescriptionMarkdownFlagOverridesPayload(t *testing.T) {
 	cmd := exec.Command("go", "run", "../../cmd/jira",
 		"issue", "edit", "PROJ-1", "--dry-run", "--no-input",
 		"--json-input", path,
-		"--description-markdown", "# From flag\n\nflag body", "--output=json")
+		"--markdown", "# From flag\n\nflag body", "--output=json")
 	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("dry-run error = %v\n%s", err, out)
+	if err == nil {
+		t.Fatalf("--markdown with --json-input must be rejected, got success:\n%s", out)
 	}
-	var env struct {
-		Data struct {
-			Fields map[string]any `json:"fields"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(out, &env); err != nil {
-		t.Fatalf("output not JSON: %v\n%s", err, out)
-	}
-	desc, ok := env.Data.Fields["description"].(map[string]any)
-	if !ok {
-		t.Fatalf("no encoded description: %#v", env.Data.Fields)
-	}
-	got := adfDocText(desc)
-	if !strings.Contains(got, "flag body") {
-		t.Fatalf("flag should win over payload description_markdown, got %q", got)
-	}
-	if strings.Contains(got, "payload body") {
-		t.Fatalf("payload description_markdown leaked despite flag override, got %q", got)
+	if !strings.Contains(string(out), "markdown") || !strings.Contains(string(out), "json-input") {
+		t.Fatalf("mutual-exclusion error must name both flags:\n%s", out)
 	}
 }
 
@@ -296,7 +281,7 @@ func TestIssueEditDescriptionMarkdownStrictAbortsBeforeWire(t *testing.T) {
 	cfg := jiraConfig(t, srv.URL)
 	stdout, stderr, code := runJira(t, "--config", cfg,
 		"issue", "edit", "PROJ-1", "--no-input",
-		"--description-markdown", "intro\n\n<div>\nraw\n</div>\n", "--output=json")
+		"--markdown", "intro\n\n<div>\nraw\n</div>\n", "--output=json")
 	if code == 0 {
 		t.Fatalf("strict mode accepted lossy raw HTML; want abort\nstdout=%s", stdout)
 	}
@@ -321,7 +306,7 @@ func TestIssueEditDescriptionMarkdownStrictAbortsBeforeWire(t *testing.T) {
 func TestIssueEditDescriptionMarkdownBestEffortWarns(t *testing.T) {
 	cmd := exec.Command("go", "run", "../../cmd/jira",
 		"--adf-best-effort", "issue", "edit", "PROJ-1", "--dry-run", "--no-input",
-		"--description-markdown", "intro\n\n<div>\nraw\n</div>\n", "--output=json")
+		"--markdown", "intro\n\n<div>\nraw\n</div>\n", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("best-effort dry-run should proceed, got error = %v\n%s", err, out)

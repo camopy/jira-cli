@@ -32,7 +32,7 @@ func TestReadOnlyModeBlocksMutationsAtHTTPLayer(t *testing.T) {
 	}{
 		{"issue create", []string{"issue", "create", "--no-input", "--json-input", createPayload, "--output=json"}},
 		{"issue edit", []string{"issue", "edit", "PROJ-1", "--no-input", "--json-input", editPayload, "--output=json"}},
-		{"issue comment", []string{"issue", "comment", "PROJ-1", "--body-markdown", "x", "--no-input", "--output=json"}},
+		{"issue comment", []string{"issue", "comment", "PROJ-1", "--markdown", "x", "--no-input", "--output=json"}},
 		{"worklog add", []string{"worklog", "add", "PROJ-1", "--time-spent", "30m", "--no-input", "--output=json"}},
 		{"epic add", []string{"epic", "add", "PROJ-1", "EPIC-1", "--no-input", "--output=json"}},
 	} {

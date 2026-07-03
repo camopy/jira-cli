@@ -9,14 +9,14 @@ When: time spent on an issue must be recorded against its worklog for sprint rep
 
 # optional metadata
 - `--started <RFC3339>` — backdate or pin a start time; otherwise Jira stamps "now".
-- `--comment-markdown "<text>"` — short worklog comment; markdown is lossy (see → `adf_reference`).
+- `--markdown "<text>"` — short worklog comment; markdown is lossy (see → `adf_reference`).
 - `--json-input <file>` — full payload, including ADF-bodied comment, for the lossless path.
 
 **Run**
 - Quick log: `jira worklog add KEY --time-spent 1h30m --output=json`
-- Bulk log: `jira worklog add <PROJECT_KEY>-1..10 -p 4 --time-spent 15m --comment-markdown "triage" --output=json`
+- Bulk log: `jira worklog add <PROJECT_KEY>-1..10 -p 4 --time-spent 15m --markdown "triage" --output=json`
 - Backdated: `jira worklog add KEY --time-spent 2h --started 2026-05-04T09:00:00.000+0000 --output=json`
-- With markdown comment: `jira worklog add KEY --time-spent 45m --comment-markdown "fixed bug X" --output=json`
+- With markdown comment: `jira worklog add KEY --time-spent 45m --markdown "fixed bug X" --output=json`
 - Full payload (ADF comment supported): `jira worklog add KEY --json-input wl.json --output=json`
 - Read back: `jira worklog list KEY --output=json`
 - Multi-key read back: `jira worklog list <PROJECT_KEY>-1..10 -p 4 --output=json`
@@ -33,7 +33,7 @@ When: time spent on an issue must be recorded against its worklog for sprint rep
 
 **Behavior**
 - Durations are concatenable (`1d 2h 30m`); whitespace is permitted between units.
-- `--comment-markdown` and the `comment` field inside `--json-input` are mutually exclusive on the same call — pick one body path.
+- `--markdown` and the `comment` field inside `--json-input` are mutually exclusive on the same call — pick one body path.
 - `-p` / `--parallelism` is bounded to 1..16 and affects multi-key worklog add/list.
 
 **Recover**

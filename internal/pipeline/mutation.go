@@ -38,7 +38,7 @@ type MutationInput struct {
 	ParseError string
 
 	// Stage 2 — ADF + compatibility. The Document the caller built
-	// (typically via adf.FromMarkdown for --description-markdown, or
+	// (typically via adf.FromMarkdown for --markdown, or
 	// via --json-input for raw ADF). FieldCompat selects per-field
 	// compatibility (inlineCard rules).
 	ADFDoc      *adf.Document

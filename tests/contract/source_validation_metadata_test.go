@@ -22,11 +22,11 @@ func TestCommentBodySourcesRejectedByMetadata(t *testing.T) {
 	}{
 		{
 			"comment add",
-			[]string{"issue", "comment", "add", "PROJ-1", "--body-markdown", "hi", "--json-input", missing, "--output=json"},
+			[]string{"issue", "comment", "add", "PROJ-1", "--markdown", "hi", "--json-input", missing, "--output=json"},
 		},
 		{
 			"comment edit",
-			[]string{"issue", "comment", "edit", "PROJ-1", "55", "--body-markdown", "hi", "--json-input", missing, "--output=json"},
+			[]string{"issue", "comment", "edit", "PROJ-1", "55", "--markdown", "hi", "--json-input", missing, "--output=json"},
 		},
 	}
 

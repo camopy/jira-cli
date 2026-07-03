@@ -6,8 +6,8 @@ When: an issue needs a status update, decision note, or human-readable annotatio
 
 # body shape
 - Native ADF (preferred for agents — lossless): `--json-input <file>` or `--json-input -` with the ADF doc.
-- Markdown convenience (lossy — see → `adf_reference` for what survives): `--body-markdown "<markdown>"`.
-- `--json-input` and `--body-markdown` are mutually exclusive on `comment add`.
+- Markdown convenience (lossy — see → `adf_reference` for what survives): `--markdown "<markdown>"`.
+- `--json-input` and `--markdown` are mutually exclusive on `comment add`.
 
 # guards
 - `--no-input` is required in agent / non-TTY mode; with no body flags it would otherwise open an editor and exit 3.
@@ -16,8 +16,8 @@ When: an issue needs a status update, decision note, or human-readable annotatio
 **Run**
 - ADF (file): `jira issue comment KEY --json-input adf.json --no-input --output=json`
 - ADF (stdin): `cat adf.json | jira issue comment KEY --json-input - --no-input --output=json`
-- Markdown: `jira issue comment KEY --body-markdown "**heads up**" --no-input --output=json`
-- Bulk markdown: `jira issue comment add <PROJECT_KEY>-1..10 -p 4 --body-markdown "**heads up**" --no-input --output=json`
+- Markdown: `jira issue comment KEY --markdown "**heads up**" --no-input --output=json`
+- Bulk markdown: `jira issue comment add <PROJECT_KEY>-1..10 -p 4 --markdown "**heads up**" --no-input --output=json`
 
 `adf.json` shape — either the full body wrapped in `{"body": {...}}` or just the ADF doc itself:
 
@@ -64,7 +64,7 @@ When: an issue needs a status update, decision note, or human-readable annotatio
 
 **Preconditions**
 - ADF doc shape must satisfy → `adf_reference`; unknown fields are rejected upstream by Jira.
-- `--body-markdown` is converted client-side; constructs without an ADF mapping degrade (see → `adf_reference`).
+- `--markdown` is converted client-side; constructs without an ADF mapping degrade (see → `adf_reference`).
 
 **Behavior**
 - The two body flags are mutually exclusive — passing both fails locally with exit 3 before any Jira call.
@@ -74,8 +74,8 @@ When: an issue needs a status update, decision note, or human-readable annotatio
 **Recover**
 | Symptom | Cause | Next |
 |---|---|---|
-| exit 3, `code: required_flag_missing` | `--no-input` with no body flag (editor flow refused) | Re-run with `--json-input` or `--body-markdown` |
-| exit 3, `code: flag_value_invalid` | Both `--json-input` and `--body-markdown` set | Pick one body flag |
+| exit 3, `code: required_flag_missing` | `--no-input` with no body flag (editor flow refused) | Re-run with `--json-input` or `--markdown` |
+| exit 3, `code: flag_value_invalid` | Both `--json-input` and `--markdown` set | Pick one body flag |
 | exit 4 from upstream | Invalid ADF doc (unknown field, bad structure) | Validate against → `adf_reference` and re-run |
 
 **Next**

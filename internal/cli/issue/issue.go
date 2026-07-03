@@ -696,15 +696,16 @@ func issueListDetailExpand() []string {
 
 func issueCreateCommand() *cobra.Command {
 	var dryRun bool
-	var summary, jsonInput, assignee string
+	var summary, jsonInput, assignee, markdownInput string
 	var project, issueType, parent, priority string
 	var labels []string
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create an issue",
 		Long: "Create a Jira issue from convenience flags, profile defaults, or a JSON " +
-			"payload. Use flags for common fields and `--json-input` for full Jira field " +
-			"objects, custom fields, or rich ADF descriptions.\n\n" +
+			"payload. Use flags for common fields, `--markdown` for a Markdown " +
+			"description, and `--json-input` for full Jira field objects, custom " +
+			"fields, or rich ADF descriptions.\n\n" +
 			"Create requests run through the validate-and-encode mutation pipeline before " +
 			"submission. `--dry-run` performs local parsing, alias normalisation, ADF " +
 			"validation, and preview rendering without resolving credentials or contacting " +
@@ -719,6 +720,9 @@ $ jira issue create --project PROJ --type Bug --summary "Crash on startup" --ass
 
 # Preview the create payload without contacting Jira
 $ jira issue create --project PROJ --type Task --summary "Draft" --dry-run
+
+# Create with a Markdown description (converted to ADF client-side)
+$ jira issue create --project PROJ --type Task --summary "Fix" --markdown "## Steps\n\n1. Repro"
 
 # Preview a full JSON payload for an agent
 $ jira issue create --json-input issue-create.json --dry-run --output=json`,
@@ -742,6 +746,13 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 				priority:  priority,
 				labels:    labels,
 			})
+			// --markdown routes through the same `description_markdown`
+			// payload key the JSON path uses, so one resolver handles both
+			// (extractDescriptionDoc). Mutual exclusion with --json-input
+			// means this never overwrites a payload value.
+			if markdownInput != "" {
+				payload["description_markdown"] = markdownInput
+			}
 			// Resolve the profile WITHOUT building a client: --assignee me,
 			// --no-input validation, and the dry-run preview only need
 			// profile metadata. Credentials are resolved later, at the
@@ -936,6 +947,7 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
 	cmdutil.AddStringVar(cmd.Flags(), &summary, "summary", "", "Issue summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
 	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read issue create payload from JSON file (canonical for agents)", "Input", "FILE")
+	cmdutil.AddMarkdownFlag(cmd, &markdownInput, "Issue description as Markdown (lossy convenience layer, converted to ADF)", "")
 	cmdutil.AddStringVar(cmd.Flags(), &assignee, "assignee", "", "Assign on creation: `me`, an email, or a Jira account ID", clib.FlagExtra{Group: "Fields", Placeholder: "USER", Terse: "assignee", Enum: []string{"me"}, EnumTerse: []string{"current user"}})
 	cmdutil.AddStringVar(cmd.Flags(), &project, "project", "", "Project key (overrides the profile default)", clib.FlagExtra{Group: "Fields", Placeholder: "KEY", Complete: "predictor=cacheproject"})
 	cmdutil.AddStringVar(cmd.Flags(), &issueType, "type", "", "Issue type name (overrides the profile default)", clib.FlagExtra{Group: "Fields", Placeholder: "NAME", Terse: "issue type", Complete: "predictor=cacheissuetype"})
@@ -1138,16 +1150,16 @@ func extractDescriptionDoc(payload map[string]any) (doc adf.Document, present bo
 
 func issueEditCommand() *cobra.Command {
 	var dryRun bool
-	var jsonInput, summary, assignee, descriptionMarkdown string
+	var jsonInput, summary, assignee, markdownInput string
 	var parallelism int
 	cmd := &cobra.Command{
 		Use:   "edit KEY...",
 		Short: "Edit an issue",
 		Long: "Edit one or more Jira issues. With no field flags, a single-key edit opens " +
 			"the configured external editor on the issue description. Use `--summary`, " +
-			"`--assignee`, `--description-markdown`, or `--json-input` for headless and " +
+			"`--assignee`, `--markdown`, or `--json-input` for headless and " +
 			"multi-key edits.\n\n" +
-			"`--description-markdown` is the headless way to set the description: it " +
+			"`--markdown` is the headless way to set the description: it " +
 			"converts Markdown to ADF with the same lossy converter `issue create` uses " +
 			"and replaces the issue description. A `--json-input` payload may carry the " +
 			"`description_markdown` key for the same effect.\n\n" +
@@ -1161,10 +1173,10 @@ func issueEditCommand() *cobra.Command {
 $ jira issue edit PROJ-123 --assignee me
 
 # Replace the description from Markdown (headless, no editor)
-$ jira issue edit PROJ-123 --description-markdown "## Steps\n\n1. Repro\n2. Fix"
+$ jira issue edit PROJ-123 --markdown "## Steps\n\n1. Repro\n2. Fix"
 
 # Preview a Markdown description as encoded ADF without contacting Jira
-$ jira issue edit PROJ-123 --description-markdown "Done." --dry-run --output=json
+$ jira issue edit PROJ-123 --markdown "Done." --dry-run --output=json
 
 # Apply JSON fields to several issues at once
 $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=json`,
@@ -1195,16 +1207,16 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 			if v := strings.TrimSpace(summary); v != "" {
 				fields["summary"] = v
 			}
-			// --description-markdown is the headless equivalent of the editor
-			// flow: a Markdown string converted to ADF via the SAME resolver
-			// the create path uses (extractDescriptionDoc below). It is stored
+			// --markdown is the headless equivalent of the editor flow: a
+			// Markdown string converted to ADF via the SAME resolver the
+			// create path uses (extractDescriptionDoc below). It is stored
 			// under the create alias `description_markdown` so a flag and a
-			// `--json-input` payload key share one routing path. The flag wins
-			// over a payload key, matching --summary / --assignee layering; the
-			// resolver then prefers Markdown over any literal `description`,
-			// mirroring create-side behavior.
-			if descriptionMarkdown != "" {
-				fields["description_markdown"] = descriptionMarkdown
+			// `--json-input` payload key share one routing path. Mutual
+			// exclusion with --json-input means this never overwrites a
+			// payload value; the resolver then prefers Markdown over any
+			// literal `description`, mirroring create-side behavior.
+			if markdownInput != "" {
+				fields["description_markdown"] = markdownInput
 			}
 			assigneeWire, assigneeEmail, assigneeSet, aerr := resolveAssigneeField(assignee, profile)
 			if aerr != nil {
@@ -1247,16 +1259,16 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 					return fmt.Errorf(`validation: --json-input payload has no recognized fields; wrap issue fields under a top-level "fields" object, e.g. {"fields": {"summary": "New"}}`)
 				}
 				if noInput {
-					return fmt.Errorf("validation: the issue edit editor needs an interactive terminal; in a non-interactive context, provide --summary, --assignee, --description-markdown, or --json-input")
+					return fmt.Errorf("validation: the issue edit editor needs an interactive terminal; in a non-interactive context, provide --summary, --assignee, --markdown, or --json-input")
 				}
 				if len(keys) > 1 {
-					return fmt.Errorf("validation: multi-key issue edit requires --summary, --assignee, --description-markdown, or --json-input")
+					return fmt.Errorf("validation: multi-key issue edit requires --summary, --assignee, --markdown, or --json-input")
 				}
 				return issueEditWithEditor(cmd, keys[0], dryRun)
 			}
 			// The issue description is the primary ADF document for this
 			// mutation. Whether it arrived as `description_markdown` (the
-			// --description-markdown flag or a --json-input key) or as a raw
+			// --markdown flag or a --json-input key) or as a raw
 			// ADF `description`, it is pulled out of the fields map here and
 			// fed to the pipeline as ADFDoc so stage 2 (ValidateDoc +
 			// ApplyCompatibility) runs on it BEFORE submission. The
@@ -1368,7 +1380,7 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
 	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read issue edit payload from JSON file (canonical for agents)", "Input", "FILE")
 	cmdutil.AddStringVar(cmd.Flags(), &summary, "summary", "", "Replace the issue summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
-	cmdutil.AddStringVar(cmd.Flags(), &descriptionMarkdown, "description-markdown", "", "Replace the description with Markdown (lossy convenience layer, converted to ADF)", clib.FlagExtra{Group: "Fields", Placeholder: "MARKDOWN"})
+	cmdutil.AddMarkdownFlag(cmd, &markdownInput, "Replace the description with Markdown (lossy convenience layer, converted to ADF)", "description-markdown")
 	cmdutil.AddStringVar(cmd.Flags(), &assignee, "assignee", "", "Set assignee: `me`, `none`/`unassigned`, an email, or a Jira account ID", clib.FlagExtra{Group: "Fields", Placeholder: "USER", Terse: "assignee", Enum: []string{"me", "none"}, EnumTerse: []string{"current user", "unassign"}})
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
@@ -1379,7 +1391,7 @@ type issueEditManyInput struct {
 	NamedADFDocs map[string]adf.Document
 	DryRun       bool
 	// DescriptionDoc is the primary ADF document (from
-	// --description-markdown or a `description` / `description_markdown`
+	// --markdown or a `description` / `description_markdown`
 	// payload key) routed as the pipeline's ADFDoc. DescriptionSet reports
 	// whether it is populated; MarkdownWarnings carries any lossy
 	// Markdown-conversion warnings so strict mode can abort.

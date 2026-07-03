@@ -175,7 +175,7 @@ Behaviours that read like bugs but are deliberate. Check here before filing one.
     only, and fractional values (`1.5h`) are rejected — combine whole units.
 
 **A Markdown body lost its @mentions, dates, or panels, with no warning.**
-:   Those ADF constructs have no Markdown spelling, so `--body-markdown` /
+:   Those ADF constructs have no Markdown spelling, so `--markdown` /
     `description_markdown` can't emit them — and `--adf-strict` can't flag what
     never enters the pipeline. Author rich bodies as native ADF via
     `--json-input`; keep Markdown for plain prose. See [ADF](adf.md).
@@ -199,7 +199,7 @@ Behaviours that read like bugs but are deliberate. Check here before filing one.
 **`issue edit KEY` exits 3 under an agent or in a pipe.**
 :   The bare form opens `$EDITOR` on the description, which needs a terminal, so
     a non-TTY or agent context refuses it rather than hang. Pass `--summary`,
-    `--assignee`, `--description-markdown`, or `--json-input`.
+    `--assignee`, `--markdown`, or `--json-input`.
 
 **A destructive command refuses without `--force`.**
 :   `--no-input` removes the confirmation prompt, so `--force` is its explicit

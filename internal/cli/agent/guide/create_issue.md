@@ -79,7 +79,7 @@ Richer payload (every key past the aliases is forwarded verbatim into Jira's `fi
 
 **Behavior**
 - Detection of ADF in the payload is **by value shape, not key suffix** — the CLI walks the payload, finds any value whose root matches `{type: "doc", version: N, content: [...]}`, and validates it. Strict mode rejects with the offending node/mark name; best-effort preserves and emits `unknown_adf_node` / `unknown_adf_mark` warnings.
-- `--body-markdown` and `description_markdown` are human convenience layers and are lossy — use them only when you can tolerate the loss.
+- `--markdown` and `description_markdown` are human convenience layers and are lossy — use them only when you can tolerate the loss.
 - For the full ADF document shape and supported nodes/marks, see → `adf_reference`.
 
 **Recover**

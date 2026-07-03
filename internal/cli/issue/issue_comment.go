@@ -42,13 +42,13 @@ func issueCommentGroup() *cobra.Command {
 			"JSON. Mutating comment commands run the body through the validate-and-encode " +
 			"ADF pipeline before submission.",
 		Example: `# Add a comment using the legacy shorthand
-$ jira issue comment PROJ-123 --body-markdown "Deployed to staging."
+$ jira issue comment PROJ-123 --markdown "Deployed to staging."
 
 # Add a comment from a native ADF JSON file
 $ jira issue comment PROJ-123 --json-input ./comment.json
 
 # Preview the comment without contacting Jira
-$ jira issue comment add PROJ-123 --body-markdown "Draft note" --dry-run`,
+$ jira issue comment add PROJ-123 --markdown "Draft note" --dry-run`,
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		Args:        cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -385,16 +385,16 @@ func commentAddCommand() *cobra.Command {
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		Args:        cobra.MinimumNArgs(1),
 		Example: `# Add a Markdown comment to an issue
-$ jira issue comment add PROJ-123 --body-markdown "Deployed to staging."
+$ jira issue comment add PROJ-123 --markdown "Deployed to staging."
 
 # Add a comment from a native ADF JSON file
 $ jira issue comment add PROJ-123 --json-input ./comment.json
 
 # Restrict a comment to a Jira role
-$ jira issue comment add PROJ-123 --body-markdown "Internal note." --visibility-role Developers
+$ jira issue comment add PROJ-123 --markdown "Internal note." --visibility-role Developers
 
 # Preview a comment for an agent
-$ jira issue comment add PROJ-123 --body-markdown "Draft note." --dry-run --output=json`,
+$ jira issue comment add PROJ-123 --markdown "Draft note." --dry-run --output=json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keys, err := issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
 			if err != nil {
@@ -408,16 +408,15 @@ $ jira issue comment add PROJ-123 --body-markdown "Draft note." --dry-run --outp
 }
 
 func registerCommentAddFlags(cmd *cobra.Command, flags *commentAddFlags) {
-	cmdutil.AddStringVar(cmd.Flags(), &flags.markdown, "body-markdown", "", "Comment body as Markdown (lossy convenience layer)", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
 	cmdutil.AddFileFlag(cmd.Flags(), &flags.jsonInput, "json-input", "", "Comment body as native ADF JSON file (canonical for agents)", "Input", "FILE")
+	// Exactly one body source: the Markdown convenience string or the native
+	// ADF JSON file. AddMarkdownFlag declares the exclusions as Cobra flag
+	// metadata so the conflict is rejected before RunE reads either source.
+	cmdutil.AddMarkdownFlag(cmd, &flags.markdown, "Comment body as Markdown (lossy convenience layer)", "body-markdown")
 	cmdutil.AddStringVar(cmd.Flags(), &flags.visRole, "visibility-role", "", "Restrict comment to a Jira role (e.g. Developers)", clib.FlagExtra{Group: "Visibility", Placeholder: "ROLE"})
 	cmdutil.AddStringVar(cmd.Flags(), &flags.visGroup, "visibility-group", "", "Restrict comment to a Jira group", clib.FlagExtra{Group: "Visibility", Placeholder: "GROUP"})
 	cmdutil.AddDryRunFlag(cmd.Flags(), &flags.dryRun, "Preview mutation without submitting")
 	cmdutil.AddParallelismFlag(cmd, &flags.parallelism)
-	// Exactly one body source: a Markdown convenience string or a native
-	// ADF JSON file. Declared as Cobra flag metadata so the conflict is
-	// rejected before RunE reads either source.
-	cmd.MarkFlagsMutuallyExclusive("body-markdown", "json-input")
 }
 
 func runCommentAddKeys(cmd *cobra.Command, keys []string, flags commentAddFlags) error {
@@ -546,26 +545,26 @@ func runCommentAddMany(
 	return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.comment.add", results, cmdutil.KeyedDataWithWarnings(warnings))
 }
 
-// buildCommentBody parses --body-markdown / --json-input into an ADF doc.
+// buildCommentBody parses --markdown / --json-input into an ADF doc.
 // Pre-flight enforces:
 //   - the resulting ADF is non-empty
 //   - --no-input requires explicit body input
 //
-// The body-markdown / json-input exclusivity is enforced declaratively
+// The markdown / json-input exclusivity is enforced declaratively
 // by cmd.MarkFlagsMutuallyExclusive, so it never reaches here.
 func buildCommentBody(cmd *cobra.Command, markdown, jsonInput string, noInput bool) (adf.Document, []adf.Warning, error) {
-	markdownSet := cmd != nil && cmd.Flags().Changed("body-markdown")
+	markdownSet := cmdutil.MarkdownFlagChanged(cmd, "body-markdown")
 	// Empty/missing body: prefer the explicit "body is required" wording so
 	// the validation error surfaces consistently. The --no-input rider still
 	// appears when the caller passed neither flag *and* opted out of prompts.
 	if xstrings.IsBlank(markdown) && jsonInput == "" {
 		switch {
 		case markdownSet:
-			return adf.Document{}, nil, fmt.Errorf("validation: comment body is required: --body-markdown is empty")
+			return adf.Document{}, nil, fmt.Errorf("validation: comment body is required: --markdown is empty")
 		case noInput:
-			return adf.Document{}, nil, fmt.Errorf("validation: comment body is required: --no-input requires --body-markdown or --json-input")
+			return adf.Document{}, nil, fmt.Errorf("validation: comment body is required: --no-input requires --markdown or --json-input")
 		default:
-			return adf.Document{}, nil, fmt.Errorf("validation: comment body is required (use --body-markdown or --json-input)")
+			return adf.Document{}, nil, fmt.Errorf("validation: comment body is required (use --markdown or --json-input)")
 		}
 	}
 	if jsonInput != "" {
@@ -590,7 +589,7 @@ func buildCommentBody(cmd *cobra.Command, markdown, jsonInput string, noInput bo
 		return parsed, nil, nil
 	}
 	if xstrings.IsBlank(markdown) {
-		return adf.Document{}, nil, fmt.Errorf("validation: comment body is required: --body-markdown is empty")
+		return adf.Document{}, nil, fmt.Errorf("validation: comment body is required: --markdown is empty")
 	}
 	doc, warnings, err := adf.FromMarkdownLossy(markdown)
 	if err != nil {
@@ -626,24 +625,23 @@ func commentEditCommand() *cobra.Command {
 		Annotations: map[string]string{"clib": "dynamic-args='issuekey'"},
 		Args:        cobra.ExactArgs(2),
 		Example: `# Replace a comment body with new Markdown
-$ jira issue comment edit PROJ-123 10042 --body-markdown "Updated: rollout complete."
+$ jira issue comment edit PROJ-123 10042 --markdown "Updated: rollout complete."
 
 # Remove a comment's visibility restriction
-$ jira issue comment edit PROJ-123 10042 --body-markdown "Now public." --clear-visibility
+$ jira issue comment edit PROJ-123 10042 --markdown "Now public." --clear-visibility
 
 # Preview a comment edit
-$ jira issue comment edit PROJ-123 10042 --body-markdown "Draft update." --dry-run`,
+$ jira issue comment edit PROJ-123 10042 --markdown "Draft update." --dry-run`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCommentEdit(cmd, args[0], args[1], flags)
 		},
 	}
-	cmdutil.AddStringVar(cmd.Flags(), &flags.markdown, "body-markdown", "", "New body as Markdown", clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
 	cmdutil.AddFileFlag(cmd.Flags(), &flags.jsonInput, "json-input", "", "New body as native ADF JSON file (canonical for agents)", "Input", "FILE")
+	cmdutil.AddMarkdownFlag(cmd, &flags.markdown, "New body as Markdown", "body-markdown")
 	cmdutil.AddStringVar(cmd.Flags(), &flags.visRole, "visibility-role", "", "Replace visibility with a Jira role", clib.FlagExtra{Group: "Visibility", Placeholder: "ROLE"})
 	cmdutil.AddStringVar(cmd.Flags(), &flags.visGroup, "visibility-group", "", "Replace visibility with a Jira group", clib.FlagExtra{Group: "Visibility", Placeholder: "GROUP"})
 	cmdutil.AddBoolVar(cmd.Flags(), &flags.visClear, "clear-visibility", false, "Remove any existing visibility restriction", clib.FlagExtra{Group: "Visibility"})
 	cmdutil.AddDryRunFlag(cmd.Flags(), &flags.dryRun, "Preview without calling Jira")
-	cmd.MarkFlagsMutuallyExclusive("body-markdown", "json-input")
 	return cmd
 }
 

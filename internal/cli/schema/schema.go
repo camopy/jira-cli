@@ -181,8 +181,11 @@ func flagGroups(flags *pflag.FlagSet, annotation string) [][]string {
 			if raw == "" {
 				continue
 			}
-			group := normalizeFlagGroup(raw)
-			if len(group) > 0 {
+			// Hidden members (deprecated aliases) stay out of the schema:
+			// a group is only worth advertising for the flags an agent can
+			// discover, and a single survivor is no longer a relationship.
+			group := visibleFlagGroup(flags, normalizeFlagGroup(raw))
+			if len(group) > 1 {
 				seen[strings.Join(group, "\x00")] = group
 			}
 		}
@@ -195,6 +198,21 @@ func flagGroups(flags *pflag.FlagSet, annotation string) [][]string {
 	out := make([][]string, 0, len(keys))
 	for _, key := range keys {
 		out = append(out, seen[key])
+	}
+	return out
+}
+
+// visibleFlagGroup drops group members that are hidden on flags (or absent
+// from it entirely), so schema consumers only see relationships between
+// flags the schema itself lists.
+func visibleFlagGroup(flags *pflag.FlagSet, group []string) []string {
+	out := make([]string, 0, len(group))
+	for _, name := range group {
+		f := flags.Lookup(strings.TrimPrefix(name, "--"))
+		if f == nil || f.Hidden {
+			continue
+		}
+		out = append(out, name)
 	}
 	return out
 }

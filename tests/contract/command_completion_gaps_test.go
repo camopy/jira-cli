@@ -74,7 +74,7 @@ func TestCommandsUseConfiguredJiraServices(t *testing.T) {
 }
 
 func TestIssueCommentCommandConvertsMarkdownToADF(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "comment", "PROJ-1", "--body-markdown", "hello **world**", "--dry-run", "--no-input", "--output=json")
+	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "comment", "PROJ-1", "--markdown", "hello **world**", "--dry-run", "--no-input", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue comment error = %v\n%s", err, out)

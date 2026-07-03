@@ -21,8 +21,8 @@ Log time against an issue. `--time-spent` takes compact Jira-style durations
 differs.
 
 ```sh
-jira worklog add PROJ-123 --time-spent "1h30m" --comment-markdown "Investigating regression"
-jira worklog add PROJ-1..PROJ-10 -p 4 --time-spent "15m" --comment-markdown "Bulk triage"
+jira worklog add PROJ-123 --time-spent "1h30m" --markdown "Investigating regression"
+jira worklog add PROJ-1..PROJ-10 -p 4 --time-spent "15m" --markdown "Bulk triage"
 jira worklog add PROJ-123 --time-spent "2h" --started "2026-05-27T09:00:00.000-0400"
 jira worklog add PROJ-123 --json-input worklog.json --dry-run
 ```

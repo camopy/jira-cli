@@ -39,7 +39,7 @@ func TestMutationCommandsDryRunMakeNoLiveCalls(t *testing.T) {
 		{"issue.edit", []string{"issue", "edit", "PROJ-1", "--dry-run", "--no-input", "--summary", "renamed"}},
 		{"issue.transition", []string{"issue", "transition", "PROJ-1", "--dry-run", "--transition", "31"}},
 		{"issue.delete", []string{"issue", "delete", "PROJ-1", "--dry-run", "--no-input"}},
-		{"issue.comment.add", []string{"issue", "comment", "add", "PROJ-1", "--dry-run", "--body-markdown", "hello"}},
+		{"issue.comment.add", []string{"issue", "comment", "add", "PROJ-1", "--dry-run", "--markdown", "hello"}},
 		{"issue.link", []string{"issue", "link", "PROJ-1", "--dry-run", "--to", "PROJ-2", "--type", "Blocks"}},
 		{"issue.link.delete", []string{"issue", "link", "delete", "PROJ-1", "9000", "--dry-run", "--no-input"}},
 		{"issue.weblink", []string{"issue", "weblink", "PROJ-1", "--dry-run", "--url", "https://example.com"}},

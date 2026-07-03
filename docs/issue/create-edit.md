@@ -71,7 +71,7 @@ custom fields) with `dry_run: true`.
 ## edit
 
 Change one or more fields on an existing issue. Use `--summary`, `--assignee`,
-or `--description-markdown` for single-field tweaks; pass `--json-input` for
+or `--markdown` for single-field tweaks; pass `--json-input` for
 everything else (an ADF description, custom fields, several fields at once). The
 JSON payload follows
 [Atlassian's `editIssue`](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-put)
@@ -81,17 +81,17 @@ lists and ranges with `-p` / `--parallelism` for bulk field changes.
 Bare `jira issue edit PROJ-123` (no field flags) opens `$EDITOR` on the
 description. That works for a human at a terminal; under `--no-input` the CLI
 refuses it rather than hang on a TTY prompt, and asks for `--summary`,
-`--assignee`, `--description-markdown`, or `--json-input` instead.
+`--assignee`, `--markdown`, or `--json-input` instead.
 
 ```sh
 jira issue edit PROJ-123 --summary "new title"
 jira issue edit PROJ-123 --assignee me
-jira issue edit PROJ-123 --description-markdown "## Steps\n\n1. Repro\n2. Fix"
+jira issue edit PROJ-123 --markdown "## Steps\n\n1. Repro\n2. Fix"
 jira issue edit PROJ-1..PROJ-10 -p 4 --summary "bulk title"
 jira issue edit PROJ-123 --json-input fields.json --dry-run --output=json
 ```
 
-`--description-markdown` is the headless way to replace the description without
+`--markdown` is the headless way to replace the description without
 the editor. It converts Markdown to ADF with the same lossy converter
 [`create` uses](#create), so GFM features beyond the supported set degrade — in
 the default strict mode a lossy conversion aborts before submission; add

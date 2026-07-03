@@ -16,19 +16,19 @@ reference page for the full flag and field tables.
 
 ## comment add
 
-Write one comment to one or more issues. Supply the body as `--body-markdown`
+Write one comment to one or more issues. Supply the body as `--markdown`
 (converted to ADF on the way out) or `--json-input` pointing at a native ADF JSON
 file — the two are mutually exclusive. The body runs through the
 validate-and-encode pipeline before submission; `--dry-run` previews the
 validated ADF and never contacts Jira.
 
 ```sh
-jira issue comment add PROJ-123 --body-markdown "Deployed to staging."
-jira issue comment add PROJ-1..10 -p 4 --body-markdown "Release note"
+jira issue comment add PROJ-123 --markdown "Deployed to staging."
+jira issue comment add PROJ-1..10 -p 4 --markdown "Release note"
 jira issue comment add PROJ-123 --json-input ./comment.json
 jira adf convert --input notes.md --output=compact | jira issue comment add PROJ-123 --json-input -
-jira issue comment add PROJ-123 --body-markdown "Internal note." --visibility-role Developers
-jira issue comment add PROJ-123 --body-markdown "Draft." --dry-run --output=json
+jira issue comment add PROJ-123 --markdown "Internal note." --visibility-role Developers
+jira issue comment add PROJ-123 --markdown "Draft." --dry-run --output=json
 ```
 
 1.  `add` takes multiple keys — separate arguments, comma lists, or `A..B`
@@ -58,7 +58,7 @@ A single key returns the `data` above; multiple keys return ordered
 `data.results[]`, each with `ok` and either the per-issue `data` or an `error`.
 
 !!! info "Legacy shorthand"
-    `jira issue comment PROJ-123 --body-markdown "…"` (no subcommand) still works
+    `jira issue comment PROJ-123 --markdown "…"` (no subcommand) still works
     as an alias of `comment add` and builds an identical request.
 
 [Full flags & output fields →](../reference/jira/issue/comment/add.md)
@@ -121,14 +121,14 @@ issue's `comments`, `pagination`, and any per-key `warnings`.
 
 Rewrite one comment by id — `edit KEY COMMENT_ID` is single-target. Run
 [`comment list`](#comment-list) first to find the id. The replacement body takes
-the same `--body-markdown` / `--json-input` pair as `add`, and visibility can be
+the same `--markdown` / `--json-input` pair as `add`, and visibility can be
 replaced (`--visibility-role` / `--visibility-group`) or removed
 (`--clear-visibility`). `--dry-run` previews the validated body and visibility
 change without contacting Jira.
 
 ```sh
-jira issue comment edit PROJ-123 10042 --body-markdown "Updated: rollout complete."
-jira issue comment edit PROJ-123 10042 --body-markdown "Now public." --clear-visibility
+jira issue comment edit PROJ-123 10042 --markdown "Updated: rollout complete."
+jira issue comment edit PROJ-123 10042 --markdown "Now public." --clear-visibility
 jira issue comment edit PROJ-123 10042 --json-input ./comment.json --dry-run
 ```
 

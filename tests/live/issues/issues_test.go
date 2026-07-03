@@ -140,13 +140,13 @@ func TestLiveIssuesEndToEnd(t *testing.T) {
 	})
 
 	t.Run("comments", func(t *testing.T) {
-		legacy := s.Run(t, "issue", "comment", survivorKey, "--body-markdown", "Legacy comment alias for "+s.RunID)
+		legacy := s.Run(t, "issue", "comment", survivorKey, "--markdown", "Legacy comment alias for "+s.RunID)
 		legacyComment := livekit.MapField(t, legacy.Data, "comment")
 		legacyCommentID := livekit.StringField(t, legacyComment, "id")
 		require.NotEmpty(t, legacyCommentID)
 		s.Run(t, "issue", "comment", "delete", survivorKey, legacyCommentID, "--force")
 
-		added := s.Run(t, "issue", "comment", "add", survivorKey, "--body-markdown", "Initial comment for "+s.RunID)
+		added := s.Run(t, "issue", "comment", "add", survivorKey, "--markdown", "Initial comment for "+s.RunID)
 		comment := livekit.MapField(t, added.Data, "comment")
 		commentID := livekit.StringField(t, comment, "id")
 		require.NotEmpty(t, commentID)
@@ -154,7 +154,7 @@ func TestLiveIssuesEndToEnd(t *testing.T) {
 		list := s.Run(t, "issue", "comment", "list", survivorKey, "--all")
 		assertCommentPresent(t, list, commentID)
 
-		edited := s.Run(t, "issue", "comment", "edit", survivorKey, commentID, "--body-markdown", "Edited comment for "+s.RunID)
+		edited := s.Run(t, "issue", "comment", "edit", survivorKey, commentID, "--markdown", "Edited comment for "+s.RunID)
 		assert.Equal(t, commentID, livekit.StringField(t, livekit.MapField(t, edited.Data, "comment"), "id"))
 
 		s.Run(t, "issue", "comment", "delete", survivorKey, commentID, "--force")
@@ -162,7 +162,7 @@ func TestLiveIssuesEndToEnd(t *testing.T) {
 
 	t.Run("worklogs", func(t *testing.T) {
 		started := time.Now().UTC().Add(-30 * time.Minute).Format("2006-01-02T15:04:05.000-0700")
-		added := s.Run(t, "worklog", "add", survivorKey, "--time-spent", "5m", "--started", started, "--comment-markdown", "Live test worklog "+s.RunID)
+		added := s.Run(t, "worklog", "add", survivorKey, "--time-spent", "5m", "--started", started, "--markdown", "Live test worklog "+s.RunID)
 		assert.False(t, livekit.BoolField(t, added.Data, "dry_run"))
 		list := s.Run(t, "worklog", "list", survivorKey)
 		require.NotEmpty(t, livekit.SliceField(t, list.Data, "worklogs"))
@@ -278,7 +278,7 @@ func TestLiveIssuesFailureModes(t *testing.T) {
 	})
 
 	t.Run("comment on a missing issue reports jira_not_found", func(t *testing.T) {
-		env := s.RunExpectError(t, "issue", "comment", "add", missingKey, "--body-markdown", "must not post")
+		env := s.RunExpectError(t, "issue", "comment", "add", missingKey, "--markdown", "must not post")
 		requireJiraCode(t, env, "jira_not_found", 404)
 	})
 

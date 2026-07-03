@@ -36,7 +36,7 @@ jira issue comment add PROJ-123 --json-input adf.json --no-input --output=json
 ## Markdown input
 
 Every rich-text surface also accepts GFM Markdown as a convenience layer
-(`--body-markdown`, `description_markdown`) and converts it client-side.
+(`--markdown`, `description_markdown`) and converts it client-side.
 Paragraphs, headings, bold/italic/strike, inline code, links, bullet and
 ordered lists, fenced code blocks, blockquotes, tables, and horizontal rules
 convert faithfully. A few constructs degrade by design:

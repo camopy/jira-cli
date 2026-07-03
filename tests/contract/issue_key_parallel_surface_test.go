@@ -103,9 +103,9 @@ func TestBulkMutationDryRunsAcceptRangesWithoutCredentials(t *testing.T) {
 		name string
 		args []string
 	}{
-		{name: "comment add", args: []string{"issue", "comment", "add", "PROJ-1..2", "--body-markdown", "bulk", "--dry-run"}},
-		{name: "legacy comment alias", args: []string{"issue", "comment", "PROJ-1..2", "--body-markdown", "bulk", "--dry-run"}},
-		{name: "worklog add", args: []string{"worklog", "add", "PROJ-1..2", "--time-spent", "15m", "--comment-markdown", "bulk", "--dry-run"}},
+		{name: "comment add", args: []string{"issue", "comment", "add", "PROJ-1..2", "--markdown", "bulk", "--dry-run"}},
+		{name: "legacy comment alias", args: []string{"issue", "comment", "PROJ-1..2", "--markdown", "bulk", "--dry-run"}},
+		{name: "worklog add", args: []string{"worklog", "add", "PROJ-1..2", "--time-spent", "15m", "--markdown", "bulk", "--dry-run"}},
 		{name: "watchers add", args: []string{"issue", "watchers", "add", "PROJ-1..2", "--user", "accountId:bulk-user", "--dry-run"}},
 		{name: "watchers remove", args: []string{"issue", "watchers", "remove", "PROJ-1..2", "--user", "accountId:bulk-user", "--dry-run"}},
 		{name: "epic add", args: []string{"epic", "add", "PROJ-1..2", "EPIC-1", "--dry-run"}},

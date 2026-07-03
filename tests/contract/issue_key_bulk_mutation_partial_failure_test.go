@@ -27,21 +27,21 @@ func TestIssueKeyBulkMutationCommandsPreservePartialFailures(t *testing.T) {
 	}{
 		{
 			name: "comment add",
-			args: []string{"issue", "comment", "add", "PROJ-1..3", "-p", "3", "--body-markdown", "bulk"},
+			args: []string{"issue", "comment", "add", "PROJ-1..3", "-p", "3", "--markdown", "bulk"},
 			handle: bulkPartialNestedIssueHandler("comment", http.MethodPost, func(w http.ResponseWriter, key string) {
 				_, _ = io.WriteString(w, `{"id":"c-`+key+`","body":{"type":"doc","version":1,"content":[]},"created":"2026-05-05T11:00:00.000+0000","updated":"2026-05-05T11:00:00.000+0000"}`)
 			}),
 		},
 		{
 			name: "legacy comment alias",
-			args: []string{"issue", "comment", "PROJ-1..3", "-p", "3", "--body-markdown", "bulk"},
+			args: []string{"issue", "comment", "PROJ-1..3", "-p", "3", "--markdown", "bulk"},
 			handle: bulkPartialNestedIssueHandler("comment", http.MethodPost, func(w http.ResponseWriter, key string) {
 				_, _ = io.WriteString(w, `{"id":"c-`+key+`","body":{"type":"doc","version":1,"content":[]},"created":"2026-05-05T11:00:00.000+0000","updated":"2026-05-05T11:00:00.000+0000"}`)
 			}),
 		},
 		{
 			name: "worklog add",
-			args: []string{"worklog", "add", "PROJ-1..3", "-p", "3", "--time-spent", "15m", "--comment-markdown", "bulk"},
+			args: []string{"worklog", "add", "PROJ-1..3", "-p", "3", "--time-spent", "15m", "--markdown", "bulk"},
 			handle: bulkPartialNestedIssueHandler("worklog", http.MethodPost, func(w http.ResponseWriter, key string) {
 				_, _ = io.WriteString(w, `{"id":"w-`+key+`","timeSpentSeconds":900}`)
 			}),

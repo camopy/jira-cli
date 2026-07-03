@@ -30,7 +30,7 @@ func TestIssueKeyBulkMutationCommandsAcceptRangesAndParallelism(t *testing.T) {
 	}{
 		{
 			name: "comment add",
-			args: []string{"issue", "comment", "add", "PROJ-1..2", "-p", "2", "--body-markdown", "bulk"},
+			args: []string{"issue", "comment", "add", "PROJ-1..2", "-p", "2", "--markdown", "bulk"},
 			handle: func(t *testing.T, r *http.Request, _ []byte, hit func(string)) {
 				key, ok := bulkNestedIssuePath(r, "comment")
 				if !ok || r.Method != http.MethodPost {
@@ -43,7 +43,7 @@ func TestIssueKeyBulkMutationCommandsAcceptRangesAndParallelism(t *testing.T) {
 		},
 		{
 			name: "legacy comment alias",
-			args: []string{"issue", "comment", "PROJ-1..2", "-p", "2", "--body-markdown", "bulk"},
+			args: []string{"issue", "comment", "PROJ-1..2", "-p", "2", "--markdown", "bulk"},
 			handle: func(t *testing.T, r *http.Request, _ []byte, hit func(string)) {
 				key, ok := bulkNestedIssuePath(r, "comment")
 				if !ok || r.Method != http.MethodPost {
@@ -56,7 +56,7 @@ func TestIssueKeyBulkMutationCommandsAcceptRangesAndParallelism(t *testing.T) {
 		},
 		{
 			name: "worklog add",
-			args: []string{"worklog", "add", "PROJ-1..2", "-p", "2", "--time-spent", "15m", "--comment-markdown", "bulk"},
+			args: []string{"worklog", "add", "PROJ-1..2", "-p", "2", "--time-spent", "15m", "--markdown", "bulk"},
 			handle: func(t *testing.T, r *http.Request, _ []byte, hit func(string)) {
 				key, ok := bulkNestedIssuePath(r, "worklog")
 				if !ok || r.Method != http.MethodPost {
