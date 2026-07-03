@@ -1,6 +1,9 @@
 package pipeline
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // createAlias maps a CLI create-input alias key onto the Jira wire
 // field id the create screen and the REST API actually use. The CLI
@@ -12,6 +15,11 @@ type createAlias struct {
 	// encode wraps the bare alias value into the wire object shape Jira
 	// expects for that field.
 	encode func(value string) map[string]any
+	// wireValueKeys are the wire-object fields that carry the same
+	// identity the alias carries, in preference order — used to compare
+	// an alias value against an explicit wire object and to read the
+	// identity back out of a wire-only payload.
+	wireValueKeys []string
 }
 
 // createAliases is the fixed alias→wire-field table. It is the single
@@ -19,17 +27,51 @@ type createAlias struct {
 // pipeline) and any caller that needs to know which keys are aliases.
 var createAliases = map[string]createAlias{
 	"project_key": {
-		wireKey: "project",
-		encode:  func(v string) map[string]any { return map[string]any{"key": v} },
+		wireKey:       "project",
+		encode:        func(v string) map[string]any { return map[string]any{"key": v} },
+		wireValueKeys: []string{"key", "id"},
 	},
 	"issue_type": {
-		wireKey: "issuetype",
-		encode:  func(v string) map[string]any { return map[string]any{"name": v} },
+		wireKey:       "issuetype",
+		encode:        func(v string) map[string]any { return map[string]any{"name": v} },
+		wireValueKeys: []string{"name", "id"},
 	},
 	"assignee_account_id": {
-		wireKey: "assignee",
-		encode:  func(v string) map[string]any { return map[string]any{"accountId": v} },
+		wireKey:       "assignee",
+		encode:        func(v string) map[string]any { return map[string]any{"accountId": v} },
+		wireValueKeys: []string{"accountId"},
 	},
+}
+
+// CreateWireValue reads the identity string for aliasKey out of fields,
+// accepting either spelling: the flat alias value, or the wire object's
+// identity field ("project": {"key": "X"} yields "X" for project_key).
+// Empty means neither spelling carries a value.
+func CreateWireValue(fields map[string]any, aliasKey string) string {
+	alias, ok := createAliases[aliasKey]
+	if !ok {
+		return ""
+	}
+	if v, ok := fields[aliasKey].(string); ok && v != "" {
+		return v
+	}
+	return wireIdentity(fields[alias.wireKey], alias.wireValueKeys)
+}
+
+// wireIdentity pulls the first non-empty identity field out of a wire
+// object. A bare string wire value counts as its own identity.
+func wireIdentity(wire any, keys []string) string {
+	switch w := wire.(type) {
+	case string:
+		return w
+	case map[string]any:
+		for _, k := range keys {
+			if v, ok := w[k].(string); ok && v != "" {
+				return v
+			}
+		}
+	}
+	return ""
 }
 
 // NormalizeCreateAliases translates the CLI create-input aliases into
@@ -75,9 +117,15 @@ func normalizeCreateAliases(fields map[string]any, strict bool) (map[string]any,
 			// An alias with no usable value carries nothing to send.
 			continue
 		}
-		if _, clash := out[alias.wireKey]; clash {
-			if strict {
-				return nil, fmt.Errorf("create input sets both %q and %q; supply the field in exactly one place", aliasKey, alias.wireKey)
+		if wire, clash := out[alias.wireKey]; clash {
+			// Both spellings set: agreement is not a conflict — a profile
+			// default or a duplicated-but-identical value proceeds with the
+			// explicit wire object kept. Only a genuine mismatch errors,
+			// naming both values so the caller can see which to drop.
+			if wireVal := wireIdentity(wire, alias.wireValueKeys); strings.EqualFold(wireVal, value) {
+				continue
+			} else if strict {
+				return nil, fmt.Errorf("create input sets %s=%q and %s=%q with different values; supply the field once or align the values", aliasKey, value, alias.wireKey, wireVal)
 			}
 			// Convenience form: keep the explicit wire value, drop the alias.
 			continue

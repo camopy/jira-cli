@@ -794,10 +794,13 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 			// Fill project / issue type from profile defaults BEFORE
 			// normalizing aliases so a default-only create still carries
 			// the target into the wire payload.
-			if cmdutil.FirstNonEmpty(cmdutil.StringFromAny(payload["project_key"])) == "" && profile.DefaultProject != "" {
+			// Profile defaults fill a field only when NEITHER spelling —
+			// the flat alias or the Jira wire object — carries it, so a
+			// wire-only payload never collides with its own default.
+			if pipeline.CreateWireValue(payload, "project_key") == "" && profile.DefaultProject != "" {
 				payload["project_key"] = profile.DefaultProject
 			}
-			if cmdutil.FirstNonEmpty(cmdutil.StringFromAny(payload["issue_type"])) == "" && profile.DefaultIssueType != "" {
+			if pipeline.CreateWireValue(payload, "issue_type") == "" && profile.DefaultIssueType != "" {
 				payload["issue_type"] = profile.DefaultIssueType
 			}
 			// Normalize the CLI create aliases (project_key / issue_type /
@@ -806,8 +809,8 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 			// Screen validation keys on the wire ids; an un-normalized
 			// alias would be flagged off-screen even for a default
 			// create. A conflict (alias and wire key both set) is fatal.
-			projectForSchema := cmdutil.FirstNonEmpty(cmdutil.StringFromAny(payload["project_key"]), profile.DefaultProject)
-			issueTypeForSchema := cmdutil.FirstNonEmpty(cmdutil.StringFromAny(payload["issue_type"]), profile.DefaultIssueType)
+			projectForSchema := cmdutil.FirstNonEmpty(pipeline.CreateWireValue(payload, "project_key"), profile.DefaultProject)
+			issueTypeForSchema := cmdutil.FirstNonEmpty(pipeline.CreateWireValue(payload, "issue_type"), profile.DefaultIssueType)
 			normalizedPayload, normErr := pipeline.NormalizeCreateAliasesChecked(payload)
 			if normErr != nil {
 				return normErr
@@ -1067,10 +1070,12 @@ func validateIssueCreateRequired(payload map[string]any, profile config.Profile)
 	if cmdutil.FirstNonEmpty(cmdutil.StringFromAny(payload["summary"])) == "" {
 		missing = append(missing, "summary")
 	}
-	if cmdutil.FirstNonEmpty(cmdutil.StringFromAny(payload["project_key"]), profile.DefaultProject) == "" {
+	// Either spelling satisfies requiredness: the flat alias or the Jira
+	// wire object both unambiguously carry the field.
+	if cmdutil.FirstNonEmpty(pipeline.CreateWireValue(payload, "project_key"), profile.DefaultProject) == "" {
 		missing = append(missing, "project_key")
 	}
-	if cmdutil.FirstNonEmpty(cmdutil.StringFromAny(payload["issue_type"]), profile.DefaultIssueType) == "" {
+	if cmdutil.FirstNonEmpty(pipeline.CreateWireValue(payload, "issue_type"), profile.DefaultIssueType) == "" {
 		missing = append(missing, "issue_type")
 	}
 	if len(missing) > 0 {

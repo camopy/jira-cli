@@ -1,6 +1,7 @@
 package pipeline_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/matcra587/jira-cli/internal/cli/adfmode"
@@ -58,6 +59,75 @@ func TestNormalizeCreateAliasesConflictKeepsBothDistinct(t *testing.T) {
 	_, err := pipeline.NormalizeCreateAliasesChecked(in)
 	if err == nil {
 		t.Fatal("a project_key alias colliding with an explicit project must be a conflict error")
+	}
+}
+
+// Agreement is not a conflict: an alias and its wire object carrying the
+// same identity (however it got there — profile default, duplicated
+// input) normalizes cleanly, keeping the explicit wire object.
+func TestNormalizeCreateAliasesAgreementIsNotAConflict(t *testing.T) {
+	in := map[string]any{
+		"project_key": "jct", // case differs; identity matches
+		"project":     map[string]any{"key": "JCT"},
+		"summary":     "ok",
+	}
+	out, err := pipeline.NormalizeCreateAliasesChecked(in)
+	if err != nil {
+		t.Fatalf("matching alias and wire values must not conflict: %v", err)
+	}
+	project, ok := out["project"].(map[string]any)
+	if !ok || project["key"] != "JCT" {
+		t.Fatalf("explicit wire object must be kept: %v", out["project"])
+	}
+	if _, has := out["project_key"]; has {
+		t.Fatalf("alias must be removed after agreement: %v", out)
+	}
+}
+
+// The mismatch error names both values so the caller can see which one
+// to drop, rather than a bare "set in two places".
+func TestNormalizeCreateAliasesMismatchNamesBothValues(t *testing.T) {
+	_, err := pipeline.NormalizeCreateAliasesChecked(map[string]any{
+		"project_key": "KAN9",
+		"project":     map[string]any{"key": "JCT"},
+	})
+	if err == nil {
+		t.Fatal("mismatched values must conflict")
+	}
+	for _, want := range []string{"KAN9", "JCT", "project_key", "project"} {
+		if !containsString(err.Error(), want) {
+			t.Fatalf("conflict error must name %q: %v", want, err)
+		}
+	}
+}
+
+func containsString(haystack, needle string) bool {
+	return len(haystack) >= len(needle) && strings.Contains(haystack, needle)
+}
+
+// CreateWireValue reads a field's identity from either spelling, which
+// requiredness checks and profile-default injection rely on so a
+// wire-only payload is never "missing" its own field.
+func TestCreateWireValueAcceptsEitherSpelling(t *testing.T) {
+	tests := map[string]struct {
+		fields map[string]any
+		alias  string
+		want   string
+	}{
+		"flat alias":       {map[string]any{"project_key": "JCT"}, "project_key", "JCT"},
+		"wire object key":  {map[string]any{"project": map[string]any{"key": "JCT"}}, "project_key", "JCT"},
+		"wire object id":   {map[string]any{"project": map[string]any{"id": "10001"}}, "project_key", "10001"},
+		"wire bare string": {map[string]any{"project": "JCT"}, "project_key", "JCT"},
+		"issuetype name":   {map[string]any{"issuetype": map[string]any{"name": "Task"}}, "issue_type", "Task"},
+		"absent":           {map[string]any{}, "project_key", ""},
+		"unknown alias":    {map[string]any{"x": "y"}, "not_an_alias", ""},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := pipeline.CreateWireValue(tc.fields, tc.alias); got != tc.want {
+				t.Fatalf("CreateWireValue(%v, %q) = %q, want %q", tc.fields, tc.alias, got, tc.want)
+			}
+		})
 	}
 }
 

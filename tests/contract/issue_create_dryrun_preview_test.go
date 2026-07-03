@@ -96,8 +96,8 @@ func TestIssueCreateProjectFlagConflictsWithWireProjectInJSON(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected conflict error, got success:\n%s", out)
 	}
-	if !strings.Contains(string(out), "exactly one place") {
-		t.Fatalf("expected alias-vs-wire conflict error, got:\n%s", out)
+	if !strings.Contains(string(out), "different values") {
+		t.Fatalf("expected alias-vs-wire mismatch error naming both values, got:\n%s", out)
 	}
 }
 
