@@ -14,16 +14,18 @@ import (
 	"github.com/matcra587/jira-cli/internal/adf"
 )
 
-// A GFM table has no supported ADF authoring path here — conversion
-// must warn rather than drop the table silently.
-func TestFromMarkdownLossy_TableWarns(t *testing.T) {
+// A GFM table converts to a real ADF table node — no warning, no drop.
+func TestFromMarkdownLossy_TableConvertsWithoutWarning(t *testing.T) {
 	md := "| a | b |\n|---|---|\n| 1 | 2 |\n"
-	_, warnings, err := adf.FromMarkdownLossy(md)
+	doc, warnings, err := adf.FromMarkdownLossy(md)
 	if err != nil {
 		t.Fatalf("FromMarkdownLossy: %v", err)
 	}
-	if len(warnings) == 0 {
-		t.Fatal("expected a warning for an unsupported Markdown table")
+	if len(warnings) != 0 {
+		t.Fatalf("table conversion should not warn; got %+v", warnings)
+	}
+	if len(doc.Content) != 1 || doc.Content[0].Type != "table" {
+		t.Fatalf("doc.Content = %+v, want a single table node", doc.Content)
 	}
 }
 
@@ -112,7 +114,7 @@ func TestFromMarkdownLossy_BlockquoteWarns(t *testing.T) {
 // The warning message must name the unsupported construct so callers
 // and agents can act on it.
 func TestFromMarkdownLossy_WarningNamesConstruct(t *testing.T) {
-	_, warnings, err := adf.FromMarkdownLossy("| a |\n|---|\n| 1 |\n")
+	_, warnings, err := adf.FromMarkdownLossy("![alt](https://example.com/p.png)\n")
 	if err != nil {
 		t.Fatalf("FromMarkdownLossy: %v", err)
 	}
@@ -121,12 +123,12 @@ func TestFromMarkdownLossy_WarningNamesConstruct(t *testing.T) {
 	}
 	named := false
 	for _, w := range warnings {
-		if strings.Contains(strings.ToLower(w.Message), "table") {
+		if strings.Contains(strings.ToLower(w.Message), "image") {
 			named = true
 		}
 	}
 	if !named {
-		t.Errorf("warning should name the 'table' construct; got %+v", warnings)
+		t.Errorf("warning should name the 'image' construct; got %+v", warnings)
 	}
 }
 

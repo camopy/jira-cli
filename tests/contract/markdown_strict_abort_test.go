@@ -9,14 +9,14 @@ import (
 )
 
 // issue create --description-markdown that drops content during ADF
-// conversion (a GFM table has no authoring path) must abort in the
+// conversion (raw HTML has no authoring path) must abort in the
 // default strict mode rather than silently submitting a document with
-// the table missing.
-func TestMarkdownStrictAbort_CreateRejectsLossyTable(t *testing.T) {
+// the block missing.
+func TestMarkdownStrictAbort_CreateRejectsLossyHTML(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "create-lossy-md.json")
 	body := "{\"summary\":\"x\",\"project_key\":\"JCT\",\"issue_type\":\"Task\"," +
-		"\"description_markdown\":\"intro\\n\\n| a | b |\\n|---|---|\\n| 1 | 2 |\\n\"}"
+		"\"description_markdown\":\"intro\\n\\n<div>\\nraw\\n</div>\\n\"}"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestMarkdownStrictAbort_CreateBestEffortWarns(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "create-lossy-md-be.json")
 	body := "{\"summary\":\"x\",\"project_key\":\"JCT\",\"issue_type\":\"Task\"," +
-		"\"description_markdown\":\"intro\\n\\n| a | b |\\n|---|---|\\n| 1 | 2 |\\n\"}"
+		"\"description_markdown\":\"intro\\n\\n<div>\\nraw\\n</div>\\n\"}"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}

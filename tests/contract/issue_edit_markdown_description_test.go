@@ -277,7 +277,7 @@ func TestIssueEditDescriptionMarkdownFlagOverridesPayload(t *testing.T) {
 }
 
 // TestIssueEditDescriptionMarkdownStrictAbortsBeforeWire proves a lossy
-// Markdown conversion (a GFM table has no ADF authoring path) aborts in the
+// Markdown conversion (raw HTML has no ADF authoring path) aborts in the
 // default strict mode before any PUT reaches the server.
 func TestIssueEditDescriptionMarkdownStrictAbortsBeforeWire(t *testing.T) {
 	var puts int32
@@ -296,9 +296,9 @@ func TestIssueEditDescriptionMarkdownStrictAbortsBeforeWire(t *testing.T) {
 	cfg := jiraConfig(t, srv.URL)
 	stdout, stderr, code := runJira(t, "--config", cfg,
 		"issue", "edit", "PROJ-1", "--no-input",
-		"--description-markdown", "intro\n\n| a | b |\n|---|---|\n| 1 | 2 |\n", "--output=json")
+		"--description-markdown", "intro\n\n<div>\nraw\n</div>\n", "--output=json")
 	if code == 0 {
-		t.Fatalf("strict mode accepted a lossy Markdown table; want abort\nstdout=%s", stdout)
+		t.Fatalf("strict mode accepted lossy raw HTML; want abort\nstdout=%s", stdout)
 	}
 	if n := atomic.LoadInt32(&puts); n != 0 {
 		t.Fatalf("description bypassed strict abort — %d PUT(s) reached the wire", n)
@@ -321,7 +321,7 @@ func TestIssueEditDescriptionMarkdownStrictAbortsBeforeWire(t *testing.T) {
 func TestIssueEditDescriptionMarkdownBestEffortWarns(t *testing.T) {
 	cmd := exec.Command("go", "run", "../../cmd/jira",
 		"--adf-best-effort", "issue", "edit", "PROJ-1", "--dry-run", "--no-input",
-		"--description-markdown", "intro\n\n| a | b |\n|---|---|\n| 1 | 2 |\n", "--output=json")
+		"--description-markdown", "intro\n\n<div>\nraw\n</div>\n", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("best-effort dry-run should proceed, got error = %v\n%s", err, out)
@@ -342,14 +342,14 @@ func TestIssueEditDescriptionMarkdownBestEffortWarns(t *testing.T) {
 	if !env.Data.DryRun {
 		t.Fatalf("expected dry_run=true: %s", out)
 	}
-	var sawTableLoss bool
+	var sawHTMLLoss bool
 	for _, w := range env.Warnings {
-		if w.Type == "markdown_lossy_conversion" && w.NodeType == "table" {
-			sawTableLoss = true
+		if w.Type == "markdown_lossy_conversion" && w.NodeType == "raw HTML block" {
+			sawHTMLLoss = true
 		}
 	}
-	if !sawTableLoss {
-		t.Fatalf("best-effort must surface a markdown_lossy_conversion warning for the dropped table: %s", out)
+	if !sawHTMLLoss {
+		t.Fatalf("best-effort must surface a markdown_lossy_conversion warning for the dropped HTML block: %s", out)
 	}
 	desc, ok := env.Data.Fields["description"].(map[string]any)
 	if !ok || desc["type"] != "doc" {

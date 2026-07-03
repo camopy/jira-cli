@@ -14,9 +14,8 @@ import (
 
 // markdownParser parses GFM with the table and strikethrough
 // extensions enabled. Enabling the table extension means a pipe table
-// is parsed as a real Table node — FromMarkdownLossy can then warn that
-// table authoring is unsupported rather than letting the table render
-// as literal pipe-laden paragraph text.
+// is parsed as a real Table node that converts to an ADF table, rather
+// than rendering as literal pipe-laden paragraph text.
 var markdownParser = goldmark.New(
 	goldmark.WithExtensions(extension.Table, extension.Strikethrough),
 ).Parser()
@@ -97,8 +96,7 @@ func (c *mdConverter) block(n ast.Node) (Node, bool) {
 		// They are parser metadata; resolved links already carry the href.
 		return Node{}, false
 	case extast.KindTable:
-		c.warn("table", "GFM table dropped")
-		return Node{}, false
+		return c.table(n), true
 	default:
 		c.warn("block "+n.Kind().String(), "")
 		return Node{}, false
@@ -166,6 +164,48 @@ func (c *mdConverter) codeBlock(n ast.Node) Node {
 		node.Content = []Node{{Type: "text", Text: text}}
 	}
 	return node
+}
+
+// table converts a GFM table to the ADF table shape: a tableRow of
+// tableHeader cells, then tableCell rows, with the standard table attrs.
+// Every cell wraps its inline run in a paragraph — tableCell/tableHeader
+// require at least one block child, and an empty GFM cell becomes an
+// empty paragraph, which the schema permits.
+func (c *mdConverter) table(n ast.Node) Node {
+	table := Node{
+		Type: "table",
+		Attrs: map[string]any{
+			"isNumberColumnEnabled": false,
+			"layout":                "default",
+		},
+	}
+	// In goldmark, TableHeader directly contains TableCell children (no
+	// wrapping TableRow), while TableRow does contain TableCells.
+	for child := n.FirstChild(); child != nil; child = child.NextSibling() {
+		switch child.Kind() {
+		case extast.KindTableHeader:
+			table.Content = append(table.Content, c.tableRow(child, "tableHeader"))
+		case extast.KindTableRow:
+			table.Content = append(table.Content, c.tableRow(child, "tableCell"))
+		}
+	}
+	return table
+}
+
+// tableRow converts one goldmark header or body row into an ADF tableRow
+// whose cells carry cellType ("tableHeader" or "tableCell").
+func (c *mdConverter) tableRow(row ast.Node, cellType string) Node {
+	out := Node{Type: "tableRow"}
+	for cell := row.FirstChild(); cell != nil; cell = cell.NextSibling() {
+		if cell.Kind() != extast.KindTableCell {
+			continue
+		}
+		out.Content = append(out.Content, Node{
+			Type:    cellType,
+			Content: []Node{{Type: "paragraph", Content: c.inlineChildren(cell)}},
+		})
+	}
+	return out
 }
 
 // inlineChildren converts the inline children of a block node to ADF
