@@ -34,7 +34,8 @@ func TestReleaseWorkflowUsesPinnedGoReleaserAndHomebrewPublisher(t *testing.T) {
 		"name_template:",
 		"{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}",
 		"sign-blob",
-		"internal/version.Version={{ .Version }}",
+		"gechr/clive.version={{ .Version }}",
+		"internal/version.Branch={{ .Branch }}",
 		"internal/version.BuildBy=goreleaser",
 	} {
 		if !strings.Contains(combined, want) {
