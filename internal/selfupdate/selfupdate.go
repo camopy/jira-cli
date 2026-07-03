@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/gechr/clive"
+	"github.com/gechr/clive/updater"
 	"github.com/gechr/clive/updater/brew"
 	"github.com/gechr/clive/updater/github"
 	cliveversion "github.com/gechr/clive/version"
@@ -248,6 +249,20 @@ func (u archiveUpdater) Latest(ctx context.Context) (string, error) {
 
 func (u archiveUpdater) Update(ctx context.Context) error {
 	return github.Update(ctx, u.cfg, github.Latest)
+}
+
+// NotifyTool is the tool identity the passive update notifier (clive/notify)
+// consumes. It is channel-independent: the latest ref comes from the GitHub
+// releases API (no Go toolchain needed on any channel), and the binary name is
+// pinned to "jira" so the kill switch derives to JIRA_NO_UPDATE_CHECK and the
+// hint names `jira update` — which routes every channel correctly, either
+// self-updating or printing that channel's installer command.
+func NotifyTool() updater.Tool {
+	return github.New(
+		clive.Info{Module: Module},
+		github.WithName("jira-cli"),
+		github.WithBinary("jira"),
+	)
 }
 
 // UpdateAvailable reports whether latest is a strictly newer version than

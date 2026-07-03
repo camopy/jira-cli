@@ -11,6 +11,7 @@ import (
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/gechr/clib/complete"
+	"github.com/gechr/clive/notify"
 	"github.com/gechr/clog"
 	"github.com/gechr/x/terminal"
 	"github.com/matcra587/jira-cli/internal/cli"
@@ -21,6 +22,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli/schema"
 	"github.com/matcra587/jira-cli/internal/cli/startup"
 	"github.com/matcra587/jira-cli/internal/cli/tui"
+	"github.com/matcra587/jira-cli/internal/selfupdate"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -384,6 +386,12 @@ func Execute(ctx context.Context) error {
 		writeCommandError(ctx, root, cerr)
 		return cerr
 	}
+	// Passive update notify wraps command dispatch: Check schedules a
+	// background cache refresh (never blocking, never on the calling
+	// path) and the deferred flush prints the throttled one-line hint on
+	// a TTY stderr after the command's own output.
+	flush := startUpdateNotify(root, effectiveArgs)
+	defer flush()
 	// Optional whole-invocation deadline. Derive it here, where Execute
 	// already owns the root context, with a local defer cancel(): no
 	// cancel func is parked in a package var, and the context is never
@@ -408,6 +416,31 @@ func Execute(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// startUpdateNotify wires clive's passive "you're behind" check around one
+// invocation and returns the flush that prints the hint. The verdict is
+// served from a cache file (no network on the calling path); notify itself
+// suppresses printing on a non-TTY stderr, throttles hints and refreshes to
+// once per 24h, and honors the JIRA_NO_UPDATE_CHECK kill switch.
+//
+// Two callers are excluded here rather than in notify: detected agent
+// context is disabled entirely — regardless of TTY — so agent runs schedule
+// no background work and machine envelopes stay byte-clean; and the
+// completion and update commands, because completion code paths must stay
+// silent and `jira update` already reports update state as its result.
+func startUpdateNotify(root *cobra.Command, args []string) func() {
+	if args == nil {
+		args = os.Args[1:]
+	}
+	switch firstPositional(root, args) {
+	case "completion", "update", "up", "__complete":
+		return func() {}
+	}
+	if cli.Detect(os.Stdout).Agent {
+		return func() {}
+	}
+	return notify.Check(selfupdate.NotifyTool())
 }
 
 // handleCompletionPreflight services a clib `--@complete` preflight

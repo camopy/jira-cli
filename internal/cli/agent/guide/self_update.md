@@ -30,6 +30,7 @@ When: the installed version is behind the latest release and the workflow (or a 
 - Managed channels (`scoop`, `mise`, `go-install`) always exit `0` without touching the binary — treat `data.hint` as the follow-up command.
 - Progress and the old→new result line render on stderr; the stdout envelope stays clean JSON.
 - `--dry-run` performs a release lookup over the network but writes nothing.
+- Separately from this command, interactive TTY sessions get a passive once-per-24h "jira is outdated" stderr hint served from a local cache. It never appears in agent or piped contexts (detection disables it entirely), and `JIRA_NO_UPDATE_CHECK=1` turns it off.
 
 **Recover**
 | Symptom | Cause | Next |

@@ -235,6 +235,7 @@ process.
 | `JIRA_EDITOR` | Override the editor for `issue edit` |
 | `JIRA_MAX_RETRY_WAIT` | Rate-limit retry budget (Go duration); `0` disables. `--max-retry-wait` wins |
 | `JIRA_NO_COLOR` | Disable ANSI colour in Human output |
+| `JIRA_NO_UPDATE_CHECK` | Any non-empty value disables the passive new-release check and its hint |
 | `JIRA_READ_ONLY` | `1`/`true` refuses every mutation regardless of profile |
 | `JIRA_THEME` | Override `[theme].name` for the current process |
 | `JIRA_KEYRING_SERVICE` | Override the keyring service name. Test-only; leave unset in production |

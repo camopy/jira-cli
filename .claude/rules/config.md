@@ -58,6 +58,7 @@ stored as fake-authenticated), `email`, `secret_backend`
 | `JIRA_ADF_STRICT` | ADF mode override (flag > env > path default) |
 | `JIRA_MAX_RETRY_WAIT` | rate-limit retry budget (Go duration); unparseable → default, never silently disabled |
 | `JIRA_LIVETEST_PROJECT` | live-suite target project (a dedicated probe project) |
+| `JIRA_NO_UPDATE_CHECK` | non-empty disables the passive update check (handled inside clive/notify; the name derives from the binary name) |
 | `NO_COLOR` / `JIRA_NO_COLOR` family | color suppression (clog/clib) |
 
 Agent detection (`CLAUDECODE`, `AI_AGENT`, …) lives in
