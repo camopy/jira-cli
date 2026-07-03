@@ -41,6 +41,11 @@ type plainConfig struct {
 	// header, and the generic renderer emits it only when the data does
 	// not already carry the value — so a key is never printed twice.
 	resultKey string
+	// statusPillWidth is the visible width every status pill in the current
+	// table pads its label to, so the filled backgrounds form a uniform block
+	// instead of ragged per-status widths. Zero means no padding (single-row
+	// renders, or the width was not precomputed).
+	statusPillWidth int
 }
 
 func WithPlainBaseURL(baseURL string) PlainOption {
@@ -737,8 +742,10 @@ func issueRows(issues []map[string]any, cfg plainConfig) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	rows := buildIssueRows(issues)
+	cfg.statusPillWidth = widestStatusLabel(rows)
 	renderer := issueTableRenderer(cfg, cols)
-	rendered := renderer.Render(buildIssueRows(issues))
+	rendered := renderer.Render(rows)
 	if rendered.String() == "" {
 		return nil, nil
 	}
@@ -843,8 +850,36 @@ func statusPillCell(cfg plainConfig, status, category, colorName string) table.C
 	// from its second argument, not the styled string, so the padding has to be
 	// in the measured text or the column would be one space too narrow on each
 	// side and the fill would overflow.
-	label := " " + status + " "
+	label := statusPillLabel(status)
+	// Pad inside the label — not via the grid — so the filled background
+	// extends to the widest pill in the table and the badges form a uniform
+	// block instead of ragged per-status widths.
+	if pad := cfg.statusPillWidth - table.VisibleWidth(label); pad > 0 {
+		label += strings.Repeat(" ", pad)
+	}
 	return table.StyledCell(statusPill(cfg, status, category, colorName).Render(label), label)
+}
+
+// statusPillLabel is the pill's visible text: the status wrapped in one space
+// of breathing room on each side, which the fill color covers.
+func statusPillLabel(status string) string {
+	return " " + status + " "
+}
+
+// widestStatusLabel measures the widest pill label across the rows about to
+// be rendered, so every pill in the table can pad to it. Empty statuses render
+// no pill and are skipped.
+func widestStatusLabel(rows []issueTableRow) int {
+	widest := 0
+	for _, row := range rows {
+		if row.Status == "" {
+			continue
+		}
+		if w := table.VisibleWidth(statusPillLabel(row.Status)); w > widest {
+			widest = w
+		}
+	}
+	return widest
 }
 
 // statusPill builds the badge style for a status: a category-derived color as

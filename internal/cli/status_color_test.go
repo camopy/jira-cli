@@ -115,6 +115,45 @@ func TestStatusPillCellGating(t *testing.T) {
 	}
 }
 
+// TestStatusPillsPadToWidestLabel checks that every pill in a table pads its
+// label to the widest status, so the filled backgrounds form a uniform block:
+// the padding lives inside the measured text (and thus inside the fill), not
+// in the grid's gap.
+func TestStatusPillsPadToWidestLabel(t *testing.T) {
+	theme := clibtheme.Dark()
+	rows := []issueTableRow{
+		{Status: "In Progress"},
+		{Status: "Done"},
+		{Status: ""}, // no pill; must not shrink the target width
+	}
+
+	width := widestStatusLabel(rows)
+	if want := len(" In Progress "); width != want {
+		t.Fatalf("widestStatusLabel = %d, want %d", width, want)
+	}
+
+	cfg := plainConfig{tty: true, theme: theme, statusPillWidth: width}
+	short := statusPillCell(cfg, "Done", "done", "green")
+	if want := " Done" + strings.Repeat(" ", width-len(" Done")); short.Plain != want {
+		t.Errorf("short pill plain text = %q, want %q", short.Plain, want)
+	}
+	if !strings.Contains(short.Text, short.Plain) {
+		t.Errorf("padding should sit inside the styled render, got %q", short.Text)
+	}
+
+	widest := statusPillCell(cfg, "In Progress", "indeterminate", "yellow")
+	if widest.Plain != " In Progress " {
+		t.Errorf("widest pill plain text = %q, want %q", widest.Plain, " In Progress ")
+	}
+
+	// Zero width (single renders, or width not precomputed) leaves the label
+	// unpadded.
+	unpadded := statusPillCell(plainConfig{tty: true, theme: theme}, "Done", "done", "green")
+	if unpadded.Plain != " Done " {
+		t.Errorf("unpadded pill plain text = %q, want %q", unpadded.Plain, " Done ")
+	}
+}
+
 // TestPriorityStyleFollowsJiraScale pins the priority colors to Jira's scale:
 // red for high and highest (highest bold), orange for medium, blue for low and
 // lowest.
