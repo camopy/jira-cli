@@ -260,6 +260,10 @@ func (v *validator) checkAttrValue(nodeType, markType string, ar attrRule, raw a
 		if ar.hasRange && (f < ar.min || f > ar.max) {
 			return v.fail(nodeType, markType, path, fmt.Sprintf("attrs.%s value %v is out of range [%v, %v]", ar.key, f, ar.min, ar.max))
 		}
+	case attrBool:
+		if _, ok := raw.(bool); !ok {
+			return v.fail(nodeType, markType, path, fmt.Sprintf("attrs.%s must be a boolean", ar.key))
+		}
 	case attrAny:
 		// No constraint.
 	}
@@ -295,6 +299,9 @@ func attrValueValid(ar attrRule, raw any) bool {
 			return false
 		}
 		return true
+	case attrBool:
+		_, ok := raw.(bool)
+		return ok
 	case attrAny:
 		return true
 	default:

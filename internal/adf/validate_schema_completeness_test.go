@@ -126,6 +126,34 @@ func TestValidateStrict_BlockTaskItemMissingState_Errors(t *testing.T) {
 	}
 }
 
+// --- D2: schema-56 optional attrs ---
+
+func TestValidateStrict_TableCellValignEnum(t *testing.T) {
+	doc := mustParse(t, `{"type":"doc","version":1,"content":[
+		{"type":"table","content":[{"type":"tableRow","content":[
+			{"type":"tableCell","attrs":{"valign":"diagonal"},"content":[
+				{"type":"paragraph","content":[{"type":"text","text":"x"}]}]}]}]}
+	]}`)
+	if _, err := adf.ValidateDoc(doc, adfmode.ModeStrict); err == nil {
+		t.Fatal("expected error for tableCell attrs.valign outside top|middle|bottom")
+	}
+}
+
+func TestValidateStrict_CodeBlockWrapMustBeBool(t *testing.T) {
+	bad := mustParse(t, `{"type":"doc","version":1,"content":[
+		{"type":"codeBlock","attrs":{"language":"go","wrap":"yes"}}
+	]}`)
+	if _, err := adf.ValidateDoc(bad, adfmode.ModeStrict); err == nil {
+		t.Fatal("expected error for codeBlock attrs.wrap as a string")
+	}
+	good := mustParse(t, `{"type":"doc","version":1,"content":[
+		{"type":"codeBlock","attrs":{"language":"go","wrap":true,"hideLineNumbers":false}}
+	]}`)
+	if _, err := adf.ValidateDoc(good, adfmode.ModeStrict); err != nil {
+		t.Fatalf("boolean wrap/hideLineNumbers must pass: %v", err)
+	}
+}
+
 // --- E: media / card required attrs ---
 
 func TestValidateStrict_MediaMissingRequiredAttrs_Errors(t *testing.T) {

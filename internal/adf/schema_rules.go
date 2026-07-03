@@ -21,6 +21,7 @@ const (
 	attrAny attrType = iota
 	attrString
 	attrNumber
+	attrBool
 )
 
 // attrRule describes one required attribute on a node or mark.
@@ -120,6 +121,10 @@ var tableCellContent = map[string]bool{
 	"nestedExpand": true,
 }
 
+// valignEnum is the vertical-alignment enum layoutColumn, tableCell, and
+// tableHeader accept (added in adf-schema 56).
+var valignEnum = []string{"top", "middle", "bottom"}
+
 // cardLayoutEnum is the 7-value layout enum shared by mediaSingle,
 // embedCard, and blockCard.
 var cardLayoutEnum = []string{"wide", "full-width", "center", "wrap-right", "wrap-left", "align-end", "align-start"}
@@ -218,10 +223,12 @@ var nodeRules = map[string]nodeRule{
 		content: contentRule{allowed: map[string]bool{"tableCell": true, "tableHeader": true}},
 	},
 	"tableCell": {
-		content: contentRule{minItems: 1, allowed: tableCellContent},
+		optionalAttrs: []attrRule{{key: "valign", typ: attrString, enum: valignEnum}},
+		content:       contentRule{minItems: 1, allowed: tableCellContent},
 	},
 	"tableHeader": {
-		content: contentRule{minItems: 1, allowed: tableCellContent},
+		optionalAttrs: []attrRule{{key: "valign", typ: attrString, enum: valignEnum}},
+		content:       contentRule{minItems: 1, allowed: tableCellContent},
 	},
 	"blockquote": {
 		content: contentRule{minItems: 1, allowed: map[string]bool{
@@ -253,6 +260,10 @@ var nodeRules = map[string]nodeRule{
 		}},
 	},
 	"codeBlock": {
+		optionalAttrs: []attrRule{
+			{key: "hideLineNumbers", typ: attrBool},
+			{key: "wrap", typ: attrBool},
+		},
 		content: contentRule{allowed: map[string]bool{"text": true}, noMarks: true},
 	},
 	// media has two attr variants: a file/link node (type+id+collection)
@@ -334,6 +345,7 @@ var nodeRules = map[string]nodeRule{
 	},
 	"layoutColumn": {
 		requiredAttrs: []attrRule{{key: "width", typ: attrNumber, min: 0, max: 100, hasRange: true}},
+		optionalAttrs: []attrRule{{key: "valign", typ: attrString, enum: valignEnum}},
 		content:       contentRule{minItems: 1},
 	},
 	"syncBlock": {
