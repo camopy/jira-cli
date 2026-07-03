@@ -17,6 +17,7 @@ When: one or more fields on an existing issue need new values; the bare-form `ji
 # guard
 - Always pass `--no-input` in agent context to surface validation errors rather than blocking on a prompt.
 - Pass at least one field flag or `--json-input` — empty edits are rejected (exit 3), never silent successes.
+- A bare `--dry-run` is a shape check with no screen schema — unknown field names pass through. `--dry-run --validate-remote` fetches the issue's edit screen (read-only editmeta) and runs the same field-schema checks a live submit gets; `data.validated_remotely: true` confirms it ran.
 
 **Run**
 - Canonical (bulk JSON): `jira issue edit KEY --no-input --json-input fields.json --output=json`

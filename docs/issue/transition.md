@@ -146,7 +146,9 @@ the move with `204 No Content`) and the unchanged `data.issue` key:
     `--dry-run` runs the payload through the local validate-and-encode pipeline
     but skips Jira, so it can accept a payload the real submit rejects (for
     example a field the destination screen demands). Treat a clean dry-run as a
-    shape check, not a guarantee.
+    shape check, not a guarantee. On `create`, `edit`, and `transition`, add
+    `--validate-remote` for a read-only pre-flight that fetches the live screen
+    or transition list and runs the same checks a real submit gets.
 
 [Full flags & output fields →](../reference/jira/issue/move.md)
 

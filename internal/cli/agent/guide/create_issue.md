@@ -16,11 +16,13 @@ When: a brand-new issue is needed and the project key and issue type are known; 
 - Lossy human shortcut: `description_markdown` in the payload (converted to ADF; GFM features beyond the supported set degrade).
 
 # guard
-- `--dry-run` validates parsing, ADF compatibility, field schema/customfield encoding when schema is available, then stops before submission. It is not proof that Jira's create screen accepts a project/issue-type pairing.
+- A bare `--dry-run` validates parsing, ADF compatibility, and a cached-priority mismatch, then stops. It has NO screen schema: unknown field names, invalid issue types, and customfield types pass through unchecked — it is a shape check, not proof Jira accepts the payload.
+- `--dry-run --validate-remote` fetches createmeta (read-only) and runs the same field-schema and customfield checks a live submit gets: unknown fields fail strict with exit 3, an issue type missing from the project's create screen errors, and known customfield types validate. `data.validated_remotely: true` confirms the fetch ran.
 - `--adf-strict` rejects any lossy step with exit 3; `--adf-best-effort` degrades silently with warnings.
 
 **Run**
 - Canonical: `jira issue create --no-input --json-input payload.json --output=json`
+- Server-validated preview: `jira issue create --no-input --json-input payload.json --dry-run --validate-remote --output=json`
 - Stdin variant: `cat payload.json | jira issue create --no-input --json-input - --output=json`
 - Default-backed one-shot: `jira issue create --no-input --summary "Refactor auth middleware" --assignee me --output=json`
 - Preview only: `jira issue create --dry-run --no-input --json-input payload.json --output=json`

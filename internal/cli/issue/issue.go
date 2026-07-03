@@ -767,7 +767,7 @@ func issueListDetailExpand() []string {
 }
 
 func issueCreateCommand() *cobra.Command {
-	var dryRun bool
+	var dryRun, validateRemote bool
 	var summary, jsonInput, assignee, markdownInput, markdownFile string
 	var project, issueType, parent, priority string
 	var labels []string
@@ -801,6 +801,9 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			noInput := cmdutil.NoInputRequested(cmd)
+			if validateRemote && !dryRun {
+				return fmt.Errorf("validation: --validate-remote is a read-only dry-run pre-flight; combine it with --dry-run (a live submit already validates against the create screen)")
+			}
 			payload := map[string]any{"summary": summary}
 			if jsonInput != "" {
 				if err := cmdutil.ReadJSONFile(jsonInput, &payload); err != nil {
@@ -896,6 +899,12 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 				return normErr
 			}
 			payload = normalizedPayload
+			// The priority set is small, site-wide, and usually cached —
+			// a name Jira would reject fails fast here instead of round-
+			// tripping. Advisory: no cache, no check.
+			if perr := validatePriorityAgainstCache(cmd, profile, payload); perr != nil {
+				return perr
+			}
 			// The issue description is the primary ADF document for
 			// this mutation. Whether it arrived as `description_markdown`
 			// or as a raw ADF `description`, it is pulled out of the
@@ -925,11 +934,14 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 			// submission. For a live create we resolve the client up
 			// front and attach a screen-schema fetcher so stage 3
 			// validates the payload against the project / issue-type
-			// create screen. A dry-run preview runs without credentials,
-			// so it has no fetcher: stages 1+2+4 still run; stage 3 is a
-			// no-op when no schema is reachable.
+			// create screen. A bare dry-run preview runs without
+			// credentials, so it has no fetcher: stages 1+2+4 still run;
+			// stage 3 is a no-op when no schema is reachable. Adding
+			// --validate-remote to a dry-run resolves the client for the
+			// read-only createmeta fetch, so the same stage-3/4 checks a
+			// live submit gets run before anything is written.
 			var client *jira.Client
-			if !dryRun {
+			if !dryRun || validateRemote {
 				var ok bool
 				var err error
 				client, profile, ok, err = cmdutil.JiraClientForCommand(cmd)
@@ -964,10 +976,12 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 				// keys to screen validation.
 				ScreenValidationExemptFields: map[string]bool{"project": true, "issuetype": true},
 			}
-			if client != nil && !cmdutil.ReadOnlyEnabled(cmd) {
-				// Skip the schema fetch in read-only mode: the client
+			if client != nil && (dryRun || !cmdutil.ReadOnlyEnabled(cmd)) {
+				// Skip the schema fetch in read-only live mode: the client
 				// refuses the create itself, so resolving its screen is
-				// wasted work and would emit a stray read request.
+				// wasted work and would emit a stray read request. A
+				// --validate-remote dry-run keeps the fetch even under
+				// read-only — the fetch IS the point, and it never writes.
 				pipeIn.SchemaFetcher = newScreenSchemaFetcher(
 					cmd.Context(), cmdutil.ServicesForClient(client).Project(0),
 					cmdutil.ProfileForEnvelope(cmd), projectForSchema, issueTypeForSchema,
@@ -1005,10 +1019,14 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 				if err != nil {
 					return err
 				}
-				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.create", map[string]any{
+				data := map[string]any{
 					"preview": preview,
 					"dry_run": true,
-				}, pipeOut.Warnings)
+				}
+				if validateRemote {
+					data["validated_remotely"] = true
+				}
+				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.create", data, pipeOut.Warnings)
 			}
 			// submitFields already carries project / issuetype / assignee
 			// in their Jira wire shapes — alias normalization ran before
@@ -1034,6 +1052,7 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 		},
 	}
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
+	cmdutil.AddBoolVar(cmd.Flags(), &validateRemote, "validate-remote", false, "With `--dry-run`, validate against the live create screen (read-only createmeta fetch)", clib.FlagExtra{Group: "Validation"})
 	cmdutil.AddStringVar(cmd.Flags(), &summary, "summary", "", "Issue summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
 	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read issue create payload from JSON file (canonical for agents)", "Input", "FILE")
 	cmdutil.AddMarkdownFlag(cmd, &markdownInput, &markdownFile, "Issue description as Markdown (lossy convenience layer, converted to ADF)", "")
@@ -1231,7 +1250,7 @@ func extractDescriptionDoc(payload map[string]any) (doc adf.Document, present bo
 }
 
 func issueEditCommand() *cobra.Command {
-	var dryRun bool
+	var dryRun, validateRemote bool
 	var jsonInput, summary, assignee, markdownInput, markdownFile string
 	var parallelism int
 	cmd := &cobra.Command{
@@ -1269,6 +1288,9 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 				return err
 			}
 			noInput := cmdutil.NoInputRequested(cmd)
+			if validateRemote && !dryRun {
+				return fmt.Errorf("validation: --validate-remote is a read-only dry-run pre-flight; combine it with --dry-run (a live submit already validates against the edit screen)")
+			}
 			payload := map[string]any{}
 			if jsonInput != "" {
 				if err := cmdutil.ReadJSONFile(jsonInput, &payload); err != nil {
@@ -1349,6 +1371,12 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 			// --no-input, an agent harness, or a piped/redirected stdin — but
 			// stays false for `jira issue edit KEY | tee out.json`, which pipes
 			// stdout yet keeps an interactive stdin, so that editor still opens.
+			// The priority set is small, site-wide, and usually cached — a
+			// name Jira would reject fails fast here. Advisory: no cache,
+			// no check.
+			if perr := validatePriorityAgainstCache(cmd, profile, fields); perr != nil {
+				return perr
+			}
 			if len(fields) == 0 && len(updateSection) == 0 {
 				if noInput {
 					return fmt.Errorf("validation: the issue edit editor needs an interactive terminal; in a non-interactive context, provide --summary, --assignee, --markdown, or --json-input")
@@ -1387,6 +1415,7 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 					Update:           updateSection,
 					NamedADFDocs:     namedADF,
 					DryRun:           dryRun,
+					ValidateRemote:   validateRemote,
 					DescriptionDoc:   descriptionDoc,
 					DescriptionSet:   descriptionPresent,
 					MarkdownWarnings: descMarkdownWarnings,
@@ -1394,10 +1423,12 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 			}
 			// For a live edit, resolve the client up front and attach an
 			// edit-screen schema fetcher (editmeta) so stage 3 validates
-			// the fields against the issue's edit screen. A dry-run runs
-			// without credentials and therefore without a fetcher.
+			// the fields against the issue's edit screen. A bare dry-run
+			// runs without credentials and therefore without a fetcher;
+			// --validate-remote resolves the client for the read-only
+			// editmeta fetch so the same stage-3/4 checks run pre-flight.
 			var editClient *jira.Client
-			if !dryRun {
+			if !dryRun || validateRemote {
 				var hasClient bool
 				editClient, _, hasClient, err = cmdutil.JiraClientForCommand(cmd)
 				if err != nil {
@@ -1422,7 +1453,7 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 				editIn.ADFDoc = &descriptionDoc
 				editIn.FieldCompat = &adf.FieldCompatibility{Field: "description", InlineCardSupported: true}
 			}
-			if editClient != nil && !cmdutil.ReadOnlyEnabled(cmd) {
+			if editClient != nil && (dryRun || !cmdutil.ReadOnlyEnabled(cmd)) {
 				editIn.SchemaFetcher = newEditScreenSchemaFetcher(
 					cmd.Context(), cmdutil.ServicesForClient(editClient).Project(0),
 					cmdutil.ProfileForEnvelope(cmd), keys[0],
@@ -1475,10 +1506,14 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 			if len(updateSection) > 0 {
 				data["update"] = updateSection
 			}
+			if validateRemote {
+				data["validated_remotely"] = true
+			}
 			return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.edit", data, pipeOut.Warnings)
 		},
 	}
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
+	cmdutil.AddBoolVar(cmd.Flags(), &validateRemote, "validate-remote", false, "With `--dry-run`, validate against the live edit screen (read-only editmeta fetch)", clib.FlagExtra{Group: "Validation"})
 	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read issue edit payload from JSON file (canonical for agents)", "Input", "FILE")
 	cmdutil.AddStringVar(cmd.Flags(), &summary, "summary", "", "Replace the issue summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
 	cmdutil.AddMarkdownFlag(cmd, &markdownInput, &markdownFile, "Replace the description with Markdown (lossy convenience layer, converted to ADF)", "description-markdown")
@@ -1494,6 +1529,9 @@ type issueEditManyInput struct {
 	Update       map[string]any
 	NamedADFDocs map[string]adf.Document
 	DryRun       bool
+	// ValidateRemote opts a dry-run into the read-only editmeta fetch so
+	// stage 3/4 validate each key against its live edit screen.
+	ValidateRemote bool
 	// DescriptionDoc is the primary ADF document (from
 	// --markdown or a `description` / `description_markdown`
 	// payload key) routed as the pipeline's ADFDoc. DescriptionSet reports
@@ -1508,7 +1546,7 @@ func runIssueEditMany(cmd *cobra.Command, keys []string, parallelism int, in iss
 	var editClient *jira.Client
 	var service jira.IssueService
 	var err error
-	if !in.DryRun {
+	if !in.DryRun || in.ValidateRemote {
 		var ok bool
 		editClient, _, ok, err = cmdutil.JiraClientForCommand(cmd)
 		if err != nil {
@@ -1534,7 +1572,7 @@ func runIssueEditMany(cmd *cobra.Command, keys []string, parallelism int, in iss
 			editIn.ADFDoc = &doc
 			editIn.FieldCompat = &adf.FieldCompatibility{Field: "description", InlineCardSupported: true}
 		}
-		if editClient != nil && !cmdutil.ReadOnlyEnabled(cmd) {
+		if editClient != nil && (in.DryRun || !cmdutil.ReadOnlyEnabled(cmd)) {
 			editIn.SchemaFetcher = newEditScreenSchemaFetcher(
 				ctx, cmdutil.ServicesForClient(editClient).Project(0),
 				cmdutil.ProfileForEnvelope(cmd), key,
@@ -1558,6 +1596,9 @@ func runIssueEditMany(cmd *cobra.Command, keys []string, parallelism int, in iss
 		}
 		if len(in.Update) > 0 {
 			data["update"] = in.Update
+		}
+		if in.DryRun && in.ValidateRemote {
+			data["validated_remotely"] = true
 		}
 		if len(pipeOut.Warnings) > 0 {
 			data["warnings"] = pipeOut.Warnings
@@ -1672,7 +1713,7 @@ func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
 }
 
 func issueTransitionCommand() *cobra.Command {
-	var dryRun bool
+	var dryRun, validateRemote bool
 	var transitionID, jsonInput, markdownInput, markdownFile string
 	var parallelism int
 	returnCmd := &cobra.Command{
@@ -1715,9 +1756,26 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 			if err != nil {
 				return err
 			}
+			if validateRemote {
+				if !dryRun {
+					return fmt.Errorf("validation: --validate-remote is a read-only dry-run pre-flight; combine it with --dry-run (a live transition already resolves the target)")
+				}
+				if target == "" {
+					return fmt.Errorf("validation: --validate-remote needs a transition target to resolve against the issue's live transitions")
+				}
+			}
+			if len(payload.fields) > 0 {
+				// Priority is site-wide and usually cached — a name Jira
+				// would reject fails fast. Advisory: no cache, no check.
+				if profile, perr := cmdutil.ProfileForCommand(cmd); perr == nil {
+					if verr := validatePriorityAgainstCache(cmd, profile, payload.fields); verr != nil {
+						return verr
+					}
+				}
+			}
 			if len(keys) > 1 {
 				if target != "" {
-					return runIssueTransitionMany(cmd, keys, parallelism, target, dryRun, payload)
+					return runIssueTransitionMany(cmd, keys, parallelism, target, dryRun, validateRemote, payload)
 				}
 				client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 				if err != nil {
@@ -1765,17 +1823,31 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 				comment = pipeOut.SubmitADF
 			}
 			if dryRun {
-				// Dry-run is local: echo the requested target without
-				// resolving a name to an id (that needs a live list).
-				data := map[string]any{"issue": key, "transition": target, "dry_run": dryRun}
-				if len(submitFields) > 0 {
-					data["fields"] = submitFields
-				}
-				if comment != nil {
-					data["comment"] = *comment
-				}
-				if len(payload.update) > 0 {
-					data["update"] = payload.update
+				// A bare dry-run is local: it echoes the requested target
+				// without resolving a name to an id (that needs a live
+				// list). --validate-remote opts into the read-only
+				// transitions fetch, resolving the target and running the
+				// screenless-payload refusal before any state change.
+				data := transitionDryRunData(key, target, submitFields, comment, payload.update)
+				if validateRemote {
+					client, _, ok, cerr := cmdutil.JiraClientForCommand(cmd)
+					if cerr != nil {
+						return cerr
+					}
+					if !ok {
+						return fmt.Errorf("jira base URL is required for issue.transition --validate-remote")
+					}
+					service := cmdutil.ServicesForClient(client).Issue()
+					var id string
+					if err := cmdutil.Spin(cmd, "issue.transition", func(ctx context.Context) error {
+						var e error
+						id, e = resolveTransitionForPayload(ctx, service, key, target, !payload.empty())
+						return e
+					}); err != nil {
+						return err
+					}
+					data["transition"] = id
+					data["transition_validated"] = true
 				}
 				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", data, pipeOut.Warnings)
 			}
@@ -1827,6 +1899,7 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 		},
 	}
 	cmdutil.AddDryRunFlag(returnCmd.Flags(), &dryRun, "Preview mutation without submitting")
+	cmdutil.AddBoolVar(returnCmd.Flags(), &validateRemote, "validate-remote", false, "With `--dry-run`, resolve the target against the issue's live transitions (read-only fetch)", clib.FlagExtra{Group: "Validation"})
 	cmdutil.AddStringVar(returnCmd.Flags(), &transitionID, "transition", "", "Transition id or status name (or pass the status as a positional argument)", clib.FlagExtra{Group: "Transition", Placeholder: "STATUS"})
 	cmdutil.AddFileFlag(returnCmd.Flags(), &jsonInput, "json-input", "", "Read transition payload from JSON file (canonical for agents)", "Input", "FILE")
 	cmdutil.AddMarkdownFlag(returnCmd, &markdownInput, &markdownFile, "Transition comment as Markdown, posted atomically with the status change", "")
@@ -1957,6 +2030,38 @@ func mergeTransitionTarget(flagTarget, payloadTarget string) (string, error) {
 		return payloadTarget, nil
 	}
 	return "", fmt.Errorf("validation: the transition target is set twice — %q on the command line and %q in the payload's transition section; supply it once or align the values", flagTarget, payloadTarget)
+}
+
+// validatePriorityAgainstCache refuses a priority name absent from the
+// cached site priority set. The check is advisory-by-cache: with no
+// readable priorities cache it passes silently, but when the site's
+// priorities ARE known locally a hallucinated name fails fast — with
+// the valid set in the message — instead of round-tripping to Jira.
+// An id-addressed priority ({"id": ...}) is not checked; ids are not
+// worth caching against.
+func validatePriorityAgainstCache(cmd *cobra.Command, profile config.Profile, fields map[string]any) error {
+	priority, isMap := fields["priority"].(map[string]any)
+	if !isMap {
+		return nil
+	}
+	name, isString := priority["name"].(string)
+	if !isString || strings.TrimSpace(name) == "" {
+		return nil
+	}
+	var cached []struct {
+		Name string `json:"name"`
+	}
+	if !clijql.ReadCacheJSON(cmdutil.CacheKeyForProfile(cmd, profile), "priorities", &cached) || len(cached) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(cached))
+	for _, p := range cached {
+		if strings.EqualFold(p.Name, strings.TrimSpace(name)) {
+			return nil
+		}
+		names = append(names, p.Name)
+	}
+	return fmt.Errorf("validation: priority %q is not one of this site's priorities (%s); refresh with `jira cache priorities --refresh` if the set changed", name, strings.Join(names, ", "))
 }
 
 // popUpdateSection removes a native REST `update` block (add / set / remove
@@ -2098,7 +2203,24 @@ func transitionNames(transitions []*jira.Transition) string {
 	return strings.Join(names, ", ")
 }
 
-func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, target string, dryRun bool, payload transitionPayload) error {
+// transitionDryRunData assembles the per-issue dry-run preview: the
+// target (as requested, or resolved under --validate-remote) plus the
+// validated payload sections.
+func transitionDryRunData(key, target string, fields map[string]any, comment *adf.Document, update map[string]any) map[string]any {
+	data := map[string]any{"issue": key, "transition": target, "dry_run": true}
+	if len(fields) > 0 {
+		data["fields"] = fields
+	}
+	if comment != nil {
+		data["comment"] = *comment
+	}
+	if len(update) > 0 {
+		data["update"] = update
+	}
+	return data
+}
+
+func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, target string, dryRun, validateRemote bool, payload transitionPayload) error {
 	// One payload, applied identically to every key — the bulk form of
 	// "close these with the same resolution note".
 	pipeIn := pipeline.MutationInput{
@@ -2121,23 +2243,36 @@ func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, 
 		comment = pipeOut.SubmitADF
 	}
 	if dryRun {
+		if validateRemote {
+			// Resolve the target per issue with the read-only transitions
+			// fetch — the same status name can map to different ids across
+			// workflow states, and a payload-carrying transition gets the
+			// screenless refusal per key.
+			client, _, ok, cerr := cmdutil.JiraClientForCommand(cmd)
+			if cerr != nil {
+				return cerr
+			}
+			if !ok {
+				return fmt.Errorf("jira base URL is required for issue.transition --validate-remote")
+			}
+			service := cmdutil.ServicesForClient(client).Issue()
+			results, rerr := cmdutil.FanOutKeysProgress(cmd.Context(), "issue.transition", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+				id, resolveErr := resolveTransitionForPayload(ctx, service, key, target, !payload.empty())
+				if resolveErr != nil {
+					return nil, resolveErr
+				}
+				value := transitionDryRunData(key, id, submitFields, comment, payload.update)
+				value["transition_validated"] = true
+				return value, nil
+			})
+			if rerr != nil {
+				return rerr
+			}
+			return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.transition", results, cmdutil.KeyedDataWithWarnings(pipeOut.Warnings))
+		}
 		results := make([]cmdutil.KeyResult[map[string]any], len(keys))
 		for i, key := range keys {
-			value := map[string]any{
-				"issue":      key,
-				"transition": target,
-				"dry_run":    true,
-			}
-			if len(submitFields) > 0 {
-				value["fields"] = submitFields
-			}
-			if comment != nil {
-				value["comment"] = *comment
-			}
-			if len(payload.update) > 0 {
-				value["update"] = payload.update
-			}
-			results[i] = cmdutil.KeyResult[map[string]any]{Key: key, Value: value}
+			results[i] = cmdutil.KeyResult[map[string]any]{Key: key, Value: transitionDryRunData(key, target, submitFields, comment, payload.update)}
 		}
 		return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.transition", results, cmdutil.KeyedDataWithWarnings(pipeOut.Warnings))
 	}

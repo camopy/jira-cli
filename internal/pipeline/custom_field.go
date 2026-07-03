@@ -44,8 +44,10 @@ func CustomFieldDropPolicy(fieldID, fieldType string, malformed bool, mode adfmo
 		// the one custom-field value that reaches Jira unverified.
 		return CustomFieldDecision{
 			Forward: true,
-			Warning: "WARNING: customfield " + fieldID + " has no known type (vendor/marketplace field); " +
-				"its value is forwarded to Jira UNVERIFIED — the CLI cannot check its shape",
+			Warning: "WARNING: customfield " + fieldID + " has no resolved type here; " +
+				"its value is forwarded to Jira UNVERIFIED — the CLI cannot check its shape without a screen schema. " +
+				"A dry-run with --validate-remote (or a live submit) fetches the screen and validates known field types; " +
+				"true vendor/marketplace types stay unverifiable",
 		}
 	}
 	if !malformed {

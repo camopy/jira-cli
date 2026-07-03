@@ -13,14 +13,15 @@ When: an issue must move to a new workflow state (e.g. To Do → In Progress →
 - Multi-key execution applies the same transition id to each issue and reports per-key failures when one issue cannot take that transition.
 
 # guard
-- `--dry-run` validates the request (issue exists, transition ID present on this issue) without changing state.
+- A bare `--dry-run` is local: it validates the payload shape and echoes the requested target WITHOUT resolving it — a bogus id or name passes. Add `--validate-remote` for a read-only pre-flight that fetches the issue's live transitions, resolves the target to its id (`data.transition_validated: true`), and applies the screenless-payload refusal before any state change.
 
 **Run**
 - List available transitions for an issue: `jira issue transition KEY --output=json`
 - Multi-key list: `jira issue transition <PROJECT_KEY>-1..10 -p 4 --output=json`
 - Execute the chosen transition: `jira issue transition KEY --transition <id> --output=json`
 - Bulk execute: `jira issue transition <PROJECT_KEY>-1..10 -p 4 --transition <id> --output=json`
-- Preview only: `jira issue transition KEY --transition <id> --dry-run --output=json`
+- Preview only (local echo): `jira issue transition KEY --transition <id> --dry-run --output=json`
+- Server-validated preview: `jira issue transition KEY --transition <id> --dry-run --validate-remote --output=json` (read-only; catches a bogus id/name and screenless-payload discard with exit 3)
 - With a comment, posted atomically: `jira issue transition KEY Done --markdown "released in v1.2.3" --output=json` (or `--markdown-file`)
 - With transition-screen fields (e.g. resolution) and/or an ADF comment: `jira issue transition KEY Done --json-input payload.json` where the payload carries `fields` (either payload shape) and an optional ADF `comment` key
 - Native REST body: `--json-input` also accepts the exact `POST /rest/api/3/issue/{key}/transitions` body — a `transition` section naming the target (`{"id": "31"}` or `{"name": "Done"}`), `fields`, and an `update` operation block forwarded verbatim. With a payload-named target no positional STATUS is needed; naming the target in both places with different values is refused. `update.comment` operations and the `comment` key are mutually exclusive — supply the comment once.

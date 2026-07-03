@@ -11,7 +11,14 @@ Four write verbs: `create` files a new issue, `edit` changes an existing one,
 block only — the envelope wrapper and exit codes live on
 [Output](../output.md), and each command links to its reference page for the
 complete flag and output-field tables. `--dry-run` is a local preview that
-validates the payload and never contacts Jira.
+validates the payload's shape and never contacts Jira — it has no screen
+schema, so unknown field names pass through. Add `--validate-remote` to a
+`create` or `edit` dry-run for a read-only pre-flight that fetches the live
+screen (createmeta / editmeta) and runs the same field-schema and custom-field
+checks a real submit gets; the envelope confirms with
+`data.validated_remotely: true`. A priority name is additionally checked
+against the cached site priorities whenever that cache is present, on dry-run
+and live alike.
 
 ## create
 

@@ -25,12 +25,13 @@ This is not a command — it's the cross-cutting contract that `clone_issue`, `m
 - Post-write: capture the returned key + envelope as evidence.
 
 # which dry-run semantics apply to my command?
-- Full validation pipeline (parse → ADF compat → field schema → customfield encoding, stops before the API call): `issue create`, `issue edit`, `issue clone`, `issue move`, and `issue comment add`. These dry-runs catch payload shape, ADF strict errors, missing required customfields, and unknown field names.
+- Local pipeline (parse → ADF compat → customfield encoding, stops before the API call): `issue create`, `issue edit`, `issue clone`, `issue move`, and `issue comment add`. A bare dry-run catches payload shape, ADF strict errors, and a cached-priority mismatch — it has NO screen schema, so unknown field names, invalid issue types, and customfield types pass through unchecked.
+- Server-validated pre-flight (read-only, still no write): add `--validate-remote` to the dry-run. `issue create --dry-run --validate-remote` fetches createmeta and runs the same field-schema + customfield checks a live submit gets (unknown fields, missing required fields, resolvable types, invalid issue type); `issue edit` does the same against editmeta; `issue transition` resolves the target against the issue's live transitions and applies the screenless-payload refusal.
 - Local-only preview (does not contact Jira): `watchers add --dry-run` when `--user` is locally derivable (`accountId:<id>`, or `me` on a profile that carries an account id), `issue link --dry-run`, `issue weblink --dry-run`, `worklog add --dry-run`, and `issue delete --dry-run`.
-- Hybrid (local preview by default, opts into a read-only resolve when asked): `watchers add --dry-run --validate-remote` does a read-only `/user/search` to resolve a bare name or email but still issues no watcher POST/DELETE.
+- Hybrid resolve: `watchers add --dry-run --validate-remote` does a read-only `/user/search` to resolve a bare name or email but still issues no watcher POST/DELETE.
 
 **Run** (sequence, per mutation)
-1. Dry-run: same command with `--dry-run --output=json`; verify payload shape, ADF validity, and any `*_resolved` flags before committing.
+1. Dry-run: same command with `--dry-run --output=json`; verify payload shape, ADF validity, and any `*_resolved` flags before committing. Add `--validate-remote` when you want the live screen checked too (read-only; `data.validated_remotely: true` confirms it ran).
 2. Real write: drop `--dry-run`, keep `--output=json`, add the target's confirmation flag (`--force` for `clone_issue` / `move_issue` / `delete_issue` / attachment delete / link delete; `--no-input` + field flags or `--json-input` for `edit_issue` and `add_comment`).
 3. Record the returned issue key, comment id, link id, worklog id, or attachment id from `data.*` as the evidence trail.
 
@@ -43,7 +44,7 @@ For bulk-safe issue-key mutations, pass key lists/ranges as `KEY...` and add `-p
 - Live multi-key `delete_issue` always requires `--force`, even in an interactive TTY. This avoids a long prompt loop and keeps bulk deletion explicit.
 
 **Behavior**
-- `--dry-run` on full-pipeline commands runs every local validation stage but stops before the network call; a clean dry-run means the payload is shaped correctly, not that Jira will accept it (server-side rules like project-required customfields still apply on submit).
+- A clean bare `--dry-run` means the payload is shaped correctly, NOT that Jira will accept it — unknown field names, invalid issue types, screen membership, and enum values are server knowledge. `--dry-run --validate-remote` closes most of that gap with read-only metadata fetches; workflow conditions and permission rules still only surface on the live submit.
 - ADF strict mode is the default on mutation submit and `--dry-run` preview; reads / `--output=human` extract default to best-effort. Override per-call with `--adf-strict` / `--adf-best-effort` or globally via `JIRA_ADF_STRICT` env / `adf_strict` profile setting. Precedence: flag > env > profile > per-path default. See → `adf_reference`.
 - `--dry-run` is local-only by default for `watchers add`; bare name/email won't resolve without `--validate-remote`.
 
