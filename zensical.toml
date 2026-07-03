@@ -170,6 +170,10 @@ nav = [
             ] },
             { "tui" = "reference/jira/tui.md" },
             { "update" = "reference/jira/update.md" },
+            { "user" = [
+                "reference/jira/user/index.md",
+                { "search" = "reference/jira/user/search.md" },
+            ] },
             { "version" = "reference/jira/version.md" },
             { "worklog" = [
                 "reference/jira/worklog/index.md",

@@ -250,9 +250,9 @@ what the CLI's ADF validator detects.
 ]}
 ```
 
-The `id` MUST be the user's `accountId` (get it from
-`jira me --output=json` for yourself, or the assignee field on any issue
-they own). The `text` is the display label and can be anything.
+The `id` MUST be the user's `accountId`: resolve it from a name or email
+with `jira user search` (see → `find_user`), or use `jira me --output=json`
+for yourself. The `text` is the display label and can be anything.
 
 **Status pill (named color: green / red / yellow / blue / purple / grey / neutral):**
 

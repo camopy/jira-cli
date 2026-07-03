@@ -31,6 +31,7 @@ var workflowGoals = map[string]string{}
 var workflowOrder = []string{
 	"core_contract",
 	"identity_setup",
+	"find_user",
 	"auth_setup",
 	"inspect_schema",
 	"configure_editor",
