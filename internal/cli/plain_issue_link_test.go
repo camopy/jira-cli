@@ -71,3 +71,40 @@ func TestGenericPlainLeavesNonKeysAndNoBaseURLAlone(t *testing.T) {
 		t.Fatalf("no browse URL known — nothing to link, got %q", buf.String())
 	}
 }
+
+func TestUserSearchPlainRendersOneLinePerMatch(t *testing.T) {
+	var buf bytes.Buffer
+	err := writeUserSearchPlain(linkLogger(&buf, clog.ColorNever), map[string]any{
+		"query": "sam",
+		"count": 2,
+		"users": []any{
+			map[string]any{"account_id": "id-1", "display_name": "Sam One", "email_address": "one@example.com"},
+			map[string]any{"account_id": "id-2", "display_name": "Sam Two", "email_address": "two@example.com"},
+		},
+	}, defaultPlainConfig())
+	if err != nil {
+		t.Fatalf("writeUserSearchPlain: %v", err)
+	}
+	got := buf.String()
+	for _, want := range []string{"Sam One — one@example.com", "Sam Two — two@example.com", "id-1", "id-2"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("plain user search missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "items") {
+		t.Fatalf("users must render as lines, never a collapsed count: %s", got)
+	}
+}
+
+func TestUserSearchPlainZeroMatches(t *testing.T) {
+	var buf bytes.Buffer
+	err := writeUserSearchPlain(linkLogger(&buf, clog.ColorNever), map[string]any{
+		"query": "nobody", "count": 0, "users": []any{},
+	}, defaultPlainConfig())
+	if err != nil {
+		t.Fatalf("writeUserSearchPlain: %v", err)
+	}
+	if !strings.Contains(buf.String(), "No users matched") {
+		t.Fatalf("zero matches must say so plainly: %s", buf.String())
+	}
+}

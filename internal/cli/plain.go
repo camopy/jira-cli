@@ -177,6 +177,8 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 		return WriteLinkTypesPlain(w, command, data, opts...)
 	case "boards.list":
 		return WriteBoardListPlain(w, command, data, opts...)
+	case "user.search":
+		return writeUserSearchPlain(logger, data, cfg)
 	default:
 		return writeGenericPlain(logger, cfg, messageForCommand(command), data)
 	}
@@ -440,6 +442,39 @@ func writeValidatePlain(logger *clog.Logger, data any, cfg plainConfig) error {
 		default:
 			logger.Info().Parts(clog.PartMessage).Msg("OK  " + query)
 		}
+	}
+	return nil
+}
+
+// writeUserSearchPlain renders `user search`: one line per match —
+// "display name — email account_id=…" — so a human scans candidates the
+// same way an agent scans data.users[]. The display name links to the
+// person's profile on a supporting terminal. Zero matches states so
+// plainly instead of printing an empty count line.
+func writeUserSearchPlain(logger *clog.Logger, data any, cfg plainConfig) error {
+	m, ok := data.(map[string]any)
+	if !ok {
+		return writeGenericPlain(logger, cfg, "", data)
+	}
+	users := normalizeMapList(m["users"])
+	if len(users) == 0 {
+		query, _ := m["query"].(string)
+		logger.Info().Str("query", query).Msg("No users matched")
+		return nil
+	}
+	for _, u := range users {
+		name, _ := u["display_name"].(string)
+		email, _ := u["email_address"].(string)
+		id, _ := u["account_id"].(string)
+		display := name
+		if cfg.baseURL != "" && id != "" {
+			display = hyperlink(cfg, cfg.baseURL+"/jira/people/"+id, name)
+		}
+		line := display
+		if email != "" {
+			line += " — " + email
+		}
+		logger.Info().Str("account_id", id).Msg(line)
 	}
 	return nil
 }
