@@ -37,7 +37,11 @@ func WriteWatcherListPlain(w io.Writer, command string, data any, opts ...PlainO
 	} else {
 		count = len(watchers)
 	}
-	header := style.bold("Watchers") + style.dim("  ("+human.Pluralize(count, "watcher", "watchers")+")")
+	title := "Watchers"
+	if cfg.resultKey != "" {
+		title += " on " + cfg.resultKey
+	}
+	header := style.bold(title) + style.dim("  ("+human.Pluralize(count, "watcher", "watchers")+")")
 	if isWatching, _ := m["is_watching"].(bool); isWatching {
 		header += "  " + style.emph("(you are watching)")
 	}

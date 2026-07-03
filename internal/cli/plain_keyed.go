@@ -30,19 +30,25 @@ func WriteKeyedResultsPlain(w io.Writer, command string, data any, opts ...Plain
 	}
 	event.Msg(messageForCommand(command))
 
-	style := authPlainStyle{tty: cfg.tty, theme: cfg.theme}
+	// No per-entry heading: identification is the child renderer's job.
+	// The entry key rides down as render context — block renderers fold
+	// it into their own header ("Comments on KEY"), and the generic
+	// renderer emits it only when the data doesn't already carry it, so
+	// the key appears exactly once per entry.
 	for _, result := range results {
 		if ok, _ := result["ok"].(bool); !ok {
 			continue
 		}
-		key := stringFromMap(result, "key")
-		if key != "" {
-			logger.Info().Parts(clog.PartMessage).Msg(style.bold(key))
+		child, hasChild := result["data"]
+		if !hasChild {
+			continue
 		}
-		if child, ok := result["data"]; ok {
-			if err := WriteCommandPlain(w, command, child, opts...); err != nil {
-				return err
-			}
+		childOpts := opts
+		if key := stringFromMap(result, "key"); key != "" {
+			childOpts = append(append([]PlainOption{}, opts...), WithPlainResultKey(key))
+		}
+		if err := WriteCommandPlain(w, command, child, childOpts...); err != nil {
+			return err
 		}
 	}
 	return nil

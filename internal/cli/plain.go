@@ -36,6 +36,11 @@ type plainConfig struct {
 	theme     *clibtheme.Theme
 	columns   []string
 	tsv       bool
+	// resultKey is the multi-key entry this render belongs to. Child
+	// renderers own identification: block renderers fold it into their
+	// header, and the generic renderer emits it only when the data does
+	// not already carry the value — so a key is never printed twice.
+	resultKey string
 }
 
 func WithPlainBaseURL(baseURL string) PlainOption {
@@ -82,6 +87,15 @@ func WithPlainTheme(theme *clibtheme.Theme) PlainOption {
 	}
 }
 
+// WithPlainResultKey names the multi-key entry the rendered data belongs
+// to, making identification the child renderer's job instead of a
+// duplicated heading above it.
+func WithPlainResultKey(key string) PlainOption {
+	return func(cfg *plainConfig) {
+		cfg.resultKey = strings.TrimSpace(key)
+	}
+}
+
 // WithPlainColumns selects and orders the issue-list columns for human and
 // TSV output. An empty slice keeps the default column set.
 func WithPlainColumns(columns []string) PlainOption {
@@ -113,31 +127,13 @@ func WritePlain(w io.Writer, data any) error {
 	return writeGenericPlain(newPlainLogger(w), defaultPlainConfig(), "result", data)
 }
 
-// PlainRenderer renders a single command's typed output as human text.
-// Per-command renderers in the plain_*.go files implement this contract:
-// they own the field order, human-size and time formatting for one
-// command group, replacing generic map reflection. writeGenericPlain
-// remains the fallback for low-risk internal data that has no dedicated
-// renderer.
-type PlainRenderer interface {
-	// RenderPlain writes the human view of data for command to w.
-	RenderPlain(w io.Writer, command string, data any, opts ...PlainOption) error
-}
-
-// plainRendererFunc adapts a plain rendering function to PlainRenderer.
-type plainRendererFunc func(w io.Writer, command string, data any, opts ...PlainOption) error
-
-func (f plainRendererFunc) RenderPlain(w io.Writer, command string, data any, opts ...PlainOption) error {
-	return f(w, command, data, opts...)
-}
-
-// dtoPlainRenderers maps a command name to the typed PlainRenderer that
-// owns its human output — field order, human sizes and time formatting.
-// Migrating a command off generic map reflection means adding it here.
-var dtoPlainRenderers = map[string]PlainRenderer{
-	"issue.attachment.list": plainRendererFunc(WriteAttachmentListPlain),
-}
-
+// WriteCommandPlain routes a command's data to the plain renderer that
+// owns its human output. Per-command renderers in the plain_*.go files
+// own the field order, human-size and time formatting for one command
+// group; writeGenericPlain remains the fallback for low-risk internal
+// data that has no dedicated renderer. The command set is closed, so an
+// explicit switch is the whole dispatch — there is deliberately no
+// parallel renderer registry.
 func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOption) error {
 	cfg := defaultPlainConfig()
 	for _, opt := range opts {
@@ -147,10 +143,9 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 	if command != "issue.view" && len(keyedResultRows(data)) > 0 {
 		return WriteKeyedResultsPlain(w, command, data, opts...)
 	}
-	if renderer, ok := dtoPlainRenderers[command]; ok {
-		return renderer.RenderPlain(w, command, data, opts...)
-	}
 	switch command {
+	case "issue.attachment.list":
+		return WriteAttachmentListPlain(w, command, data, opts...)
 	case "issue.list":
 		return writeIssueListPlain(logger, data, cfg)
 	case "issue.list.jql", "jql.build":
@@ -199,6 +194,17 @@ func writeGenericPlain(logger *clog.Logger, cfg plainConfig, message string, dat
 		return nil
 	}
 	event := logger.Info()
+	// A multi-key entry must be identifiable from its own line. When the
+	// data already carries the key's value under any field (issue=KEY,
+	// resource names, ...), that field identifies it; otherwise the key
+	// is emitted up front — linked like any other issue-key value.
+	if cfg.resultKey != "" && !plainFieldsCarryValue(fields, cfg.resultKey) {
+		if url, key := issueBrowseURL(cfg, cfg.resultKey); url != "" {
+			event = event.Link("key", url, key)
+		} else {
+			event = event.Str("key", cfg.resultKey)
+		}
+	}
 	for _, field := range fields {
 		// An issue-key value becomes a clickable link to its browse URL.
 		// clog owns the fallback: off a TTY (or with hyperlinks disabled)
@@ -264,6 +270,17 @@ func messageForCommand(command string) string {
 type plainField struct {
 	key   string
 	value any
+}
+
+// plainFieldsCarryValue reports whether any rendered field's string value
+// equals want — i.e. the data already self-identifies its multi-key entry.
+func plainFieldsCarryValue(fields []plainField, want string) bool {
+	for _, field := range fields {
+		if s, ok := field.value.(string); ok && s == want {
+			return true
+		}
+	}
+	return false
 }
 
 func plainFields(data any) []plainField {

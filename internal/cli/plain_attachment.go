@@ -40,7 +40,11 @@ func WriteAttachmentListPlain(w io.Writer, command string, data any, opts ...Pla
 			count = t
 		}
 	}
-	header := style.bold("Attachments") + style.dim("  ("+human.Pluralize(count, "attachment", "attachments")+")")
+	title := "Attachments"
+	if cfg.resultKey != "" {
+		title += " on " + cfg.resultKey
+	}
+	header := style.bold(title) + style.dim("  ("+human.Pluralize(count, "attachment", "attachments")+")")
 	logger.Info().Parts(clog.PartMessage).Msg(header)
 
 	if len(rows) == 0 {

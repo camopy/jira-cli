@@ -54,7 +54,11 @@ func WriteCommentListPlain(w io.Writer, command string, data any, opts ...PlainO
 	comments := normalizeMapList(m["comments"])
 	style := authPlainStyle{tty: cfg.tty, theme: cfg.theme}
 
-	header := style.bold("Comments")
+	title := "Comments"
+	if cfg.resultKey != "" {
+		title += " on " + cfg.resultKey
+	}
+	header := style.bold(title)
 	if count := len(comments); count > 0 {
 		header += style.dim("  (" + human.Pluralize(count, "comment", "comments") + ")")
 	}
