@@ -189,13 +189,13 @@ func TestDocsSiteArtifactsExist(t *testing.T) {
 		"../../docs/installation.md",
 		"../../docs/auth.md",
 		"../../docs/output.md",
-		"../../docs/issues.md",
+		"../../docs/issue/create-edit.md",
 		"../../docs/adf.md",
 		"../../docs/custom-fields.md",
 		"../../docs/search.md",
 		"../../docs/cache.md",
 		"../../docs/agent.md",
-		"../../docs/stylesheets/catppuccin.css",
+		"../../docs/stylesheets/theme.css",
 	} {
 		if _, err := os.ReadFile(path); err != nil {
 			t.Fatalf("docs site artifact %s missing: %v", path, err)
@@ -222,9 +222,9 @@ func TestDocsSiteArtifactsExist(t *testing.T) {
 		t.Fatalf("ReadFile(.mise/tasks/docs-serve): %v", err)
 	}
 	for _, want := range []string{
-		`local_site_url="http://localhost:8000/"`,
-		`uvx --from zensical zensical build --clean --strict -f "$tmp_config"`,
-		`uvx --from zensical zensical serve -f "$tmp_config" "$@"`,
+		// The serve task runs the committed config directly — no throwaway
+		// copy with a rewritten site_url, so nothing lands in the tree.
+		`exec uvx --from zensical zensical serve -f zensical.toml "$@"`,
 	} {
 		if !strings.Contains(string(serveTask), want) {
 			t.Fatalf("docs serve task missing %q\n%s", want, serveTask)

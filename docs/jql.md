@@ -63,8 +63,8 @@ hyperlink to the Jira search URL on a TTY). The JSON `data` adds the resolved
 }
 ```
 
-Defaults: no filters gives `updated >= -365d ORDER BY updated DESC`; sort
-defaults to `updated` descending (`--order-by` takes `created`, `priority`,
+Defaults: no filters gives `updated >= -365d ORDER BY updated DESC`. Sort defaults to descending
+on `updated` (`--order-by` takes `created`, `priority`,
 `status`, `key`, `summary`; `--desc=false` sorts ascending).
 
 [Full flags & output fields →](reference/jira/jql/build.md)

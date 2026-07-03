@@ -131,6 +131,16 @@ becomes `JIRA_TOKEN_WORK`), then the backend recorded on the profile.
     (`CGO_ENABLED=1 go install github.com/matcra587/jira-cli/cmd/jira@latest`)
     or set `JIRA_TOKEN_<PROFILE>` and skip the backend.
 
+!!! note "1Password desktop-app authorization"
+    The desktop app must be installed, signed in to the account that owns
+    the item, and configured to allow SDK integrations: in 1Password open
+    Settings › Developer and enable **Integrate with other apps**.
+    Authorization is per account and per process — separate `jira`
+    invocations may prompt separately even while the app is unlocked.
+
+    Further reading:
+    [1Password SDK desktop app integration](https://www.1password.dev/sdks#1password-desktop-app)
+
 ## When access fails
 
 `auth status` tells a bad token apart from a missing permission:

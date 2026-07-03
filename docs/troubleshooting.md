@@ -107,14 +107,11 @@ See [Cache](cache.md) for the full resource list.
     `config theme --name <unknown>`.
 
 `exit 3` with `screen schema could not be resolved in strict mode`
-:   `issue create --json-input` got the edit-shape payload
-    (`{"fields": {...}}`) instead of the flat-alias shape
-    (`{"project_key": ..., "issue_type": ...}`). See [Issues › `## create`](issue/create-edit.md#create)
-    for the payload-shape warning.
-
-`exit 3` with `validation: --json-input payload has no recognized fields`
-:   Inverse of the above: `issue edit --json-input` got a flat
-    payload. Wrap it under `{"fields": {...}}`.
+:   Strict mode could not fetch the create screen for the payload's
+    project and issue type — usually an unknown project key or issue
+    type name for the instance, or no live connection to resolve the
+    screen. Check the names with [`cache projects`](cache.md) and
+    [`cache issuetypes`](cache.md).
 
 `exit 1` with `auth_failed` on a previously-working profile
 :   Token rotated upstream. Re-run `auth login`.

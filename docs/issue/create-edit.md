@@ -29,9 +29,10 @@ jira issue create --json-input new-issue.json --dry-run
 jira issue create --json-input new-issue.json --output=json
 ```
 
-The `--json-input` file uses flat CLI-alias keys (`description` is an ADF
-document; `description_markdown` takes Markdown instead — a lossy shortcut that
-can't carry mentions, dates, panels, or tables):
+The `--json-input` file accepts flat CLI-alias keys or the Jira-native
+`{"fields": {...}}` object interchangeably (`description` is an ADF
+document; `description_markdown` takes Markdown instead — a lossy shortcut
+that can't carry mentions, dates, panels, or status lozenges):
 
 ```json
 {
@@ -53,18 +54,14 @@ A live create returns `data.issue` with the new `id`, `key`, and `self`. A
 submit (`project_key`, `issue_type`, `summary`, `description_adf`, and any
 custom fields) with `dry_run: true`.
 
-!!! warning "`create` and `edit` take different payload shapes"
-    `create --json-input` reads flat CLI-alias keys at the **top level**:
-    `project_key`, `issue_type`, `summary`, `description`,
-    `assignee_account_id`, plus any bare Jira field name. There is **no**
-    `fields` wrapper and **no** `{"project": {"key": …}}` /
-    `{"issuetype": {"name": …}}` nesting — the CLI normalises the aliases
-    internally.
-
-    [`edit --json-input`](#edit) is the opposite: it follows Atlassian's REST
-    `editIssue` shape, a top-level `fields` object holding bare field names.
-    Sending the edit shape to `create` fails schema resolution because the
-    resolver looks for `project_key` / `issue_type`, not `fields.project.key`.
+!!! tip "`create` and `edit` accept the same payload shapes"
+    Both commands take either form: the Jira-native shape — a top-level
+    `fields` object holding bare field names with wire nesting
+    (`{"project": {"key": …}}`, `{"issuetype": {"name": …}}`) — or flat
+    convenience keys at the top level (`project_key`, `issue_type`,
+    `summary`, plus any bare Jira field name). The CLI normalises either
+    into the same submit, so a payload written for one command works on
+    the other.
 
 [Full flags & output fields →](../reference/jira/issue/create.md)
 

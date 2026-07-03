@@ -11,7 +11,7 @@ go install github.com/matcra587/jira-cli/cmd/jira@latest
 Homebrew and GoReleaser release archives include release version metadata.
 `go install github.com/matcra587/jira-cli/cmd/jira@latest` builds from source
 and reports the module version in `jira version` (resolved from Go build
-info; a plain `go build` reports a commit-derived dev version).
+info; a plain `go build` reports a commit-derived `dev` version).
 Release archives currently target macOS, Linux, and Windows.
 
 See [docs/installation.md](docs/installation.md) for release archives, the
