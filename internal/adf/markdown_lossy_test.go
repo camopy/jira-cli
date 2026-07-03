@@ -103,15 +103,17 @@ func TestFromMarkdownLossy_SupportedConstructsNoWarnings(t *testing.T) {
 	}
 }
 
-// A blockquote currently has no authoring path in FromMarkdown — it
-// must warn rather than silently drop the quoted content.
-func TestFromMarkdownLossy_BlockquoteWarns(t *testing.T) {
-	_, warnings, err := adf.FromMarkdownLossy("> quoted line\n")
+// A blockquote converts to a real ADF blockquote node — no warning.
+func TestFromMarkdownLossy_BlockquoteConvertsWithoutWarning(t *testing.T) {
+	doc, warnings, err := adf.FromMarkdownLossy("> quoted line\n")
 	if err != nil {
 		t.Fatalf("FromMarkdownLossy: %v", err)
 	}
-	if len(warnings) == 0 {
-		t.Fatal("expected a warning for an unsupported Markdown blockquote")
+	if len(warnings) != 0 {
+		t.Fatalf("blockquote conversion should not warn; got %+v", warnings)
+	}
+	if len(doc.Content) != 1 || doc.Content[0].Type != "blockquote" {
+		t.Fatalf("doc.Content = %+v, want a single blockquote node", doc.Content)
 	}
 }
 

@@ -158,7 +158,7 @@ var registryEntries = []Entry{
 	markRow("strong", fullSupport, StatusMVP, ""),
 	markRow("em", fullSupport, StatusMVP, ""),
 	markRow("strike", fullSupport, StatusMVP, ""),
-	markRow("code", fullSupport, StatusMVP, ""),
+	markRow("code", fullSupport, StatusMVP, "Combines only with the link mark; any other mark on code text is invalid."),
 	markRow("link", fullSupport, StatusMVP, "attrs.href required."),
 	markRow("textColor", fullSupport, StatusMVP, "attrs.color required (#RRGGBB)."),
 	markRow("backgroundColor", fullSupport, StatusMVP, "attrs.color required (#RRGGBB)."),

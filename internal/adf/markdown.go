@@ -1,6 +1,7 @@
 package adf
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -52,18 +53,91 @@ type mdConverter struct {
 }
 
 // warn records one lossy-conversion warning naming an unsupported
-// Markdown construct.
-func (c *mdConverter) warn(construct, detail string) {
+// Markdown construct, source-mapped to the offending input when n carries
+// position information.
+func (c *mdConverter) warn(n ast.Node, construct, detail string) {
 	msg := fmt.Sprintf("Markdown %s is not supported and was dropped during ADF conversion", construct)
 	if detail != "" {
 		msg += ": " + detail
 	}
-	c.warnings = append(c.warnings, Warning{
+	c.warnings = append(c.warnings, c.sourceMapped(n, Warning{
 		Type:     "markdown_lossy_conversion",
 		Message:  msg,
 		NodeType: construct,
 		Lossy:    true,
-	})
+	}))
+}
+
+// warnDowngrade records a non-lossy downgrade notice: the content survives
+// in a different shape, so strict mode does not abort on it.
+func (c *mdConverter) warnDowngrade(n ast.Node, construct, resolution string) {
+	c.warnings = append(c.warnings, c.sourceMapped(n, Warning{
+		Type:     "markdown_lossy_conversion",
+		Message:  fmt.Sprintf("Markdown %s was downgraded during ADF conversion: %s", construct, resolution),
+		NodeType: construct,
+		Lossy:    false,
+	}))
+}
+
+// sourceMapped appends the 1-based source position and the offending line
+// to w so a diagnostic points at the Markdown the author wrote, not a JSON
+// path into a document they never saw. A node with no resolvable position
+// (synthesized, or an empty document) leaves w unchanged.
+func (c *mdConverter) sourceMapped(n ast.Node, w Warning) Warning {
+	off := nodeOffset(n)
+	if off < 0 || off > len(c.source) {
+		return w
+	}
+	line := 1 + bytes.Count(c.source[:off], []byte("\n"))
+	lineStart := bytes.LastIndexByte(c.source[:off], '\n') + 1
+	col := off - lineStart + 1
+	w.Path = fmt.Sprintf("line %d, col %d", line, col)
+	if snippet := sourceLine(c.source, lineStart); snippet != "" {
+		w.Message += fmt.Sprintf(" (line %d, col %d: %q)", line, col, snippet)
+	} else {
+		w.Message += fmt.Sprintf(" (line %d, col %d)", line, col)
+	}
+	return w
+}
+
+// nodeOffset resolves the byte offset of n's first piece of source text:
+// block nodes carry line segments, text nodes carry their own segment, and
+// containers defer to their first positioned child. -1 means no position.
+func nodeOffset(n ast.Node) int {
+	if n == nil {
+		return -1
+	}
+	// Lines() is only defined for block nodes; goldmark's inline base
+	// panics on it.
+	if n.Type() == ast.TypeBlock {
+		if lines := n.Lines(); lines != nil && lines.Len() > 0 {
+			return lines.At(0).Start
+		}
+	}
+	if t, ok := n.(*ast.Text); ok {
+		return t.Segment.Start
+	}
+	for child := n.FirstChild(); child != nil; child = child.NextSibling() {
+		if off := nodeOffset(child); off >= 0 {
+			return off
+		}
+	}
+	return -1
+}
+
+// sourceLine returns the trimmed source line starting at lineStart, capped
+// so a pathological input cannot balloon a warning message.
+func sourceLine(source []byte, lineStart int) string {
+	end := bytes.IndexByte(source[lineStart:], '\n')
+	if end < 0 {
+		end = len(source) - lineStart
+	}
+	const maxSnippet = 80
+	line := strings.TrimSpace(string(source[lineStart : lineStart+end]))
+	if len(line) > maxSnippet {
+		line = line[:maxSnippet] + "…"
+	}
+	return line
 }
 
 // block converts one block-level goldmark node to an ADF block node.
@@ -81,15 +155,11 @@ func (c *mdConverter) block(n ast.Node) (Node, bool) {
 	case ast.KindCodeBlock, ast.KindFencedCodeBlock:
 		return c.codeBlock(n), true
 	case ast.KindBlockquote:
-		// Blockquote has no authoring path in the supported node set:
-		// the quoted content cannot be preserved without dropping the
-		// blockquote semantics. Warn and skip.
-		c.warn("blockquote", "quoted block dropped")
-		return Node{}, false
+		return c.blockquote(n), true
 	case ast.KindThematicBreak:
 		return Node{Type: "rule"}, true
 	case ast.KindHTMLBlock:
-		c.warn("raw HTML block", "")
+		c.warn(n, "raw HTML block", "")
 		return Node{}, false
 	case ast.KindLinkReferenceDefinition:
 		// Goldmark v1.8 surfaces reference definitions as block nodes.
@@ -98,9 +168,37 @@ func (c *mdConverter) block(n ast.Node) (Node, bool) {
 	case extast.KindTable:
 		return c.table(n), true
 	default:
-		c.warn("block "+n.Kind().String(), "")
+		c.warn(n, "block "+n.Kind().String(), "")
 		return Node{}, false
 	}
+}
+
+// blockquote converts a Markdown blockquote to the ADF blockquote node. The
+// schema restricts blockquote children to paragraphs, lists, and code
+// blocks, so other quoted constructs degrade: a nested quote is flattened
+// into its parent, and a quoted heading becomes a paragraph. Both keep the
+// content and report a non-lossy downgrade.
+func (c *mdConverter) blockquote(n ast.Node) Node {
+	return Node{Type: "blockquote", Content: c.blockquoteChildren(n)}
+}
+
+func (c *mdConverter) blockquoteChildren(n ast.Node) []Node {
+	var out []Node
+	for child := n.FirstChild(); child != nil; child = child.NextSibling() {
+		switch child.Kind() {
+		case ast.KindBlockquote:
+			c.warnDowngrade(child, "nested blockquote", "flattened into its parent blockquote")
+			out = append(out, c.blockquoteChildren(child)...)
+		case ast.KindHeading:
+			c.warnDowngrade(child, "heading inside a blockquote", "converted to a paragraph")
+			out = append(out, Node{Type: "paragraph", Content: c.inlineChildren(child)})
+		default:
+			if node, ok := c.block(child); ok {
+				out = append(out, node)
+			}
+		}
+	}
+	return out
 }
 
 // list converts a bullet or ordered list, recursing into list items.
@@ -138,6 +236,13 @@ func (c *mdConverter) listItemChildren(item ast.Node) []Node {
 			}
 		case ast.KindCodeBlock, ast.KindFencedCodeBlock:
 			out = append(out, c.codeBlock(child))
+		case ast.KindBlockquote:
+			// ADF list items cannot contain blockquotes. Hoist the quoted
+			// blocks into the list item so the content survives — this is
+			// exactly the "- >50 keys" shape, where Markdown parses the
+			// remainder of a list item as a nested quote.
+			c.warnDowngrade(child, "blockquote inside a list item", "quoted content hoisted into the list item")
+			out = append(out, c.blockquoteChildren(child)...)
 		default:
 			if node, ok := c.block(child); ok {
 				out = append(out, node)
@@ -252,8 +357,25 @@ func (c *mdConverter) inline(n ast.Node, marks []Mark) []Node {
 		mark := Mark{Type: "link", Attrs: map[string]any{"href": string(link.Destination)}}
 		return c.inlineRun(n, append(cloneMarks(marks), mark))
 	case ast.KindCodeSpan:
+		// The ADF spec allows the code mark to combine only with link.
+		// Resolve the conflict here, where the Markdown source is still at
+		// hand: keep code (and any link), drop the decorative marks, and
+		// report it as lossy — best-effort proceeds with the sanitized
+		// marks, strict aborts with this source-mapped message instead of
+		// a JSON path into a document the author never wrote.
+		kept, dropped := sanitizeCodeMarks(cloneMarks(marks))
+		if len(dropped) > 0 {
+			w := c.sourceMapped(n, Warning{
+				Type:     "markdown_lossy_conversion",
+				Message:  fmt.Sprintf("Markdown formatting cannot combine with inline code in ADF (code combines only with link); kept the code mark and dropped %s", strings.Join(dropped, ", ")),
+				NodeType: "codeSpan",
+				MarkType: dropped[0],
+				Lossy:    true,
+			})
+			c.warnings = append(c.warnings, w)
+		}
 		text := string(codeSpanText(n, c.source))
-		return []Node{{Type: "text", Text: text, Marks: append(cloneMarks(marks), Mark{Type: "code"})}}
+		return []Node{{Type: "text", Text: text, Marks: append(kept, Mark{Type: "code"})}}
 	case ast.KindAutoLink:
 		al := n.(*ast.AutoLink)
 		url := string(al.URL(c.source))
@@ -264,12 +386,28 @@ func (c *mdConverter) inline(n ast.Node, marks []Mark) []Node {
 	case ast.KindImage:
 		return c.image(n.(*ast.Image), marks)
 	case ast.KindRawHTML:
-		c.warn("inline raw HTML", "")
+		c.warn(n, "inline raw HTML", "")
 		return nil
 	default:
-		c.warn("inline "+n.Kind().String(), "")
+		c.warn(n, "inline "+n.Kind().String(), "")
 		return nil
 	}
+}
+
+// sanitizeCodeMarks applies the ADF mark-combination rule at conversion
+// time: the code mark combines only with link, so every other accumulated
+// mark is dropped. Returns the surviving marks and the dropped mark types.
+func sanitizeCodeMarks(marks []Mark) ([]Mark, []string) {
+	var kept []Mark
+	var dropped []string
+	for _, m := range marks {
+		if m.Type == "link" {
+			kept = append(kept, m)
+			continue
+		}
+		dropped = append(dropped, m.Type)
+	}
+	return kept, dropped
 }
 
 // image degrades a Markdown image to its alt text (the URL when the alt is
@@ -281,19 +419,14 @@ func (c *mdConverter) inline(n ast.Node, marks []Mark) []Node {
 func (c *mdConverter) image(img *ast.Image, marks []Mark) []Node {
 	url := string(img.Destination)
 	if url == "" {
-		c.warn("image", "image with no URL dropped")
+		c.warn(img, "image", "image with no URL dropped")
 		return nil
 	}
 	alt := imageAltText(img, c.source)
 	if alt == "" {
 		alt = url
 	}
-	c.warnings = append(c.warnings, Warning{
-		Type:     "markdown_lossy_conversion",
-		Message:  "Markdown image was downgraded to a link during ADF conversion: " + url,
-		NodeType: "image",
-		Lossy:    false,
-	})
+	c.warnDowngrade(img, "image", "rendered as a link to "+url)
 	mark := Mark{Type: "link", Attrs: map[string]any{"href": url}}
 	return []Node{{Type: "text", Text: alt, Marks: append(cloneMarks(marks), mark)}}
 }

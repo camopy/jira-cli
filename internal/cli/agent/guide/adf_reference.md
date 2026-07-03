@@ -307,6 +307,21 @@ they own). The `text` is the display label and can be anything.
   unicode glyph (`🚀`). All three should be set for portability.
 - **`tableCell` / `tableHeader` content must be wrapped in
   `paragraph`** — bare text inside a cell is invalid.
+- **The `code` mark combines only with `link`** — `**\`bold code\`**`
+  in Markdown is an invalid mark pair in ADF. The converter keeps the
+  code mark and drops the rest: best-effort proceeds with a lossy
+  warning, strict fails with the offending Markdown line and snippet.
+- **A list item starting with `>` parses as a blockquote** — `- >50 keys`
+  is a quote nested in a list item to Markdown. ADF list items cannot
+  contain blockquotes, so the quoted content is hoisted into the item
+  (non-lossy downgrade warning). Write `- more than 50 keys`, or escape
+  as `- \>50 keys`, when no quote was intended.
+- **Unhinted code fences get an explicit `language: ""`** — Jira renders
+  an attr-less `codeBlock` with its default language (java). Prefer a
+  real language hint; use `plaintext`-style hints only if you must.
+- **Markdown images degrade to alt-text links** — ADF cannot embed
+  external images by URL (media nodes need attachment IDs). The link
+  keeps the reference; the downgrade is warned but does not fail strict.
 
 ### ADF strict vs best-effort
 

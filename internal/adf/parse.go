@@ -19,6 +19,16 @@ type Warning struct {
 	Lossy    bool   `json:"lossy"`
 }
 
+// LossyConversionError is the strict-mode abort for a lossy Markdown→ADF
+// conversion: it carries the source-mapped warning so the error mapper can
+// surface the offending Markdown line and a remediation hint instead of a
+// bare message with none.
+type LossyConversionError struct {
+	Warning Warning
+}
+
+func (e LossyConversionError) Error() string { return e.Warning.Message }
+
 // Implement cli.WarningSource so commands can do cli.WarningFrom(adfW)
 // without either package importing the other's concrete type.
 func (w Warning) WarningType() string     { return w.Type }

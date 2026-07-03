@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -118,6 +119,9 @@ func MapError(err error) Error {
 		return out
 	}
 	if out, ok := mapProfileError(err); ok {
+		return out
+	}
+	if out, ok := mapLossyConversionError(err); ok {
 		return out
 	}
 	if out, ok := mapJiraAPIError(err); ok {
@@ -250,6 +254,21 @@ func mapProfileError(err error) (Error, bool) {
 		return out, true
 	}
 	return Error{}, false
+}
+
+// mapLossyConversionError adapts the strict-mode Markdown→ADF abort. The
+// message is already source-mapped (line/column and the offending snippet);
+// the mapper's job is the stable code and a never-empty remediation hint.
+func mapLossyConversionError(err error) (Error, bool) {
+	var lossy adf.LossyConversionError
+	if !errors.As(err, &lossy) {
+		return Error{}, false
+	}
+	out := NewError(ErrorTypeValidation, lossy.Error())
+	out.Code = "markdown_lossy_conversion"
+	out.Hint = "Rewrite the named Markdown construct (see `jira agent guide adf_reference`), " +
+		"or pass `--adf-best-effort` to accept the documented downgrade."
+	return out, true
 }
 
 // mapJiraAPIError adapts a *jira.APIError. Jira exposes no stable

@@ -121,7 +121,9 @@ func RunMutation(in MutationInput) MutationResult {
 			if w.Lossy {
 				res.Aborted = true
 				res.AbortedAt = StageADF
-				res.Err = errors.New(w.Message)
+				// Typed so the error mapper emits the source-mapped
+				// message with a remediation hint, never an empty one.
+				res.Err = adf.LossyConversionError{Warning: w}
 				return res
 			}
 		}
