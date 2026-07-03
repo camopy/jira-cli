@@ -443,18 +443,19 @@ func inputSchemas() map[string]any {
 		"adf_document": adfDocument,
 		"issue.create": map[string]any{
 			"type":        "object",
-			"description": "issue create --json-input payload. The description may be supplied as raw ADF or as Markdown.",
+			"description": "issue create --json-input payload. Accepts the flat convenience keys shown here or the Jira-native {\"fields\": {...}} object interchangeably (wire spellings like project/issuetype work in either). The description may be supplied as raw ADF or as Markdown.",
 			"properties": map[string]any{
 				"summary":              map[string]any{"type": "string"},
 				"project_key":          map[string]any{"type": "string"},
 				"issue_type":           map[string]any{"type": "string"},
+				"fields":               map[string]any{"type": "object", "description": "Jira-native field set; treated as the field set when present."},
 				"description":          map[string]any{"$ref": "#/data/input_schemas/adf_document"},
 				"description_markdown": map[string]any{"type": "string", "description": "Markdown converted to ADF; mutually exclusive with description."},
 			},
 		},
 		"issue.edit": map[string]any{
 			"type":        "object",
-			"description": "issue edit --json-input payload. ADF-shaped values inside fields (e.g. fields.description) are validated as canonical ADF documents.",
+			"description": "issue edit --json-input payload. {\"fields\": {...}} is canonical; bare field keys at the top level are accepted as the field set. ADF-shaped values inside fields (e.g. fields.description) are validated as canonical ADF documents.",
 			"properties": map[string]any{
 				"fields": map[string]any{"type": "object"},
 			},

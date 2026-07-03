@@ -735,6 +735,10 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 					return err
 				}
 			}
+			// Accept the Jira-native {"fields": {...}} shape interchangeably
+			// with the flat convenience keys — one payload contract across
+			// create and edit.
+			payload = pipeline.FieldsFromPayload(payload)
 			// Convenience flags layer onto --json-input so common fields need
 			// no hand-written JSON. An explicit flag overrides the same key in
 			// --json-input; a clashing project/type alias-vs-wire pair is
@@ -1056,15 +1060,6 @@ func resolveAssigneeEmail(ctx context.Context, client *jira.Client, email string
 	return map[string]string{"accountId": id}, nil
 }
 
-func issueEditPayloadHasTopLevelFieldCandidates(payload map[string]any) bool {
-	for key := range payload {
-		if key != "fields" {
-			return true
-		}
-	}
-	return false
-}
-
 // validateIssueCreateRequired enforces the spec rule "headless write commands
 // require complete input via --no-input + --json-input". It checks that
 // project_key, issue_type, and summary are derivable from the supplied JSON
@@ -1196,16 +1191,16 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 				return err
 			}
 			noInput := cmdutil.NoInputRequested(cmd)
-			payload := map[string]any{"fields": map[string]any{}}
+			payload := map[string]any{}
 			if jsonInput != "" {
 				if err := cmdutil.ReadJSONFile(jsonInput, &payload); err != nil {
 					return err
 				}
 			}
-			fields, ok := payload["fields"].(map[string]any)
-			if !ok {
-				return fmt.Errorf(`validation: --json-input payload must contain a top-level "fields" object, e.g. {"fields": {"summary": "New"}}`)
-			}
+			// Accept the Jira-native {"fields": {...}} shape (canonical) or
+			// bare field keys at the top level — one payload contract across
+			// create and edit.
+			fields := pipeline.FieldsFromPayload(payload)
 			// --summary / --assignee shortcuts, applied on top of any --json-input.
 			// Resolve the profile only — building a client here would
 			// resolve credentials even on a dry-run or editor-only path.
@@ -1268,9 +1263,6 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 			// stays false for `jira issue edit KEY | tee out.json`, which pipes
 			// stdout yet keeps an interactive stdin, so that editor still opens.
 			if len(fields) == 0 {
-				if jsonInput != "" && issueEditPayloadHasTopLevelFieldCandidates(payload) {
-					return fmt.Errorf(`validation: --json-input payload has no recognized fields; wrap issue fields under a top-level "fields" object, e.g. {"fields": {"summary": "New"}}`)
-				}
 				if noInput {
 					return fmt.Errorf("validation: the issue edit editor needs an interactive terminal; in a non-interactive context, provide --summary, --assignee, --markdown, or --json-input")
 				}

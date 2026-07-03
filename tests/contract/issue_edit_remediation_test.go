@@ -1,7 +1,6 @@
 package contract
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -95,38 +94,33 @@ func TestIssueEditNoInputJSONInputCallsJiraUpdateWithFieldsAndADF(t *testing.T) 
 	}
 }
 
-func TestIssueEditJSONInputWithoutFieldsEnvelopeNamesPayloadShape(t *testing.T) {
+// A flat edit payload (bare field keys, no fields wrapper) is accepted as
+// the field set — the same contract create follows. This replaced the old
+// "wrap it under fields" rejection.
+func TestIssueEditFlatJSONInputTreatedAsFields(t *testing.T) {
 	dir := t.TempDir()
-	input := filepath.Join(dir, "bad-edit.json")
+	input := filepath.Join(dir, "flat-edit.json")
 	if err := os.WriteFile(input, []byte(`{"priority":{"name":"High"}}`), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
 	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "edit", "PROJ-1", "--dry-run", "--no-input", "--json-input", input, "--output=json")
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	if err == nil {
-		t.Fatalf("issue edit accepted json-input without fields envelope:\nstdout=%s\nstderr=%s", stdout.String(), stderr.String())
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("flat edit payload must be accepted as the field set, got %v\n%s", err, out)
 	}
-
 	var env struct {
-		Errors []struct {
-			Message string `json:"message"`
-			Hint    string `json:"hint"`
-		} `json:"errors"`
+		OK   bool `json:"ok"`
+		Data struct {
+			Fields map[string]any `json:"fields"`
+		} `json:"data"`
 	}
-	decodeErrorEnvelopeFromStdout(t, stdout.Bytes(), stderr.Bytes(), cmd.Args, &env)
-	if len(env.Errors) == 0 {
-		t.Fatalf("issue edit error envelope has no errors:\nstdout=%s\nstderr=%s", stdout.String(), stderr.String())
+	if jerr := json.Unmarshal(out, &env); jerr != nil || !env.OK {
+		t.Fatalf("expected ok envelope: %v\n%s", jerr, out)
 	}
-	msg := env.Errors[0].Message + " " + env.Errors[0].Hint
-	if !strings.Contains(msg, `top-level "fields" object`) {
-		t.Fatalf("error does not name fields-envelope requirement:\nstdout=%s\nstderr=%s", stdout.String(), stderr.String())
-	}
-	if strings.Contains(msg, "provide --json-input") {
-		t.Fatalf("error still tells the user to provide --json-input they already provided:\nstdout=%s\nstderr=%s", stdout.String(), stderr.String())
+	priority, ok := env.Data.Fields["priority"].(map[string]any)
+	if !ok || priority["name"] != "High" {
+		t.Fatalf("flat key must land in the edit fields: %#v", env.Data.Fields)
 	}
 }
 

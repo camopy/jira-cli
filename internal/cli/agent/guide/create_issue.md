@@ -40,7 +40,7 @@ Minimal payload:
 }
 ```
 
-Richer payload (every key past the aliases is forwarded verbatim into Jira's `fields` object):
+Both payload shapes are accepted interchangeably on create and edit: the flat convenience keys shown here, or the Jira-native `{"fields": {...}}` object with wire spellings (`project`, `issuetype`). Richer payload (every key past the aliases is forwarded verbatim into Jira's `fields` object):
 
 ```json
 {
@@ -85,7 +85,6 @@ Richer payload (every key past the aliases is forwarded verbatim into Jira's `fi
 **Recover**
 | Symptom | Cause | Next |
 |---|---|---|
-| `screen schema could not be resolved in strict mode: pipeline: project/issue-type schema unknown` | Sent the wire-envelope shape (`{"fields": {"project": {"key": "..."}, "issuetype": {"name": "..."}, ...}}`) — that is the edit_issue shape, not create_issue | Rewrite with flat top-level alias keys: `project_key`, `issue_type`, `summary`, `description`. No `fields` wrapper |
 | `screen schema unavailable: project or issue type not found: pipeline: project/issue-type schema not found`, or a live 404 like `issue type Story not found on the create screen for project <PROJECT_KEY>` | The issue type may exist globally but is not on that project's create screen, or Jira createmeta could not resolve the pairing | Pick a type from Jira's create dialog for that project. `cache issuetypes` cannot prove this pairing yet |
 | `Operation value must be an Atlassian Document` on `environment` | Passed `environment` as a plain string; on most modern Jira instances it is an ADF field | Re-run with a full ADF doc value for `environment` (same shape as `description`) |
 | `Operation value must be an Atlassian Document` on `description` | Plain string for `description` | Wrap in `{type: "doc", version: 1, content: [...]}` or use `description_markdown` |
