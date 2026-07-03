@@ -22,6 +22,7 @@ jobs:
     permissions:
       contents: write           # Required to create GitHub releases and upload assets.
       id-token: write           # Required for cosign via OIDC.
+      actions: read             # Required to read the CI gate run for the tagged commit.
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -57,9 +58,49 @@ jobs:
             echo "exists=false" >>"${GITHUB_OUTPUT}"
           fi
 
-      - name: Release preflight
+      # Validation happens in the ci workflow's push gate, which runs the full
+      # `mise run ci` (with caches) on every push to main. This workflow stays
+      # cache-free so release artifacts are never built from cached state; it
+      # only waits for the gate covering the exact tagged commit to go green.
+      - name: Await CI gate for tagged commit
         if: steps.release-state.outputs.exists != 'true'
-        run: mise run release:preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          sha="$(git rev-parse "${TAG_NAME}^{commit}")"
+          echo "awaiting ci gate for ${sha}"
+          runs_url="repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${sha}&event=push"
+          deadline=$((SECONDS + 900))
+          grace=$((SECONDS + 180))
+          while :; do
+            run="$(gh api "${runs_url}" --jq '.workflow_runs[0] // empty | "\(.status) \(.conclusion)"' 2>/dev/null || true)"
+            status="${run%% *}"
+            conclusion="${run##* }"
+            if [[ -z "${run}" ]]; then
+              if ((SECONDS > grace)); then
+                echo "no push CI run found for ${sha}." >&2
+                echo "only pushed branch tips get a gate run; tag a commit that was the tip of a push." >&2
+                exit 1
+              fi
+            elif [[ "${status}" == "completed" ]]; then
+              if [[ "${conclusion}" == "success" ]]; then
+                echo "ci gate succeeded for ${sha}"
+                break
+              fi
+              echo "ci gate for ${sha} concluded: ${conclusion}" >&2
+              exit 1
+            fi
+            if ((SECONDS > deadline)); then
+              echo "timed out waiting for the ci gate on ${sha}" >&2
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: Check GoReleaser configuration
+        if: steps.release-state.outputs.exists != 'true'
+        run: mise run release:check
 
       - name: Create packaging token
         id: app-token

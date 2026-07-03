@@ -47,23 +47,46 @@ func TestReleaseWorkflowUsesPinnedGoReleaserAndHomebrewPublisher(t *testing.T) {
 	}
 }
 
-func TestReleaseWorkflowRunsLocalPreflightBeforePublishing(t *testing.T) {
+func TestReleaseWorkflowAwaitsCIGateBeforePublishing(t *testing.T) {
 	release, err := os.ReadFile("../../.github/workflows/release.yml")
 	if err != nil {
 		t.Fatalf("ReadFile(release) error = %v", err)
 	}
 	got := string(release)
 	for _, want := range []string{
-		"name: Release preflight",
-		"mise run release:preflight",
+		"name: Await CI gate for tagged commit",
+		"actions/workflows/ci.yml/runs?head_sha=",
+		"name: Check GoReleaser configuration",
+		"mise run release:check",
 		"if: steps.release-state.outputs.exists != 'true'",
+		"actions: read",
 	} {
 		if !strings.Contains(got, want) {
-			t.Fatalf("release workflow missing preflight gate %q\n%s", want, release)
+			t.Fatalf("release workflow missing CI gate wiring %q\n%s", want, release)
 		}
 	}
-	if strings.Index(got, "name: Release preflight") > strings.Index(got, "name: Run GoReleaser") {
-		t.Fatalf("release preflight must run before GoReleaser publish\n%s", release)
+	if strings.Index(got, "name: Await CI gate for tagged commit") > strings.Index(got, "name: Run GoReleaser") {
+		t.Fatalf("CI gate await must run before GoReleaser publish\n%s", release)
+	}
+	if strings.Index(got, "name: Check GoReleaser configuration") > strings.Index(got, "name: Run GoReleaser") {
+		t.Fatalf("GoReleaser config check must run before GoReleaser publish\n%s", release)
+	}
+}
+
+func TestReleaseWorkflowBuildsUncached(t *testing.T) {
+	// Release artifacts must never be built from cached state; validation
+	// caching lives in the ci workflow's push gate instead. This is the
+	// cache-poisoning stance zizmor enforces on publish-triggered workflows.
+	release, err := os.ReadFile("../../.github/workflows/release.yml")
+	if err != nil {
+		t.Fatalf("ReadFile(release) error = %v", err)
+	}
+	got := string(release)
+	if !strings.Contains(got, "cache: false") {
+		t.Fatalf("release workflow must disable the mise tool cache\n%s", release)
+	}
+	if strings.Contains(got, "actions/cache") {
+		t.Fatalf("release workflow must not restore caches into the publish path\n%s", release)
 	}
 }
 
@@ -87,7 +110,7 @@ func TestReleaseWorkflowUsesStrictBashDefaults(t *testing.T) {
 	}
 }
 
-func TestReleaseWorkflowDoesNotRequireLinuxKeyringForPreflight(t *testing.T) {
+func TestReleaseWorkflowDoesNotRequireLinuxKeyring(t *testing.T) {
 	release, err := os.ReadFile("../../.github/workflows/release.yml")
 	if err != nil {
 		t.Fatalf("ReadFile(release) error = %v", err)
@@ -100,11 +123,11 @@ func TestReleaseWorkflowDoesNotRequireLinuxKeyringForPreflight(t *testing.T) {
 		"dbus-run-session",
 	} {
 		if strings.Contains(got, forbidden) {
-			t.Fatalf("release preflight should not require Linux keyring setup %q\n%s", forbidden, release)
+			t.Fatalf("release workflow should not require Linux keyring setup %q\n%s", forbidden, release)
 		}
 	}
-	if !strings.Contains(got, "mise run release:preflight") {
-		t.Fatalf("release workflow missing preflight command\n%s", release)
+	if !strings.Contains(got, "mise run release:check") {
+		t.Fatalf("release workflow missing GoReleaser config check\n%s", release)
 	}
 }
 
@@ -122,8 +145,8 @@ func TestReleaseWorkflowValidatesExactSemverTag(t *testing.T) {
 			t.Fatalf("release workflow missing exact tag validation %q\n%s", want, release)
 		}
 	}
-	if strings.Index(got, "name: Validate release tag") > strings.Index(got, "name: Release preflight") {
-		t.Fatalf("release tag validation must run before release preflight\n%s", release)
+	if strings.Index(got, "name: Validate release tag") > strings.Index(got, "name: Await CI gate for tagged commit") {
+		t.Fatalf("release tag validation must run before the CI gate await\n%s", release)
 	}
 }
 

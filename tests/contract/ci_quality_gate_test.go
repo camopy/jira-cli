@@ -93,6 +93,33 @@ func TestCIQualityGateRunsRequiredGoChecks(t *testing.T) {
 	}
 }
 
+func TestCIWorkflowGatesMainPushesForRelease(t *testing.T) {
+	ci, err := os.ReadFile("../../.github/workflows/ci.yml")
+	if err != nil {
+		t.Fatalf("ReadFile(ci) error = %v", err)
+	}
+	got := string(ci)
+	for _, want := range []string{
+		// The release workflow awaits this gate instead of re-running the
+		// suite at tag time, so main pushes must run the full local gate
+		// plus the cross-platform snapshot build.
+		"name: Release gate",
+		"if: github.event_name == 'push'",
+		"run: mise run ci",
+		"run: mise run release:build",
+		// Push runs group per commit so a rapid push series cannot cancel
+		// a gate run that a release tag is waiting on.
+		"group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("ci workflow missing release gate wiring %q\n%s", want, ci)
+		}
+	}
+	if !strings.Contains(got, "push:") || !strings.Contains(got, "- main") {
+		t.Fatalf("ci workflow must trigger on pushes to main\n%s", ci)
+	}
+}
+
 func TestLocalCITaskIncludesReleasePreflightInputs(t *testing.T) {
 	tasks, err := os.ReadFile("../../tasks.toml")
 	if err != nil {

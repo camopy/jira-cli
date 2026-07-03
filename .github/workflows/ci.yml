@@ -3,28 +3,85 @@ name: ci
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
 
+# Pull requests cancel superseded runs per ref; pushes to main get one group
+# per commit so a rapid series of pushes never cancels the gate run a release
+# tag is waiting on.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: true
 
 permissions: {}
 
 jobs:
+  gate:
+    name: Release gate
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash --noprofile --norc -euo pipefail {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # GoReleaser refuses shallow clones; it needs tags for snapshot versioning.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install mise
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          install_args: --locked
+          cache: true
+
+      # Caching lives here rather than in the release workflow so release
+      # artifacts are never built from cached state: this job only validates.
+      # Covers the Go module cache, the Go build cache, and golangci-lint's
+      # analysis cache, keyed on the dependency graph and toolchain pins.
+      - name: Restore Go caches
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            ~/.cache/golangci-lint
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum', 'mise.lock') }}
+          restore-keys: |
+            go-${{ runner.os }}-
+
+      - name: Run CI gate
+        run: mise run ci
+
+      # Catches cross-compile breakage (platform-specific code) at push time
+      # instead of at tag time. The snapshot artifacts are discarded; the
+      # release workflow rebuilds from scratch, uncached.
+      - name: Cross-platform build check
+        run: mise run release:build
+
   go-test:
     name: Go test
+    if: github.event_name == 'pull_request'
     uses: matcra587/github-actions/.github/workflows/go-test.yml@67f0de0d0ceebe69895e868207c04e5c66b3bde8
     permissions:
       contents: read
 
   go-lint:
     name: Go lint
+    if: github.event_name == 'pull_request'
     uses: matcra587/github-actions/.github/workflows/go-lint.yml@67f0de0d0ceebe69895e868207c04e5c66b3bde8
     permissions:
       contents: read
 
   md-lint:
     name: Markdown lint
+    if: github.event_name == 'pull_request'
     uses: matcra587/github-actions/.github/workflows/md-lint.yml@67f0de0d0ceebe69895e868207c04e5c66b3bde8
     permissions:
       contents: read
