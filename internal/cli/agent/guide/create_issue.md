@@ -97,3 +97,4 @@ Richer payload (every key past the aliases is forwarded verbatim into Jira's `fi
 - Then: → `read_issue` to confirm rendered fields, or → `transition_issue` to move it off the initial state.
 - Subtask of an existing parent? → `create_subtask`.
 - Adding context: → `add_comment`, → `attach_file`, → `link_issues`.
+- Composes: → `author_adf` (pre-flight a rich description with `adf convert` before submitting).

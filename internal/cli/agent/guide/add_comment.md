@@ -80,4 +80,4 @@ When: an issue needs a status update, decision note, or human-readable annotatio
 
 **Next**
 - Then: → `list_comments` to read the updated thread back, or `comment edit KEY <id>` with the returned `data.comment.id` to revise.
-- Composes: → `read_issue` (most comment work happens inside an issue review loop).
+- Composes: → `read_issue` (most comment work happens inside an issue review loop), → `author_adf` (pre-flight a rich body with `adf convert` and pipe it into `--json-input`).

@@ -1,8 +1,10 @@
 // Package stdin is the ONLY place in the source tree allowed to read
-// os.Stdin. Two opt-in surfaces exist:
+// os.Stdin. Three opt-in surfaces exist:
 //
 //   - JSONInput(path) is the only way command-payload JSON enters the
 //     CLI; pass "-" to mean stdin.
+//   - TextInput(path) is the only way non-JSON text payloads (Markdown
+//     for `adf convert`) enter the CLI; pass "-" to mean stdin.
 //   - SecretStdin() is the only way credential material enters the CLI
 //     via stdin; kept separate so a JSON parser never accidentally eats
 //     a secret.
@@ -30,6 +32,16 @@ var ErrEmptySecret = errors.New("stdin: --secret-stdin requested but no input re
 // `--json-input <path>` flag. Adding implicit stdin reads anywhere else
 // is forbidden by the guardrail test.
 func JSONInput(path string) (io.ReadCloser, error) {
+	if path == "-" {
+		return io.NopCloser(os.Stdin), nil
+	}
+	return os.Open(path)
+}
+
+// TextInput returns a reader for a non-JSON text payload, such as the
+// Markdown input of `adf convert`. Path "-" means stdin; any other value
+// is a regular file. The caller closes the returned io.ReadCloser.
+func TextInput(path string) (io.ReadCloser, error) {
 	if path == "-" {
 		return io.NopCloser(os.Stdin), nil
 	}

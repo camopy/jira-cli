@@ -1,6 +1,7 @@
 package root
 
 import (
+	"github.com/matcra587/jira-cli/internal/cli/adfcmd"
 	"github.com/matcra587/jira-cli/internal/cli/agent"
 	"github.com/matcra587/jira-cli/internal/cli/alias"
 	"github.com/matcra587/jira-cli/internal/cli/auth"
@@ -23,6 +24,7 @@ func registerCommands(root *cobra.Command) {
 	root.AddCommand(
 		tui.NewCommand(),
 		agent.NewCommand(),
+		adfcmd.NewCommand(),
 		cache.NewCommand(),
 		me.NewCommand(),
 		version.NewCommand(),

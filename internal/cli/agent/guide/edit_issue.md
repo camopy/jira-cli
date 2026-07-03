@@ -82,4 +82,4 @@ Bulk edit payload shape:
 - Then: → `read_issue` to verify the change (the edit envelope does not project field values).
 - Then: → `transition_issue` if the edit was a precursor to a workflow move.
 - Alternative: → `link_issues` for `issuelinks` (cannot be set via bulk edit).
-- Composes: → `safe_mutation` (same `--dry-run` / `--no-input` guarantees as the other mutation commands).
+- Composes: → `safe_mutation` (same `--dry-run` / `--no-input` guarantees as the other mutation commands), → `author_adf` (pre-flight a rich description with `adf convert` before submitting it in the `fields` envelope).

@@ -77,6 +77,8 @@ func (v OperationVerb) PastPlural() string { return phrase(v.Past, v.NounPlural(
 // completion message (messageForCommand) all read their wording from here, so
 // they can never disagree. Keys are sorted alphabetically; forms are lower case.
 var operationVerbs = map[string]OperationVerb{
+	"adf.convert":               {"converting", "converted", "convert", "markdown"},
+	"adf.render":                {"rendering", "rendered", "render", "ADF"},
 	"auth.login":                {"logging in", "logged in", "log in", ""},
 	"auth.login.discover":       {"discovering", "discovered", "discover", "cloud ID"},
 	"auth.logout":               {"logging out", "logged out", "log out", ""},

@@ -67,7 +67,8 @@ func UseHumanJSONOutput(cmd *cobra.Command) bool {
 // even --output=human uses clog's JSON printer rather than key-value logs.
 func IsStructuredAgentCommand(cmd *cobra.Command) bool {
 	switch cmd.CommandPath() {
-	case "jira agent schema", "jira agent adf-matrix", "jira agent fieldtypes":
+	case "jira agent schema", "jira agent adf-matrix", "jira agent fieldtypes",
+		"jira adf convert", "jira adf render":
 		return true
 	default:
 		return false
