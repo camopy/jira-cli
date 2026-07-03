@@ -28,7 +28,7 @@ When: a `--board <name>` filter is needed and the board's numeric id is unknown,
 - `data.from_cache` [bool] — true when the response came from disk.
 - `data.fetched_at` [string] — RFC3339 timestamp of the most recent fetch.
 - `data.truncated` [bool] / `data.truncated_reason` [string] — set when the safety bound fired.
-- `meta.pagination.total` / `.start_at` / `.max_results` / `.is_last` / `.next_page_token` — standard pagination.
+- `meta.pagination.total` / `.startAt` / `.maxResults` / `.isLast` — the canonical block per → `core_contract`; the cached set is served through a `--limit` window (default 50), `--all` returns everything, and `isLast:false` means the window truncated (no cursor — widen or `--all`).
 
 Envelope shape:
 
@@ -39,10 +39,6 @@ Envelope shape:
       {"id": 42, "name": "Engineering Sprint", "type": "scrum",
        "project_keys": ["ENG", "PLAT"]}
     ],
-    "pagination": {
-      "total": 12, "start_at": 0, "max_results": 12,
-      "is_last": true, "next_page_token": null
-    },
     "from_cache": true,
     "fetched_at": "2026-05-06T18:30:00Z",
     "truncated": false,
@@ -50,6 +46,9 @@ Envelope shape:
     "cache_state": "fresh",
     "cache_source_state": "fresh",
     "cache_empty": false
+  },
+  "meta": {
+    "pagination": {"total": 12, "startAt": 0, "maxResults": 50, "isLast": true}
   }
 }
 ```

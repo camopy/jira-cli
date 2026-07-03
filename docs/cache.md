@@ -157,10 +157,13 @@ jira boards list --refresh --output=json
   ],
   "cache_state": "fresh",
   "from_cache": true,
-  "pagination": { "is_last": true, "max_results": 1, "next_page_token": null, "start_at": 0, "total": 1 },
   "truncated": false
 }
 ```
+
+The pagination block rides in `meta.pagination` (`startAt`, `maxResults`,
+`total`, `isLast`), the same shape every paginated command emits. `--limit`
+windows the cached set (default `50`) and `--all` returns everything.
 
 [Full flags & output fields →](reference/jira/boards/list.md)
 

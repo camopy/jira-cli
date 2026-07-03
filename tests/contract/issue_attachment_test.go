@@ -86,14 +86,20 @@ func TestAttachmentListEnvelopeShape(t *testing.T) {
 			t.Fatalf("attachment missing required key %q: %v", key, first)
 		}
 	}
-	pagination, ok := data["pagination"].(map[string]any)
+	pagination, ok := meta["pagination"].(map[string]any)
 	if !ok {
-		t.Fatalf("data.pagination missing or wrong type: %s", out)
+		t.Fatalf("meta.pagination missing or wrong type (the canonical location): %s", out)
 	}
-	for _, key := range []string{"total", "start_at", "max_results", "is_last"} {
+	if _, hasOld := data["pagination"]; hasOld {
+		t.Fatalf("pagination must live in meta, not data: %s", out)
+	}
+	for _, key := range []string{"total", "startAt", "maxResults", "isLast"} {
 		if _, exists := pagination[key]; !exists {
 			t.Fatalf("pagination missing %q: %v", key, pagination)
 		}
+	}
+	if pagination["isLast"] != true || pagination["total"] != float64(2) {
+		t.Fatalf("complete set must report isLast:true with the known total: %v", pagination)
 	}
 }
 

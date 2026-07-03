@@ -271,14 +271,15 @@ func outputSchemas() map[string]any {
 					"timestamp":  map[string]any{"type": "string", "format": "date-time"},
 					"request_id": map[string]any{"type": "string"},
 					"pagination": map[string]any{
-						"type":     "object",
-						"required": []string{"startAt", "maxResults", "isLast"}, // pagination-exempt: documents output-shape only
+						"type":        "object",
+						"description": "Canonical pagination block, identical on every paginated command: meta.pagination on single-target reads, and the same shape at results[].data.pagination inside keyed multi-key results. isLast and nextCursor are the authoritative walk signals. Mutation envelopes omit the block entirely.",
+						"required":    []string{"startAt", "maxResults", "isLast"}, // pagination-exempt: documents output-shape only
 						"properties": map[string]any{
 							"startAt":    map[string]any{"type": "integer"}, // pagination-exempt: output-shape only
 							"maxResults": map[string]any{"type": "integer"},
-							"total":      map[string]any{"type": "integer"},
+							"total":      map[string]any{"type": "integer", "description": "Present only when the endpoint reports an authoritative total; token-paged endpoints (enhanced search) never do."},
 							"isLast":     map[string]any{"type": "boolean"},
-							"nextCursor": map[string]any{"type": "string"},
+							"nextCursor": map[string]any{"type": "string", "description": "Pass back via --cursor (search jql, issue list) to fetch the next page."},
 						},
 					},
 				},

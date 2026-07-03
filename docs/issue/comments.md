@@ -85,20 +85,26 @@ Comments  (2 comments)
 #10245    John Doe       2026-05-27T07:13:03.697-0400  Rollout complete.
 ```
 
-The JSON `data` carries each comment with its native ADF body and a pagination
-block:
+The JSON `data` carries each comment with its native ADF body; the pagination
+block rides in `meta.pagination` with the same camelCase shape every paginated
+command uses:
 
 ```json
 {
-  "comments": [
-    { "id": "10244", "body": { "type": "doc", "version": 1, "content": [ "…" ] }, "author": { "…": "…" }, "update_author": { "…": "…" }, "visibility": null, "created": "…", "updated": "…" }
-  ],
-  "pagination": { "is_last": false, "max_results": 50, "next_page_token": "", "start_at": 0, "total": 2 }
+  "data": {
+    "comments": [
+      { "id": "10244", "body": { "type": "doc", "version": 1, "content": [ "…" ] }, "author": { "…": "…" }, "update_author": { "…": "…" }, "visibility": null, "created": "…", "updated": "…" }
+    ]
+  },
+  "meta": {
+    "pagination": { "startAt": 0, "maxResults": 50, "total": 2, "isLast": true }
+  }
 }
 ```
 
 Multiple keys return `data.results[]`; each successful entry's `data` holds that
-issue's `comments`, `pagination`, and any per-key `warnings`.
+issue's `comments`, a per-key `pagination` block in the same shape, and any
+per-key `warnings`.
 
 !!! tip "Bodies round-trip losslessly"
     `body` is the document exactly as Jira stores it — mentions keep their
@@ -112,8 +118,8 @@ issue's `comments`, `pagination`, and any per-key `warnings`.
     `warnings[]` (`type: adf-lossy-comment`) naming them — the JSON `body` is
     unaffected; the warning concerns the human preview and any Markdown
     projection you apply. If `--all` stops on a rate limit,
-    `pagination.is_last` stays `false`, `next_page_token` carries the resume
-    cursor, and a `rate-limit-during-paginate` warning is added.
+    `meta.pagination.isLast` stays `false`, `nextCursor` carries the resume
+    offset, and a `rate-limit-during-paginate` warning is added.
 
 [Full flags & output fields →](../reference/jira/issue/comment/list.md)
 

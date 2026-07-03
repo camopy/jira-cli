@@ -108,9 +108,17 @@ func TestBoardsListColdStartPrimesThenServesFromCache(t *testing.T) {
 	if len(pks) != 2 {
 		t.Fatalf("expected 2 project_keys, got %v", first0["project_keys"])
 	}
-	// Pagination is always present ( shape consistency).
-	if _, ok := data["pagination"].(map[string]any); !ok {
-		t.Fatalf("data.pagination missing: %+v", data)
+	// Pagination lives in meta with the canonical camelCase shape.
+	firstMeta, _ := first["meta"].(map[string]any)
+	pagination, ok := firstMeta["pagination"].(map[string]any)
+	if !ok {
+		t.Fatalf("meta.pagination missing: %+v", first)
+	}
+	if _, hasOld := data["pagination"]; hasOld {
+		t.Fatalf("pagination must live in meta, not data: %+v", data)
+	}
+	if pagination["isLast"] != true || pagination["total"] != float64(2) {
+		t.Fatalf("cached set of 2 must report isLast:true total:2: %v", pagination)
 	}
 	if data["fetched_at"] == nil || data["fetched_at"] == "" {
 		t.Fatalf("data.fetched_at missing: %+v", data)

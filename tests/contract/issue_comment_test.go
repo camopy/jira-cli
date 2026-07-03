@@ -122,6 +122,9 @@ func runJira(t *testing.T, args ...string) (stdout, stderr []byte, exitCode int)
 // ---------- comment list contract ----------
 
 func TestCommentListReturnsEnvelopeWithPaginationAndOrdering(t *testing.T) {
+	// Real tenants OMIT isLast on this endpoint — the fixture omits it too,
+	// pinning the computed startAt+returned>=total boundary instead of a
+	// decoded-false "more pages" lie.
 	page := `{
 		"comments": [
 			{"id":"100","body":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"text","text":"first"}]}]},"author":{"accountId":"u1","displayName":"Alice"},"created":"2026-04-01T10:00:00.000+0000","updated":"2026-04-01T10:00:00.000+0000"},
@@ -129,8 +132,7 @@ func TestCommentListReturnsEnvelopeWithPaginationAndOrdering(t *testing.T) {
 		],
 		"startAt":0,
 		"maxResults":50,
-		"total":2,
-		"isLast":true
+		"total":2
 	}`
 	srv, cts := newCommentServer(t, map[string]http.HandlerFunc{
 		"GET /rest/api/3/issue/PROJ-1/comment": func(w http.ResponseWriter, r *http.Request) {
@@ -157,15 +159,24 @@ func TestCommentListReturnsEnvelopeWithPaginationAndOrdering(t *testing.T) {
 		t.Errorf("first comment id = %v; want 100 (oldest-first)", first["id"])
 	}
 
-	pagination, ok := env.Data["pagination"].(map[string]any)
+	pagination, ok := env.Meta["pagination"].(map[string]any)
 	if !ok {
-		t.Fatalf("data.pagination missing: %s", stdout)
+		t.Fatalf("meta.pagination missing (the canonical location): %s", stdout)
 	}
-	if pagination["total"] == nil || pagination["start_at"] == nil || pagination["is_last"] == nil {
+	if _, hasOld := env.Data["pagination"]; hasOld {
+		t.Fatalf("pagination must live in meta, not data: %s", stdout)
+	}
+	if pagination["total"] != float64(2) {
+		t.Errorf("pagination.total = %v; want 2 (endpoint-reported)", pagination["total"])
+	}
+	if pagination["startAt"] == nil || pagination["maxResults"] == nil {
 		t.Errorf("pagination missing required fields: %v", pagination)
 	}
-	if pagination["is_last"] != true {
-		t.Errorf("pagination.is_last = %v; want true", pagination["is_last"])
+	if pagination["isLast"] != true {
+		t.Errorf("pagination.isLast = %v; want true (startAt+returned covers total even without a wire isLast)", pagination["isLast"])
+	}
+	if cursor, has := pagination["nextCursor"]; has && cursor != "" {
+		t.Errorf("complete single page must not carry a cursor: %v", cursor)
 	}
 
 	if len(cts.Requests()) != 1 {
@@ -199,9 +210,9 @@ func TestCommentListAllPaginatesUntilIsLast(t *testing.T) {
 	if len(comments) != 2 {
 		t.Fatalf("--all comments len = %d; want 2: %s", len(comments), stdout)
 	}
-	pagination, _ := env.Data["pagination"].(map[string]any)
-	if pagination["is_last"] != true {
-		t.Errorf("after --all, pagination.is_last = %v; want true", pagination["is_last"])
+	pagination, _ := env.Meta["pagination"].(map[string]any)
+	if pagination["isLast"] != true {
+		t.Errorf("after --all, pagination.isLast = %v; want true", pagination["isLast"])
 	}
 }
 
@@ -230,12 +241,12 @@ func TestCommentListAllRateLimitDuringPaginationReturnsPartialData(t *testing.T)
 	if len(comments) != 1 {
 		t.Fatalf("partial comments len = %d; want 1: %s", len(comments), stdout)
 	}
-	pagination, _ := env.Data["pagination"].(map[string]any)
-	if pagination["is_last"] != false {
-		t.Errorf("pagination.is_last = %v; want false (partial)", pagination["is_last"])
+	pagination, _ := env.Meta["pagination"].(map[string]any)
+	if pagination["isLast"] != false {
+		t.Errorf("pagination.isLast = %v; want false (partial)", pagination["isLast"])
 	}
-	if pagination["next_page_token"] == nil || pagination["next_page_token"] == "" {
-		t.Errorf("pagination.next_page_token missing on partial: %v", pagination)
+	if pagination["nextCursor"] == nil || pagination["nextCursor"] == "" {
+		t.Errorf("pagination.nextCursor missing on partial: %v", pagination)
 	}
 
 	found := false

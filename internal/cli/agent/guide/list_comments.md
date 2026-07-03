@@ -36,7 +36,9 @@ When: the comment thread on an issue must be reviewed end-to-end before quoting 
        "updated": "2026-04-01T10:00:00.000+0000",
        "visibility": null}
     ],
-    "pagination": {"total": 142, "start_at": 0, "max_results": 50, "is_last": false, "next_page_token": "50"}
+  },
+  "meta": {
+    "pagination": {"total": 142, "startAt": 0, "maxResults": 50, "isLast": false, "nextCursor": "50"}
   },
   "warnings": [
     {"type": "adf-lossy-comment", "comment_id": "10103", "lossy_constructs": ["inlineCard", "panel:custom"]}
@@ -48,10 +50,10 @@ When: the comment thread on an issue must be reviewed end-to-end before quoting 
 - `data.comments[].body` [object, required] — the native ADF document as stored (mention accountIds, status lozenges, cards all intact; `null` for an empty body). Reusable verbatim as `--json-input` for `comment edit`/`comment add`. Matches `read_issue`'s comment representation.
 - `data.comments[].author` / `data.comments[].update_author` [object, optional] — `update_author` is `null` when the comment has never been edited.
 - `data.comments[].visibility` [object, optional] — `null` for public, otherwise `{type, value}` (role/group restriction).
-- `data.pagination.is_last` [bool, required] — stop when `true`.
-- `data.pagination.next_page_token` [string, optional] — feed back as paging cursor until `is_last=true`.
+- `meta.pagination.isLast` [bool, required] — stop when `true`; the canonical block per → `core_contract`.
+- `meta.pagination.nextCursor` [string, optional] — the next offset when more pages remain; a rate-limit-interrupted `--all` reports `isLast:false` with the resume offset here.
 - `warnings[].comment_id` + `warnings[].lossy_constructs[]` [array, optional] — the named comment contains constructs that degrade in markdown/human renderings (the one-line human preview, or any markdown flatten you apply). The JSON `body` itself is native and lossless.
-- Multi-key list: `data.results[]` [array, required] — ordered by requested key; each successful entry has `data.comments`, `data.pagination`, and optional per-key `data.warnings`.
+- Multi-key list: `data.results[]` [array, required] — ordered by requested key; each successful entry has `data.comments`, a per-key `data.pagination` (same camelCase shape as `meta.pagination`), and optional per-key `data.warnings`.
 
 `comment delete KEY ID --force`:
 
@@ -68,7 +70,7 @@ When: the comment thread on an issue must be reviewed end-to-end before quoting 
 
 **Behavior**
 - `warnings[]` does not change the exit code — the response is still successful; lossy markers describe markdown/human renderings only, the JSON `body` is native.
-- Pagination is cursor-based via `next_page_token`; do not assume `start_at + max_results` is enough.
+- Prefer `--all` for a full thread; `isLast` and `nextCursor` are the authoritative walk signals when paging manually.
 - `-p` / `--parallelism` is bounded to 1..16 and only affects multi-key reads.
 
 **Recover**

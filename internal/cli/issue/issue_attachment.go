@@ -111,7 +111,8 @@ $ jira issue attachment list PROJ-123 --output=json`,
 				}); err != nil {
 					return err
 				}
-				return cmdutil.WriteEnvelope(cmd, "issue.attachment.list", attachmentListEnvelopeData(attachments, limit, all))
+				data, pagination := attachmentListEnvelopeData(attachments, limit, all)
+				return cmdutil.WriteEnvelopeWithPaginationAndRawWarnings(cmd, "issue.attachment.list", data, pagination, nil)
 			}
 			results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) ([]jira.Attachment, error) {
 				attachments, _, err := service.List(ctx, key)
@@ -121,7 +122,9 @@ $ jira issue attachment list PROJ-123 --output=json`,
 				return err
 			}
 			return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.attachment.list", results, func(_ string, attachments []jira.Attachment) any {
-				return attachmentListEnvelopeData(attachments, limit, all)
+				data, pagination := attachmentListEnvelopeData(attachments, limit, all)
+				data["pagination"] = pagination
+				return data
 			})
 		},
 	}
@@ -131,7 +134,7 @@ $ jira issue attachment list PROJ-123 --output=json`,
 	return cmd
 }
 
-func attachmentListEnvelopeData(attachments []jira.Attachment, limit int, all bool) map[string]any {
+func attachmentListEnvelopeData(attachments []jira.Attachment, limit int, all bool) (map[string]any, *cli.Pagination) {
 	// Atlassian returns attachments oldest-first natively. Apply the requested
 	// page slice client-side: there is no dedicated /attachments list endpoint.
 	windowed := attachments
@@ -146,16 +149,16 @@ func attachmentListEnvelopeData(attachments []jira.Attachment, limit int, all bo
 	for _, a := range windowed {
 		rows = append(rows, attachmentToOutput(a))
 	}
-	return map[string]any{
-		"attachments": rows,
-		"pagination": map[string]any{
-			"total":           len(attachments),
-			"start_at":        0,
-			"max_results":     pageSize,
-			"is_last":         all || len(attachments) <= pageSize,
-			"next_page_token": nil,
-		},
+	// The set arrives whole and the window is cut client-side, so total is
+	// always known. A truncated window is not resumable page-by-page —
+	// re-run with --all (or a larger --limit) for the rest — but the shape
+	// stays canonical: isLast honest, no fabricated cursor.
+	pagination := &cli.Pagination{
+		MaxResults: pageSize,
+		Total:      cli.KnownTotal(len(attachments)),
+		IsLast:     all || len(attachments) <= pageSize,
 	}
+	return map[string]any{"attachments": rows}, pagination
 }
 
 func issueAttachmentAddCommand() *cobra.Command {

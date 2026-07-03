@@ -40,13 +40,24 @@ type Meta struct {
 // responses. The startAt/nextPageToken fields here describe the SHAPE the
 // CLI emits — they are not cursor-management state in command code.
 // pagination-exempt: output-shape only, not consumer-side cursor management.
+//
+// This is the ONE pagination shape and it lives in ONE place: meta.pagination
+// on single-target reads, and results[].data.pagination (same shape) inside
+// keyed multi-key results. isLast and nextCursor are the authoritative walk
+// signals; total appears only when the endpoint reports a real total —
+// token-paged endpoints (enhanced search) never do, so a fabricated 0 is
+// never emitted.
 type Pagination struct {
 	StartAt    int    `json:"startAt"` //nolint:revive // pagination-exempt
 	MaxResults int    `json:"maxResults"`
-	Total      int    `json:"total"`
+	Total      *int   `json:"total,omitempty"`
 	IsLast     bool   `json:"isLast"`
 	NextCursor string `json:"nextCursor,omitempty"`
 }
+
+// KnownTotal wraps an authoritative total for Pagination.Total. Only call
+// it with a value the endpoint actually reported.
+func KnownTotal(total int) *int { return &total }
 
 // Error is one structured failure entry in the envelope errors slice.
 // type, code, message, hint, and retryable are always present; agents

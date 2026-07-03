@@ -80,17 +80,17 @@ jira issue attachment list PROJ-1..10 -p 4 --output=json
 `--limit` (default `50`) is applied client-side — Jira returns attachments as
 part of the issue, so there's no server page to fetch. `--all` returns every
 attachment regardless of `--limit`. Each row matches the attachment shape shown
-under [`add`](#attachment-add), wrapped with pagination:
+under [`add`](#attachment-add); the pagination block rides in `meta.pagination`
+with `total` always known and `isLast: false` signalling a truncated window
+(re-run with `--all` — there is no cursor for a client-side window):
 
 ```json
 {
-  "attachments": [ { "id": "10500", "filename": "screenshot.png", "…": "…" } ],
-  "pagination": {
-    "total": 2,
-    "start_at": 0,
-    "max_results": 50,
-    "is_last": true,
-    "next_page_token": null
+  "data": {
+    "attachments": [ { "id": "10500", "filename": "screenshot.png", "…": "…" } ]
+  },
+  "meta": {
+    "pagination": { "startAt": 0, "maxResults": 50, "total": 2, "isLast": true }
   }
 }
 ```

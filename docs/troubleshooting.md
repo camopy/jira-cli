@@ -162,9 +162,11 @@ Behaviours that read like bugs but are deliberate. Check here before filing one.
     the per-key `data.results[]` (`ok` / `error`) and retry only the failures —
     a blind retry double-applies the ones that already succeeded.
 
-**A search returns rows but `meta.pagination.total` is `0`.**
-:   Jira's token-paginated `/search/jql` returns no reliable total. Paginate on
-    `meta.pagination.isLast`, never on `total`; add `--all` to drain (bounded to
+**A search result has no `meta.pagination.total`.**
+:   Jira's token-paginated `/search/jql` returns no reliable total, so the CLI
+    omits the field rather than fabricate a `0`. Paginate on
+    `meta.pagination.isLast` / `nextCursor` (pass the cursor back via
+    `--cursor`), use `--count` for a number, or `--all` to drain (bounded to
     100 pages / 10 000 issues, `--unbounded` lifts the caps). See [Search](search.md#search-jql).
 
 **`--time-spent "1h 30m"` fails with `invalid duration`.**

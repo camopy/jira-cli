@@ -27,8 +27,7 @@ import (
 //	      "updated": "2026-04-01T10:00:00.000+0000",
 //	      "visibility": {"type": "role", "value": "Developers"} | null
 //	    }, ...
-//	  ],
-//	  "pagination": {...}
+//	  ]
 //	}
 //
 // The renderer prints one line per comment with:

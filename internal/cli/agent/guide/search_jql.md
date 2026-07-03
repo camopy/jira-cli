@@ -20,7 +20,7 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 - `jira issue list --as-jql --output=json` returns the builder output without an API call.
 
 # pagination
-- One page by default (`--limit N`, default 50). `--all` walks every page until `isLast` (bounded: 100 pages / 10 000 issues; a truncated drain adds a `search-truncated` warning). `--unbounded` with `--all` lifts the caps. `/search/jql` returns no reliable total — treat `meta.pagination.isLast` as authoritative. `--all`/`--limit` don't combine with `--count` or `--web`.
+- One page by default (`--limit N`, default 50). Resume page-by-page with `--cursor <meta.pagination.nextCursor>` — the cursor also survives a context reset. `--all` walks every page until `isLast` (bounded: 100 pages / 10 000 issues; a truncated drain adds a `search-truncated` warning and, when the cut fell on a page boundary, the resume cursor). `--unbounded` with `--all` lifts the caps. `/search/jql` returns no total — the envelope omits it; treat `meta.pagination.isLast`/`nextCursor` as authoritative. `--all`/`--limit`/`--cursor` don't combine with `--count` or `--web`.
 
 # count without fetching issues
 - `jira search jql 'JQL' --count --output=json` returns an estimate in `data.count` via one `/search/approximate-count` call — no issue pages, no reliable-total problem. The count is approximate and `ORDER BY` is ignored. Can't combine with `--fields` / `--full` / `--web`. Use it to size a result set before a heavy fetch.
@@ -57,7 +57,7 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 - `data.issues[].key` [string, required] — feed to → `read_issue`, → `edit_issue`, → `transition_issue`, etc.
 - `data.jql` [string, required on `jql build`] — the constructed JQL string; pipe to `search jql` or pass to `issue list --jql`.
 - `data.count` [int, present only under `--count`] — the approximate match estimate; `data.issues` is absent in this mode.
-- `meta.pagination.startAt` / `.maxResults` / `.total` / `.isLast` [int / int / int / bool] — paginate until `isLast=true`. Treat `isLast` as authoritative; newer Jira search responses can report `total=0` or omit a trustworthy total while still returning rows.
+- `meta.pagination.startAt` / `.maxResults` / `.isLast` / `.nextCursor` [int / int / bool / string] — paginate until `isLast=true`, passing `nextCursor` back via `--cursor`. `total` appears only when authoritative (a drained `--all`); the single-page token path omits it — use `--count` for a number.
 
 **Behavior**
 - Builder flag translations (so you don't hand-quote):

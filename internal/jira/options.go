@@ -46,10 +46,15 @@ type Rate struct {
 }
 
 type Response struct {
-	Response      *http.Response
-	StartAt       int
-	MaxResults    int
-	Total         int
+	Response   *http.Response
+	StartAt    int
+	MaxResults int
+	Total      int
+	// TotalKnown reports that Total was decoded from the endpoint's own
+	// total field. Token-paged endpoints (enhanced search) never report
+	// one, and a zero Total from them is fabrication, not fact — the
+	// envelope only publishes a total when this is true.
+	TotalKnown    bool
 	IsLast        bool
 	NextPageToken string
 	TokenPage     bool

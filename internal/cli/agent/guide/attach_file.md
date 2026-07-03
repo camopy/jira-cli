@@ -36,8 +36,10 @@ When: a binary or non-Jira artifact (log, screenshot, exported report) must trav
       {"id": "10042", "filename": "screenshot.png", "mime_type": "image/png", "size": 84211,
        "author": {"account_id": "...", "display_name": "Test User"},
        "created": "2026-05-04T18:30:00.000+0000"}
-    ],
-    "pagination": {"total": 1, "start_at": 0, "max_results": 50, "is_last": true, "next_page_token": null}
+    ]
+  },
+  "meta": {
+    "pagination": {"total": 1, "startAt": 0, "maxResults": 50, "isLast": true}
   }
 }
 ```
@@ -70,8 +72,8 @@ When: a binary or non-Jira artifact (log, screenshot, exported report) must trav
 - `data.attachments[].id` [string, required] — feed to `attachment download` and `attachment delete`.
 - `data.attachments[].filename` / `.mime_type` / `.size` [string / string / int, required] — server-side metadata.
 - `data.attachments[].author` [object, required] — uploader.
-- `data.pagination.is_last` / `data.pagination.next_page_token` [bool / string] — paginate `attachment list` until `is_last=true`.
-- Multi-key add/list: `data.results[]` [array, required] — ordered by requested key; each successful entry has command-specific `data`.
+- `meta.pagination.total` / `.isLast` [int / bool] — the set arrives whole and `--limit` cuts a client-side window, so `total` is always known; `isLast:false` means the window truncated — re-run with `--all` (or a larger `--limit`), there is no cursor.
+- Multi-key add/list: `data.results[]` [array, required] — ordered by requested key; each successful entry has command-specific `data` (list entries carry a per-key `data.pagination` in the same camelCase shape).
 - `data.attachment_id` [string, required on download/delete] — echo of the target id.
 - `data.written_to` [string, required on download] — actual disk path written.
 - `data.bytes` [int, required on download] — file size on disk after write.

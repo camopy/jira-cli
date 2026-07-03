@@ -98,11 +98,16 @@ curated subset regardless of how many fields the project defines.
 ### Pagination
 
 `/search/jql` is token-paginated and returns no reliable total, so `search jql`
-returns one page by default (`--limit`, default 50). Add `--all` to walk every
-page until the server reports `isLast`. The drain is bounded — 100 pages /
-10 000 issues — and a truncated result carries a `search-truncated` warning in
-the envelope. Pass `--unbounded` with `--all` to lift the caps. `--all` and
-`--limit` can't combine with `--count` or `--web`.
+returns one page by default (`--limit`, default 50) and `meta.pagination` omits
+`total` — `isLast` and `nextCursor` are the walk signals. Page by page, pass a
+returned `nextCursor` back via `--cursor`; the same flag resumes after a
+context reset or checkpoint. Add `--all` to walk every page until the server
+reports `isLast`. The drain is bounded — 100 pages / 10 000 issues — and a
+truncated result carries a `search-truncated` warning plus, when the cut fell
+on a page boundary, the resume cursor. Pass `--unbounded` with `--all` to lift
+the caps. `--all`, `--limit`, and `--cursor` can't combine with `--count` or
+`--web`. [`issue list`](issue/read.md#list) accepts the same
+`--limit` / `--all` / `--cursor` / `--unbounded` set against its built query.
 
 ### Count
 

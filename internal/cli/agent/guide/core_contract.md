@@ -16,10 +16,11 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 - Destructive ops (`delete` / `clone` / `move` / `comment delete` / `link delete` / `attachment delete`) still require `--force` on top of `--no-input` → see `safe_mutation`.
 
 # pagination
-- Single page (default page size): omit `--limit` / `--all`.
-- Custom page size: `--limit N`.
-- Walk every page until `is_last=true`: `--all` (`issue comment list`, `issue attachment list`).
-- Board cache drain: `jira boards list --unbounded` removes the default 100-page / 10 000-board safety bound.
+- One shape, one place: every paginated read emits the camelCase block (`startAt`, `maxResults`, `total`, `isLast`, `nextCursor`) at `meta.pagination`; keyed multi-key results carry the same shape at `results[].data.pagination`. Mutations emit no pagination block.
+- `isLast` and `nextCursor` are authoritative. `total` is present only when the endpoint reports one — token-paged search never does, so use `--count` for a number, never a missing total as "empty".
+- Single page (default page size): omit `--limit` / `--all`. Custom page size: `--limit N`.
+- Walk every page: `--all` (`search jql`, `issue list`, `issue comment list`, `issue attachment list`, `boards list`) — bounded at 100 pages / 10 000 results; `--unbounded` lifts the caps on the drains.
+- Page-by-page / resume after a context reset: pass `meta.pagination.nextCursor` back via `--cursor` (`search jql`, `issue list`); a truncated bounded `--all` also returns the resume cursor. Offset-paged reads (`comment list`) surface the next offset in `nextCursor`; client-side windows (`attachment list`, `boards list`) have no cursor — re-run with `--all`.
 
 # read-only mode
 - Block every mutation at the HTTP layer for the invocation: `JIRA_READ_ONLY=true jira <anything>`.
@@ -40,6 +41,7 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 **Run**
 - Canonical write: `jira <cmd> --no-input --json-input payload.json --output=json`
 - Pagination drain: `jira issue comment list KEY --all --output=json`
+- Cursor walk: `jira search jql "project = X" --output=json`, then re-run with `--cursor <meta.pagination.nextCursor>` until `isLast=true`
 - Per-call read-only: `JIRA_READ_ONLY=true jira issue edit <ISSUE_KEY> --summary "x" --no-input --output=json`
 - Debug capture: `jira issue edit <ISSUE_KEY> --json-input fields.json --no-input --debug 2>&1 | grep '^DBG'`
 
@@ -50,7 +52,7 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 - `meta.timestamp` [string, required] — ISO 8601 UTC.
 - `meta.request_id` [string, required] — request correlation id.
 - `meta.exit_code` [int, present on failure] — mirrors the process exit code; `data` is `null` when set.
-- `meta.pagination` [object, optional] — `startAt`, `maxResults`, `total`, `isLast`; walk until `isLast=true`.
+- `meta.pagination` [object, optional] — `startAt`, `maxResults`, `total` (only when the endpoint reports one), `isLast`, `nextCursor`; walk until `isLast=true`, resume via `--cursor` where supported. Absent entirely on mutations.
 - `data` [object, required on success] — command-specific payload; `null` on failure.
 - `errors[]` [array, required] — each entry carries `type`, `code` (stable snake_case — branch on this, never on `message`), `message`, `hint`, `retryable`. Optional fields when relevant: `flag`, `field`, `http_status`, `retry_after_seconds`, `provider`, `upstream_code`, `upstream_status`. Jira API errors leave `upstream_code` empty — Jira exposes no stable machine error code.
 - `warnings[]` [array, required] — non-fatal diagnostics; never blank on a successful command that degraded.

@@ -30,6 +30,7 @@ type searchOptions struct {
 	all       bool
 	limit     int
 	unbounded bool
+	cursor    string
 }
 
 func searchJQLCommand() *cobra.Command {
@@ -75,7 +76,7 @@ $ jira search jql "project = PROJ AND status != Done" --fields key,summary,statu
 				if limit <= 0 {
 					limit = 50
 				}
-				req := &jira.SearchRequest{JQL: args[0], Fields: fields, ListOptions: jira.ListOptions{MaxResults: limit}}
+				req := &jira.SearchRequest{JQL: args[0], Fields: fields, ListOptions: jira.ListOptions{MaxResults: limit, NextPageToken: opts.cursor}} // pagination-exempt: opaque --cursor pass-through
 				if opts.all {
 					var (
 						issues []*jira.Issue
@@ -92,13 +93,16 @@ $ jira search jql "project = PROJ AND status != Done" --fields key,summary,statu
 					data := map[string]any{"source": "inline", "jql": args[0], "issues": cmdutil.IssueOutput(issues, detail)}
 					// The drain knows its terminal state: the result set is
 					// complete unless a bound truncated it. /search/jql has no
-					// reliable total, so report the count we actually hold.
+					// reliable total, so report the count we actually hold —
+					// and the resume cursor when a bound cut the walk on a
+					// page boundary.
 					pagination := &cli.Pagination{
 						MaxResults: len(issues),
-						Total:      len(issues),
+						Total:      cli.KnownTotal(len(issues)),
 						IsLast:     !info.Truncated,
+						NextCursor: info.NextPageToken, // pagination-exempt: opaque resume token from the drain
 					}
-					return cmdutil.WriteEnvelopeWithPaginationAndRawWarnings(cmd, "search.jql", data, pagination, searchTruncationWarnings(info))
+					return cmdutil.WriteEnvelopeWithPaginationAndRawWarnings(cmd, "search.jql", data, pagination, cmdutil.DrainTruncationWarnings(info))
 				}
 				var (
 					found2 []*jira.Issue
@@ -216,35 +220,20 @@ func addSearchPaginationFlags(cmd *cobra.Command, opts *searchOptions) {
 	cmdutil.AddBoolVar(fs, &opts.all, "all", false, "Walk every page until `isLast` (bounded; use `--unbounded` to lift the caps)", clib.FlagExtra{Group: "Pagination"})
 	cmdutil.AddIntVar(fs, &opts.limit, "limit", 50, "Page size requested from Jira", clib.FlagExtra{Group: "Pagination", Placeholder: "N"})
 	cmdutil.AddBoolVar(fs, &opts.unbounded, "unbounded", false, "With `--all`, lift the default 100-page / 10 000-issue caps", clib.FlagExtra{Group: "Pagination"})
+	cmdutil.AddStringVar(fs, &opts.cursor, "cursor", "", "Resume from a `nextCursor` returned by a previous page", clib.FlagExtra{Group: "Pagination", Placeholder: "TOKEN"})
 	// --count fetches nothing and --web opens a browser, so the page controls
-	// are meaningless alongside either.
+	// are meaningless alongside either. --cursor composes with --limit (page
+	// size of the resumed page) and --all (resume the drain from the cursor).
 	cmd.MarkFlagsMutuallyExclusive("count", "all")
 	cmd.MarkFlagsMutuallyExclusive("count", "limit")
+	cmd.MarkFlagsMutuallyExclusive("count", "cursor")
 	cmd.MarkFlagsMutuallyExclusive("web", "all")
 	cmd.MarkFlagsMutuallyExclusive("web", "limit")
+	cmd.MarkFlagsMutuallyExclusive("web", "cursor")
 }
 
-// searchTruncationWarnings maps a bounded-drain truncation onto the envelope's
-// warnings[], with a re-run-with---unbounded remediation. nil when the drain
-// reached isLast.
-func searchTruncationWarnings(info jira.DrainInfo) []map[string]any {
-	if !info.Truncated {
-		return nil
-	}
-	limit := 100
-	if info.TruncatedReason == "max_results" {
-		limit = 10_000
-	}
-	return []map[string]any{{
-		"type":          "search-truncated",
-		"resource":      "issues",
-		"reason":        info.TruncatedReason,
-		"limit":         limit,
-		"pages_fetched": info.PagesFetched,
-		"message":       "search truncated by " + info.TruncatedReason + "; re-run with --unbounded to fetch every issue",
-		"remediation":   "Re-run with --unbounded if you need every issue.",
-	}}
-}
+// Drain truncation warnings are shared via cmdutil.DrainTruncationWarnings —
+// `issue list --all` emits the identical contract.
 
 // addSearchCountFlag attaches --count. It lives only on `search jql`, not on the
 // shared output flags, because `search saved` does not implement count — adding

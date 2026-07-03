@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cache"
+	"github.com/matcra587/jira-cli/internal/cli"
 	cachereg "github.com/matcra587/jira-cli/internal/cli/cache/registry"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -44,7 +45,8 @@ func NewCommand() *cobra.Command {
 func boardsListCommand() *cobra.Command {
 	var refresh bool
 	var ttlMinutes int
-	var unbounded bool
+	var unbounded, all bool
+	var limit int
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List the boards visible to this profile",
@@ -82,29 +84,41 @@ $ jira boards list --refresh --unbounded --output=json`,
 			sort.SliceStable(file.Items, func(i, j int) bool {
 				return safeIntPtr(file.Items[i].ID) < safeIntPtr(file.Items[j].ID)
 			})
-			boards := boardsListEnvelope(file.Items)
+			// The cached set is served whole and the window is cut
+			// client-side, mirroring attachment list: total always
+			// known, isLast honest, no fabricated cursor — --all (or a
+			// larger --limit) fetches the rest.
+			items := file.Items
+			pageSize := limit
+			if pageSize <= 0 {
+				pageSize = 50
+			}
+			if !all && len(items) > pageSize {
+				items = items[:pageSize]
+			}
+			boards := boardsListEnvelope(items)
+			pagination := &cli.Pagination{
+				MaxResults: pageSize,
+				Total:      cli.KnownTotal(len(file.Items)),
+				IsLast:     all || len(file.Items) <= pageSize,
+			}
 			envelopeData := map[string]any{
-				"boards": boards,
-				"pagination": map[string]any{
-					"total":           len(boards),
-					"start_at":        0,
-					"max_results":     len(boards),
-					"is_last":         true,
-					"next_page_token": nil,
-				},
+				"boards":           boards,
 				"from_cache":       fromCache,
 				"fetched_at":       fetchedAt.UTC().Format(time.RFC3339),
 				"truncated":        file.Truncated,
 				"truncated_reason": file.TruncatedReason,
 			}
-			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(boards))
+			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(file.Items))
 			warnings := boardsTruncationWarnings(file)
-			return cmdutil.WriteEnvelopeWithRawWarnings(cmd, "boards.list", envelopeData, warnings)
+			return cmdutil.WriteEnvelopeWithPaginationAndRawWarnings(cmd, "boards.list", envelopeData, pagination, warnings)
 		},
 	}
 	cmdutil.AddBoolVar(cmd.Flags(), &refresh, "refresh", false, "Force a re-prime even when the cache is fresh", clib.FlagExtra{Group: "Cache", Terse: "force re-prime"})
 	cmdutil.AddIntVar(cmd.Flags(), &ttlMinutes, "ttl-minutes", cachereg.TTLMinutesFor("boards"), "Freshness window before automatic refresh", clib.FlagExtra{Group: "Cache", Placeholder: "N", Terse: "freshness window"})
 	cmdutil.AddBoolVar(cmd.Flags(), &unbounded, "unbounded", false, "Walk every page (disables the default 100-page / 10 000-board cap)", clib.FlagExtra{Group: "Pagination", Terse: "fetch all pages"})
+	cmdutil.AddIntVar(cmd.Flags(), &limit, "limit", 50, "Maximum boards returned without `--all`", clib.FlagExtra{Group: "Pagination", Placeholder: "N", Terse: "page size"})
+	cmdutil.AddBoolVar(cmd.Flags(), &all, "all", false, "Return every cached board regardless of `--limit`", clib.FlagExtra{Group: "Pagination", Terse: "return all"})
 	// No --dry-run: `boards list` always performs a live read and a
 	// cache write, so a "dry-run" flag here could not be honest.
 	return cmd

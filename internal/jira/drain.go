@@ -21,6 +21,11 @@ type DrainInfo struct {
 	PagesFetched    int
 	Truncated       bool
 	TruncatedReason string
+	// NextPageToken resumes the walk after a truncation that fell on a
+	// page boundary. Empty when the walk completed, or when the cut fell
+	// mid-page (a max_results stop inside a page) — resuming from the
+	// page token there would silently skip the tail of the cut page.
+	NextPageToken string
 }
 
 const (
@@ -69,12 +74,15 @@ func DrainSearch(ctx context.Context, svc SearchService, req *SearchRequest, opt
 				info.TruncatedReason = "max_results"
 				if len(out) > maxResults {
 					out = out[:maxResults]
+				} else if resp != nil {
+					info.NextPageToken = resp.NextPageToken
 				}
 				return out, info, nil
 			}
 			if info.PagesFetched >= maxPages && !serverDone {
 				info.Truncated = true
 				info.TruncatedReason = "max_pages"
+				info.NextPageToken = resp.NextPageToken
 				return out, info, nil
 			}
 		}

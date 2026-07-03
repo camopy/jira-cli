@@ -50,6 +50,7 @@ $ jira issue list --project PROJ --status Done --as-jql --output=json`,
 	cmdutil.AddParallelismFlag(cmd, &opts.parallelism)
 	cmdutil.AddIssueColumnFlags(cmd.Flags(), &opts.columns, &opts.tsv)
 	boardscope.AddFlags(cmd)
+	addIssueListPaginationFlags(cmd, &opts)
 	// --as-jql is an offline preview; --count calls Jira. They short-circuit
 	// the runner differently, so they can't combine.
 	cmd.MarkFlagsMutuallyExclusive("as-jql", "count")

@@ -131,6 +131,11 @@ A few flags change what `list` does rather than what it filters:
 *   `--key` narrows to known keys (`PROJ-1`, comma lists, `PROJ-1..PROJ-10`
   ranges). Large key sets chunk and tolerate gaps; add `-p N` to run the chunks
   concurrently.
+*   `--limit` / `--all` / `--cursor` / `--unbounded` page the built query with
+  the same contract as [`search jql`](../search.md#pagination): one page of
+  `--limit` (default 50) with `meta.pagination.nextCursor` to resume via
+  `--cursor`, or `--all` to drain (bounded; `--unbounded` lifts the caps). A
+  `--key` listing is looked up whole, so it refuses the pagination flags.
 
 !!! warning "`--detail` is heavy"
     `--detail` returns the full `view` payload — description ADF, every custom

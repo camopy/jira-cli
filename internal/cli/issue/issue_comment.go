@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	clib "github.com/gechr/clib/cli/cobra"
 	xstrings "github.com/gechr/x/strings"
@@ -118,6 +117,10 @@ $ jira issue comment list PROJ-123 --output=json`,
 			}
 			return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.comment.list", results, func(_ string, result commentListReadResult) any {
 				data := cmdutil.CopyAnyMap(result.Data)
+				// Keyed results have no per-key meta, so the canonical
+				// pagination block rides inside each result's data with
+				// the same camelCase shape.
+				data["pagination"] = result.Pagination
 				if len(result.Warnings) > 0 {
 					data["warnings"] = result.Warnings
 				}
@@ -151,12 +154,13 @@ func runCommentList(cmd *cobra.Command, key string, limit int, all bool) error {
 	}); err != nil {
 		return err
 	}
-	return writeEnvelopeWithCommentWarnings(cmd, "issue.comment.list", result.Data, result.Warnings)
+	return cmdutil.WriteEnvelopeWithPaginationAndRawWarnings(cmd, "issue.comment.list", result.Data, result.Pagination, result.Warnings)
 }
 
 type commentListReadResult struct {
-	Data     map[string]any
-	Warnings []map[string]any
+	Data       map[string]any
+	Pagination *cli.Pagination
+	Warnings   []map[string]any
 }
 
 func commentListEnvelopeData(ctx context.Context, svc jira.CommentService, key string, limit int, all bool) (commentListReadResult, error) {
@@ -195,46 +199,32 @@ func commentListEnvelopeData(ctx context.Context, svc jira.CommentService, key s
 	pagination := commentListPagination(lastResp, all, rateLimitHit)
 	commentsOut := commentListData(collected)
 	data := map[string]any{
-		"comments":   commentsOut,
-		"pagination": pagination,
+		"comments": commentsOut,
 	}
 
 	warnings := commentListWarnings(collected, rateLimitHit, pagesFetched)
-	return commentListReadResult{Data: data, Warnings: warnings}, nil
+	return commentListReadResult{Data: data, Pagination: pagination, Warnings: warnings}, nil
 }
 
-// commentListPagination produces the snake-case pagination block per
-// envelope-shapes.md. : when rate-limit hit mid --all, is_last is false
-// and next_page_token carries the cursor to resume from.
-func commentListPagination(resp *jira.Response, all bool, rateLimitHit *jira.APIError) map[string]any {
-	if resp == nil {
-		return map[string]any{
-			"total":           0,
-			"start_at":        0,
-			"max_results":     0,
-			"is_last":         true,
-			"next_page_token": nil,
-		}
+// commentListPagination produces the canonical camelCase pagination block
+// (meta.pagination on single-key reads, results[].data.pagination on
+// multi-key). When a rate limit interrupts an --all walk, isLast is false
+// and nextCursor carries the offset to resume from; a clean --all walk
+// always landed on the boundary.
+func commentListPagination(resp *jira.Response, all bool, rateLimitHit *jira.APIError) *cli.Pagination {
+	pagination := cmdutil.PaginationFromResponse(resp)
+	if pagination == nil {
+		return &cli.Pagination{IsLast: true, Total: cli.KnownTotal(0)}
 	}
-	isLast := resp.IsLast
-	if rateLimitHit != nil {
-		isLast = false
+	switch {
+	case rateLimitHit != nil:
+		pagination.IsLast = false
+		pagination.NextCursor = resp.NextCursor()
+	case all:
+		pagination.IsLast = true
+		pagination.NextCursor = ""
 	}
-	if all && rateLimitHit == nil {
-		// After a clean --all walk we always landed on isLast=true.
-		isLast = true
-	}
-	out := map[string]any{
-		"total":           resp.Total,
-		"start_at":        resp.StartAt, // pagination-exempt: output-shape passthrough.
-		"max_results":     resp.MaxResults,
-		"is_last":         isLast,
-		"next_page_token": nil,
-	}
-	if !isLast {
-		out["next_page_token"] = resp.NextCursor()
-	}
-	return out
+	return pagination
 }
 
 // commentListData renders each comment with snake-case keys per
@@ -324,42 +314,9 @@ func commentListWarnings(comments []*jira.Comment, rateLimitHit *jira.APIError, 
 	return out
 }
 
-// writeEnvelopeWithCommentWarnings emits the envelope with snake-case
-// per-comment warnings under warnings[]. We don't reuse
-// cmdutil.WriteEnvelopeWithWarnings because that helper is shaped around adf.Warning
-// (Type/Message/Field/NodeType etc.) — comment-list warnings are a different
-// schema.
-func writeEnvelopeWithCommentWarnings(cmd *cobra.Command, command string, data any, warnings []map[string]any) error {
-	if cmdutil.UseCompactOutput(cmd) {
-		return cli.WriteCompact(cmd.OutOrStdout(), cmdutil.FoldRawWarningsIntoData(data, warnings))
-	}
-	if cmdutil.UsePlainOutput(cmd) {
-		if err := cli.WriteCommandPlain(cmd.OutOrStdout(), command, data, cmdutil.PlainOptionsForCommand(cmd)...); err != nil {
-			return err
-		}
-		return cmdutil.MirrorADFWarningsToStderr(cmd.ErrOrStderr(), cmdutil.RawWarningsToCLI(warnings))
-	}
-	body := map[string]any{
-		"ok": true,
-		"meta": map[string]any{
-			"command":    command,
-			"timestamp":  time.Now().UTC().Format(time.RFC3339),
-			"request_id": cli.NewRequestID(),
-		},
-		"data":     data,
-		"errors":   []any{},
-		"warnings": warningsOrEmpty(warnings),
-	}
-	enc := json.NewEncoder(cmd.OutOrStdout())
-	return enc.Encode(body)
-}
-
-func warningsOrEmpty(w []map[string]any) []map[string]any {
-	if w == nil {
-		return []map[string]any{}
-	}
-	return w
-}
+// Comment-list warnings are free-form maps (a schema wider than
+// adf.Warning), so the envelope rides through
+// cmdutil.WriteEnvelopeWithPaginationAndRawWarnings.
 
 // ---------- comment add ----------
 

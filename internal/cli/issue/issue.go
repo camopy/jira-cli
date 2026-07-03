@@ -98,6 +98,7 @@ $ jira issue mine --project PROJ --as-jql`,
 	clijql.AddSortFlags(cmd, &opts.builder)
 	clijql.AddDateFilterFlags(cmd, &opts.builder)
 	cmdutil.AddIssueColumnFlags(cmd.Flags(), &opts.columns, &opts.tsv)
+	addIssueListPaginationFlags(cmd, &opts)
 	return cmd
 }
 
@@ -394,8 +395,35 @@ type issueListOptions struct {
 	detail      bool
 	asJQL       bool
 	count       bool
+	all         bool
+	unbounded   bool
+	limit       int
+	cursor      string
 	columns     []string
 	tsv         bool
+}
+
+// addIssueListPaginationFlags attaches the general pagination contract —
+// --limit / --all / --unbounded / --cursor — shared by `issue list` and
+// `issue mine`. Must run after the --count / --as-jql flags exist so the
+// mutexes can reference them.
+func addIssueListPaginationFlags(cmd *cobra.Command, opts *issueListOptions) {
+	fs := cmd.Flags()
+	cmdutil.AddBoolVar(fs, &opts.all, "all", false, "Walk every page until `isLast` (bounded; use `--unbounded` to lift the caps)", clib.FlagExtra{Group: "Pagination"})
+	cmdutil.AddIntVar(fs, &opts.limit, "limit", 50, "Page size requested from Jira", clib.FlagExtra{Group: "Pagination", Placeholder: "N"})
+	cmdutil.AddBoolVar(fs, &opts.unbounded, "unbounded", false, "With `--all`, lift the default 100-page / 10 000-issue caps", clib.FlagExtra{Group: "Pagination"})
+	cmdutil.AddStringVar(fs, &opts.cursor, "cursor", "", "Resume from a `nextCursor` returned by a previous page", clib.FlagExtra{Group: "Pagination", Placeholder: "TOKEN"})
+	// --count fetches no issues and --as-jql never calls Jira, so the page
+	// controls are meaningless alongside either. --cursor composes with
+	// --limit and --all, mirroring `search jql`.
+	for _, short := range []string{"count", "as-jql"} {
+		if cmd.Flags().Lookup(short) == nil {
+			continue
+		}
+		cmd.MarkFlagsMutuallyExclusive(short, "all")
+		cmd.MarkFlagsMutuallyExclusive(short, "limit")
+		cmd.MarkFlagsMutuallyExclusive(short, "cursor")
+	}
 }
 
 // runIssueList is the shared body for `issue list` and `issue mine`. It
@@ -493,6 +521,12 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 		expand = issueListDetailExpand()
 	}
 	if len(keyChunks) > 0 {
+		// A key listing is a set of exact lookups, not a page walk — the
+		// pagination controls have nothing to apply to, so refusing them
+		// beats silently ignoring them.
+		if opts.all || opts.cursor != "" || cmd.Flags().Changed("limit") {
+			return fmt.Errorf("validation: --limit, --all, and --cursor page the JQL listing; a key list is looked up whole, so drop the pagination flags or the keys")
+		}
 		return runIssueListKeyChunks(cmd, issueListKeyChunkInputs{
 			service:     service,
 			opts:        opts,
@@ -506,6 +540,42 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 			parallelism: opts.parallelism,
 		})
 	}
+	limit := opts.limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if opts.all {
+		// Same drain, bounds, truncation warnings, and resume cursor as
+		// `search jql --all` — one pagination contract across both list
+		// surfaces.
+		req := &jira.SearchRequest{
+			JQL:         query,
+			Fields:      fields,
+			Expand:      expand,
+			ListOptions: jira.ListOptions{MaxResults: limit, NextPageToken: opts.cursor}, // pagination-exempt: opaque --cursor pass-through
+		}
+		searchSvc := cmdutil.ServicesForClient(client).Search()
+		var (
+			issues []*jira.Issue
+			info   jira.DrainInfo
+		)
+		if err := cmdutil.Spin(cmd, "issue.list", func(ctx context.Context) error {
+			var drainErr error
+			issues, info, drainErr = jira.DrainSearch(ctx, searchSvc, req, jira.DrainOptions{Unbounded: opts.unbounded})
+			return drainErr
+		}); err != nil {
+			return err
+		}
+		pagination := &cli.Pagination{
+			MaxResults: len(issues),
+			Total:      cli.KnownTotal(len(issues)),
+			IsLast:     !info.Truncated,
+			NextCursor: info.NextPageToken, // pagination-exempt: opaque resume token from the drain
+		}
+		issueData := cmdutil.IssueOutput(issues, opts.detail)
+		data := boardScopedListData(cmd, issueData, opts.detail, query, scope, precedence)
+		return cmdutil.WriteEnvelopeWithPaginationAndRawWarnings(cmd, "issue.list", data, pagination, cmdutil.DrainTruncationWarnings(info))
+	}
 	var (
 		issues []*jira.Issue
 		resp   *jira.Response
@@ -513,7 +583,7 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 	if err := cmdutil.Spin(cmd, "issue.list", func(ctx context.Context) error {
 		var listErr error
 		issues, resp, listErr = service.List(ctx, &jira.IssueListOptions{
-			ListOptions: jira.ListOptions{MaxResults: 50},
+			ListOptions: jira.ListOptions{MaxResults: limit, NextPageToken: opts.cursor}, // pagination-exempt: opaque --cursor pass-through
 			JQL:         query,
 			Fields:      fields,
 			Expand:      expand,
@@ -589,6 +659,7 @@ func runIssueListKeyChunks(cmd *cobra.Command, in issueListKeyChunkInputs) error
 	resp := &jira.Response{
 		MaxResults: len(order),
 		Total:      len(issues),
+		TotalKnown: true,
 		IsLast:     true,
 		TokenPage:  true,
 	}

@@ -41,9 +41,19 @@ func (s *worklogService) List(ctx context.Context, issueKey string, opts *ListOp
 		return nil, nil, err
 	}
 	var result struct {
-		Worklogs []*Worklog `json:"worklogs"`
+		Worklogs   []*Worklog `json:"worklogs"`
+		StartAt    int        `json:"startAt"`
+		MaxResults int        `json:"maxResults"`
+		Total      int        `json:"total"`
 	}
 	resp, err := s.client.Do(req, &result)
+	if resp != nil {
+		resp.StartAt = result.StartAt
+		resp.MaxResults = result.MaxResults
+		resp.Total = result.Total
+		resp.TotalKnown = true
+		resp.IsLast = result.StartAt+len(result.Worklogs) >= result.Total
+	}
 	return result.Worklogs, resp, err
 }
 

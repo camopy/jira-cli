@@ -124,6 +124,13 @@ func writeRawWarningEnvelope(cmd *cobra.Command, command string, data any, warni
 		// no envelope to ride in, so fold any non-empty warning set into
 		// the data so credential-cleanup and pagination notices stay
 		// visible to agents (they would otherwise be silently dropped).
+		// Pagination folds in the same way, matching the
+		// WriteEnvelopeWithResponse compact path.
+		if pagination != nil {
+			if m, ok := data.(map[string]any); ok {
+				m["pagination"] = pagination
+			}
+		}
 		return cli.WriteCompact(cmd.OutOrStdout(), FoldRawWarningsIntoData(data, warnings))
 	}
 	if UsePlainOutput(cmd) {
@@ -285,7 +292,9 @@ func WriteEnvelopeWithResponseAndWarnings(cmd *cobra.Command, command string, da
 	cliWarnings = append(cliWarnings, collectedCommandWarnings(cmd)...)
 	if UseCompactOutput(cmd) {
 		if m, ok := data.(map[string]any); ok {
-			m["pagination"] = paginationFromResponse(resp)
+			if pagination := paginationFromResponse(resp); pagination != nil {
+				m["pagination"] = pagination
+			}
 			return cli.WriteCompact(cmd.OutOrStdout(), FoldWarningsIntoData(m, cliWarnings))
 		}
 		return cli.WriteCompact(cmd.OutOrStdout(), data)
@@ -339,16 +348,31 @@ func MirrorADFWarningsToStderr(stderr io.Writer, warnings []cli.Warning) error {
 }
 
 // paginationFromResponse derives the envelope pagination block from an HTTP
-// response, or nil when resp is nil.
+// response, or nil when resp is nil or carries no pagination signal at all —
+// a mutation response would otherwise emit a zero-value block that reads as
+// "empty last page".
 func paginationFromResponse(resp *jira.Response) *cli.Pagination {
 	if resp == nil {
 		return nil
 	}
-	return &cli.Pagination{
+	if resp.MaxResults <= 0 && !resp.TotalKnown && resp.NextPageToken == "" { // pagination-exempt: signal presence check, no cursor arithmetic
+		return nil
+	}
+	p := &cli.Pagination{
 		StartAt:    resp.StartAt, // pagination-exempt: output-shape, not consumer cursor
 		MaxResults: resp.MaxResults,
-		Total:      resp.Total,
 		IsLast:     resp.NextCursor() == "",
 		NextCursor: resp.NextCursor(),
 	}
+	if resp.TotalKnown {
+		p.Total = cli.KnownTotal(resp.Total)
+	}
+	return p
+}
+
+// PaginationFromResponse is the exported form for commands that need to
+// build the canonical pagination block themselves (drains, client-side
+// windows) before handing it to WriteEnvelopeWithPagination.
+func PaginationFromResponse(resp *jira.Response) *cli.Pagination {
+	return paginationFromResponse(resp)
 }

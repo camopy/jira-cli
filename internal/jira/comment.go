@@ -289,7 +289,11 @@ func (s *commentService) List(ctx context.Context, key string, opts *ListComment
 		resp.StartAt = page.StartAt
 		resp.MaxResults = page.MaxResults
 		resp.Total = page.Total
-		resp.IsLast = page.IsLast
+		resp.TotalKnown = true
+		// Real tenants omit isLast on this endpoint, decoding to a false
+		// that reads as "more pages" even when startAt+returned covers the
+		// whole set. Compute the boundary instead of trusting the wire.
+		resp.IsLast = page.IsLast || page.StartAt+len(page.Comments) >= page.Total
 	}
 	return page.Comments, resp, err
 }
