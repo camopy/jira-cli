@@ -16,7 +16,7 @@ import (
 )
 
 func worklogAddCommand() *cobra.Command {
-	var timeSpent, commentMarkdown, started, jsonInput string
+	var timeSpent, commentMarkdown, commentMarkdownFile, started, jsonInput string
 	var dryRun bool
 	var parallelism int
 	cmd := &cobra.Command{
@@ -93,6 +93,11 @@ $ jira worklog add PROJ-123 --json-input worklog.json --dry-run --output=json`,
 				return err
 			}
 			var comment *adf.Document
+			resolvedMarkdown, mdErr := cmdutil.ResolveMarkdownInput(commentMarkdown, commentMarkdownFile)
+			if mdErr != nil {
+				return mdErr
+			}
+			commentMarkdown = resolvedMarkdown
 			var commentMarkdownWarnings []adf.Warning
 			switch {
 			case commentADF != nil:
@@ -164,7 +169,7 @@ $ jira worklog add PROJ-123 --json-input worklog.json --dry-run --output=json`,
 	cmdutil.AddStringVar(fs, &started, "started", "", "Worklog start timestamp", clib.FlagExtra{Group: "Worklog", Placeholder: "TIME"})
 	cmdutil.AddFileFlag(fs, &jsonInput, "json-input", "", "Read worklog payload from JSON file (canonical for agents)", "Input", "FILE")
 	cmdutil.AddDryRunFlag(fs, &dryRun, "Preview mutation without submitting")
-	cmdutil.AddMarkdownFlag(cmd, &commentMarkdown, "Worklog comment as Markdown", "comment-markdown")
+	cmdutil.AddMarkdownFlag(cmd, &commentMarkdown, &commentMarkdownFile, "Worklog comment as Markdown", "comment-markdown")
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
 }

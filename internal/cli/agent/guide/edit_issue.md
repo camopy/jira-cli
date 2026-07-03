@@ -10,7 +10,7 @@ When: one or more fields on an existing issue need new values; the bare-form `ji
 # scope
 - Single field, fast path: a field flag (`--summary`, `--assignee`, etc.).
 - Rich description (or any ADF field): `--json-input payload.json` with a `fields` envelope carrying native ADF — the canonical, lossless path, and the only one that can express mentions, dates, panels, status, and tables. Prefer this in agent context. See → `adf_reference`.
-- Description from Markdown, lossy shortcut: `--markdown "..."` (or a `description_markdown` key inside `fields`) converts Markdown to ADF with the same converter `create` uses. Use only for plain prose you can afford to flatten — it silently cannot emit mentions/dates/panels/status/tables; strict mode aborts on any lossy node, `--adf-best-effort` keeps the rest with a warning.
+- Description from Markdown, lossy shortcut: `--markdown "..."` or `--markdown-file FILE` (- reads stdin) (or a `description_markdown` key inside `fields`) converts Markdown to ADF with the same converter `create` uses. Use only for plain prose you can afford to flatten — it silently cannot emit mentions/dates/panels/status/tables; strict mode aborts on any lossy node, `--adf-best-effort` keeps the rest with a warning.
 - Interactive humans only (NOT agents): bare `jira issue edit KEY` opens `$EDITOR` on the description.
 
 # guard

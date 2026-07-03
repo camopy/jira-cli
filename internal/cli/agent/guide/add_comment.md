@@ -6,7 +6,7 @@ When: an issue needs a status update, decision note, or human-readable annotatio
 
 # body shape
 - Native ADF (preferred for agents — lossless): `--json-input <file>` or `--json-input -` with the ADF doc.
-- Markdown convenience (lossy — see → `adf_reference` for what survives): `--markdown "<markdown>"`.
+- Markdown convenience (lossy — see → `adf_reference` for what survives): `--markdown "<markdown>"`, or `--markdown-file FILE` (- reads stdin) for multi-paragraph bodies shell quoting would mangle.
 - `--json-input` and `--markdown` are mutually exclusive on `comment add`.
 
 # guards

@@ -696,7 +696,7 @@ func issueListDetailExpand() []string {
 
 func issueCreateCommand() *cobra.Command {
 	var dryRun bool
-	var summary, jsonInput, assignee, markdownInput string
+	var summary, jsonInput, assignee, markdownInput, markdownFile string
 	var project, issueType, parent, priority string
 	var labels []string
 	cmd := &cobra.Command{
@@ -750,8 +750,12 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 			// payload key the JSON path uses, so one resolver handles both
 			// (extractDescriptionDoc). Mutual exclusion with --json-input
 			// means this never overwrites a payload value.
-			if markdownInput != "" {
-				payload["description_markdown"] = markdownInput
+			markdownBody, mdErr := cmdutil.ResolveMarkdownInput(markdownInput, markdownFile)
+			if mdErr != nil {
+				return mdErr
+			}
+			if markdownBody != "" {
+				payload["description_markdown"] = markdownBody
 			}
 			// Resolve the profile WITHOUT building a client: --assignee me,
 			// --no-input validation, and the dry-run preview only need
@@ -950,7 +954,7 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
 	cmdutil.AddStringVar(cmd.Flags(), &summary, "summary", "", "Issue summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
 	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read issue create payload from JSON file (canonical for agents)", "Input", "FILE")
-	cmdutil.AddMarkdownFlag(cmd, &markdownInput, "Issue description as Markdown (lossy convenience layer, converted to ADF)", "")
+	cmdutil.AddMarkdownFlag(cmd, &markdownInput, &markdownFile, "Issue description as Markdown (lossy convenience layer, converted to ADF)", "")
 	cmdutil.AddStringVar(cmd.Flags(), &assignee, "assignee", "", "Assign on creation: `me`, an email, or a Jira account ID", clib.FlagExtra{Group: "Fields", Placeholder: "USER", Terse: "assignee", Enum: []string{"me"}, EnumTerse: []string{"current user"}})
 	cmdutil.AddStringVar(cmd.Flags(), &project, "project", "", "Project key (overrides the profile default)", clib.FlagExtra{Group: "Fields", Placeholder: "KEY", Complete: "predictor=cacheproject"})
 	cmdutil.AddStringVar(cmd.Flags(), &issueType, "type", "", "Issue type name (overrides the profile default)", clib.FlagExtra{Group: "Fields", Placeholder: "NAME", Terse: "issue type", Complete: "predictor=cacheissuetype"})
@@ -1155,7 +1159,7 @@ func extractDescriptionDoc(payload map[string]any) (doc adf.Document, present bo
 
 func issueEditCommand() *cobra.Command {
 	var dryRun bool
-	var jsonInput, summary, assignee, markdownInput string
+	var jsonInput, summary, assignee, markdownInput, markdownFile string
 	var parallelism int
 	cmd := &cobra.Command{
 		Use:   "edit KEY...",
@@ -1220,8 +1224,12 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 			// exclusion with --json-input means this never overwrites a
 			// payload value; the resolver then prefers Markdown over any
 			// literal `description`, mirroring create-side behavior.
-			if markdownInput != "" {
-				fields["description_markdown"] = markdownInput
+			markdownBody, mdErr := cmdutil.ResolveMarkdownInput(markdownInput, markdownFile)
+			if mdErr != nil {
+				return mdErr
+			}
+			if markdownBody != "" {
+				fields["description_markdown"] = markdownBody
 			}
 			assigneeWire, assigneeEmail, assigneeSet, aerr := resolveAssigneeField(assignee, profile)
 			if aerr != nil {
@@ -1385,7 +1393,7 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
 	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read issue edit payload from JSON file (canonical for agents)", "Input", "FILE")
 	cmdutil.AddStringVar(cmd.Flags(), &summary, "summary", "", "Replace the issue summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
-	cmdutil.AddMarkdownFlag(cmd, &markdownInput, "Replace the description with Markdown (lossy convenience layer, converted to ADF)", "description-markdown")
+	cmdutil.AddMarkdownFlag(cmd, &markdownInput, &markdownFile, "Replace the description with Markdown (lossy convenience layer, converted to ADF)", "description-markdown")
 	cmdutil.AddStringVar(cmd.Flags(), &assignee, "assignee", "", "Set assignee: `me`, `none`/`unassigned`, an email, or a Jira account ID", clib.FlagExtra{Group: "Fields", Placeholder: "USER", Terse: "assignee", Enum: []string{"me", "none"}, EnumTerse: []string{"current user", "unassign"}})
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd

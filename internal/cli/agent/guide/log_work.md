@@ -9,7 +9,7 @@ When: time spent on an issue must be recorded against its worklog for sprint rep
 
 # optional metadata
 - `--started <RFC3339>` — backdate or pin a start time; otherwise Jira stamps "now".
-- `--markdown "<text>"` — short worklog comment; markdown is lossy (see → `adf_reference`).
+- `--markdown "<text>"` (or `--markdown-file FILE`, - reads stdin) — worklog comment; markdown is lossy (see → `adf_reference`).
 - `--json-input <file>` — full payload, including ADF-bodied comment, for the lossless path.
 
 **Run**

@@ -364,12 +364,13 @@ func warningsOrEmpty(w []map[string]any) []map[string]any {
 // ---------- comment add ----------
 
 type commentAddFlags struct {
-	markdown    string
-	jsonInput   string
-	visRole     string
-	visGroup    string
-	parallelism int
-	dryRun      bool
+	markdownFile string
+	markdown     string
+	jsonInput    string
+	visRole      string
+	visGroup     string
+	parallelism  int
+	dryRun       bool
 }
 
 func commentAddCommand() *cobra.Command {
@@ -412,7 +413,7 @@ func registerCommentAddFlags(cmd *cobra.Command, flags *commentAddFlags) {
 	// Exactly one body source: the Markdown convenience string or the native
 	// ADF JSON file. AddMarkdownFlag declares the exclusions as Cobra flag
 	// metadata so the conflict is rejected before RunE reads either source.
-	cmdutil.AddMarkdownFlag(cmd, &flags.markdown, "Comment body as Markdown (lossy convenience layer)", "body-markdown")
+	cmdutil.AddMarkdownFlag(cmd, &flags.markdown, &flags.markdownFile, "Comment body as Markdown (lossy convenience layer)", "body-markdown")
 	cmdutil.AddStringVar(cmd.Flags(), &flags.visRole, "visibility-role", "", "Restrict comment to a Jira role (e.g. Developers)", clib.FlagExtra{Group: "Visibility", Placeholder: "ROLE"})
 	cmdutil.AddStringVar(cmd.Flags(), &flags.visGroup, "visibility-group", "", "Restrict comment to a Jira group", clib.FlagExtra{Group: "Visibility", Placeholder: "GROUP"})
 	cmdutil.AddDryRunFlag(cmd.Flags(), &flags.dryRun, "Preview mutation without submitting")
@@ -420,7 +421,11 @@ func registerCommentAddFlags(cmd *cobra.Command, flags *commentAddFlags) {
 }
 
 func runCommentAddKeys(cmd *cobra.Command, keys []string, flags commentAddFlags) error {
-	doc, markdownWarnings, err := buildCommentBody(cmd, flags.markdown, flags.jsonInput, cmdutil.NoInputRequested(cmd))
+	markdown, err := cmdutil.ResolveMarkdownInput(flags.markdown, flags.markdownFile)
+	if err != nil {
+		return err
+	}
+	doc, markdownWarnings, err := buildCommentBody(cmd, markdown, flags.jsonInput, cmdutil.NoInputRequested(cmd))
 	if err != nil {
 		return err
 	}
@@ -604,12 +609,13 @@ func buildCommentBody(cmd *cobra.Command, markdown, jsonInput string, noInput bo
 // ---------- comment edit ----------
 
 type commentEditFlags struct {
-	markdown  string
-	jsonInput string
-	visRole   string
-	visGroup  string
-	visClear  bool
-	dryRun    bool
+	markdownFile string
+	markdown     string
+	jsonInput    string
+	visRole      string
+	visGroup     string
+	visClear     bool
+	dryRun       bool
 }
 
 func commentEditCommand() *cobra.Command {
@@ -637,7 +643,7 @@ $ jira issue comment edit PROJ-123 10042 --markdown "Draft update." --dry-run`,
 		},
 	}
 	cmdutil.AddFileFlag(cmd.Flags(), &flags.jsonInput, "json-input", "", "New body as native ADF JSON file (canonical for agents)", "Input", "FILE")
-	cmdutil.AddMarkdownFlag(cmd, &flags.markdown, "New body as Markdown", "body-markdown")
+	cmdutil.AddMarkdownFlag(cmd, &flags.markdown, &flags.markdownFile, "New body as Markdown", "body-markdown")
 	cmdutil.AddStringVar(cmd.Flags(), &flags.visRole, "visibility-role", "", "Replace visibility with a Jira role", clib.FlagExtra{Group: "Visibility", Placeholder: "ROLE"})
 	cmdutil.AddStringVar(cmd.Flags(), &flags.visGroup, "visibility-group", "", "Replace visibility with a Jira group", clib.FlagExtra{Group: "Visibility", Placeholder: "GROUP"})
 	cmdutil.AddBoolVar(cmd.Flags(), &flags.visClear, "clear-visibility", false, "Remove any existing visibility restriction", clib.FlagExtra{Group: "Visibility"})
@@ -656,7 +662,11 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 	if err != nil {
 		return err
 	}
-	doc, markdownWarnings, err := buildCommentBody(cmd, flags.markdown, flags.jsonInput, cmdutil.NoInputRequested(cmd))
+	markdown, err := cmdutil.ResolveMarkdownInput(flags.markdown, flags.markdownFile)
+	if err != nil {
+		return err
+	}
+	doc, markdownWarnings, err := buildCommentBody(cmd, markdown, flags.jsonInput, cmdutil.NoInputRequested(cmd))
 	if err != nil {
 		return err
 	}
