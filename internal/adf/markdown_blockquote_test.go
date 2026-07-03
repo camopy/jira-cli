@@ -89,9 +89,9 @@ func TestFromMarkdownBlockquoteDegradesForbiddenChildren(t *testing.T) {
 }
 
 // Bold-wrapped inline code is an invalid ADF mark pair: the converter keeps
-// code, drops the decorative mark, and reports a lossy source-mapped
-// warning (strict aborts on it; best-effort proceeds with the sanitized
-// marks and a valid document).
+// code, drops the decorative mark, and reports a NON-lossy source-mapped
+// downgrade — the text and its code mark survive verbatim, so the default
+// strict mutation mode proceeds with the warning instead of aborting.
 func TestFromMarkdownCodeMarkConflictSanitized(t *testing.T) {
 	doc, warnings, err := adf.FromMarkdownLossy("- **`Tree()`** walks\n")
 	if err != nil {
@@ -101,8 +101,8 @@ func TestFromMarkdownCodeMarkConflictSanitized(t *testing.T) {
 		t.Fatalf("warnings = %+v, want exactly the mark-conflict warning", warnings)
 	}
 	w := warnings[0]
-	if !w.Lossy {
-		t.Error("mark-conflict warning must be Lossy=true so strict aborts")
+	if w.Lossy {
+		t.Error("mark-conflict warning must be a non-lossy downgrade (decoration loss, not content loss)")
 	}
 	if !strings.Contains(w.Message, "strong") {
 		t.Errorf("message = %q, want the dropped mark named", w.Message)

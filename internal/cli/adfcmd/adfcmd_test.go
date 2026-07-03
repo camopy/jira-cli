@@ -37,7 +37,7 @@ func TestConvertMarkdownMatchesPipelineConverter(t *testing.T) {
 // Strict mode aborts on a lossy step with the typed source-mapped error —
 // mutation parity.
 func TestConvertMarkdownStrictAbortsOnLossyStep(t *testing.T) {
-	_, _, err := convertMarkdown("**`bold code`**\n", adfmode.ModeStrict)
+	_, _, err := convertMarkdown("<div>\nraw\n</div>\n", adfmode.ModeStrict)
 	var lossy adf.LossyConversionError
 	if !errors.As(err, &lossy) {
 		t.Fatalf("err = %v, want adf.LossyConversionError", err)
@@ -49,7 +49,7 @@ func TestConvertMarkdownStrictAbortsOnLossyStep(t *testing.T) {
 
 // Best-effort emits the sanitized document plus the lossy warning.
 func TestConvertMarkdownBestEffortEmitsDocumentAndWarnings(t *testing.T) {
-	doc, warnings, err := convertMarkdown("**`bold code`**\n", adfmode.ModeBestEffort)
+	doc, warnings, err := convertMarkdown("intro\n\n<div>\nraw\n</div>\n", adfmode.ModeBestEffort)
 	if err != nil {
 		t.Fatalf("convertMarkdown: %v", err)
 	}

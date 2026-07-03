@@ -334,8 +334,13 @@ they own). The `text` is the display label and can be anything.
   `paragraph`** — bare text inside a cell is invalid.
 - **The `code` mark combines only with `link`** — `**\`bold code\`**`
   in Markdown is an invalid mark pair in ADF. The converter keeps the
-  code mark and drops the rest: best-effort proceeds with a lossy
-  warning, strict fails with the offending Markdown line and snippet.
+  code mark and drops the rest as a non-lossy downgrade: the text and
+  code mark survive verbatim, so strict proceeds with a source-mapped
+  warning naming the dropped decoration.
+- **A table indented under a list bullet (or quoted) is hoisted** — ADF
+  forbids `table` inside `listItem`/`blockquote`, so the converted table
+  moves directly after the enclosing block with a non-lossy downgrade
+  warning. Put tables at the top level to control placement exactly.
 - **A list item starting with `>` parses as a blockquote** — `- >50 keys`
   is a quote nested in a list item to Markdown. ADF list items cannot
   contain blockquotes, so the quoted content is hoisted into the item

@@ -69,3 +69,38 @@ func TestMarkdownStrictAbort_CreateBestEffortWarns(t *testing.T) {
 		t.Fatalf("best-effort must warn about lossy Markdown; got zero warnings\n%s", stdout)
 	}
 }
+
+// Bold-wrapped inline code survives the default strict mutation mode: the
+// decoration drops (a non-lossy downgrade, like an image degrading to its
+// alt-text link) while the text and code mark land verbatim.
+func TestMarkdownStrictAcceptsDecorativeMarkDrop(t *testing.T) {
+	cmd := exec.Command("go", "run", "../../cmd/jira",
+		"issue", "comment", "add", "PROJ-1", "--dry-run", "--no-input",
+		"--markdown", "see **`helm upgrade`** now", "--output=json")
+	stdout, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("strict mutation must accept a decorative mark drop, got %v\n%s", err, stdout)
+	}
+	var env struct {
+		OK       bool `json:"ok"`
+		Warnings []struct {
+			NodeType string `json:"node_type"`
+			Lossy    bool   `json:"lossy"`
+		} `json:"warnings"`
+	}
+	if jerr := json.Unmarshal(stdout, &env); jerr != nil || !env.OK {
+		t.Fatalf("expected ok envelope: %v\n%s", jerr, stdout)
+	}
+	var warned bool
+	for _, w := range env.Warnings {
+		if w.NodeType == "codeSpan" {
+			warned = true
+			if w.Lossy {
+				t.Fatalf("mark drop must be non-lossy: %s", stdout)
+			}
+		}
+	}
+	if !warned {
+		t.Fatalf("the dropped decoration must still be warned: %s", stdout)
+	}
+}

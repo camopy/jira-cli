@@ -46,7 +46,8 @@ convert faithfully. A few constructs degrade by design:
 |---|---|---|
 | `![alt](url)` image | Alt-text link to the URL | Passes (non-lossy downgrade) |
 | Blockquote inside a list item (`- >text`) | Quoted content hoisted into the item | Passes (non-lossy downgrade) |
-| Decorative mark on inline code (``**`code`**``) | Code mark kept, decoration dropped | **Fails** with the offending line |
+| Decorative mark on inline code (``**`code`**``) | Code mark kept, decoration dropped | Passes (non-lossy downgrade) |
+| Table inside a list item or blockquote | Table moved after the enclosing block | Passes (non-lossy downgrade) |
 | Raw HTML | Dropped | **Fails** with the offending line |
 
 Constructs with no Markdown spelling at all — mentions, panels, status

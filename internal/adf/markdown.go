@@ -47,6 +47,12 @@ func FromMarkdownLossy(markdown string) (Document, []Warning, error) {
 		if node, ok := conv.block(child); ok {
 			doc.Content = append(doc.Content, node)
 		}
+		// Blocks hoisted out of forbidden nesting (tables in list items
+		// or blockquotes) land right after the block that contained them.
+		if len(conv.hoisted) > 0 {
+			doc.Content = append(doc.Content, conv.hoisted...)
+			conv.hoisted = nil
+		}
 	}
 	if len(doc.Content) == 0 && !xstrings.IsBlank(markdown) && len(conv.warnings) == 0 {
 		doc.Content = append(doc.Content, Node{Type: "paragraph", Content: []Node{{Type: "text", Text: strings.TrimSpace(markdown)}}})
@@ -63,6 +69,11 @@ type mdConverter struct {
 	source    []byte
 	warnings  []Warning
 	wikiEmoji bool
+	// hoisted collects block nodes that converted cleanly but sat in a
+	// position ADF forbids (a table inside a list item or blockquote).
+	// FromMarkdownLossy drains it after each top-level block, so the
+	// node re-enters the document at the nearest valid position.
+	hoisted []Node
 }
 
 // warn records one lossy-conversion warning naming an unsupported
@@ -202,6 +213,13 @@ func (c *mdConverter) blockquoteChildren(n ast.Node) []Node {
 		case ast.KindBlockquote:
 			c.warnDowngrade(child, "nested blockquote", "flattened into its parent blockquote")
 			out = append(out, c.blockquoteChildren(child)...)
+		case extast.KindTable:
+			// ADF forbids a table inside a blockquote; the table itself
+			// converts cleanly, so it moves after the enclosing block.
+			c.warnDowngrade(child, "table inside a blockquote", "moved after the enclosing block")
+			if node, ok := c.block(child); ok {
+				c.hoisted = append(c.hoisted, node)
+			}
 		case ast.KindHeading:
 			c.warnDowngrade(child, "heading inside a blockquote", "converted to a paragraph")
 			out = append(out, Node{Type: "paragraph", Content: c.inlineChildren(child)})
@@ -256,6 +274,14 @@ func (c *mdConverter) listItemChildren(item ast.Node) []Node {
 			// remainder of a list item as a nested quote.
 			c.warnDowngrade(child, "blockquote inside a list item", "quoted content hoisted into the list item")
 			out = append(out, c.blockquoteChildren(child)...)
+		case extast.KindTable:
+			// ADF forbids a table inside a list item — a common Markdown
+			// shape (a status bullet followed by its indented table). The
+			// table converts cleanly, so it moves after the enclosing list.
+			c.warnDowngrade(child, "table inside a list item", "moved after the enclosing list")
+			if node, ok := c.block(child); ok {
+				c.hoisted = append(c.hoisted, node)
+			}
 		default:
 			if node, ok := c.block(child); ok {
 				out = append(out, node)
@@ -386,10 +412,11 @@ func (c *mdConverter) inline(n ast.Node, marks []Mark) []Node {
 	case ast.KindCodeSpan:
 		// The ADF spec allows the code mark to combine only with link.
 		// Resolve the conflict here, where the Markdown source is still at
-		// hand: keep code (and any link), drop the decorative marks, and
-		// report it as lossy — best-effort proceeds with the sanitized
-		// marks, strict aborts with this source-mapped message instead of
-		// a JSON path into a document the author never wrote.
+		// hand: keep code (and any link) and drop the decorative marks.
+		// The text and its code mark survive verbatim — like an image
+		// degrading to its alt-text link, this loses decoration, not
+		// content — so the warning is a non-lossy downgrade and the
+		// default strict mutation mode proceeds with it.
 		kept, dropped := sanitizeCodeMarks(cloneMarks(marks))
 		if len(dropped) > 0 {
 			w := c.sourceMapped(n, Warning{
@@ -397,7 +424,7 @@ func (c *mdConverter) inline(n ast.Node, marks []Mark) []Node {
 				Message:  fmt.Sprintf("Markdown formatting cannot combine with inline code in ADF (code combines only with link); kept the code mark and dropped %s", strings.Join(dropped, ", ")),
 				NodeType: "codeSpan",
 				MarkType: dropped[0],
-				Lossy:    true,
+				Lossy:    false,
 			})
 			c.warnings = append(c.warnings, w)
 		}
