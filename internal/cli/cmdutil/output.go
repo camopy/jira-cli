@@ -2,6 +2,7 @@ package cmdutil
 
 import (
 	"os"
+	"strings"
 
 	clibtheme "github.com/gechr/clib/theme"
 	"github.com/gechr/clog"
@@ -83,6 +84,7 @@ func PlainOptionsForCommand(cmd *cobra.Command) []cli.PlainOption {
 	opts := []cli.PlainOption{
 		cli.WithPlainTTY(det.IsTTY),
 		cli.WithPlainTermWidth(terminal.Width(os.Stdout)),
+		cli.WithPlainGraphemeWidth(det.IsTTY && graphemeTerminal()),
 	}
 	if debug, _ := cmd.Root().PersistentFlags().GetBool("debug"); debug {
 		opts = append(opts, cli.WithPlainDebug(true))
@@ -117,6 +119,29 @@ func PlainOptionsForCommand(cmd *cobra.Command) []cli.PlainOption {
 		}
 	}
 	return opts
+}
+
+// graphemeTerminal reports whether the attached terminal measures text in
+// grapheme clusters (mode 2027) rather than per-rune wcwidth: it draws a
+// ZWJ emoji sequence as one 2-cell glyph and a VS16 emoji as two cells, so
+// tables aligned with the wrong method drift on rows containing them.
+// Detection is an environment sniff of the terminals known to cluster
+// unconditionally (Ghostty, kitty, WezTerm, foot) — right for the
+// direct-attach case and conservatively wcwidth over SSH hops that strip
+// the variables. A DECRQM 2027 query would be exact; env detection avoids
+// a terminal round-trip on every command.
+func graphemeTerminal() bool {
+	switch strings.ToLower(os.Getenv("TERM_PROGRAM")) {
+	case "ghostty", "wezterm", "kitty":
+		return true
+	}
+	term := strings.ToLower(os.Getenv("TERM"))
+	for _, prefix := range []string{"xterm-ghostty", "xterm-kitty", "foot"} {
+		if strings.HasPrefix(term, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func commandParallelism(cmd *cobra.Command) int {

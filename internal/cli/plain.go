@@ -46,6 +46,12 @@ type plainConfig struct {
 	// instead of ragged per-status widths. Zero means no padding (single-row
 	// renders, or the width was not precomputed).
 	statusPillWidth int
+	// graphemeWidth selects grapheme-cluster width measurement for table
+	// alignment. Grapheme-clustering terminals (mode 2027 — Ghostty, kitty,
+	// WezTerm, foot) draw a ZWJ emoji sequence as one 2-cell glyph where
+	// per-rune wcwidth counts 4, so rows measured with the wrong method
+	// render with drifted columns.
+	graphemeWidth bool
 }
 
 func WithPlainBaseURL(baseURL string) PlainOption {
@@ -89,6 +95,16 @@ func WithPlainTTY(tty bool) PlainOption {
 func WithPlainTheme(theme *clibtheme.Theme) PlainOption {
 	return func(cfg *plainConfig) {
 		cfg.theme = theme
+	}
+}
+
+// WithPlainGraphemeWidth selects grapheme-cluster width measurement for
+// table alignment, for terminals that draw grapheme clusters (mode 2027)
+// as single glyphs. The default per-rune wcwidth measurement misaligns
+// rows containing ZWJ or VS16 emoji sequences on such terminals.
+func WithPlainGraphemeWidth(grapheme bool) PlainOption {
+	return func(cfg *plainConfig) {
+		cfg.graphemeWidth = grapheme
 	}
 }
 
@@ -797,7 +813,11 @@ func issueTableRenderer(cfg plainConfig, cols []issueColumn) *table.Renderer[iss
 			},
 		})
 	}
-	return table.NewRenderer(columns, ctx, table.WithTTY(cfg.tty), table.WithTermWidth(cfg.termWidth))
+	opts := []table.Option{table.WithTTY(cfg.tty), table.WithTermWidth(cfg.termWidth)}
+	if cfg.graphemeWidth {
+		opts = append(opts, table.WithGridOptions(table.WithWidthMethod(ansi.GraphemeWidth)))
+	}
+	return table.NewRenderer(columns, ctx, opts...)
 }
 
 type primerTheme struct {
