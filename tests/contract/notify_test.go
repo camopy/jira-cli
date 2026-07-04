@@ -12,7 +12,7 @@ import (
 
 // seedNotifyCache writes a fresh notify cache claiming a far-future release,
 // so an update is pending without any network access. The layout matches
-// clive/notify: $XDG_CACHE_HOME/<binary>/last-update-check.
+// clive/notify: $XDG_CACHE_HOME/<binary>/last-update/check.
 func seedNotifyCache(t *testing.T) string {
 	t.Helper()
 	cacheHome := t.TempDir()
@@ -21,7 +21,10 @@ func seedNotifyCache(t *testing.T) string {
 		t.Fatal(err)
 	}
 	stamp := []byte(`{"version":1,"track":"","latest":"v99.0.0"}` + "\n")
-	if err := os.WriteFile(filepath.Join(dir, "last-update-check"), stamp, 0o644); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "last-update"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "last-update", "check"), stamp, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return cacheHome

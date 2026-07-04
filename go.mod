@@ -13,8 +13,8 @@ require (
 	github.com/agnivade/levenshtein v1.2.1
 	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/charmbracelet/x/exp/teatest/v2 v2.0.0-20260608090822-c3ad58c6c9e5
-	github.com/gechr/clib v0.5.8
-	github.com/gechr/clive v0.2.4
+	github.com/gechr/clib v0.5.9
+	github.com/gechr/clive v0.2.6
 	github.com/gechr/clog v0.11.15
 	github.com/gechr/primer v0.1.1
 	github.com/gechr/x v0.2.6

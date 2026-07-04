@@ -19,7 +19,10 @@ func TestSeededNotifyCacheRegistersPendingUpdate(t *testing.T) {
 	t.Setenv("JIRA_NO_UPDATE_CHECK", "")
 	dir := t.TempDir()
 	stamp := []byte(`{"version":1,"track":"","latest":"v99.0.0"}` + "\n")
-	if err := os.WriteFile(filepath.Join(dir, "last-update-check"), stamp, 0o600); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "last-update"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "last-update", "check"), stamp, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
