@@ -62,6 +62,7 @@ func WriteKeyedResultsFailureDiagnostics(w io.Writer, data any, errorsOut []Erro
 		return nil
 	}
 	logger := clog.New(clog.NewOutput(w, clog.ColorAuto))
+	logger.SetStyles(plainLoggerStyles())
 	logger.SetLevel(clog.LevelError)
 	shown, omitted := shownFailureKeys(failures)
 	total, succeeded, failed := keyedResultCounts(data, len(failures))

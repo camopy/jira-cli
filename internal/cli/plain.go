@@ -15,6 +15,7 @@ import (
 	ansi "github.com/charmbracelet/x/ansi"
 	clibtheme "github.com/gechr/clib/theme"
 	"github.com/gechr/clog"
+	clogstyle "github.com/gechr/clog/style"
 	"github.com/gechr/primer/table"
 	termansi "github.com/gechr/x/ansi"
 	"github.com/gechr/x/human"
@@ -141,7 +142,18 @@ func WithPlainTSV(tsv bool) PlainOption {
 func newPlainLogger(w io.Writer) *clog.Logger {
 	logger := clog.New(clog.NewOutput(w, clog.ColorAuto))
 	logger.SetOmitEmpty(true)
+	logger.SetStyles(plainLoggerStyles())
 	return logger
+}
+
+// plainLoggerStyles keeps backtick delimiters in styled output
+// (BacktickKeep): plain renderers emit grid-aligned table rows and padded
+// columns, and clog's default backtick rendering drops the two delimiter
+// characters of a `code` span — two visible cells gone per span, shifting
+// every column after it. Keep mode styles the span but leaves the width
+// exactly as written.
+func plainLoggerStyles() *clogstyle.Config {
+	return &clogstyle.Config{BacktickMode: clogstyle.BacktickKeep}
 }
 
 func WritePlain(w io.Writer, data any) error {

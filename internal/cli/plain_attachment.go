@@ -24,6 +24,7 @@ func WriteAttachmentListPlain(w io.Writer, command string, data any, opts ...Pla
 		opt(&cfg)
 	}
 	logger := clog.New(clog.NewOutput(w, clog.ColorAuto))
+	logger.SetStyles(plainLoggerStyles())
 
 	m, ok := data.(map[string]any)
 	if !ok {

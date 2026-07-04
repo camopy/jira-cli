@@ -30,6 +30,7 @@ func WriteBoardListPlain(w io.Writer, command string, data any, opts ...PlainOpt
 		opt(&cfg)
 	}
 	logger := clog.New(clog.NewOutput(w, clog.ColorAuto))
+	logger.SetStyles(plainLoggerStyles())
 
 	m, ok := data.(map[string]any)
 	if !ok {
