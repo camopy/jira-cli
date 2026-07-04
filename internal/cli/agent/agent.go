@@ -176,9 +176,14 @@ func agentADFMatrixCommand() *cobra.Command {
 		Long: "Print the Atlassian Document Format (ADF) nodes and marks that jira-cli knows " +
 			"how to read or write — the support matrix. ADF is the JSON rich-text format Jira " +
 			"uses for descriptions, comments, worklogs, and rich-text custom fields; reach for " +
-			"it before generating ADF by hand. For every node and mark it records which " +
-			"operations the CLI supports (author, render, preserve, validate, submit), and each " +
-			"row carries an `official_url` to the matching node in the Atlassian reference.\n\n" +
+			"it before generating ADF by hand. The matrix covers every node and mark of the " +
+			"pinned ADF schema, one row each, recording which operations the CLI supports " +
+			"(author, render, preserve, validate, submit); each row carries an `official_url` " +
+			"to the matching Atlassian reference.\n\n" +
+			"Rows come in two status tiers. `mvp` rows are the curated core: authorable " +
+			"(most from Markdown) and rendered in human output. `preserve-only` rows validate, " +
+			"submit, and round-trip as native ADF, but have no Markdown authoring surface and " +
+			"render as their child text only — author them as native ADF via --json-input.\n\n" +
 			"The output is local registry data: it does not contact Jira, and it does not prove " +
 			"that a particular Jira field accepts every listed node.\n\n" +
 			"See the Atlassian ADF structure reference: " +
