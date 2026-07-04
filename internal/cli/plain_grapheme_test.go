@@ -98,7 +98,7 @@ func TestGraphemeFixtureDisagrees(t *testing.T) {
 	if wc == gr {
 		t.Fatalf("fixture summary %q measures identically (%d) under both methods; pick a spicier emoji", summary, wc)
 	}
-	if !strings.Contains(summary, "‍") {
+	if !strings.Contains(summary, "\u200d") {
 		t.Fatal("fixture summary lost its ZWJ sequence")
 	}
 }
