@@ -88,9 +88,7 @@ It prompts for a kind (`Added`, `Changed`, `Fixed`, …) and a one-line summary,
 
 `.changes/unreleased/` is a staging area: fragments accumulate there, one per change, between releases. Cutting a release (`mise run release-notes <version>`) batches every pending fragment into a single dated `.changes/<version>.md` section and empties the directory — the `.gitkeep` just keeps it tracked while empty — and `changie merge` rebuilds `CHANGELOG.md` from the header and every version file. So a fragment is transient scaffolding that lives in `unreleased/` only until the next release folds it in.
 
-The commit-msg hook enforces this: a `feat` or `fix` commit with no staged fragment is rejected. If the change genuinely isn't user-facing (an internal refactor, a test-only fix, a GitHub Actions/CI tweak), add a `Changelog: skip` trailer to the commit message instead. `docs`, `chore`, `ci`, `build`, `style`, and `refactor` commits are exempt automatically.
-
-You don't have to memorise any of this. If a fragment is missing, the hook rejects the commit and prints exactly how to recover — add a fragment, or the `Changelog: skip` trailer — so you fix it and re-commit:
+Only `feat` and `fix` commits need a fragment; the commit-msg hook rejects one that's missing and prints how to fix it, so you can't get stuck. Every other type (`docs`, `chore`, `ci`, `build`, `style`, `refactor`) is exempt. A `feat`/`fix` that genuinely isn't user-facing takes a `Changelog: skip` trailer instead:
 
 ```text
 This feat/fix needs a changelog fragment: run 'changie new' and stage it,

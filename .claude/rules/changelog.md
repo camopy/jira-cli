@@ -33,12 +33,10 @@ time. `docs/changelog.md` is a one-line snippet include of `CHANGELOG.md`.
 *   **Write the body for the release-notes reader**: the user-visible outcome,
     imperative, no emoji, no commit SHAs or PR numbers, scope prefix stripped.
     `CHANGELOG.md` and the `.changes/v*.md` files are the style exemplar.
-*   **Not user-facing?** A GitHub Actions/CI workflow, an internal refactor, a
-    test-only fix, a build or tooling tweak — none of these get a fragment.
-    Prefer the matching non-`feat`/`fix` commit type (`ci`, `chore`, `docs`,
-    `build`, `style`, `refactor`); the gate skips those automatically. Only if
-    the change is genuinely a `feat`/`fix` yet still not user-facing do you add a
-    `Changelog: skip` trailer. Changes under `.github/` almost never need one.
+*   **Only `feat`/`fix` are gated.** Everything else — `docs`, `chore`, `ci`
+    (workflows), `build`, `style`, `refactor` — is exempt; just use the honest
+    type. A `feat`/`fix` that genuinely isn't user-facing takes a
+    `Changelog: skip` trailer.
 *   **Never hand-edit `CHANGELOG.md`** (changie assembles it), and never bypass
     the gate with `git commit --no-verify`. Releases at or before v0.7.7 are
     frozen as `.changes/v*.md` files; don't rewrite them.
