@@ -23,8 +23,9 @@ time. `docs/changelog.md` is a one-line snippet include of `CHANGELOG.md`.
     ```
 
     `-k` takes the lowercase kind **key** (not the label): `added`, `changed`,
-    `fixed`, `breaking`, `removed`, `deprecated`, `security`. The release notes
-    render the label (`### Added`, `### Breaking Changes`).
+    `fixed`, `breaking`, `removed`, `deprecated`, `security`, `dependencies`. The
+    release notes render the label (`### Added`, `### Breaking Changes`). Use
+    `dependencies` for dependency-version bumps (renders under `### Dependencies`).
 
     That is the changie binary, so it behaves the same under PowerShell, bash,
     or sh. The gate itself runs automatically at commit time (the `check-changie`

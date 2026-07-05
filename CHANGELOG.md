@@ -14,6 +14,12 @@ notice. For the full history, see git.
 
 - Keep issue-table columns aligned when a summary contains an inline-code span.
 
+### Dependencies
+
+- Update gechr/clib to v0.5.9
+- Update gechr/clive to v0.2.6
+- Update gechr/clog to v0.11.15
+- Update gechr/x to v0.2.8
 
 ## [0.7.6](https://github.com/matcra587/jira-cli/releases/tag/v0.7.6) — 2026-07-04
 
@@ -28,6 +34,13 @@ notice. For the full history, see git.
 - Pad status pills to a uniform width down the column.
 - Show an unassigned issue as `unassigned` rather than a raw `map[]`.
 
+### Dependencies
+
+- Update gechr/primer to v0.1.1
+- Update gechr/x to v0.2.4
+- Update bubbletea to v2.0.8
+- Update lipgloss to v2.0.5
+- Update google/uuid to v1.6.0
 
 ## [0.7.5](https://github.com/matcra587/jira-cli/releases/tag/v0.7.5) — 2026-07-03
 
@@ -91,6 +104,13 @@ notice. For the full history, see git.
 - Update the CLI in place with channel-aware self-update.
 - Print a bare version for humans, with a `--detailed` build block.
 
+### Dependencies
+
+- Update gechr/clib to v0.5.8
+- Update gechr/clive to v0.2.4
+- Update gechr/clog to v0.11.12
+- Update gechr/primer to v0.0.16
+- Update gechr/x to v0.1.14
 
 ## [0.6.4](https://github.com/matcra587/jira-cli/releases/tag/v0.6.4) — 2026-06-30
 
@@ -114,6 +134,15 @@ notice. For the full history, see git.
 
 - Handle ADF that Jira rejects with `INVALID_INPUT`.
 
+### Dependencies
+
+- Update gechr/clib to v0.5.4
+- Update gechr/clog to v0.11.2
+- Update gechr/x to v0.1.4
+- Update glamour to v2.0.1
+- Update koanf to v2.3.5
+- Update lipgloss to v2.0.4
+- Update golang.org/x/sync to v0.21.0
 
 ## [0.6.0](https://github.com/matcra587/jira-cli/releases/tag/v0.6.0) — 2026-06-10
 
@@ -121,6 +150,10 @@ notice. For the full history, see git.
 
 - Rebuild the TUI as a section-based dashboard, with context-aware JQL autocomplete drawn from the instance's own metadata.
 
+### Dependencies
+
+- Update bubbletea to v2.0.7
+- Update glamour to v2.0.0
 
 ## [0.5.1](https://github.com/matcra587/jira-cli/releases/tag/v0.5.1) — 2026-06-09
 
@@ -159,6 +192,11 @@ notice. For the full history, see git.
 
 - Write machine-mode error envelopes to stdout with a clean message.
 
+### Dependencies
+
+- Update gechr/clib to v0.5.2
+- Update gechr/clog to v0.10.2
+- Update gechr/x to v0.0.10
 
 ## [0.3.3](https://github.com/matcra587/jira-cli/releases/tag/v0.3.3) — 2026-06-03
 
@@ -166,6 +204,10 @@ notice. For the full history, see git.
 
 - Complete `--status`, `--priority`, `--assignee`, and `--columns` from cached metadata in the shell.
 - Validate JQL against Jira's parser (`jql validate`), list instance JQL metadata (`jql reference`), count approximate matches (`--count`), and page `search jql` with `--all`/`--limit`/`--unbounded`.
+
+### Security
+
+- Rebuild with Go 1.26.4 to clear two standard-library advisories on the HTTPS path to Jira: GO-2026-5039 (`net/textproto`) and GO-2026-5037 (`crypto/x509`).
 
 
 ## [0.3.2](https://github.com/matcra587/jira-cli/releases/tag/v0.3.2) — 2026-06-01
@@ -200,6 +242,11 @@ notice. For the full history, see git.
 - Apply `--order-by` to a custom `--jql` query.
 - Write config through a symlinked file instead of clobbering it.
 
+### Dependencies
+
+- Update gechr/clib to v0.4.15
+- Update gechr/clog to v0.9.8
+- Update gechr/x to v0.0.8
 
 ## [0.2.0](https://github.com/matcra587/jira-cli/releases/tag/v0.2.0) — 2026-05-29
 
@@ -207,6 +254,9 @@ notice. For the full history, see git.
 
 - Fan out multi-key operations with bounded parallelism.
 
+### Dependencies
+
+- Update golang.org/x/sync to v0.20.0
 
 ## [0.1.2](https://github.com/matcra587/jira-cli/releases/tag/v0.1.2) — 2026-05-28
 
