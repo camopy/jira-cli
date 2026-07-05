@@ -38,6 +38,7 @@ nav = [
         { Worklog = "worklog.md" },
         { Epics = "epic.md" },
         { Aliases = "alias.md" },
+        { "Release notes" = "release-notes.md" },
     ] },
     { Concepts = [
         { "Output & exit codes" = "output.md" },
