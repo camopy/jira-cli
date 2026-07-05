@@ -12,9 +12,6 @@ func TestBuildResultFull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("full: %v", err)
 	}
-	if res.Version != "" {
-		t.Fatalf("full changelog should have no single version, got %q", res.Version)
-	}
 	if !strings.Contains(res.Markdown, changelog.Header()) {
 		t.Fatal("full markdown should include the header")
 	}
@@ -33,11 +30,11 @@ func TestBuildResultLatest(t *testing.T) {
 		t.Fatalf("latest: %v", err)
 	}
 	newest := changelog.Releases()[0]
-	if res.Version != newest.Version {
-		t.Fatalf("latest: want %q got %q", newest.Version, res.Version)
-	}
 	if len(res.Releases) != 1 {
 		t.Fatalf("latest should list one release, got %d", len(res.Releases))
+	}
+	if res.Releases[0].Version != newest.Version {
+		t.Fatalf("latest: want %q got %q", newest.Version, res.Releases[0].Version)
 	}
 	if res.Markdown != newest.Markdown {
 		t.Fatal("latest markdown should be the newest release's notes")
@@ -48,9 +45,6 @@ func TestBuildResultSingleVersion(t *testing.T) {
 	res, err := buildResult("0.3.3", false)
 	if err != nil {
 		t.Fatalf("single: %v", err)
-	}
-	if res.Version != "0.3.3" {
-		t.Fatalf("want version 0.3.3, got %q", res.Version)
 	}
 	if len(res.Releases) != 1 || res.Releases[0].Version != "0.3.3" {
 		t.Fatalf("single should list only 0.3.3: %+v", res.Releases)
@@ -68,8 +62,8 @@ func TestBuildResultVPrefixTolerated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("v-prefixed: %v", err)
 	}
-	if res.Version != "0.3.3" {
-		t.Fatalf("want 0.3.3, got %q", res.Version)
+	if len(res.Releases) != 1 || res.Releases[0].Version != "0.3.3" {
+		t.Fatalf("want 0.3.3, got %+v", res.Releases)
 	}
 }
 

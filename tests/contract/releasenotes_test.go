@@ -36,10 +36,11 @@ func TestReleaseNotesFullJSON(t *testing.T) {
 	}
 	data, _ := envel["data"].(map[string]any)
 
-	if v, ok := data["version"].(string); ok && v != "" {
-		t.Fatalf("full changelog should carry no single version, got %q", v)
+	// The payload is just the releases list — no redundant top-level version
+	// and no raw markdown blob.
+	if _, ok := data["version"]; ok {
+		t.Fatal("JSON output should not carry a top-level version field")
 	}
-	// JSON is structured, not a Markdown blob.
 	if _, ok := data["markdown"]; ok {
 		t.Fatal("JSON output should not carry a raw markdown blob")
 	}
@@ -86,11 +87,13 @@ func TestReleaseNotesLatestJSON(t *testing.T) {
 		t.Fatalf("parse envelope: %v\n%s", err, out)
 	}
 	data, _ := envel["data"].(map[string]any)
-	if v, _ := data["version"].(string); v == "" {
-		t.Fatal("--latest should carry the newest version")
-	}
-	if releases, _ := data["releases"].([]any); len(releases) != 1 {
+	releases, _ := data["releases"].([]any)
+	if len(releases) != 1 {
 		t.Fatalf("--latest should return exactly one release, got %d", len(releases))
+	}
+	rel, _ := releases[0].(map[string]any)
+	if v, _ := rel["version"].(string); v == "" {
+		t.Fatal("--latest release should carry its version")
 	}
 }
 
@@ -107,9 +110,6 @@ func TestReleaseNotesSingleVersion(t *testing.T) {
 		t.Fatalf("parse envelope: %v\n%s", err, out)
 	}
 	data, _ := envel["data"].(map[string]any)
-	if data["version"] != "0.3.3" {
-		t.Fatalf("data.version: want 0.3.3 got %v", data["version"])
-	}
 	releases, _ := data["releases"].([]any)
 	if len(releases) != 1 {
 		t.Fatalf("single version should return exactly one release, got %d", len(releases))

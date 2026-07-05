@@ -90,7 +90,6 @@ func buildResult(query string, latest bool) (cli.ReleaseNotesResult, error) {
 // single wraps one release as a result whose Markdown is just that release.
 func single(r changelog.Release) cli.ReleaseNotesResult {
 	return cli.ReleaseNotesResult{
-		Version:  r.Version,
 		Releases: []changelog.Release{r},
 		Markdown: r.Markdown,
 	}

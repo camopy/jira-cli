@@ -13,14 +13,12 @@ import (
 
 // ReleaseNotesResult is the envelope payload for `jira release-notes`: jira-cli's
 // own embedded changelog. Releases carries the structured notes (newest first, or
-// a single release when one is requested) and is what JSON consumers read.
-// Markdown drives the human renderer and is excluded from JSON. It is shared with
-// the releasenotes command package, which builds it, so the JSON envelope and the
-// human renderer agree on one shape.
+// a single release when one is requested) and is what JSON consumers read — for a
+// single release or --latest it holds one entry, so `.releases[0]` is that
+// release. Markdown drives the human renderer and is excluded from JSON. It is
+// shared with the releasenotes command package, which builds it, so the JSON
+// envelope and the human renderer agree on one shape.
 type ReleaseNotesResult struct {
-	// Version is the single release these notes are for, empty when the payload
-	// is the full changelog.
-	Version  string              `json:"version,omitempty"`
 	Releases []changelog.Release `json:"releases"`
 	// Markdown is the notes to display in human output; excluded from JSON,
 	// where Releases is the structured form.

@@ -13,7 +13,6 @@ import (
 func releaseNotesFixture() ReleaseNotesResult {
 	md := "## [0.3.3](https://example/tag/v0.3.3) — 2026-06-03\n\n### Added\n\n- A thing\n"
 	return ReleaseNotesResult{
-		Version:  "0.3.3",
 		Markdown: md,
 		Releases: []changelog.Release{{
 			Version:  "0.3.3",
