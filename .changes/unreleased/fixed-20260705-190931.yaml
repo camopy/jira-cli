@@ -1,0 +1,3 @@
+kind: fixed
+body: search jql/saved --fields now narrows the flat per-issue summary projection instead of silently switching the issues array to Jira's raw wire shape; --full remains the raw-record mode
+time: 2026-07-05T19:09:31.7895532-04:00

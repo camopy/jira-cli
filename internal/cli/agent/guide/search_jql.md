@@ -11,9 +11,9 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 
 # field set
 - Default summary set per row.
-- Wire-shape `fields:["*all"]`: `--full`.
-- Explicit selector: `--fields key,summary,customfield_10010`.
-- Jira may still omit fields the endpoint, token, project, or field screen does not expose. Always inspect the returned `data.issues[].fields` shape; do not infer that a missing requested field exists with an empty value.
+- Wire-shape `fields:["*all"]` (raw records with a nested `fields` object): `--full`.
+- Explicit selector: `--fields key,summary,customfield_10010` — trims the flat summary rows, never switches the shape. Summary fields keep their default names and types (`status` stays the flat string plus `status_category`); a requested field outside the summary set rides top-level under its Jira id with the wire value.
+- Jira may still omit fields the endpoint, token, project, or field screen does not expose. Under `--fields` a missing field is `null` in the row; under `--full` inspect the returned `data.issues[].fields` shape. Do not infer that a missing requested field exists with an empty value.
 - Note `--detail` is NOT accepted on `search jql` / `search saved` — that flag belongs to → `list_issues`.
 
 # preview without calling Jira
@@ -111,7 +111,7 @@ When: a query goes beyond what `issue list` flags can express, a stored query ha
 | Exit `3`, `issue key expansion exceeds maximum of 1000 keys` | `--key` expanded past the local safety cap | Split the key set into smaller builder/list invocations, or use project/JQL filters for discovery |
 | Exit `3`, Jira `400` on unknown function/field | Hand-authored JQL references a field/function this instance does not expose | Cross-check operators, keywords, functions in → `jql_reference` |
 | Zero `data.issues[]` | Query is well-formed but matches nothing | Loosen the JQL; reconfirm `project`/`assignee` values |
-| Requested field is absent/null | Jira did not return that field despite `--fields` / `--full` | Trust the live `fields` object; use available summary fields, or verify the field via Jira UI/API permissions before depending on it |
+| Requested field is absent/null | Jira did not return that field despite `--fields` / `--full` | Trust the returned row (`--fields`) or `fields` object (`--full`); use available summary fields, or verify the field via Jira UI/API permissions before depending on it |
 
 **Next**
 - Then: → `read_issue` on any captured key for the typed envelope.

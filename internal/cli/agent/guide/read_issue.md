@@ -36,13 +36,13 @@ When: known issue keys need full payloads for downstream reasoning — transitio
 - `issue view` does not have a separate raw REST passthrough mode; the command's normal JSON payload is already the Jira issue object wrapped by the CLI envelope.
 - To get an issue's browse URL without fetching the whole object, `jira open KEY` (or `jira issue view KEY --web`) reports it at `data.url`, built offline from the profile base URL with no Jira call. The browser is launched only in an interactive session — never for an agent or piped stdin — so the URL stays usable headless.
 - `issue view` and `issue list` do not have a `--fields` flag. Their default field sets can omit `issuetype`; absence means the field was not returned, not that the issue has no type.
-- For the type catalog (`Bug`, `Epic`, `Task`, etc.), use → `cache_metadata` (`jira cache issuetypes`). Use `search jql --fields issuetype` only when you need the actual type of one existing issue, and verify the returned `fields` object because Jira may omit requested fields.
+- For the type catalog (`Bug`, `Epic`, `Task`, etc.), use → `cache_metadata` (`jira cache issuetypes`). Use `search jql --fields issuetype` only when you need the actual type of one existing issue, and verify the returned value — the row carries `issuetype` top-level, `null` when Jira omits it.
 
 | Field                              | Typed JSON     |
 |------------------------------------|----------------|
 | `parent`                           | `data.issue.fields.parent` when Jira returns it |
 | `subtasks`                         | `data.issue.fields.subtasks` when Jira returns it |
-| `issuetype.name` from `search jql --fields issuetype` | `data.issues[].fields.issuetype.name` when Jira returns it |
+| `issuetype.name` from `search jql --fields issuetype` | `data.issues[].issuetype.name` when Jira returns it |
 
 - Because `issue view` preserves Jira's issue shape, absence of a key means Jira did not return it for the requested field set/token, not that the CLI projected it away.
 
@@ -54,7 +54,7 @@ When: known issue keys need full payloads for downstream reasoning — transitio
 | Exit `3`, `issue key expansion exceeds maximum of 1000 keys` | A list or range expanded past the local safety cap | Split the range into smaller invocations or discover keys with → `list_issues` / → `search_jql` first |
 | `parallelism must be between 1 and 16` | `-p` / `--parallelism` was outside the supported bound | Re-run with `-p 1` through `-p 16` |
 | `parent` / `subtasks` absent from JSON | Jira did not include that field in the returned issue object | Cross-check field visibility/scopes or use → `search_jql` with explicit fields |
-| `issuetype.name` / `created` absent/null | The default field set did not include it, or Jira did not expose it even after an explicit selector | Try → `search_jql` with `--fields` / `--full`; if the returned `fields` object is still empty, report the field as unavailable instead of guessing |
+| `issuetype.name` / `created` absent/null | The default field set did not include it, or Jira did not expose it even after an explicit selector | Try → `search_jql` with `--fields` / `--full`; if the returned row (`--fields`) or `fields` object (`--full`) still lacks it, report the field as unavailable instead of guessing |
 
 **Next**
 - Then: → `list_comments` to read the discussion thread on the same key.

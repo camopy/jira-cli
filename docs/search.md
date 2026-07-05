@@ -69,27 +69,45 @@ table use [`issue list`](issue/read.md#list) on the same JQL; for structure use
 
 ### Projection shapes
 
-With `--fields key,summary,status` the issues array switches to the raw Jira
-REST shape — each issue carries `id`, `key`, `self`, and a nested `fields`
-object holding only the requested keys:
+`--fields` keeps the flat summary shape and trims it to the requested fields;
+`key` always stays as the row identity. Summary fields keep the names and
+types the default projection publishes — requesting `status` still yields the
+flat `status` string with `status_category` (and `status_color`) alongside,
+never a nested status object:
 
 ```json
 {
   "issues": [
     {
-      "id": "10401",
       "key": "PROJ-123",
-      "self": "https://example.atlassian.net/rest/api/3/issue/10401",
-      "fields": {
-        "status": { "name": "To Do" },
-        "summary": "Checkout returns 500 on empty cart"
-      }
+      "summary": "Checkout returns 500 on empty cart",
+      "status": "To Do",
+      "status_category": "new",
+      "status_color": "blue-gray"
     }
   ]
 }
 ```
 
-`--full` asks for `*all` and returns every field on each issue — status,
+A requested field outside the summary set — `issuetype`, `labels`, a
+`customfield_*` id — rides top-level under its Jira id carrying the wire
+value, or `null` when Jira does not return it:
+
+```json
+{
+  "issues": [
+    {
+      "key": "PROJ-123",
+      "issuetype": { "name": "Bug" },
+      "customfield_10010": "Sprint 5"
+    }
+  ]
+}
+```
+
+`--full` is the only mode that switches to the raw Jira REST shape — each
+issue carries `id`, `key`, `self`, and a nested `fields` object. It asks for
+`*all` and returns every field on each issue — status,
 priority, reporter, description ADF, the comment block, the worklog, and every
 `customfield_*` on the project. This is **not** the same as
 [`issue view`](issue/read.md#view): `view` has no projection flag and returns a

@@ -90,7 +90,7 @@ $ jira search jql "project = PROJ AND status != Done" --fields key,summary,statu
 					if err != nil {
 						return err
 					}
-					data := map[string]any{"source": "inline", "jql": args[0], "issues": cmdutil.IssueOutput(issues, detail)}
+					data := map[string]any{"source": "inline", "jql": args[0], "issues": searchIssueOutput(issues, fields, detail)}
 					// The drain knows its terminal state: the result set is
 					// complete unless a bound truncated it. /search/jql has no
 					// reliable total, so report the count we actually hold —
@@ -116,7 +116,7 @@ $ jira search jql "project = PROJ AND status != Done" --fields key,summary,statu
 				if err != nil {
 					return err
 				}
-				return cmdutil.WriteEnvelopeWithResponse(cmd, "search.jql", map[string]any{"source": "inline", "jql": args[0], "issues": cmdutil.IssueOutput(found2, detail)}, resp)
+				return cmdutil.WriteEnvelopeWithResponse(cmd, "search.jql", map[string]any{"source": "inline", "jql": args[0], "issues": searchIssueOutput(found2, fields, detail)}, resp)
 			}
 			return cmdutil.WriteEnvelope(cmd, "search.jql", map[string]any{
 				"source": "inline",
@@ -186,7 +186,7 @@ $ jira search saved my-open-bugs --output=json`,
 				if err != nil {
 					return err
 				}
-				issues = cmdutil.IssueOutput(found, detail)
+				issues = searchIssueOutput(found, fields, detail)
 			}
 			data := map[string]any{
 				"source":      "saved",
@@ -206,7 +206,7 @@ $ jira search saved my-open-bugs --output=json`,
 
 func addSearchOutputFlags(cmd *cobra.Command, opts *searchOptions) {
 	fs := cmd.Flags()
-	cmdutil.AddStringSliceVar(fs, &opts.fields, "fields", nil, "Issue fields to request from Jira, comma-separated [example: summary,status,assignee]", clib.FlagExtra{Group: "Output", Placeholder: "FIELD", Complete: "predictor=cachefield,comma"})
+	cmdutil.AddStringSliceVar(fs, &opts.fields, "fields", nil, "Narrow each issue to these fields, comma-separated [example: summary,status,assignee]", clib.FlagExtra{Group: "Output", Placeholder: "FIELD", Complete: "predictor=cachefield,comma"})
 	cmdutil.AddBoolVar(fs, &opts.full, "full", false, "Request Jira's full issue payload (`*all` fields)", clib.FlagExtra{Group: "Output"})
 	cmdutil.AddBoolVar(fs, &opts.web, "web", false, "Open the query in a browser instead of printing results", clib.FlagExtra{Group: "Output"})
 	cmd.MarkFlagsMutuallyExclusive("fields", "full")
@@ -302,7 +302,18 @@ func searchOutputFields(opts searchOptions) ([]string, bool, error) {
 		return []string{"*all"}, true, nil
 	}
 	if len(fields) > 0 {
-		return fields, true, nil
+		return fields, false, nil
 	}
 	return jira.DefaultIssueListFields(), false, nil
+}
+
+// searchIssueOutput renders issues for the envelope. --full returns the raw
+// wire records; every other path — default and --fields alike — projects the
+// compact summary shape narrowed to the requested fields, so a field selector
+// can never silently change the output contract.
+func searchIssueOutput(issues []*jira.Issue, fields []string, detail bool) any {
+	if detail {
+		return issues
+	}
+	return cmdutil.IssueOutputFields(issues, fields)
 }
