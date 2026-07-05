@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - 'docs/**'
+      - 'CHANGELOG.md'
+      - '.changes/**'
       - 'zensical.toml'
       - '.github/workflows/docs.yml'
       - '.mise.toml'
