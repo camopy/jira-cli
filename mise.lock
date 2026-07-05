@@ -53,6 +53,38 @@ checksum = "sha256:210852dc72b037422fafb1d053209b352d271300473c7dafca2560cef68eb
 url = "https://github.com/betterleaks/betterleaks/releases/download/v1.5.0/betterleaks_1.5.0_windows_x64.zip"
 provenance = "cosign"
 
+[[tools.changie]]
+version = "1.25.0"
+backend = "aqua:miniscruff/changie"
+
+[tools.changie."platforms.linux-arm64"]
+checksum = "sha256:26345ccf8b9ded9bb6663faf8eb3518b5fff746db9f4422a653271f8ebfb03c0"
+url = "https://github.com/miniscruff/changie/releases/download/v1.25.0/changie_1.25.0_linux_arm64.tar.gz"
+
+[tools.changie."platforms.linux-arm64-musl"]
+checksum = "sha256:26345ccf8b9ded9bb6663faf8eb3518b5fff746db9f4422a653271f8ebfb03c0"
+url = "https://github.com/miniscruff/changie/releases/download/v1.25.0/changie_1.25.0_linux_arm64.tar.gz"
+
+[tools.changie."platforms.linux-x64"]
+checksum = "sha256:f8c012073cd7865783d6db5123c59cdc006b2244309ce80243c8f6a1dda7aa5a"
+url = "https://github.com/miniscruff/changie/releases/download/v1.25.0/changie_1.25.0_linux_amd64.tar.gz"
+
+[tools.changie."platforms.linux-x64-musl"]
+checksum = "sha256:f8c012073cd7865783d6db5123c59cdc006b2244309ce80243c8f6a1dda7aa5a"
+url = "https://github.com/miniscruff/changie/releases/download/v1.25.0/changie_1.25.0_linux_amd64.tar.gz"
+
+[tools.changie."platforms.macos-arm64"]
+checksum = "sha256:2bb82efe29506391cb39f346c75e71a4a2dff159fb7b641d16939476f6abde59"
+url = "https://github.com/miniscruff/changie/releases/download/v1.25.0/changie_1.25.0_darwin_arm64.tar.gz"
+
+[tools.changie."platforms.macos-x64"]
+checksum = "sha256:e9a0931d1850200c647ea5721d4a1289ae2bb7c03e1995770cabf10c94324387"
+url = "https://github.com/miniscruff/changie/releases/download/v1.25.0/changie_1.25.0_darwin_amd64.tar.gz"
+
+[tools.changie."platforms.windows-x64"]
+checksum = "sha256:504958fd7ece0303a2ef876ecc3bd60903f0e4f8cda008117683b8ed4ff97d38"
+url = "https://github.com/miniscruff/changie/releases/download/v1.25.0/changie_1.25.0_windows_amd64.zip"
+
 [[tools.cosign]]
 version = "3.0.6"
 backend = "aqua:sigstore/cosign"
@@ -190,6 +222,45 @@ url = "https://github.com/jdx/hk/releases/download/v1.49.0/hk-aarch64-apple-darw
 [tools.hk."platforms.windows-x64"]
 checksum = "sha256:6048c968aa200d6629050aeff0580e6dfe3235126b7f0beaa182076e9b59aef8"
 url = "https://github.com/jdx/hk/releases/download/v1.49.0/hk-x86_64-pc-windows-msvc.zip"
+
+[[tools.jq]]
+version = "1.8.1"
+backend = "aqua:jqlang/jq"
+
+[tools.jq."platforms.linux-arm64"]
+checksum = "sha256:6bc62f25981328edd3cfcfe6fe51b073f2d7e7710d7ef7fcdac28d4e384fc3d4"
+url = "https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-linux-arm64"
+provenance = "github-attestations"
+
+[tools.jq."platforms.linux-arm64-musl"]
+checksum = "sha256:6bc62f25981328edd3cfcfe6fe51b073f2d7e7710d7ef7fcdac28d4e384fc3d4"
+url = "https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-linux-arm64"
+provenance = "github-attestations"
+
+[tools.jq."platforms.linux-x64"]
+checksum = "sha256:020468de7539ce70ef1bceaf7cde2e8c4f2ca6c3afb84642aabc5c97d9fc2a0d"
+url = "https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-linux-amd64"
+provenance = "github-attestations"
+
+[tools.jq."platforms.linux-x64-musl"]
+checksum = "sha256:020468de7539ce70ef1bceaf7cde2e8c4f2ca6c3afb84642aabc5c97d9fc2a0d"
+url = "https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-linux-amd64"
+provenance = "github-attestations"
+
+[tools.jq."platforms.macos-arm64"]
+checksum = "sha256:a9fe3ea2f86dfc72f6728417521ec9067b343277152b114f4e98d8cb0e263603"
+url = "https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-macos-arm64"
+provenance = "github-attestations"
+
+[tools.jq."platforms.macos-x64"]
+checksum = "sha256:e80dbe0d2a2597e3c11c404f03337b981d74b4a8504b70586c354b7697a7c27f"
+url = "https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-macos-amd64"
+provenance = "github-attestations"
+
+[tools.jq."platforms.windows-x64"]
+checksum = "sha256:23cb60a1354eed6bcc8d9b9735e8c7b388cd1fdcb75726b93bc299ef22dd9334"
+url = "https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-windows-amd64.exe"
+provenance = "github-attestations"
 
 [[tools.pkl]]
 version = "0.31.1"

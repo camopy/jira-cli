@@ -62,6 +62,14 @@ hooks {
             ["betterleaks"] = new Step {
                 check = "betterleaks stdin --no-banner < {{commit_msg_file}}"
             }
+            // A feat/fix must ship a changie fragment (or an explicit
+            // `Changelog: skip` trailer) so nothing user-facing is missed from
+            // the release notes. Routed through the mise task (a cross-platform
+            // Go program — see tasks.toml) so it stays discoverable in
+            // `mise tasks`.
+            ["check-changie"] = new Step {
+                check = "mise run check-changie {{commit_msg_file}}"
+            }
         }
     }
 }

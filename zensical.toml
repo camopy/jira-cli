@@ -47,6 +47,7 @@ nav = [
     ] },
     { "For agents" = "agent.md" },
     { Troubleshooting = "troubleshooting.md" },
+    { "Release Notes" = "changelog.md" },
     # >>> gen-docs:reference-nav (generated — do not edit by hand)
     { Reference = [
         { "jira" = [

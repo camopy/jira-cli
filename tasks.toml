@@ -196,3 +196,16 @@ run = "rm -rf bin dist coverage.out"
 description = "Print build version info"
 quiet = true
 file = ".mise/tasks/version"
+
+["check-changie"]
+description = "Fail a feat/fix commit that ships no changelog fragment"
+usage = 'arg "<commit_msg_file>" help="Path to the commit message file to check"'
+run = "go run ./cmd/check-changie {{usage.commit_msg_file}}"
+
+["release-notes"]
+description = "Batch unreleased fragments into a version and regenerate the changelog"
+usage = 'arg "<version>" help="Release version, e.g. v0.7.8"'
+run = [
+    "changie batch {{usage.version}}",
+    "changie merge",
+]

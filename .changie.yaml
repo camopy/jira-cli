@@ -1,0 +1,40 @@
+changesDir: .changes
+unreleasedDir: unreleased
+headerPath: header.tpl.md
+changelogPath: CHANGELOG.md
+versionExt: md
+versionFormat: '## [{{.VersionNoPrefix}}](https://github.com/matcra587/jira-cli/releases/tag/{{.Version}}) — {{.Time.Format "2006-01-02"}}'
+kindFormat: '### {{.Kind}}'
+changeFormat: '- {{.Body}}'
+# Pre-1.0 semver: breaking changes bump minor (0.x.0), never major — nothing
+# here declares 1.0.0 automatically. `auto` only applies to `changie batch
+# auto`; explicit `changie batch vX.Y.Z` ignores it.
+kinds:
+    - label: Breaking Changes
+      key: breaking
+      auto: minor
+    - label: Added
+      key: added
+      auto: minor
+    - label: Changed
+      key: changed
+      auto: patch
+    - label: Fixed
+      key: fixed
+      auto: patch
+    - label: Removed
+      key: removed
+      auto: minor
+    - label: Deprecated
+      key: deprecated
+      auto: patch
+    - label: Security
+      key: security
+      auto: patch
+newlines:
+    afterChangelogHeader: 1
+    beforeChangelogVersion: 1
+    beforeKind: 1
+    afterKind: 1
+    endOfVersion: 1
+envPrefix: CHANGIE_

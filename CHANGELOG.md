@@ -1,0 +1,235 @@
+# Release Notes
+
+What's changed in jira-cli, newest first — the things people using it will
+notice. For the full history, see git.
+
+
+## [0.7.7](https://github.com/matcra587/jira-cli/releases/tag/v0.7.7) — 2026-07-05
+
+### Changed
+
+- Detect grapheme-clustering terminals through emulator markers (Ghostty, WezTerm, foot, Contour, Windows Terminal); kitty now measures width by wcwidth, correcting its column drift.
+
+### Fixed
+
+- Keep issue-table columns aligned when a summary contains an inline-code span.
+
+
+## [0.7.6](https://github.com/matcra587/jira-cli/releases/tag/v0.7.6) — 2026-07-04
+
+### Added
+
+- Author Jira checklists from Markdown task lists (`- [ ]` / `- [x]`); the ADF support matrix now covers every node and mark of the pinned Atlassian schema.
+- Teach a foreign flag carried over from another Jira CLI, pointing at this CLI's equivalent instead of rejecting it bare.
+
+### Fixed
+
+- Align issue tables on grapheme-clustering terminals (Ghostty, WezTerm, foot) when a summary contains emoji.
+- Pad status pills to a uniform width down the column.
+- Show an unassigned issue as `unassigned` rather than a raw `map[]`.
+
+
+## [0.7.5](https://github.com/matcra587/jira-cli/releases/tag/v0.7.5) — 2026-07-03
+
+### Added
+
+- Accept native Jira REST payloads on `create`, `edit`, `transition`, and `link` via `--json-input`.
+- Render bulk operations as a live per-key block.
+
+### Changed
+
+- Validate `--dry-run` against the server and report only the checks it actually ran.
+- Emit pagination as a single canonical block with resumable cursors.
+
+### Fixed
+
+- Resolve numeric transition targets against the live transition list under `--dry-run`.
+
+
+## [0.7.4](https://github.com/matcra587/jira-cli/releases/tag/v0.7.4) — 2026-07-03
+
+### Added
+
+- Carry a comment and field edits atomically with a transition's status change.
+- Resolve names and emails to Jira account identities with `user search`.
+
+
+## [0.7.3](https://github.com/matcra587/jira-cli/releases/tag/v0.7.3) — 2026-07-03
+
+### Added
+
+- Read Markdown bodies from a file or stdin via `--markdown-file`, unified under a single `--markdown` flag.
+- Accept both `--json-input` payload shapes on `create` and `edit`.
+
+### Changed
+
+- Normalize pasted Jira wiki markup before Markdown conversion.
+- Abort strict ADF mode on content loss only, not on decoration or placement.
+- Treat the wire and alias spellings of the project field as one.
+
+
+## [0.7.2](https://github.com/matcra587/jira-cli/releases/tag/v0.7.2) — 2026-07-03
+
+### Added
+
+- Author ADF ahead of submission with standalone `adf convert` and `adf render` commands.
+- Return native ADF bodies from `comment list` for lossless reuse.
+- Convert GFM tables, blockquotes, and images (as alt-text links) during Markdown conversion, with source-mapped diagnostics.
+
+
+## [0.7.1](https://github.com/matcra587/jira-cli/releases/tag/v0.7.1) — 2026-07-03
+
+### Fixed
+
+- Fail closed on an unknown or incomplete `--profile`.
+
+
+## [0.7.0](https://github.com/matcra587/jira-cli/releases/tag/v0.7.0) — 2026-07-03
+
+### Added
+
+- Update the CLI in place with channel-aware self-update.
+- Print a bare version for humans, with a `--detailed` build block.
+
+
+## [0.6.4](https://github.com/matcra587/jira-cli/releases/tag/v0.6.4) — 2026-06-30
+
+### Added
+
+- Edit an issue description with `--description-markdown`.
+- Install on Windows via a published Scoop manifest.
+
+
+## [0.6.2](https://github.com/matcra587/jira-cli/releases/tag/v0.6.2) — 2026-06-18
+
+### Added
+
+- Auto-detect and support scoped (granular) API tokens.
+
+### Changed
+
+- Resolve config, cache, and query directories OS-natively.
+
+### Fixed
+
+- Handle ADF that Jira rejects with `INVALID_INPUT`.
+
+
+## [0.6.0](https://github.com/matcra587/jira-cli/releases/tag/v0.6.0) — 2026-06-10
+
+### Changed
+
+- Rebuild the TUI as a section-based dashboard, with context-aware JQL autocomplete drawn from the instance's own metadata.
+
+
+## [0.5.1](https://github.com/matcra587/jira-cli/releases/tag/v0.5.1) — 2026-06-09
+
+### Added
+
+- Warn on a successful response that is near the rate limit.
+
+
+## [0.5.0](https://github.com/matcra587/jira-cli/releases/tag/v0.5.0) — 2026-06-08
+
+### Added
+
+- Retry 429/503 responses within a bounded budget, honoring `Retry-After`, opt-in via `--max-retry-wait` and explained under `--debug`.
+
+
+## [0.4.1](https://github.com/matcra587/jira-cli/releases/tag/v0.4.1) — 2026-06-08
+
+### Added
+
+- Warm every cached resource in one pass with `cache refresh`, backed by a per-resource TTL ladder and versioned entries that self-invalidate on a shape change.
+
+
+## [0.4.0](https://github.com/matcra587/jira-cli/releases/tag/v0.4.0) — 2026-06-08
+
+### Added
+
+- Adapt output to the terminal background with an opt-in `auto` theme, honored across output and the dashboard.
+- Show progress feedback for blocking and fan-out operations.
+- Accept `-o` as shorthand for `--output`.
+
+### Changed
+
+- Colour issue-list status pills and the priority column.
+
+### Fixed
+
+- Write machine-mode error envelopes to stdout with a clean message.
+
+
+## [0.3.3](https://github.com/matcra587/jira-cli/releases/tag/v0.3.3) — 2026-06-03
+
+### Added
+
+- Complete `--status`, `--priority`, `--assignee`, and `--columns` from cached metadata in the shell.
+- Validate JQL against Jira's parser (`jql validate`), list instance JQL metadata (`jql reference`), count approximate matches (`--count`), and page `search jql` with `--all`/`--limit`/`--unbounded`.
+
+
+## [0.3.2](https://github.com/matcra587/jira-cli/releases/tag/v0.3.2) — 2026-06-01
+
+### Added
+
+- Filter `issue mine` with the full list surface, plus `--updated`/`--created`/`--resolved` date filters.
+
+
+## [0.3.1](https://github.com/matcra587/jira-cli/releases/tag/v0.3.1) — 2026-06-01
+
+### Fixed
+
+- Route config and credential writes through a symlink-aware atomic writer.
+
+
+## [0.3.0](https://github.com/matcra587/jira-cli/releases/tag/v0.3.0) — 2026-05-31
+
+### Added
+
+- Open issues and queries in the browser.
+- Transition by status name or positional target.
+- Filter status with JQL comparators and negation; select and order columns with `--columns` and `--tsv`; create issues with convenience flags.
+
+### Changed
+
+- Colour issue statuses by workflow category.
+- Require a 1Password vault and item on the headless login path, and validate the profile name at login.
+
+### Fixed
+
+- Apply `--order-by` to a custom `--jql` query.
+- Write config through a symlinked file instead of clobbering it.
+
+
+## [0.2.0](https://github.com/matcra587/jira-cli/releases/tag/v0.2.0) — 2026-05-29
+
+### Added
+
+- Fan out multi-key operations with bounded parallelism.
+
+
+## [0.1.2](https://github.com/matcra587/jira-cli/releases/tag/v0.1.2) — 2026-05-28
+
+### Added
+
+- Accept issue-key ranges (`PROJ-1..PROJ-5`).
+
+
+## [0.1.1](https://github.com/matcra587/jira-cli/releases/tag/v0.1.1) — 2026-05-27
+
+### Fixed
+
+- Render agent human output as styled JSON.
+
+
+## [0.1.0](https://github.com/matcra587/jira-cli/releases/tag/v0.1.0) — 2026-05-27
+
+Initial release — a Jira Cloud CLI built for developer and agent workflows.
+
+### Added
+
+- Log in to Jira Cloud with an API token, credentials keyed per site.
+- Read, create, edit, and mutate issues, with an honest `--dry-run`.
+- Emit machine output modes with agent detection, typed command-line parse failures, and an actionable hint on every Jira failure.
+- Validate and preserve submitted ADF, and validate custom fields against the Jira screen schema.
+- Page and query with truthful JQL, backed by a site-isolated metadata cache.

@@ -21,6 +21,7 @@ respect_gitignore = true
 exclude = [
     ".git",
     ".agents",
+    ".changes",
     ".claude",
     ".github",
     "build",
