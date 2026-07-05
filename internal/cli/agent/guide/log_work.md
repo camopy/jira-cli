@@ -8,14 +8,14 @@ When: time spent on an issue must be recorded against its worklog for sprint rep
 - `--time-spent <duration>` — accepts `1d 2h 30m`-style strings; `1d` resolves via the per-profile `workday_seconds` (default 28,800 = 8h).
 
 # optional metadata
-- `--started <RFC3339>` — backdate or pin a start time; otherwise Jira stamps "now".
+- `--started <TIME>` — backdate or pin a start time; otherwise Jira stamps "now". Accepts ISO-8601 (offset optional; a naive time resolves in the machine's local timezone) and relative forms (`now`, `yesterday`, `2h ago`). Every form is normalized to Jira's strict `yyyy-MM-dd'T'HH:mm:ss.SSS±HHMM` and validated locally, so a bad value fails `--dry-run` with exit 3 instead of the submit.
 - `--markdown "<text>"` (or `--markdown-file FILE`, - reads stdin) — worklog comment; markdown is lossy (see → `adf_reference`).
 - `--json-input <file>` — full payload, including ADF-bodied comment, for the lossless path.
 
 **Run**
 - Quick log: `jira worklog add KEY --time-spent 1h30m --output=json`
 - Bulk log: `jira worklog add <PROJECT_KEY>-1..10 -p 4 --time-spent 15m --markdown "triage" --output=json`
-- Backdated: `jira worklog add KEY --time-spent 2h --started 2026-05-04T09:00:00.000+0000 --output=json`
+- Backdated: `jira worklog add KEY --time-spent 2h --started 2026-05-04T09:00 --output=json` (or `--started "2h ago"`)
 - With markdown comment: `jira worklog add KEY --time-spent 45m --markdown "fixed bug X" --output=json`
 - Full payload (ADF comment supported): `jira worklog add KEY --json-input wl.json --output=json`
 - Read back: `jira worklog list KEY --output=json`
@@ -40,6 +40,7 @@ When: time spent on an issue must be recorded against its worklog for sprint rep
 | Symptom | Cause | Next |
 |---|---|---|
 | exit 3, `code: flag_value_invalid` on `--time-spent` | Duration string didn't parse (typo, unknown unit) | Re-run with a `d/h/m/s` combination |
+| exit 3, `validation: --started` | Start timestamp didn't parse | Re-run with ISO-8601 (`2026-05-04T09:00`) or a relative form (`yesterday`, `2h ago`) |
 | Unexpected `1d` totals | Profile `workday_seconds` differs from 8h | Check active profile (see → `auth_setup`) and recompute |
 
 **Next**

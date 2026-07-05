@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/matcra587/jira-cli/internal/adf"
@@ -92,6 +93,16 @@ $ jira worklog add PROJ-123 --json-input worklog.json --dry-run --output=json`,
 			if err != nil {
 				return err
 			}
+			// Normalize --started before the dry-run split so a value Jira
+			// would reject fails local validation (exit 3) instead of the
+			// submit, and the preview echoes the exact wire timestamp.
+			if started != "" {
+				normalized, err := jira.ParseStarted(started, time.Now(), time.Local)
+				if err != nil {
+					return fmt.Errorf("validation: --started: %w", err)
+				}
+				started = normalized
+			}
 			var comment *adf.Document
 			resolvedMarkdown, mdErr := cmdutil.ResolveMarkdownInput(commentMarkdown, commentMarkdownFile)
 			if mdErr != nil {
@@ -166,7 +177,7 @@ $ jira worklog add PROJ-123 --json-input worklog.json --dry-run --output=json`,
 	}
 	fs := cmd.Flags()
 	cmdutil.AddStringVar(fs, &timeSpent, "time-spent", "", "Human-readable time spent [example: 2h30m]", clib.FlagExtra{Group: "Worklog", Placeholder: "DURATION"})
-	cmdutil.AddStringVar(fs, &started, "started", "", "Worklog start timestamp", clib.FlagExtra{Group: "Worklog", Placeholder: "TIME"})
+	cmdutil.AddStringVar(fs, &started, "started", "", "Worklog start time: ISO-8601 (offset optional, local time assumed) or relative (`now`, `yesterday`, `2h ago`); omit to let Jira stamp now [example: 2026-06-26T10:00]", clib.FlagExtra{Group: "Worklog", Placeholder: "TIME"})
 	cmdutil.AddFileFlag(fs, &jsonInput, "json-input", "", "Read worklog payload from JSON file (canonical for agents)", "Input", "FILE")
 	cmdutil.AddDryRunFlag(fs, &dryRun, "Preview mutation without submitting")
 	cmdutil.AddMarkdownFlag(cmd, &commentMarkdown, &commentMarkdownFile, "Worklog comment as Markdown", "comment-markdown")

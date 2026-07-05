@@ -23,9 +23,19 @@ differs.
 ```sh
 jira worklog add PROJ-123 --time-spent "1h30m" --markdown "Investigating regression"
 jira worklog add PROJ-1..PROJ-10 -p 4 --time-spent "15m" --markdown "Bulk triage"
-jira worklog add PROJ-123 --time-spent "2h" --started "2026-05-27T09:00:00.000-0400"
+jira worklog add PROJ-123 --time-spent "2h" --started "2026-05-27T09:00"
+jira worklog add PROJ-123 --time-spent "2h" --started "2h ago"
 jira worklog add PROJ-123 --json-input worklog.json --dry-run
 ```
+
+`--started` backdates the entry. It takes ISO-8601 — an explicit offset is
+kept as given; a naive time (`2026-05-27T09:00`) resolves in the machine's
+local timezone — or a relative value (`now`, `yesterday`, `2h ago`). Every
+form is normalized to the strict `yyyy-MM-dd'T'HH:mm:ss.SSS±HHMM` shape Jira
+requires, and validation runs locally, so an unparseable value fails a
+`--dry-run` with exit `3` instead of surviving the preview and dying on
+submit. Omit the flag to let Jira stamp the current time. The same
+normalization applies to `started` inside `--json-input`.
 
 A live add returns `data.worklog` with Jira's `id`, `timeSpentSeconds`,
 `started`, and the ADF `comment`. A `--dry-run` runs the full pipeline (duration

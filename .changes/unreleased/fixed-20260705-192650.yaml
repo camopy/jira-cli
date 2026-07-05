@@ -1,0 +1,3 @@
+kind: fixed
+body: worklog add --started now accepts ISO-8601 and relative times (yesterday, 2h ago), normalizes them to the exact timestamp format Jira requires, and rejects unparseable values at --dry-run instead of on submit
+time: 2026-07-05T19:26:50.8895772-04:00
