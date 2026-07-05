@@ -36,3 +36,9 @@ Area-specific conventions auto-load from `.claude/rules/`.
 
 *   Conventional-commit PR titles (squash-merged); signed commits; `gh` CLI
     for PRs.
+*   **Changelog:** a user-facing `feat`/`fix` needs a changie fragment, created
+    **non-interactively** (you can't answer prompts) and staged before commit:
+    `changie new -k <added|changed|fixed> -b "<user outcome>" --interactive=false`
+    (lowercase kind key; also `breaking`, `removed`, `deprecated`, `security`).
+    The commit-msg hook enforces it; not user-facing → a `Changelog: skip`
+    commit trailer. Details in [.claude/rules/changelog.md](.claude/rules/changelog.md).

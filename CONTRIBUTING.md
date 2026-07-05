@@ -74,6 +74,31 @@ go test ./internal/adf/... -run TestValidate
 
 US spelling in code, comments, and identifiers: the linter's misspell rule is locale `US`, so British spellings (`behaviour`, `colour`) fail the build.
 
+## Changelog
+
+User-facing changes are recorded as small [changie](https://changie.dev) fragments — one file per change — and assembled into `CHANGELOG.md` at release time. This way the release notes never depend on anyone reconstructing them from the git log after the fact.
+
+If your change is something a user would notice (a new flag, changed output, a fixed bug), add a fragment as part of the change:
+
+```sh
+changie new
+```
+
+It prompts for a kind (`Added`, `Changed`, `Fixed`, …) and a one-line summary, then writes a file under `.changes/unreleased/`. Write the summary for the person reading the release notes — the user-visible outcome, not the commit subject — and stage it alongside your change.
+
+`.changes/unreleased/` is a staging area: fragments accumulate there, one per change, between releases. Cutting a release (`mise run release-notes <version>`) batches every pending fragment into a single dated `.changes/<version>.md` section and empties the directory — the `.gitkeep` just keeps it tracked while empty — and `changie merge` rebuilds `CHANGELOG.md` from the header and every version file. So a fragment is transient scaffolding that lives in `unreleased/` only until the next release folds it in.
+
+The commit-msg hook enforces this: a `feat` or `fix` commit with no staged fragment is rejected. If the change genuinely isn't user-facing (an internal refactor, a test-only fix, a GitHub Actions/CI tweak), add a `Changelog: skip` trailer to the commit message instead. `docs`, `chore`, `ci`, `build`, `style`, and `refactor` commits are exempt automatically.
+
+You don't have to memorise any of this. If a fragment is missing, the hook rejects the commit and prints exactly how to recover — add a fragment, or the `Changelog: skip` trailer — so you fix it and re-commit:
+
+```text
+This feat/fix needs a changelog fragment: run 'changie new' and stage it,
+or add a 'Changelog: skip' trailer if it isn't user-facing.
+```
+
+Don't hand-edit `CHANGELOG.md`; changie assembles it from the fragments, and the docs site's Release Notes page is a one-line include of it.
+
 ## Opening a pull request
 
 1.  Fork the repo and branch off `main`.
@@ -95,7 +120,7 @@ jira-cli is built for agents, so AI-assisted PRs are welcome. The bar is the sam
 
 ## Pre-commit hooks
 
-**Optional**, but it catches what CI checks locally, before you raise the PR. The repo ships an [`hk`](https://github.com/jdx/hk) hook configuration in `hk.pkl`; on commit it runs `gofumpt`, `go vet`, `golangci-lint`, and `rumdl`, plus `actionlint` and `zizmor` over the GitHub Actions workflows, and checks the message is a conventional commit. Install it once per checkout:
+**Optional**, but it catches what CI checks locally, before you raise the PR. The repo ships an [`hk`](https://github.com/jdx/hk) hook configuration in `hk.pkl`; on commit it runs `gofumpt`, `go vet`, `golangci-lint`, and `rumdl`, plus `actionlint` and `zizmor` over the GitHub Actions workflows. On the message it checks the conventional-commit format and that a user-facing `feat`/`fix` ships a changelog fragment (see [Changelog](#changelog)). Install it once per checkout:
 
 ```sh
 hk install

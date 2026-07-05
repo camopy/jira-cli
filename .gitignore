@@ -45,14 +45,5 @@ docs/reference/
 *.local.*
 .task/
 
-# Project-owned Claude Code skill is tracked (override global ignore of
-# .claude/). Re-ignore everything else inside .claude/skills/ so plugin-
-# installed skills stay out of the repo.
-!.claude/
-!.claude/skills/
-.claude/skills/*
-!.claude/skills/jira-cli/
-!.claude/skills/jira-cli/**
-
 # Zensical site build output (uvx --from zensical zensical build)
 site/
