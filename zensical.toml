@@ -164,6 +164,7 @@ nav = [
             ] },
             { "me" = "reference/jira/me.md" },
             { "open" = "reference/jira/open.md" },
+            { "release-notes" = "reference/jira/release-notes.md" },
             { "search" = [
                 "reference/jira/search/index.md",
                 { "jql" = "reference/jira/search/jql.md" },

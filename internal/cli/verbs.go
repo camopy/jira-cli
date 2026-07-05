@@ -129,6 +129,7 @@ var operationVerbs = map[string]OperationVerb{
 	"issue.weblink":             {"adding", "added", "add", "web link"},
 	"jql.reference":             {"fetching", "fetched", "fetch", "JQL reference"},
 	"me":                        {"fetching", "fetched", "fetch", "account"},
+	"release.notes":             {"showing", "shown", "show", "release notes"},
 	"schema":                    {"rendering", "rendered", "render", "schema"},
 	"search.count":              {"counting", "counted", "count", "issues"},
 	"search.jql":                {"searching", "searched", "search", "issues"},

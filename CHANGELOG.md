@@ -1,8 +1,5 @@
 # Release Notes
 
-What's changed in jira-cli, newest first — the things people using it will
-notice. For the full history, see git.
-
 
 ## [0.7.7](https://github.com/matcra587/jira-cli/releases/tag/v0.7.7) — 2026-07-05
 

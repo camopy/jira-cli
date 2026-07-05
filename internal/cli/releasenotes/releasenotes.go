@@ -1,0 +1,107 @@
+// Package releasenotes implements `jira release-notes`, which prints jira-cli's
+// own changelog — embedded in the binary — so a user can see what changed in the
+// tool without opening GitHub or the docs site. It reads nothing over the
+// network and is unrelated to any Jira project's releases.
+package releasenotes
+
+import (
+	"fmt"
+	"strings"
+
+	clib "github.com/gechr/clib/cli/cobra"
+	changelog "github.com/matcra587/jira-cli"
+	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/spf13/cobra"
+)
+
+type options struct {
+	latest bool
+}
+
+// NewCommand returns the `release-notes` command.
+func NewCommand() *cobra.Command {
+	var opts options
+	cmd := &cobra.Command{
+		Use:     "release-notes [version]",
+		Aliases: []string{"rn"},
+		Short:   "Show what's changed in jira-cli",
+		Long: "Print jira-cli's own release notes — embedded in the binary — so you can " +
+			"see what changed in the tool without opening GitHub or the docs site.\n\n" +
+			"With no arguments it prints the full changelog, newest first. Pass a version " +
+			"(e.g. `0.7.7`) for a single release, or `--latest` for just the newest one. " +
+			"Human output is rendered Markdown; `--output=json` returns the notes as " +
+			"structured data.\n\n" +
+			"This is jira-cli's changelog. It is unrelated to a Jira project's releases.",
+		Example: `$ jira release-notes
+$ jira release-notes --latest
+$ jira rn 0.7.7
+$ jira release-notes --output=json`,
+		GroupID: "configuration",
+		Args:    cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return run(cmd, opts, args)
+		},
+	}
+	cmdutil.AddBoolVar(cmd.Flags(), &opts.latest, "latest", false, "Show only the newest release", clib.FlagExtra{})
+	return cmd
+}
+
+func run(cmd *cobra.Command, opts options, args []string) error {
+	var query string
+	if len(args) == 1 {
+		query = strings.TrimSpace(args[0])
+	}
+	if query != "" && opts.latest {
+		return fmt.Errorf("validation: pass a version or --latest, not both")
+	}
+
+	result, err := buildResult(query, opts.latest)
+	if err != nil {
+		return err
+	}
+	return cmdutil.WriteEnvelope(cmd, "release.notes", result)
+}
+
+// buildResult selects which notes to return: a single version when one is named,
+// the newest with --latest, or the whole changelog by default.
+func buildResult(query string, latest bool) (cli.ReleaseNotesResult, error) {
+	switch {
+	case query != "":
+		r, ok := changelog.Find(query)
+		if !ok {
+			return cli.ReleaseNotesResult{}, fmt.Errorf("no release notes for %q; available: %s", query, strings.Join(versionList(), ", "))
+		}
+		return single(r), nil
+	case latest:
+		releases := changelog.Releases()
+		if len(releases) == 0 {
+			return cli.ReleaseNotesResult{}, fmt.Errorf("no release notes are embedded in this build")
+		}
+		return single(releases[0]), nil
+	default:
+		return cli.ReleaseNotesResult{
+			Releases: changelog.Releases(),
+			Markdown: changelog.Full(),
+		}, nil
+	}
+}
+
+// single wraps one release as a result whose Markdown is just that release.
+func single(r changelog.Release) cli.ReleaseNotesResult {
+	return cli.ReleaseNotesResult{
+		Version:  r.Version,
+		Releases: []changelog.Release{r},
+		Markdown: r.Markdown,
+	}
+}
+
+// versionList is the available versions, newest first, for error messages.
+func versionList() []string {
+	releases := changelog.Releases()
+	out := make([]string, len(releases))
+	for i, r := range releases {
+		out[i] = r.Version
+	}
+	return out
+}

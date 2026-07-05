@@ -111,11 +111,11 @@ func StyleFromTheme(t *clibtheme.Theme) ansi.StyleConfig {
 		cfg = styles.LightStyleConfig
 	}
 
-	blue := colorToken(t.Blue.GetForeground())
-	magenta := colorToken(t.Magenta.GetForeground())
-	yellow := colorToken(t.Yellow.GetForeground())
-	text := colorToken(t.MarkdownText.GetForeground())
-	dim := colorToken(t.Dim.GetForeground())
+	blue := ColorToken(t.Blue.GetForeground())
+	magenta := ColorToken(t.Magenta.GetForeground())
+	yellow := ColorToken(t.Yellow.GetForeground())
+	text := ColorToken(t.MarkdownText.GetForeground())
+	dim := ColorToken(t.Dim.GetForeground())
 
 	cfg.Document.Margin = uintPtr(0)
 	cfg.Document.Color = strPtr(text)
@@ -142,12 +142,12 @@ func StyleFromTheme(t *clibtheme.Theme) ansi.StyleConfig {
 	return cfg
 }
 
-// colorToken converts a theme color to the string form glamour accepts.
+// ColorToken converts a theme color to the string form glamour accepts.
 // ANSI palette indexes pass through as their index ("4", "212"), so the
 // terminal's own palette renders them exactly like the rest of the chrome —
 // round-tripping an indexed color through RGBA would bake in the standard
 // VGA value and visibly drift from the themed UI around it.
-func colorToken(c color.Color) string {
+func ColorToken(c color.Color) string {
 	switch v := c.(type) {
 	case xansi.BasicColor:
 		return fmt.Sprintf("%d", int(v))

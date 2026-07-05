@@ -207,6 +207,8 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 		return WriteBoardListPlain(w, command, data, opts...)
 	case "user.search":
 		return writeUserSearchPlain(logger, data, cfg)
+	case "release.notes":
+		return writeReleaseNotesPlain(w, data, cfg)
 	default:
 		return writeGenericPlain(logger, cfg, messageForCommand(command), data)
 	}

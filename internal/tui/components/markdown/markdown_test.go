@@ -89,7 +89,7 @@ func TestStyleFromThemeUsesPalette(t *testing.T) {
 	if cfg.H2.Color == nil {
 		t.Fatal("H2 color not set from theme")
 	}
-	want := colorToken(th.Blue.GetForeground())
+	want := ColorToken(th.Blue.GetForeground())
 	if *cfg.H2.Color != want {
 		t.Errorf("H2 color = %q, want theme blue %q", *cfg.H2.Color, want)
 	}
@@ -103,8 +103,8 @@ func TestColorTokenPreservesANSIIndexes(t *testing.T) {
 	// palette renders it — converting to hex bakes in the standard VGA value
 	// and stops matching the lipgloss-rendered chrome around the markdown.
 	for in, want := range map[string]string{"4": "4", "212": "212", "#ff00aa": "#ff00aa"} {
-		if got := colorToken(lipgloss.Color(in)); got != want {
-			t.Errorf("colorToken(%q) = %q, want %q", in, got, want)
+		if got := ColorToken(lipgloss.Color(in)); got != want {
+			t.Errorf("ColorToken(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

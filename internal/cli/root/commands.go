@@ -12,6 +12,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli/issue"
 	"github.com/matcra587/jira-cli/internal/cli/jql"
 	"github.com/matcra587/jira-cli/internal/cli/me"
+	"github.com/matcra587/jira-cli/internal/cli/releasenotes"
 	"github.com/matcra587/jira-cli/internal/cli/search"
 	"github.com/matcra587/jira-cli/internal/cli/tui"
 	"github.com/matcra587/jira-cli/internal/cli/update"
@@ -38,6 +39,7 @@ func registerCommands(root *cobra.Command) {
 		jql.NewCommand(),
 		alias.NewCommand(),
 		search.NewCommand(),
+		releasenotes.NewCommand(),
 		user.NewCommand(),
 		worklog.NewCommand(),
 		config.NewCommand(),

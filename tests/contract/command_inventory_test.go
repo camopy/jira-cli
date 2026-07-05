@@ -32,6 +32,7 @@ var expectedTopLevelCommands = []string{
 	"issue",
 	"jql",
 	"me",
+	"release-notes",
 	"search",
 	"tui",
 	"version",
