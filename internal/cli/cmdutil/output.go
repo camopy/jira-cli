@@ -99,13 +99,20 @@ func PlainOptionsForCommand(cmd *cobra.Command) []cli.PlainOption {
 		if baseURL := ActiveProfile(cmd, cfg).BaseURL; baseURL != "" {
 			opts = append(opts, cli.WithPlainBaseURL(baseURL))
 		}
-		// The "auto" theme detects the terminal background so hash-based
-		// entity colors stay readable. Detection runs only for "auto" users
-		// with color enabled — never under --color=never or NO_COLOR, where
-		// there is no color to contrast and a terminal query would be pure
-		// waste — so the round-trip never costs anyone else.
-		if config.IsAutoTheme(cfg.Theme.Name) && !clog.ColorsDisabled() {
-			opts = append(opts, cli.WithPlainTheme(config.AutoTheme(os.Stdout)))
+		// Resolve the active theme so plain renderers — the clog tables and the
+		// glamour release-notes view — match the user's configured theme rather
+		// than the dark default. "auto" detects the terminal background so
+		// hash-based entity colors stay readable; that round-trip runs only for
+		// "auto" users with color enabled — never under --color=never or
+		// NO_COLOR, where there is nothing to contrast. A named theme is cheap
+		// to resolve and is always passed.
+		switch {
+		case config.IsAutoTheme(cfg.Theme.Name):
+			if !clog.ColorsDisabled() {
+				opts = append(opts, cli.WithPlainTheme(config.AutoTheme(os.Stdout)))
+			}
+		default:
+			opts = append(opts, cli.WithPlainTheme(config.ThemeForName(cfg.Theme.Name)))
 		}
 	}
 	if cmd.Flags().Lookup("columns") != nil {
