@@ -1,3 +1,0 @@
-kind: added
-body: 'Read jira-cli''s own changelog from the CLI with `jira release-notes` (alias `rn`): the notes are embedded in the binary and rendered as Markdown — the full history by default, or a single release with a version argument or `--latest`.'
-time: 2026-07-05T08:39:46.3454745-04:00
