@@ -22,7 +22,11 @@ updates:
       default-days: 7
     open-pull-requests-limit: 10
     commit-message:
+      # Yields `chore(deps): …` (and `chore(deps-dev): …`), matching the manual
+      # dependency-bump convention. `chore` is gate-exempt, so these never need a
+      # changelog fragment; a security bump still gets a `security` fragment by hand.
       prefix: "chore"
+      include: "scope"
     labels:
       - dependencies
     groups:
@@ -44,7 +48,9 @@ updates:
       default-days: 7
     open-pull-requests-limit: 10
     commit-message:
+      # Yields `ci(deps): …` for workflow action bumps; `ci` is gate-exempt.
       prefix: "ci"
+      include: "scope"
     labels:
       - dependencies
     groups:
