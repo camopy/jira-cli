@@ -19,16 +19,6 @@ func TestPlainPadRightUsesDisplayWidth(t *testing.T) {
 	}
 }
 
-func TestPlainTruncateUsesDisplayWidth(t *testing.T) {
-	got := truncate("世界abc", 4)
-	if width := termansi.StringWidth(got); width > 4 {
-		t.Fatalf("display width = %d, want <= 4 for %q", width, got)
-	}
-	if !strings.Contains(got, "…") {
-		t.Fatalf("truncate did not append ellipsis: %q", got)
-	}
-}
-
 func TestLinkListPlainRendersTypedLinks(t *testing.T) {
 	var buf bytes.Buffer
 	err := WriteLinkListPlain(&buf, "issue.link.list", map[string]any{

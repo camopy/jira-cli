@@ -11,6 +11,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	xstrings "github.com/gechr/x/strings"
 
 	"github.com/matcra587/jira-cli/internal/tui/components/input"
 	"github.com/matcra587/jira-cli/internal/tui/core"
@@ -139,7 +140,7 @@ func (m *QueryModel) View() string {
 	if w < 1 {
 		w = 1
 	}
-	return m.view(lipgloss.NewStyle().Faint(true).Render(truncate(m.jql, w)))
+	return m.view(lipgloss.NewStyle().Faint(true).Render(xstrings.Truncate(m.jql, w, "…")))
 }
 
 // CapturesInput reports filter/action focus.

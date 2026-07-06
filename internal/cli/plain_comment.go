@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gechr/clog"
+	termansi "github.com/gechr/x/ansi"
 	"github.com/gechr/x/human"
 	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
@@ -128,9 +129,9 @@ func commentBodyText(v any) string {
 	return ""
 }
 
-// flattenPreview collapses whitespace and truncates `s` to at most n runes
-// so multi-line Markdown bodies render as a one-line preview.
+// flattenPreview collapses whitespace and truncates `s` to at most n display
+// cells so multi-line Markdown bodies render as a one-line preview.
 func flattenPreview(s string, n int) string {
 	flat := strings.Join(strings.Fields(s), " ")
-	return truncate(flat, n)
+	return termansi.Truncate(flat, n, "…")
 }

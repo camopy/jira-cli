@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
+	xstrings "github.com/gechr/x/strings"
 
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -224,7 +225,7 @@ func layoutFor(width int) rowLayout {
 // styling but a fixed display width, so listviewport (which measures display
 // width) keeps the columns aligned.
 func rowText(i *jira.Issue, width int, now time.Time) string {
-	key := fmt.Sprintf("%-*s", keyCol, truncate(issueKey(i), keyCol))
+	key := fmt.Sprintf("%-*s", keyCol, xstrings.Truncate(issueKey(i), keyCol, "…"))
 	left := typeCell(i) + " " + priorityCell(i) + " " + key + "  " + statusCell(issueStatus(i)) + "  "
 	l := layoutFor(width)
 	if !l.age {
@@ -249,7 +250,7 @@ func assigneeCell(i *jira.Issue) string {
 
 // statusCell renders the status name as a width-padded, colored cell.
 func statusCell(status string) string {
-	padded := fmt.Sprintf("%-*s", statusCol, truncate(status, statusCol))
+	padded := fmt.Sprintf("%-*s", statusCol, xstrings.Truncate(status, statusCol, "…"))
 	return theme.StatusStyle(status).Render(padded)
 }
 
@@ -376,7 +377,7 @@ func chipsWithQuery(lenses []Lens, active, width int) string {
 	if room < 12 {
 		return c
 	}
-	return c + "    " + lipgloss.NewStyle().Faint(true).Render(truncate(lenses[active].JQL, room))
+	return c + "    " + lipgloss.NewStyle().Faint(true).Render(xstrings.Truncate(lenses[active].JQL, room, "…"))
 }
 
 // detailHeading renders the shared header for the sidebar and the
@@ -537,22 +538,6 @@ func renderComments(i *jira.Issue, width int, md *markdown.Renderer) string {
 		parts = append(parts, head+"\n"+body)
 	}
 	return strings.Join(parts, "\n\n")
-}
-
-// truncate shortens s to n display runes, adding an ellipsis. It counts runes,
-// not bytes, so it never splits a multi-byte UTF-8 sequence.
-func truncate(s string, n int) string {
-	if n <= 0 {
-		return ""
-	}
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	if n == 1 {
-		return string(r[:1])
-	}
-	return string(r[:n-1]) + "…"
 }
 
 // wrap is a minimal width-aware wrap on spaces, measuring words in runes so

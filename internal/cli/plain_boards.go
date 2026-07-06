@@ -78,7 +78,7 @@ func boardPlainLine(m map[string]any, style authPlainStyle) string {
 	projects := coerceStringSlice(m["project_keys"])
 
 	idCell := padLeft(idStr, 5)
-	nameCell := padRight(truncate(name, 40), 24)
+	nameCell := padRight(termansi.Truncate(name, 40, "…"), 24)
 	typeCell := padRight(typeName, 6)
 	projectsCell := boardProjectDescriptor(projects)
 

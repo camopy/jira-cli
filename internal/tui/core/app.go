@@ -13,6 +13,7 @@ import (
 
 	"github.com/gechr/primer/helpsheet"
 	"github.com/gechr/primer/overlay"
+	xstrings "github.com/gechr/x/strings"
 
 	"github.com/matcra587/jira-cli/internal/config"
 )
@@ -633,7 +634,7 @@ func (a App) labeledBorder(width int, left, right string) string {
 	// would otherwise wrap the border and break the fixed-height layout). Reserve
 	// room for the right label plus the four rule glyphs and three gaps.
 	if budget := width - lipgloss.Width(right) - 7; budget > 0 && lipgloss.Width(left) > budget {
-		left = truncateRunes(left, budget)
+		left = xstrings.Truncate(left, budget, "…")
 	}
 	var leftPart, rightPart string
 	if left != "" {
@@ -684,22 +685,6 @@ func (a App) hintLine(width int) string {
 		used += need
 	}
 	return lipgloss.PlaceHorizontal(width, lipgloss.Center, strings.Join(parts, sep))
-}
-
-// truncateRunes shortens s to at most n display runes, adding an ellipsis. It
-// counts runes so it never splits a multi-byte sequence.
-func truncateRunes(s string, n int) string {
-	r := []rune(s)
-	if n <= 0 {
-		return ""
-	}
-	if len(r) <= n {
-		return s
-	}
-	if n == 1 {
-		return string(r[:1])
-	}
-	return string(r[:n-1]) + "…"
 }
 
 // contextLine joins the non-empty profile/project/board labels for the footer.

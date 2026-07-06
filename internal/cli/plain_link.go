@@ -90,7 +90,7 @@ func linkPlainLine(r linkPlainRow, style authPlainStyle, cfg plainConfig) string
 		style.bold(icon),
 		padRight(r.Verb, 14),
 		style.bold(r.OtherKey),
-		padRight(truncate(r.Summary, 40), 40),
+		padRight(termansi.Truncate(r.Summary, 40, "…"), 40),
 	}
 	if r.Status != "" {
 		parts = append(parts, style.dim("["+r.Status+"]"))
@@ -152,11 +152,4 @@ func padRight(s string, n int) string {
 		return s + strings.Repeat(" ", n-width)
 	}
 	return s
-}
-
-func truncate(s string, n int) string {
-	if n <= 0 {
-		return ""
-	}
-	return termansi.Truncate(s, n, "…")
 }

@@ -14,6 +14,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	xstrings "github.com/gechr/x/strings"
 
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/tui/core"
@@ -159,7 +160,7 @@ func (m *Model) View() string {
 			if title == "" {
 				title = dim.Render("(untitled)")
 			}
-			row(name, title+dim.Render("  "+truncate(sec.JQL, 60)))
+			row(name, title+dim.Render("  "+xstrings.Truncate(sec.JQL, 60, "…")))
 		}
 	} else {
 		b.WriteString(dim.Render("no config loaded — built-in defaults\n"))
@@ -172,15 +173,6 @@ func (m *Model) View() string {
 	hint := m.ctx.Styles.HintKey.Render("r") + " " + m.ctx.Styles.HintDesc.Render("reload now")
 	b.WriteString("\n\n" + hint)
 	return lipgloss.NewStyle().Padding(0, 1).Render(b.String())
-}
-
-// truncate shortens s to n runes with an ellipsis.
-func truncate(s string, n int) string {
-	r := []rune(s)
-	if n <= 0 || len(r) <= n {
-		return s
-	}
-	return string(r[:n-1]) + "…"
 }
 
 // CapturesInput: the settings view has no text input.
