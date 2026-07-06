@@ -314,7 +314,16 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 			// freshly created config, start from no profiles and let the login
 			// create exactly the profile requested, rather than leaving the
 			// seed beside it as a phantom unconfigured "default".
-			_, statErr := os.Stat(cmdutil.ConfigPath(cmd))
+			//
+			// The existence probe must stat the RESOLVED path — an unset
+			// --config means the default location, the same rule Load and Save
+			// apply. Stat'ing the raw (empty) flag value declared every
+			// default-path config "new" and wiped its existing profiles.
+			configPath := cmdutil.ConfigPath(cmd)
+			if configPath == "" {
+				configPath = config.DefaultPath()
+			}
+			_, statErr := os.Stat(configPath)
 			configExisted := statErr == nil
 			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
