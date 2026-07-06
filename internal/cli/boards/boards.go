@@ -117,7 +117,7 @@ $ jira boards list --refresh --unbounded --output=json`,
 	cmdutil.AddBoolVar(cmd.Flags(), &refresh, "refresh", false, "Force a re-prime even when the cache is fresh", clib.FlagExtra{Group: "Cache", Terse: "force re-prime"})
 	cmdutil.AddIntVar(cmd.Flags(), &ttlMinutes, "ttl-minutes", cachereg.TTLMinutesFor("boards"), "Freshness window before automatic refresh", clib.FlagExtra{Group: "Cache", Placeholder: "N", Terse: "freshness window"})
 	cmdutil.AddBoolVar(cmd.Flags(), &unbounded, "unbounded", false, "Walk every page (disables the default 100-page / 10 000-board cap)", clib.FlagExtra{Group: "Pagination", Terse: "fetch all pages"})
-	cmdutil.AddIntVar(cmd.Flags(), &limit, "limit", 50, "Maximum boards returned without `--all`", clib.FlagExtra{Group: "Pagination", Placeholder: "N", Terse: "page size"})
+	cmdutil.AddIntVar(cmd.Flags(), &limit, "limit", 50, "Maximum boards returned without `--all`; `0` uses the default", clib.FlagExtra{Group: "Pagination", Placeholder: "N", Terse: "page size"})
 	cmdutil.AddBoolVar(cmd.Flags(), &all, "all", false, "Return every cached board regardless of `--limit`", clib.FlagExtra{Group: "Pagination", Terse: "return all"})
 	// No --dry-run: `boards list` always performs a live read and a
 	// cache write, so a "dry-run" flag here could not be honest.

@@ -218,7 +218,7 @@ func addSearchOutputFlags(cmd *cobra.Command, opts *searchOptions) {
 func addSearchPaginationFlags(cmd *cobra.Command, opts *searchOptions) {
 	fs := cmd.Flags()
 	cmdutil.AddBoolVar(fs, &opts.all, "all", false, "Walk every page until `isLast` (bounded; use `--unbounded` to lift the caps)", clib.FlagExtra{Group: "Pagination"})
-	cmdutil.AddIntVar(fs, &opts.limit, "limit", 50, "Page size requested from Jira", clib.FlagExtra{Group: "Pagination", Placeholder: "N"})
+	cmdutil.AddIntVar(fs, &opts.limit, "limit", 50, "Page size requested from Jira; `0` uses the default", clib.FlagExtra{Group: "Pagination", Placeholder: "N"})
 	cmdutil.AddBoolVar(fs, &opts.unbounded, "unbounded", false, "With `--all`, lift the default 100-page / 10 000-issue caps", clib.FlagExtra{Group: "Pagination"})
 	cmdutil.AddStringVar(fs, &opts.cursor, "cursor", "", "Resume from a `nextCursor` returned by a previous page", clib.FlagExtra{Group: "Pagination", Placeholder: "TOKEN"})
 	// --count fetches nothing and --web opens a browser, so the page controls

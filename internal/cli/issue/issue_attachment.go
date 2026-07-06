@@ -128,7 +128,7 @@ $ jira issue attachment list PROJ-123 --output=json`,
 			})
 		},
 	}
-	cmdutil.AddIntVar(cmd.Flags(), &limit, "limit", 50, "Page size (max attachments returned without `--all`)", clib.FlagExtra{Group: "Pagination", Placeholder: "N", Terse: "page size"})
+	cmdutil.AddIntVar(cmd.Flags(), &limit, "limit", 50, "Page size (max attachments returned without `--all`); `0` uses the default", clib.FlagExtra{Group: "Pagination", Placeholder: "N", Terse: "page size"})
 	cmdutil.AddBoolVar(cmd.Flags(), &all, "all", false, "Return every attachment regardless of `--limit`", clib.FlagExtra{Group: "Pagination", Terse: "fetch all pages"})
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
@@ -257,6 +257,22 @@ $ jira issue attachment add PROJ-123 ./report.pdf --dry-run`,
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview without uploading")
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
+}
+
+// attachmentIssueKey validates the issue-key argument of the single-issue
+// attachment verbs (download, delete) through the same parser every other
+// key-taking command uses, so a traversal path or hallucinated key fails
+// fast instead of reaching Jira (or an ok dry-run). These verbs address one
+// issue and one attachment id, so a list or range expansion is rejected too.
+func attachmentIssueKey(arg string) (string, error) {
+	keys, err := issuekey.ParseExpressions([]string{arg}, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
+	if err != nil {
+		return "", err
+	}
+	if len(keys) != 1 {
+		return "", fmt.Errorf("validation: expected a single issue key, but %q expands to %d keys", arg, len(keys))
+	}
+	return keys[0], nil
 }
 
 func attachmentAddKeysAndPaths(args, files []string) ([]string, []string, error) {
@@ -397,7 +413,11 @@ $ jira issue attachment delete PROJ-123 10500 --dry-run
 # Delete an attachment by id without a prompt
 $ jira issue attachment delete PROJ-123 10500 --force`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			key, attachmentID := args[0], args[1]
+			key, err := attachmentIssueKey(args[0])
+			if err != nil {
+				return err
+			}
+			attachmentID := args[1]
 			if dryRun {
 				return cmdutil.WriteEnvelope(cmd, "issue.attachment.delete", map[string]any{
 					"key":           key,
@@ -467,7 +487,11 @@ $ jira issue attachment download PROJ-123 10500 --to ./report.pdf --force
 # Preview the download target without contacting Jira
 $ jira issue attachment download PROJ-123 10500 --to ./report.pdf --dry-run`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			key, attachmentID := args[0], args[1]
+			key, err := attachmentIssueKey(args[0])
+			if err != nil {
+				return err
+			}
+			attachmentID := args[1]
 			mode, target := resolveDownloadMode(output)
 			// Clobber-protect for an explicit --to target happens BEFORE
 			// any HTTP call.

@@ -101,6 +101,9 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	if cmd.Name() == "completion" || (cmd.Parent() != nil && cmd.Parent().Name() == "completion") {
 		return nil
 	}
+	if err := validateNumericFlags(cmd); err != nil {
+		return err
+	}
 
 	pf := cmd.Root().PersistentFlags()
 	debug, _ := pf.GetBool("debug")
@@ -173,6 +176,26 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	// rather than Cobra's untyped "required flag(s) ... not set" string.
 	if missing := missingRequiredFlags(cmd); len(missing) > 0 {
 		return requiredFlagError(missing)
+	}
+	return nil
+}
+
+// validateNumericFlags rejects negative values on the tree-wide numeric
+// flags. A negative deadline or page size is always operator error, and
+// silently degrading it into the default is the false-confidence failure
+// mode (compare `--timeout banana`, which already fails at parse). Zero is
+// not rejected: it stays each flag's documented disabled/default sentinel.
+func validateNumericFlags(cmd *cobra.Command) error {
+	pf := cmd.Root().PersistentFlags()
+	for _, name := range []string{"timeout", "max-retry-wait"} {
+		if d, err := pf.GetDuration(name); err == nil && d < 0 {
+			return fmt.Errorf("validation: --%s must not be negative (got %s); 0 disables it", name, d)
+		}
+	}
+	if cmd.Flags().Lookup("limit") != nil {
+		if limit, err := cmd.Flags().GetInt("limit"); err == nil && limit < 0 {
+			return fmt.Errorf("validation: --limit must not be negative (got %d); 0 uses the default page size", limit)
+		}
 	}
 	return nil
 }

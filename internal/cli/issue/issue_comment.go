@@ -128,7 +128,7 @@ $ jira issue comment list PROJ-123 --output=json`,
 			})
 		},
 	}
-	cmdutil.AddIntVar(cmd.Flags(), &limit, "limit", 50, "Maximum comments per page", clib.FlagExtra{Group: "Pagination", Placeholder: "N"})
+	cmdutil.AddIntVar(cmd.Flags(), &limit, "limit", 50, "Maximum comments per page; `0` uses the default", clib.FlagExtra{Group: "Pagination", Placeholder: "N"})
 	cmdutil.AddBoolVar(cmd.Flags(), &all, "all", false, "Walk every page until isLast", clib.FlagExtra{Group: "Pagination"})
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	return cmd
