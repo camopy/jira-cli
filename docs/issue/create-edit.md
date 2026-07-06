@@ -70,6 +70,16 @@ custom fields) with `dry_run: true`.
     into the same submit, so a payload written for one command works on
     the other.
 
+    Object-valued system fields additionally accept a bare string in
+    either form, lifted to one fixed identity key before submission:
+    `project` and `parent` become `{"key": …}`; `issuetype` and
+    `priority` become `{"name": …}`; `assignee` and `reporter` become
+    `{"accountId": …}`; and string elements of `components`,
+    `fixVersions`, and `versions` become `{"name": …}`. Explicit wire
+    objects pass through untouched, and a numeric-looking string is
+    never reinterpreted as an id — address by id with an explicit
+    `{"id": …}` object.
+
 [Full flags & output fields →](../reference/jira/issue/create.md)
 
 ## edit

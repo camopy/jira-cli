@@ -42,7 +42,7 @@ Minimal payload:
 }
 ```
 
-Both payload shapes are accepted interchangeably on create and edit: the flat convenience keys shown here, or the Jira-native `{"fields": {...}}` object with wire spellings (`project`, `issuetype`). Prefer the native shape when the payload originates from Jira's API docs or another REST client — the exact `POST /rest/api/3/issue` body works with zero translation, and the identity wire fields (`project`, `issuetype`) are never subject to screen validation. Richer payload (every key past the aliases is forwarded verbatim into Jira's `fields` object):
+Both payload shapes are accepted interchangeably on create and edit: the flat convenience keys shown here, or the Jira-native `{"fields": {...}}` object with wire spellings (`project`, `issuetype`). Prefer the native shape when the payload originates from Jira's API docs or another REST client — the exact `POST /rest/api/3/issue` body works with zero translation, and the identity wire fields (`project`, `issuetype`) are never subject to screen validation. Object-valued system fields additionally accept a bare string in either shape, lifted to one fixed identity key before submission: `project`/`parent` → `{"key": ...}`, `issuetype`/`priority` → `{"name": ...}`, `assignee`/`reporter` → `{"accountId": ...}`, and string elements of `components`/`fixVersions`/`versions` → `{"name": ...}`. Explicit wire objects pass through untouched, and there is no digits-means-id guessing — address by id with an explicit `{"id": ...}` object. Richer payload (every key past the aliases is forwarded verbatim into Jira's `fields` object):
 
 ```json
 {

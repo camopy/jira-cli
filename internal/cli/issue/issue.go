@@ -898,7 +898,12 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 			if normErr != nil {
 				return normErr
 			}
-			payload = normalizedPayload
+			// Lift bare-string system fields ("priority": "Medium",
+			// "parent": "PROJ-1") into their canonical wire objects AFTER
+			// alias normalization, so the alias-vs-wire conflict check
+			// above still sees the value the user wrote. Without the lift,
+			// the flat spelling passes the dry-run and 400s on the wire.
+			payload = pipeline.LiftSystemFieldShapes(normalizedPayload)
 			// The priority set is small, site-wide, and usually cached —
 			// a name Jira would reject fails fast here instead of round-
 			// tripping. Advisory: no cache, no check.
@@ -1363,6 +1368,12 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 				}
 				fields["assignee"] = wire
 			}
+			// Lift bare-string system fields ("priority": "Medium",
+			// "parent": "PROJ-1") into their canonical wire objects — the
+			// same normalization the create path applies, so both commands
+			// accept the same payload spellings. Runs after every field
+			// source (json-input, flags, resolved assignee) has merged.
+			fields = pipeline.LiftSystemFieldShapes(fields)
 			// kubectl-style default: bare `jira issue edit KEY` (no field
 			// flags, no --json-input) opens the configured external editor on
 			// the issue description. The editor needs an interactive terminal,

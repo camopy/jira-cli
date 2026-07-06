@@ -31,6 +31,8 @@ Subtask payload (note `issue_type: "Subtask"` and `parent.key`):
 }
 ```
 
+A bare `"parent": "<PARENT_ISSUE_KEY>"` string is also accepted — it is lifted to `{"key": ...}` before submission.
+
 **Save**
 > Requires `--output=json`.
 - `data.issue.key` [string, required] — the new subtask key; feed into `→ ` `read_issue` or downstream mutations. The key is nested under `data.issue` (read `.data.issue.key`, not a top-level field).

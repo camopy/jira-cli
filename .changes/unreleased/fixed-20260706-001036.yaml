@@ -1,0 +1,3 @@
+kind: fixed
+body: issue create/edit --json-input now accept flat-string values for object-valued system fields (project, issuetype, parent, priority, assignee, reporter, components, fixVersions, versions), lifting them to the wire shape Jira requires instead of passing --dry-run and failing on submit; explicit wire objects are untouched
+time: 2026-07-06T00:10:36.6715096-04:00

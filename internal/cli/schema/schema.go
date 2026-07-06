@@ -444,7 +444,7 @@ func inputSchemas() map[string]any {
 		"adf_document": adfDocument,
 		"issue.create": map[string]any{
 			"type":        "object",
-			"description": "issue create --json-input payload. Accepts the flat convenience keys shown here or the Jira-native {\"fields\": {...}} object interchangeably (wire spellings like project/issuetype work in either). The description may be supplied as raw ADF or as Markdown.",
+			"description": "issue create --json-input payload. Accepts the flat convenience keys shown here or the Jira-native {\"fields\": {...}} object interchangeably (wire spellings like project/issuetype work in either). Object-valued system fields also accept a bare string, lifted to one fixed identity key: project/parent -> {\"key\": ...}, issuetype/priority -> {\"name\": ...}, assignee/reporter -> {\"accountId\": ...}, and string elements of components/fixVersions/versions -> {\"name\": ...}. Explicit wire objects pass through untouched; there is no digits-means-id guessing. The description may be supplied as raw ADF or as Markdown.",
 			"properties": map[string]any{
 				"summary":              map[string]any{"type": "string"},
 				"project_key":          map[string]any{"type": "string"},
@@ -456,7 +456,7 @@ func inputSchemas() map[string]any {
 		},
 		"issue.edit": map[string]any{
 			"type":        "object",
-			"description": "issue edit --json-input payload. {\"fields\": {...}} is canonical; bare field keys at the top level are accepted as the field set. ADF-shaped values inside fields (e.g. fields.description) are validated as canonical ADF documents. A top-level update block — the native PUT /rest/api/3/issue body's sibling section of add/set/remove operations — is forwarded verbatim; Jira validates the operation verbs.",
+			"description": "issue edit --json-input payload. {\"fields\": {...}} is canonical; bare field keys at the top level are accepted as the field set. Object-valued system fields accept a bare string exactly as on create, lifted to one fixed identity key: project/parent -> {\"key\": ...}, issuetype/priority -> {\"name\": ...}, assignee/reporter -> {\"accountId\": ...}, and string elements of components/fixVersions/versions -> {\"name\": ...}; explicit wire objects pass through untouched. ADF-shaped values inside fields (e.g. fields.description) are validated as canonical ADF documents. A top-level update block — the native PUT /rest/api/3/issue body's sibling section of add/set/remove operations — is forwarded verbatim; Jira validates the operation verbs.",
 			"properties": map[string]any{
 				"fields": map[string]any{"type": "object"},
 				"update": map[string]any{"type": "object", "description": "Native REST add/set/remove operation block, sent as a sibling of fields."},

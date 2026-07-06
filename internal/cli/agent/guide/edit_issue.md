@@ -41,6 +41,8 @@ Bulk edit payload shape:
 }
 ```
 
+Object-valued system fields also accept a bare string, lifted to one fixed identity key before submission (same contract as create): `project`/`parent` → `{"key": ...}`, `issuetype`/`priority` → `{"name": ...}`, `assignee`/`reporter` → `{"accountId": ...}`, and string elements of `components`/`fixVersions`/`versions` → `{"name": ...}`. So `"priority": "Lowest"` and `"priority": {"name": "Lowest"}` submit identically. Explicit wire objects pass through untouched; address by id with an explicit `{"id": ...}` object.
+
 **Save**
 > Requires `--output=json`.
 - `data.issue` [string, required] — echo of the edited issue key.
