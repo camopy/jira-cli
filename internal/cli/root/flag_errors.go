@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -72,19 +73,14 @@ func flagName(f *pflag.Flag) string {
 // flags inherited from parents. cli.Suggest applies the single length gate
 // that drops names too short to suggest into meaningfully.
 func suggestFlags(cmd *cobra.Command, unknown string) []string {
-	seen := make(map[string]struct{})
 	candidates := make([]string, 0)
-	collect := func(f *pflag.Flag) {
-		if _, dup := seen[f.Name]; dup {
-			return
-		}
-		seen[f.Name] = struct{}{}
-		candidates = append(candidates, f.Name)
-	}
+	collect := func(f *pflag.Flag) { candidates = append(candidates, f.Name) }
 	cmd.Flags().VisitAll(collect)
 	cmd.InheritedFlags().VisitAll(collect)
 
-	hits := cli.Suggest(unknown, candidates)
+	// Unique keeps first-seen order, so a flag visible both locally and
+	// inherited is offered once, in visit order.
+	hits := cli.Suggest(unknown, xslices.Unique(candidates))
 	for i := range hits {
 		hits[i] = "--" + hits[i]
 	}

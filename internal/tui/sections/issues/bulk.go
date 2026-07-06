@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/gechr/x/human"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/matcra587/jira-cli/internal/adf"
@@ -91,7 +92,7 @@ type bulkConfirm struct {
 // a key preview), defaulting to No.
 func (b *bulkConfirm) prompt() string {
 	n := len(b.keys)
-	target := fmt.Sprintf("%d %s (%s)", n, issuesWord(n), keysPreview(b.keys))
+	target := fmt.Sprintf("%s (%s)", human.Pluralize(n, "issue", "issues"), keysPreview(b.keys))
 	switch b.mode {
 	case action.ModeBulkTransition:
 		return fmt.Sprintf("Transition %s to %q? (y/N)", target, b.text)
@@ -106,13 +107,6 @@ func (b *bulkConfirm) prompt() string {
 	// Unreachable today (submitAction only parks the three modes above), but
 	// an empty overlay would strand the user with no clue what y applies.
 	return fmt.Sprintf("Apply %s to %s? (y/N)", b.mode, target)
-}
-
-func issuesWord(n int) string {
-	if n == 1 {
-		return "issue"
-	}
-	return "issues"
 }
 
 // keysPreview shows the first few target keys so the user confirms against

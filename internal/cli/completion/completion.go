@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/gechr/clib/complete"
+	xslices "github.com/gechr/x/slices"
 
 	"github.com/matcra587/jira-cli/internal/cache"
 	"github.com/matcra587/jira-cli/internal/cli"
@@ -207,18 +208,13 @@ type namedCacheValue struct {
 // filter only needs each name once, and offering "To Do" three times is noise.
 func uniqueCachedNames(values []namedCacheValue) []string {
 	out := make([]string, 0, len(values))
-	seen := make(map[string]struct{}, len(values))
 	for _, v := range values {
 		if v.Name == "" {
 			continue
 		}
-		if _, dup := seen[v.Name]; dup {
-			continue
-		}
-		seen[v.Name] = struct{}{}
 		out = append(out, v.Name)
 	}
-	return out
+	return xslices.Unique(out)
 }
 
 // emitCachedNames emits one candidate per unique cached name for the

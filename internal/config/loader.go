@@ -13,6 +13,7 @@ import (
 	xfilepath "github.com/gechr/x/filepath"
 	xos "github.com/gechr/x/os"
 	"github.com/gechr/x/shell"
+	xstrings "github.com/gechr/x/strings"
 	"github.com/go-viper/mapstructure/v2"
 	koanftoml "github.com/knadh/koanf/parsers/toml"
 	"github.com/knadh/koanf/providers/confmap"
@@ -273,7 +274,7 @@ func (c *Config) Set(key, value string) error {
 		// Builtin section IDs or a configured tui.sections title; an unknown
 		// value is ignored at runtime rather than rejected here, because the
 		// set of valid titles lives in the same file being edited.
-		if strings.TrimSpace(value) == "" {
+		if xstrings.IsBlank(value) {
 			return fmt.Errorf("tui.default_tab cannot be empty")
 		}
 		c.TUI.DefaultTab = value

@@ -6,11 +6,10 @@
 package action
 
 import (
-	"strings"
-
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/gechr/x/ptr"
+	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui/components/input"
 	"github.com/matcra587/jira-cli/internal/tui/components/picker"
@@ -260,7 +259,7 @@ func (c *Controller) Submit() (Request, bool) {
 		text := c.Text()
 		// Labels and bulk assign accept empty text deliberately: clear all
 		// labels, and unassign the selection (the bulk path confirms first).
-		if strings.TrimSpace(text) == "" && c.mode != ModeLabels && c.mode != ModeBulkAssign {
+		if xstrings.IsBlank(text) && c.mode != ModeLabels && c.mode != ModeBulkAssign {
 			return Request{}, false // empty comment/summary/etc is not a submit
 		}
 		req := Request{Mode: c.mode, IssueKey: c.issueKey, Text: text}

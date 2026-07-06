@@ -3,6 +3,7 @@ package root
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/matcra587/jira-cli/internal/cli"
@@ -110,6 +111,27 @@ func TestSuggestFlagsScopesToVisibleFlags(t *testing.T) {
 	}
 	if got := suggestFlags(child, "porfile"); len(got) != 1 || got[0] != "--profile" {
 		t.Errorf("inherited flag not suggested: got %v, want [--profile]", got)
+	}
+}
+
+// TestSuggestFlagsDedupesPreservingVisitOrder pins the candidate contract:
+// equal-distance suggestions keep visit order (the command's own flags before
+// inherited persistent flags), and a flag visible both locally and inherited
+// is offered once.
+func TestSuggestFlagsDedupesPreservingVisitOrder(t *testing.T) {
+	root := &cobra.Command{Use: "jira"}
+	root.PersistentFlags().String("beta1", "", "")
+	root.PersistentFlags().String("shared", "", "")
+	child := &cobra.Command{Use: "list"}
+	child.Flags().String("beta2", "", "")
+	child.Flags().String("shared", "", "")
+	root.AddCommand(child)
+
+	if got := suggestFlags(child, "beta"); !slices.Equal(got, []string{"--beta2", "--beta1"}) {
+		t.Errorf("suggestFlags(beta) = %v, want [--beta2 --beta1] (own flags before inherited)", got)
+	}
+	if got := suggestFlags(child, "shraed"); !slices.Equal(got, []string{"--shared"}) {
+		t.Errorf("suggestFlags(shraed) = %v, want the duplicated flag offered once", got)
 	}
 }
 
