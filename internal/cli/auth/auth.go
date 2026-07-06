@@ -13,6 +13,7 @@ import (
 	"charm.land/huh/v2"
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/gechr/clog"
+	xhttp "github.com/gechr/x/http"
 	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/cli"
 	cachereg "github.com/matcra587/jira-cli/internal/cli/cache/registry"
@@ -430,7 +431,7 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 						return &config.CredentialError{
 							Type:        config.ErrorTypeAuth,
 							ErrCode:     config.ErrorCode("auth_failed"),
-							Message:     fmt.Sprintf("invalid Atlassian account email or API token - Jira rejected the credential (HTTP %d)", apiErr.StatusCode),
+							Message:     fmt.Sprintf("invalid Atlassian account email or API token - Jira rejected the credential (HTTP %s)", strings.TrimSpace(xhttp.Status(apiErr.StatusCode))),
 							HintMsg:     "check the email and that the API token is current at id.atlassian.com, or pass --skip-verify to store it without checking",
 							IsRetryable: false,
 						}

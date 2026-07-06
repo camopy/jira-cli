@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	xhttp "github.com/gechr/x/http"
 )
 
 // tenantInfoPath is Atlassian's cloudId probe. It is not part of the
@@ -48,7 +50,9 @@ func discoverCloudID(ctx context.Context, siteBaseURL string, timeout time.Durat
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("%s returned HTTP %d", base+tenantInfoPath, resp.StatusCode)
+		// TrimSpace guards the unregistered-code case, where the reason phrase
+		// is empty and xhttp.Status would leave a trailing space.
+		return "", fmt.Errorf("%s returned HTTP %s", base+tenantInfoPath, strings.TrimSpace(xhttp.Status(resp.StatusCode)))
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxTenantInfoBody))
 	if err != nil {

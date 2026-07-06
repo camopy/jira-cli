@@ -174,7 +174,10 @@ func retryEvent(req *http.Request, resp *http.Response, attempt int) *clog.Event
 
 // isRetryableStatus reports whether a response should be retried: a 429
 // always, a 503 only when it carries Retry-After (an explicit "come back"
-// signal rather than an opaque outage we should not hammer).
+// signal rather than an opaque outage we should not hammer). Deliberately
+// narrower than xhttp.IsRetryableStatus (408/429/any 5xx): auto-retrying a
+// bare 5xx would hammer an outage, and the 503 rule reads the response
+// header, which a code-only helper cannot express.
 func isRetryableStatus(resp *http.Response) bool {
 	if resp == nil {
 		return false

@@ -1,0 +1,3 @@
+kind: fixed
+body: auth login credential-rejection and cloudId discovery errors now name the HTTP status text (e.g. 401 Unauthorized) instead of the bare status code
+time: 2026-07-06T08:38:55.1254643-04:00
