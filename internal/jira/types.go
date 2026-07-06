@@ -31,6 +31,9 @@ type IssueFields struct {
 	Priority     *Priority                  `json:"priority,omitempty"`
 	Labels       []string                   `json:"labels,omitempty"`
 	Components   []Component                `json:"components,omitempty"`
+	Parent       *Issue                     `json:"parent,omitempty"`
+	FixVersions  []Version                  `json:"fixVersions,omitempty"`
+	Versions     []Version                  `json:"versions,omitempty"`
 	Updated      *string                    `json:"updated,omitempty"`
 	Comment      *CommentPage               `json:"comment,omitempty"`
 	Worklog      *WorklogPage               `json:"worklog,omitempty"`
@@ -89,6 +92,13 @@ type User struct {
 }
 
 type Component struct {
+	Name *string `json:"name,omitempty"`
+}
+
+// Version is a project version reference as it appears in an issue's
+// fixVersions / versions arrays. Only the name is modeled — it is the
+// identity the CLI submits and diffs by.
+type Version struct {
 	Name *string `json:"name,omitempty"`
 }
 

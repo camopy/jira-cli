@@ -1,0 +1,3 @@
+kind: fixed
+body: 'issue create/edit gain --verify: after a successful live write the issue is re-fetched and every requested field is diffed against what the server actually applied, so silently dropped labels, parents, assignees, priorities, versions, components, and custom fields surface as field_not_applied warnings with a data.verification block instead of a clean success'
+time: 2026-07-06T15:06:05.4182389-04:00

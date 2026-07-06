@@ -13,6 +13,7 @@ import (
 
 	"charm.land/huh/v2"
 	clib "github.com/gechr/clib/cli/cobra"
+	"github.com/gechr/x/ptr"
 	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/browser"
@@ -767,7 +768,7 @@ func issueListDetailExpand() []string {
 }
 
 func issueCreateCommand() *cobra.Command {
-	var dryRun, validateRemote bool
+	var dryRun, validateRemote, verifyWrite bool
 	var summary, jsonInput, assignee, markdownInput, markdownFile string
 	var project, issueType, parent, priority string
 	var labels []string
@@ -803,6 +804,9 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 			noInput := cmdutil.NoInputRequested(cmd)
 			if validateRemote && !dryRun {
 				return fmt.Errorf("validation: --validate-remote is a read-only dry-run pre-flight; combine it with --dry-run (a live submit already validates against the create screen)")
+			}
+			if verifyWrite && dryRun {
+				return fmt.Errorf("validation: --verify re-fetches the issue after a live write; it cannot be combined with --dry-run")
 			}
 			payload := map[string]any{"summary": summary}
 			if jsonInput != "" {
@@ -1053,11 +1057,32 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 			}); err != nil {
 				return err
 			}
-			return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.create", map[string]any{"issue": issue, "dry_run": false}, resp, pipeOut.Warnings)
+			data := map[string]any{"issue": issue, "dry_run": false}
+			warnings := pipeOut.Warnings
+			if verifyWrite {
+				createdKey := ""
+				if issue != nil {
+					createdKey = ptr.Deref(issue.Key)
+				}
+				if createdKey == "" {
+					warnings = append(warnings, adf.Warning{
+						Type:    "verification_failed",
+						Message: "the write succeeded but the create response carried no issue key to verify against",
+					})
+				} else {
+					verification, vWarnings := runWriteVerification(cmd, client, createdKey, submitFields)
+					if verification != nil {
+						data["verification"] = verification
+					}
+					warnings = append(warnings, vWarnings...)
+				}
+			}
+			return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.create", data, resp, warnings)
 		},
 	}
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
 	cmdutil.AddBoolVar(cmd.Flags(), &validateRemote, "validate-remote", false, "With `--dry-run`, validate against the live create screen (read-only createmeta fetch)", clib.FlagExtra{Group: "Validation"})
+	cmdutil.AddBoolVar(cmd.Flags(), &verifyWrite, "verify", false, "After a live create, re-fetch the issue and warn about requested fields the server did not apply", clib.FlagExtra{Group: "Validation"})
 	cmdutil.AddStringVar(cmd.Flags(), &summary, "summary", "", "Issue summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
 	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read issue create payload from JSON file (canonical for agents)", "Input", "FILE")
 	cmdutil.AddMarkdownFlag(cmd, &markdownInput, &markdownFile, "Issue description as Markdown (lossy convenience layer, converted to ADF)", "")
@@ -1255,7 +1280,7 @@ func extractDescriptionDoc(payload map[string]any) (doc adf.Document, present bo
 }
 
 func issueEditCommand() *cobra.Command {
-	var dryRun, validateRemote bool
+	var dryRun, validateRemote, verifyWrite bool
 	var jsonInput, summary, assignee, markdownInput, markdownFile string
 	var parallelism int
 	cmd := &cobra.Command{
@@ -1295,6 +1320,12 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 			noInput := cmdutil.NoInputRequested(cmd)
 			if validateRemote && !dryRun {
 				return fmt.Errorf("validation: --validate-remote is a read-only dry-run pre-flight; combine it with --dry-run (a live submit already validates against the edit screen)")
+			}
+			if verifyWrite && dryRun {
+				return fmt.Errorf("validation: --verify re-fetches the issue after a live write; it cannot be combined with --dry-run")
+			}
+			if verifyWrite && len(keys) > 1 {
+				return fmt.Errorf("validation: --verify supports a single issue key; run per key to verify a fan-out edit")
 			}
 			payload := map[string]any{}
 			if jsonInput != "" {
@@ -1507,7 +1538,15 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 				if len(updateSection) > 0 {
 					data["update"] = updateSection
 				}
-				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.edit", data, resp, pipeOut.Warnings)
+				warnings := pipeOut.Warnings
+				if verifyWrite {
+					verification, vWarnings := runWriteVerification(cmd, editClient, keys[0], submitFields)
+					if verification != nil {
+						data["verification"] = verification
+					}
+					warnings = append(warnings, vWarnings...)
+				}
+				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.edit", data, resp, warnings)
 			}
 			data := map[string]any{
 				"issue":   keys[0],
@@ -1525,6 +1564,7 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 	}
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview mutation without submitting")
 	cmdutil.AddBoolVar(cmd.Flags(), &validateRemote, "validate-remote", false, "With `--dry-run`, validate against the live edit screen (read-only editmeta fetch)", clib.FlagExtra{Group: "Validation"})
+	cmdutil.AddBoolVar(cmd.Flags(), &verifyWrite, "verify", false, "After a live edit, re-fetch the issue and warn about requested fields the server did not apply (single key only)", clib.FlagExtra{Group: "Validation"})
 	cmdutil.AddFileFlag(cmd.Flags(), &jsonInput, "json-input", "", "Read issue edit payload from JSON file (canonical for agents)", "Input", "FILE")
 	cmdutil.AddStringVar(cmd.Flags(), &summary, "summary", "", "Replace the issue summary", clib.FlagExtra{Group: "Fields", Placeholder: "TEXT"})
 	cmdutil.AddMarkdownFlag(cmd, &markdownInput, &markdownFile, "Replace the description with Markdown (lossy convenience layer, converted to ADF)", "description-markdown")

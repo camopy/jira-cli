@@ -18,10 +18,13 @@ When: a brand-new issue is needed and the project key and issue type are known; 
 # guard
 - A bare `--dry-run` validates parsing, ADF compatibility, and a cached-priority mismatch, then stops. It has NO screen schema: unknown field names, invalid issue types, and customfield types pass through unchecked — it is a shape check, not proof Jira accepts the payload.
 - `--dry-run --validate-remote` fetches createmeta (read-only) and runs the same field-schema and customfield checks a live submit gets: unknown fields fail strict with exit 3, an issue type missing from the project's create screen errors, and known customfield types validate. `data.validated_remotely: true` confirms the fetch ran.
+- A `--validate-remote` pass is field-SHAPE validation only, NOT proof of referential validity: Jira can still silently drop a label not in the project's scheme, a parent the hierarchy rejects, or an option a context excludes — while returning 2xx. To confirm application, pass `--verify` on the live write (or read the issue back yourself).
+- `--verify` (live writes only; rejected with `--dry-run`) re-fetches the issue after a successful create and diffs the requested fields against what the server applied. Drops surface as `warnings[]` entries of type `field_not_applied` plus a `data.verification` block (`applied` values, `dropped` list, and `unverified` for requested fields the diff cannot observe, e.g. `duedate`). `ok` stays `true` — the write itself succeeded.
 - `--adf-strict` rejects any lossy step with exit 3; `--adf-best-effort` degrades silently with warnings.
 
 **Run**
 - Canonical: `jira issue create --no-input --json-input payload.json --output=json`
+- Verified write: `jira issue create --no-input --json-input payload.json --verify --output=json` (one extra read; check `warnings[]` for `field_not_applied`)
 - Server-validated preview: `jira issue create --no-input --json-input payload.json --dry-run --validate-remote --output=json`
 - Stdin variant: `cat payload.json | jira issue create --no-input --json-input - --output=json`
 - Default-backed one-shot: `jira issue create --no-input --summary "Refactor auth middleware" --assignee me --output=json`
