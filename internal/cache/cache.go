@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	xos "github.com/gechr/x/os"
 	"github.com/gechr/x/shell"
 )
 
@@ -121,8 +122,8 @@ func ReadCachedOrEmpty(profile, resource string) (Entry, bool, error) {
 }
 
 // Write atomically stores `data` (already JSON-encoded) under the (profile,
-// resource) key. Uses a temp-file-then-rename to avoid leaving a half-written
-// file when the process is killed mid-write.
+// resource) key. xos.AtomicWrite's temp-file-then-rename avoids leaving a
+// half-written file when the process is killed mid-write.
 func Write(profile, resource string, data json.RawMessage) (Entry, error) {
 	path, err := Path(profile, resource)
 	if err != nil {
@@ -142,22 +143,7 @@ func Write(profile, resource string, data json.RawMessage) (Entry, error) {
 	if err != nil {
 		return Entry{}, err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
-	if err != nil {
-		return Entry{}, err
-	}
-	defer func() {
-		// Best-effort cleanup if rename below failed.
-		_ = os.Remove(tmp.Name())
-	}()
-	if _, err := tmp.Write(body); err != nil {
-		_ = tmp.Close()
-		return Entry{}, err
-	}
-	if err := tmp.Close(); err != nil {
-		return Entry{}, err
-	}
-	if err := os.Rename(tmp.Name(), path); err != nil {
+	if err := xos.AtomicWrite(path, body, 0o600); err != nil {
 		return Entry{}, err
 	}
 	return entry, nil
