@@ -1230,18 +1230,26 @@ func httpStatusOf(resp *jira.Response) int {
 }
 
 func authLogoutCommand() *cobra.Command {
-	return &cobra.Command{
+	var baseURL string
+	cmd := &cobra.Command{
 		Use:   "logout PROFILE",
 		Short: "Remove stored credentials",
 		Long: "Remove the stored credential for one profile from its configured secret " +
 			"backend. Use it when a token is no longer valid or a machine should stop " +
 			"using that Jira account.\n\n" +
 			"The profile entry remains in config, so site metadata and defaults are kept. " +
-			"If no credential exists, the command succeeds and reports `removed: false`.",
+			"If no credential exists, the command succeeds and reports `removed: false`.\n\n" +
+			"A credential can outlive its profile: deleting the profile from config does " +
+			"not remove the stored secret. The keychain entry is keyed by site host and " +
+			"profile name, so passing `--base-url` supplies the missing half of that " +
+			"identity and lets logout purge the orphaned credential.",
 		Example: `$ jira auth logout work
 
 # Report whether a credential was removed
-$ jira auth logout work --output=json`,
+$ jira auth logout work --output=json
+
+# Purge the credential of a profile already deleted from config
+$ jira auth logout old-work --base-url acme.atlassian.net`,
 		Args:              cobra.ExactArgs(1),
 		Annotations:       map[string]string{"clib": "dynamic-args='profile'"},
 		ValidArgsFunction: cmdutil.CompleteProfileNames,
@@ -1252,7 +1260,22 @@ $ jira auth logout work --output=json`,
 			}
 			profile, err := cfg.ResolveProfile(args[0])
 			if err != nil {
-				return err
+				// A deleted profile leaves its credential behind. With an
+				// explicit --base-url the keychain entry (<host>/<profile>)
+				// is fully determined without the config entry, so the
+				// orphan can still be purged. Without it, keep refusing:
+				// fabricating a profile for a credential-admin command is
+				// how a typo probes the wrong namespace.
+				if !errors.Is(err, config.ErrProfileNotDefined) || baseURL == "" {
+					return err
+				}
+				profile = config.Profile{Name: args[0], SecretBackend: config.SecretBackendKeyring}
+			}
+			if baseURL != "" {
+				// The flag names the credential's site explicitly. This also
+				// reaches a credential stranded under a previous host after
+				// the profile was re-pointed at a new site.
+				profile.BaseURL = baseURL
 			}
 			ref, err := cmdutil.SecretRefFor(profile, profile.SecretBackend)
 			if err != nil {
@@ -1272,6 +1295,8 @@ $ jira auth logout work --output=json`,
 			return cmdutil.WriteEnvelope(cmd, "auth.logout", map[string]any{"profile": profile.Name, "removed": removed})
 		},
 	}
+	cmdutil.AddStringVar(cmd.Flags(), &baseURL, "base-url", "", "Jira site of the credential to remove; required to purge a credential whose profile was deleted from config", clib.FlagExtra{Group: "Configuration", Placeholder: "URL", Terse: "site URL"})
+	return cmd
 }
 
 func authSwitchCommand() *cobra.Command {

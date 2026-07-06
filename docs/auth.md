@@ -156,6 +156,17 @@ jira auth status --output json     # machine-readable health check
 jira auth logout <profile>         # remove a stored credential
 ```
 
+A stored credential outlives its profile: deleting the profile from config
+does not remove the secret from the keychain, and a plain
+`jira auth logout <profile>` refuses a name that is no longer in config. Pass
+the profile's old site as `--base-url` — the keychain entry is keyed by site
+host and profile name, and the pair identifies the orphaned credential
+without the config entry:
+
+```sh
+jira auth logout old-work --base-url acme.atlassian.net
+```
+
 ## See also
 
 *   [Configure](config.md) for profiles,

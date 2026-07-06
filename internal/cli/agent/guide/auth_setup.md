@@ -58,6 +58,7 @@ Resolution order: the environment override is checked first; if unset, the profi
 - Re-resolve credential from backend: `jira auth refresh`
 - Move credential between backends: `jira auth migrate --backend 1password`
 - Remove credential (keeps TOML metadata): `jira auth logout <profile>`
+- Purge a credential whose profile was already deleted from config: `jira auth logout <profile> --base-url <site>` — the keychain entry is keyed by site host + profile name, so the flag supplies the half config no longer holds; without it a deleted/unknown profile is refused (`profile_not_found`).
 - Redacted token diagnostics (length, prefix, backend — never the raw token): `jira auth token --output=json`
 - Verify post-login: `jira auth whoami --save` then `jira me`.
 
