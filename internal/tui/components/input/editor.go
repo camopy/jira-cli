@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	xshell "github.com/gechr/x/shell"
 )
 
 // EditorCommand returns the configured external editor: $JIRA_EDITOR wins,
@@ -54,7 +55,7 @@ func Edit(id, initial string) tea.Cmd {
 	// ed is deliberately unquoted so values with flags ("nvim -f", "code -w")
 	// work; the trade-off is that an editor binary living at a path with
 	// spaces must be wrapped in quotes inside the variable itself, same as git.
-	cmd := exec.Command("sh", "-c", ed+" "+shellQuote(path)) //nolint:gosec // running the user's own $EDITOR is the feature; path is our quoted temp file
+	cmd := exec.Command("sh", "-c", ed+" "+xshell.Quote(path)) //nolint:gosec // running the user's own $EDITOR is the feature; path is our quoted temp file
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		defer func() { _ = os.Remove(path) }()
 		if err != nil {
@@ -66,9 +67,4 @@ func Edit(id, initial string) tea.Cmd {
 		}
 		return EditorFinishedMsg{ID: id, Text: strings.TrimRight(string(b), "\n")}
 	})
-}
-
-// shellQuote single-quotes s for sh -c, escaping embedded quotes.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

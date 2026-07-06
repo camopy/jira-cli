@@ -1,7 +1,6 @@
 package input
 
 import (
-	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -69,16 +68,6 @@ func TestEditWithoutEditorReturnsError(t *testing.T) {
 	}
 	if msg.ID != "comment:JCT-1" || msg.Err == nil {
 		t.Errorf("msg = %+v, want routed ID and a configuration error", msg)
-	}
-}
-
-func TestShellQuoteEscapesSingleQuotes(t *testing.T) {
-	q := shellQuote("/tmp/it's here.md")
-	if !strings.HasPrefix(q, "'") || !strings.HasSuffix(q, "'") {
-		t.Errorf("not single-quoted: %q", q)
-	}
-	if !strings.Contains(q, `'\''`) {
-		t.Errorf("embedded quote not escaped: %q", q)
 	}
 }
 
