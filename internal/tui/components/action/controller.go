@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/gechr/x/ptr"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui/components/input"
 	"github.com/matcra587/jira-cli/internal/tui/components/picker"
@@ -160,7 +161,7 @@ func (c *Controller) openPick(mode Mode, issueKey, title string, transitions []*
 		if t == nil {
 			continue
 		}
-		items = append(items, picker.Item{Label: derefStr(t.Name), Value: derefStr(t.ID)})
+		items = append(items, picker.Item{Label: ptr.Deref(t.Name), Value: ptr.Deref(t.ID)})
 	}
 	c.pick = picker.New(title, items)
 }
@@ -283,11 +284,4 @@ func (c *Controller) View() string {
 	default:
 		return ""
 	}
-}
-
-func derefStr(p *string) string {
-	if p == nil {
-		return ""
-	}
-	return *p
 }

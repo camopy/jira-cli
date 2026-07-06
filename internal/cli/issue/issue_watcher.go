@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	"github.com/gechr/x/ptr"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/issuekey"
@@ -725,8 +726,8 @@ func watcherListData(users []*jira.User) []map[string]any {
 			continue
 		}
 		entry := map[string]any{
-			"account_id":   derefString(u.AccountID),
-			"display_name": derefString(u.DisplayName),
+			"account_id":   ptr.Deref(u.AccountID),
+			"display_name": ptr.Deref(u.DisplayName),
 		}
 		if u.EmailAddress != nil {
 			entry["email_address"] = *u.EmailAddress
@@ -734,21 +735,4 @@ func watcherListData(users []*jira.User) []map[string]any {
 		out = append(out, entry)
 	}
 	return out
-}
-
-// derefString turns a possibly-nil *string into "", used by the
-// envelope projectors that walk pkg/jira's nullable fields.
-func derefString(p *string) string {
-	if p == nil {
-		return ""
-	}
-	return *p
-}
-
-// derefInt64 turns a possibly-nil *int64 into 0.
-func derefInt64(p *int64) int64 {
-	if p == nil {
-		return 0
-	}
-	return *p
 }

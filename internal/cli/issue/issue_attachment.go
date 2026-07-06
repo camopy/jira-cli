@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	"github.com/gechr/x/ptr"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/issuekey"
@@ -636,11 +637,11 @@ func inferAttachmentMime(path string) string {
 // strings for nil fields rather than panicking.
 func attachmentToOutput(a jira.Attachment) map[string]any {
 	out := map[string]any{
-		"id":        derefString(a.ID),
-		"filename":  derefString(a.Filename),
-		"mime_type": derefString(a.MimeType),
-		"size":      derefInt64(a.Size),
-		"created":   derefString(a.Created),
+		"id":        ptr.Deref(a.ID),
+		"filename":  ptr.Deref(a.Filename),
+		"mime_type": ptr.Deref(a.MimeType),
+		"size":      ptr.Deref(a.Size),
+		"created":   ptr.Deref(a.Created),
 	}
 	out["author"] = attachmentUserToOutput(a.Author)
 	return out
@@ -651,7 +652,7 @@ func attachmentUserToOutput(u *jira.User) map[string]any {
 		return map[string]any{"account_id": "", "display_name": ""}
 	}
 	return map[string]any{
-		"account_id":   derefString(u.AccountID),
-		"display_name": derefString(u.DisplayName),
+		"account_id":   ptr.Deref(u.AccountID),
+		"display_name": ptr.Deref(u.DisplayName),
 	}
 }

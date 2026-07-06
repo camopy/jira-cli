@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
+	"github.com/gechr/x/ptr"
 	xstrings "github.com/gechr/x/strings"
 
 	"github.com/matcra587/jira-cli/internal/adf"
@@ -30,34 +31,27 @@ var priorityGlyphs = map[string]string{
 	"Lowest":  "↡",
 }
 
-func deref(p *string) string {
-	if p == nil {
-		return ""
-	}
-	return *p
-}
-
-func issueKey(i *jira.Issue) string { return deref(i.Key) }
+func issueKey(i *jira.Issue) string { return ptr.Deref(i.Key) }
 
 func issueSummary(i *jira.Issue) string {
 	if i.Fields == nil {
 		return ""
 	}
-	return deref(i.Fields.Summary)
+	return ptr.Deref(i.Fields.Summary)
 }
 
 func issueStatus(i *jira.Issue) string {
 	if i.Fields == nil || i.Fields.Status == nil {
 		return ""
 	}
-	return deref(i.Fields.Status.Name)
+	return ptr.Deref(i.Fields.Status.Name)
 }
 
 func issueAssignee(i *jira.Issue) string {
 	if i.Fields == nil || i.Fields.Assignee == nil {
 		return "Unassigned"
 	}
-	if name := deref(i.Fields.Assignee.DisplayName); name != "" {
+	if name := ptr.Deref(i.Fields.Assignee.DisplayName); name != "" {
 		return name
 	}
 	return "Unassigned"
@@ -67,21 +61,21 @@ func issuePriority(i *jira.Issue) string {
 	if i.Fields == nil || i.Fields.Priority == nil {
 		return ""
 	}
-	return deref(i.Fields.Priority.Name)
+	return ptr.Deref(i.Fields.Priority.Name)
 }
 
 func issueReporter(i *jira.Issue) string {
 	if i.Fields == nil || i.Fields.Reporter == nil {
 		return ""
 	}
-	return deref(i.Fields.Reporter.DisplayName)
+	return ptr.Deref(i.Fields.Reporter.DisplayName)
 }
 
 func issueTypeName(i *jira.Issue) string {
 	if i.Fields == nil || i.Fields.IssueType == nil {
 		return ""
 	}
-	return deref(i.Fields.IssueType.Name)
+	return ptr.Deref(i.Fields.IssueType.Name)
 }
 
 // typeGlyphFor maps an issue type name to a colored single-rune badge. Color is
@@ -126,7 +120,7 @@ func issueUpdated(i *jira.Issue) string {
 	if i.Fields == nil {
 		return ""
 	}
-	return deref(i.Fields.Updated)
+	return ptr.Deref(i.Fields.Updated)
 }
 
 // projectOf returns the project prefix of an issue key ("JCT-12" → "JCT").
@@ -520,19 +514,19 @@ func renderComments(i *jira.Issue, width int, md *markdown.Renderer) string {
 		}
 		author := "Unknown"
 		if c.Author != nil {
-			if n := deref(c.Author.DisplayName); n != "" {
+			if n := ptr.Deref(c.Author.DisplayName); n != "" {
 				author = n
 			}
 		}
 		head := theme.DetailLabel.Render(author)
-		if when := deref(c.Created); when != "" {
+		if when := ptr.Deref(c.Created); when != "" {
 			head += theme.DetailDim.Render("  " + when)
 		}
 		body := ""
 		if c.Body != nil {
 			// The index keeps keys distinct even if a comment arrives without
 			// an ID — a shared key would serve one comment's body for another.
-			id := fmt.Sprintf("%s:comment:%s:%d", issueKey(i), deref(c.ID), idx)
+			id := fmt.Sprintf("%s:comment:%s:%d", issueKey(i), ptr.Deref(c.ID), idx)
 			body = adfBody(md, id, c.Body, width)
 		}
 		parts = append(parts, head+"\n"+body)

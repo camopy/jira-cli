@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/gechr/x/ptr"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui/components/picker"
 )
@@ -74,7 +75,7 @@ const unassignedFacet = "Unassigned"
 
 func assigneeFacetValue(i *jira.Issue) string {
 	if i.Fields != nil && i.Fields.Assignee != nil {
-		if a := deref(i.Fields.Assignee.DisplayName); a != "" {
+		if a := ptr.Deref(i.Fields.Assignee.DisplayName); a != "" {
 			return a
 		}
 	}

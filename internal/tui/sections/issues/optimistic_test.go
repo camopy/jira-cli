@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/gechr/x/ptr"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui/components/action"
 )
@@ -16,7 +17,7 @@ func rowAssignee(m *Model) string {
 	if f.Assignee == nil {
 		return ""
 	}
-	return deref(f.Assignee.DisplayName)
+	return ptr.Deref(f.Assignee.DisplayName)
 }
 
 func TestEditAppliesSummaryBeforeTheWriteLands(t *testing.T) {

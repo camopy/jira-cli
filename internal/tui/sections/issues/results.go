@@ -15,6 +15,7 @@ import (
 	"github.com/gechr/primer/flash"
 	"github.com/gechr/primer/overlay"
 	"github.com/gechr/primer/scrollbar"
+	"github.com/gechr/x/ptr"
 	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/browser"
@@ -1485,8 +1486,8 @@ func transitionByName(ctx context.Context, svc core.Services, key, status string
 // or "" when none matches.
 func findTransitionID(ts []*jira.Transition, status string) string {
 	for _, t := range ts {
-		if strings.EqualFold(deref(t.Name), status) {
-			return deref(t.ID)
+		if strings.EqualFold(ptr.Deref(t.Name), status) {
+			return ptr.Deref(t.ID)
 		}
 	}
 	return ""
