@@ -54,7 +54,12 @@ func ParseOutputMode(v string) (OutputMode, error) {
 	case "compact":
 		return OutputCompact, nil
 	default:
-		return "", fmt.Errorf("invalid --output mode %q: must be one of auto, human, json, compact", v)
+		// A typed flag-value error keeps this on the flag_value_invalid
+		// code with the offending flag named, consistent with every other
+		// flag-value parse failure.
+		fe := NewCLIInputError(InputFlagValueInvalid, fmt.Sprintf("invalid --output mode %q: must be one of auto, human, json, compact", v))
+		fe.Flag = "output"
+		return "", fe
 	}
 }
 

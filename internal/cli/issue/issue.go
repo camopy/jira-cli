@@ -1274,6 +1274,13 @@ func extractDescriptionDoc(payload map[string]any) (doc adf.Document, present bo
 	}
 	parsed, _, perr := adf.Parse(encoded)
 	if perr != nil {
+		// A wrong-shape description (a plain string, say) carries a typed
+		// identity; name the offending payload key so the envelope's `field`
+		// can point at it. A nested path reported by the decoder wins.
+		var invalid *adf.InvalidDocumentError
+		if errors.As(perr, &invalid) && invalid.Field == "" {
+			invalid.Field = "description"
+		}
 		return adf.Document{}, false, nil, fmt.Errorf("description: %w", perr)
 	}
 	return parsed, true, nil, nil

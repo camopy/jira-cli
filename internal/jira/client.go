@@ -443,16 +443,10 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 		return nil, err
 	}
 	if c.readOnly && c.isMutationRequest(req) {
-		return nil, &APIError{
-			Type:    ErrorTypeValidation,
-			Message: "read-only mode is active (JIRA_READ_ONLY env or profile read_only=true); refusing " + req.Method + " " + req.URL.Path,
-		}
+		return nil, &ReadOnlyError{Method: req.Method, Path: req.URL.Path}
 	}
 	if c.dryRun && c.isMutationRequest(req) {
-		return nil, &APIError{
-			Type:    ErrorTypeValidation,
-			Message: "dry-run is active; refusing to send " + req.Method + " " + req.URL.Path,
-		}
+		return nil, &DryRunBlockedError{Method: req.Method, Path: req.URL.Path}
 	}
 	ctx := req.Context()
 	if c.debug {
@@ -501,7 +495,7 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 		ec := parseErrorCollection(msgBody)
 		apiErr := &APIError{
 			StatusCode:         res.StatusCode,
-			Type:               classifyStatus(res.StatusCode),
+			Type:               ClassifyStatus(res.StatusCode),
 			Message:            displayMessage(ec, string(msgBody)),
 			ErrorMessages:      ec.ErrorMessages,
 			FieldErrors:        ec.Errors,
@@ -851,11 +845,16 @@ func (c *Client) relativeEscapedPath(req *http.Request) (string, bool) {
 	return "/" + strings.TrimPrefix(path, basePath), true
 }
 
-func classifyStatus(code int) ErrorType {
+func ClassifyStatus(code int) ErrorType {
 	switch {
 	case code == http.StatusUnauthorized || code == http.StatusForbidden:
 		return ErrorTypeAuth
 	case code == http.StatusNotFound:
+		return ErrorTypeNotFound
+	case code == http.StatusGone:
+		// 410 is a permanently deleted resource: not-found (exit 2) tells an
+		// agent to fix the reference, where validation (exit 3) would
+		// suggest correcting the request.
 		return ErrorTypeNotFound
 	case code == http.StatusTooManyRequests:
 		return ErrorTypeRateLimit

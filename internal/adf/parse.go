@@ -2,6 +2,7 @@ package adf
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -39,13 +40,35 @@ func (w Warning) WarningNodeType() string { return w.NodeType }
 func (w Warning) WarningMarkType() string { return w.MarkType }
 func (w Warning) WarningIsLossy() bool    { return w.Lossy }
 
+// InvalidDocumentError reports a value that is not an ADF document object —
+// most commonly a plain string where {"type":"doc",...} is required. It is
+// TYPED so the error mapper can emit a stable adf_invalid code with a clean
+// message instead of leaking the raw json unmarshal error to the envelope.
+type InvalidDocumentError struct {
+	// Got names the JSON shape that was supplied ("string", "number", ...).
+	Got string
+	// Field optionally names the payload key that carried the bad value;
+	// callers that know the key tag it after Parse returns.
+	Field string
+}
+
+func (e *InvalidDocumentError) Error() string {
+	return "value is not an ADF document: got a JSON " + e.Got + ", want an object"
+}
+
 // Parse decodes ADF JSON into a typed Document and returns any best-effort
 // warnings collected during the decode. Unknown nodes/marks are preserved
 // opaquely and surface no warnings on parse — they only matter at
-// render/submit time.
+// render/submit time. A value of the wrong JSON shape (a string where the
+// document object belongs) returns *InvalidDocumentError so the failure
+// carries a stable identity instead of the raw json error text.
 func Parse(data []byte) (Document, []Warning, error) {
 	var doc Document
 	if err := json.Unmarshal(data, &doc); err != nil {
+		var typeErr *json.UnmarshalTypeError
+		if errors.As(err, &typeErr) {
+			return Document{}, nil, &InvalidDocumentError{Got: typeErr.Value, Field: typeErr.Field}
+		}
 		return Document{}, nil, fmt.Errorf("adf parse: %w", err)
 	}
 	return doc, nil, nil

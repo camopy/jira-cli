@@ -54,7 +54,7 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 - `meta.exit_code` [int, present on failure] — mirrors the process exit code; `data` is `null` when set.
 - `meta.pagination` [object, optional] — `startAt`, `maxResults`, `total` (only when the endpoint reports one), `isLast`, `nextCursor`; walk until `isLast=true`, resume via `--cursor` where supported. Absent entirely on mutations.
 - `data` [object, required on success] — command-specific payload; `null` on failure.
-- `errors[]` [array, required] — each entry carries `type`, `code` (stable snake_case — branch on this, never on `message`), `message`, `hint`, `retryable`. Optional fields when relevant: `flag`, `field`, `http_status`, `retry_after_seconds`, `provider`, `upstream_code`, `upstream_status`. Jira API errors leave `upstream_code` empty — Jira exposes no stable machine error code.
+- `errors[]` [array, required] — each entry carries `type`, `code` (stable snake_case — branch on this, never on `message`), `message`, `hint` (never empty), `retryable`. Optional fields when relevant: `flag` (argv-level: the offending flag name), `field` (payload-level: the offending JSON key), `path` (a document path within the offending value), `http_status`, `retry_after_seconds`, `rate_limit_remaining`, `provider`, `upstream_code`, `upstream_status`, `upstream_messages` (Jira's errorMessages array), `upstream_field_errors` (Jira's per-field errors map), `candidates` (structured disambiguation rows for `user_ambiguous` / `board_ambiguous`). Jira API errors leave `upstream_code` empty — Jira exposes no stable machine error code.
 - `warnings[]` [array, required] — non-fatal diagnostics; never blank on a successful command that degraded.
 
 **Behavior**
@@ -117,6 +117,8 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
   | 3    | Validation error / mutex flags / no-input gap    |
   | 4    | Rate limited                                     |
   | 5    | Server error                                     |
+  | 6    | Canceled (`code=canceled`: SIGINT or the root context canceled mid-request; retryable) |
+  | 7    | Timeout (`code=timeout`: the `--timeout` deadline elapsed; retryable — raise `--timeout`) |
 
 - `--debug` redacts `Authorization`, `Cookie`, and `X-Atlassian-Token` headers to `REDACTED` in the dumped traffic. `Atl-Traceid` is preserved — quote it on Atlassian support tickets.
 - Bounded drains (boards cache, etc.) emit a `cache-truncated` warning naming the bound that fired, and surface `truncated` / `truncated_reason` in `data`.
@@ -128,6 +130,9 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 | Exit 1 | Authentication failure | → `auth_setup` |
 | Exit 2 | Not found (issue key, attachment id, link id, profile, etc.) | Re-resolve the identifier; check `auth_setup` if the resource should exist |
 | Exit 2, `code=profile_not_found` | `--profile` names a profile that is undefined or has no base URL | `jira config profile` to list; `jira auth login --profile <name>` to create or complete it |
+| Exit 2, `code=jira_gone` | The resource was permanently deleted (HTTP 410) | Drop any cached reference to it |
+| Exit 3, `code=jira_bad_request` | Jira rejected the request body (HTTP 400) | Check `upstream_messages` / `upstream_field_errors`, correct the input |
+| Exit 3, `code=jira_conflict` | The resource changed since it was read (HTTP 409) | Re-fetch the issue, then retry against the latest version |
 | Exit 3, `code=flag_unknown` | Unrecognized flag (often a removed legacy boolean like `--json`/`--compact`/`--plain`/`--raw`) | Drop the flag; use `--output=json|compact` |
 | Exit 3, `code=flag_value_missing` | A flag that needs a value was given none | Supply the value |
 | Exit 3, `code=flag_value_invalid` | Flag value failed type or range parsing | Match the documented value set |
@@ -136,7 +141,9 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 | Exit 3, `code=arg_count_invalid` | Wrong number of positional arguments | Match the documented arity |
 | Exit 3, `code=arg_value_invalid` | Positional argument value is outside the command's accepted set | Use one of the documented values |
 | Exit 3, `code=command_unknown` | Unrecognized command; `hint` may carry `Did you mean <name>?` | Use the suggested name |
-| Exit 3, `read-only mode is active` | `JIRA_READ_ONLY=true` or profile `read_only = true` | Unset / flip the profile, or do the work elsewhere |
+| Exit 3, `code=read_only` | `JIRA_READ_ONLY=true` or profile `read_only = true` | Unset / flip the profile, or do the work elsewhere |
+| Exit 6, `code=canceled` | SIGINT / root context canceled mid-request | Retry when ready |
+| Exit 7, `code=timeout` | The `--timeout` deadline elapsed | Raise `--timeout` or retry |
 | Exit 3 under `--no-input` with no field flags | Empty headless edit | Pass at least `--summary` / `--assignee` / `--json-input` → `edit_issue` |
 | Exit 4 | Rate limited; surfaced after any applicable retry was exhausted or skipped; `errors[0].retry_after_seconds` set when known | Raise `--max-retry-wait` / `JIRA_MAX_RETRY_WAIT`, or wait for the window to reset |
 | Exit 5 | Server error (Jira 5xx or a 413 upload-size cap); `errors[0].message` carries the upstream text | Retry if transient; for 413 split or shrink the upload |

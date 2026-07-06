@@ -24,10 +24,12 @@ const (
 )
 
 // NewError builds a structured Error with a normalized code derived from
-// the type. Callers with a more specific code should set Error.Code
-// directly afterward.
+// the type and that code's canonical hint. Callers with a more specific
+// code should set Error.Code AND Error.Hint directly afterward — every
+// code carries a non-empty hint (the taxonomy guard enforces it).
 func NewError(kind ErrorType, msg string) Error {
-	return Error{Type: string(kind), Code: defaultCodeForType(kind), Message: msg, Retryable: kind == ErrorTypeRateLimit}
+	code := defaultCodeForType(kind)
+	return Error{Type: string(kind), Code: code, Message: msg, Hint: defaultHintForCode(code), Retryable: kind == ErrorTypeRateLimit}
 }
 
 // defaultCodeForType is the fallback stable code when no more specific
@@ -46,6 +48,26 @@ func defaultCodeForType(kind ErrorType) string {
 		return "server_error"
 	default:
 		return "error"
+	}
+}
+
+// defaultHintForCode is the canonical next-action hint for each fallback
+// code, so even an untyped error hands the caller a next step. Specific
+// codes carry their own hints at the site that sets the code.
+func defaultHintForCode(code string) string {
+	switch code {
+	case "auth_failed":
+		return "Authentication failed — check the credential with `jira auth status`, then re-login with `jira auth login`."
+	case "not_found":
+		return "Re-resolve the identifier; it does not exist or is not visible to this account."
+	case "validation_failed":
+		return "Review the request fields and retry."
+	case "rate_limited":
+		return "Raise --max-retry-wait (or JIRA_MAX_RETRY_WAIT) to wait out longer limits, or retry once the window resets."
+	case "server_error":
+		return "Jira reported an unexpected error; retry after a short backoff."
+	default:
+		return "Rerun with --debug and report the failure if it persists."
 	}
 }
 
@@ -123,6 +145,15 @@ func MapError(err error) Error {
 		return out
 	}
 	if out, ok := mapLossyConversionError(err); ok {
+		return out
+	}
+	if out, ok := mapADFInvalidError(err); ok {
+		return out
+	}
+	if out, ok := mapReadOnlyError(err); ok {
+		return out
+	}
+	if out, ok := mapDryRunBlockedError(err); ok {
 		return out
 	}
 	if out, ok := mapJiraAPIError(err); ok {
@@ -272,6 +303,52 @@ func mapLossyConversionError(err error) (Error, bool) {
 	return out, true
 }
 
+// mapADFInvalidError adapts an *adf.InvalidDocumentError — a payload value
+// of the wrong JSON shape where an ADF document object belongs. The typed
+// error's clean message replaces the raw json unmarshal text, which must
+// never reach the envelope; `field` names the offending payload key when
+// the decode path could tell.
+func mapADFInvalidError(err error) (Error, bool) {
+	var invalid *adf.InvalidDocumentError
+	if !errors.As(err, &invalid) {
+		return Error{}, false
+	}
+	out := NewError(ErrorTypeValidation, invalid.Error())
+	out.Code = "adf_invalid"
+	out.Hint = "This field must be an ADF document (object), not a " + invalid.Got +
+		"; see `jira agent guide adf_reference` for the document shape, or use the field's *_markdown alias."
+	out.Field = invalid.Field
+	return out, true
+}
+
+// mapReadOnlyError adapts the transport's *jira.ReadOnlyError so a blocked
+// mutation carries its own stable code instead of the validation_failed
+// catch-all. Checked ahead of mapJiraAPIError: read-only refusals happen
+// before any HTTP exchange, so they are not API errors.
+func mapReadOnlyError(err error) (Error, bool) {
+	var ro *jira.ReadOnlyError
+	if !errors.As(err, &ro) {
+		return Error{}, false
+	}
+	out := NewError(ErrorTypeValidation, ro.Error())
+	out.Code = "read_only"
+	out.Hint = "Read-only mode is active (JIRA_READ_ONLY or profile read_only=true); unset the env var, set the profile's read_only=false, or run the mutation under a profile that allows writes."
+	return out, true
+}
+
+// mapDryRunBlockedError adapts the transport's *jira.DryRunBlockedError —
+// the guard that stops a mutation reaching the wire under --dry-run.
+func mapDryRunBlockedError(err error) (Error, bool) {
+	var blocked *jira.DryRunBlockedError
+	if !errors.As(err, &blocked) {
+		return Error{}, false
+	}
+	out := NewError(ErrorTypeValidation, blocked.Error())
+	out.Code = "dry_run_blocked"
+	out.Hint = "A mutation reached the transport under --dry-run; this is an internal guard, not a user error — rerun without --dry-run to submit."
+	return out, true
+}
+
 // mapJiraAPIError adapts a *jira.APIError. Jira exposes no stable
 // machine error code, so upstream_code stays empty; the normalized code
 // is derived from the HTTP status. Schema-backed ErrorCollection fields
@@ -308,6 +385,7 @@ func mapIssueKeyError(err error) (Error, bool) {
 		return Error{}, false
 	}
 	out := NewError(ErrorTypeValidation, limit.Error())
+	out.Code = "issue_key_expansion_limit"
 	out.Hint = limit.Hint()
 	return out, true
 }
@@ -325,6 +403,11 @@ func mapValidationCandidatesError(err error) (Error, bool) {
 	}
 	out := NewError(ErrorTypeValidation, vce.Error())
 	if cands := vce.BoardCandidates(); len(cands) > 0 {
+		// Multiple boards matched: the caller picks one from candidates[].
+		// Candidate-less board failures (no default board set) keep the
+		// validation_failed catch-all and its canonical hint.
+		out.Code = "board_ambiguous"
+		out.Hint = "Pick a board from candidates[] and pass it via --board, or set a default board for the profile."
 		out.Candidates = cands
 	}
 	return out, true
@@ -340,6 +423,8 @@ func mapAmbiguousUserError(err error) (Error, bool) {
 		return Error{}, false
 	}
 	out := NewError(ErrorTypeValidation, ambig.Error())
+	out.Code = "user_ambiguous"
+	out.Hint = "Pick an account_id from candidates[] and pass it directly instead of the email."
 	cands := make([]map[string]any, 0, len(ambig.Candidates))
 	for _, c := range ambig.Candidates {
 		if c == nil {
@@ -412,10 +497,10 @@ func jiraHintForStatus(status int, kind ErrorType) string {
 		return "Jira rate-limited the request beyond the retry budget. Raise --max-retry-wait (or JIRA_MAX_RETRY_WAIT) to wait out longer limits, or retry once the window resets."
 	case status >= 500:
 		return "Jira reported a server-side error; retry after a short backoff."
-	case kind == ErrorTypeValidation:
-		return "Review the request fields and retry."
 	default:
-		return ""
+		// An unmapped status falls back to the type's canonical hint, so a
+		// jira-mapped error never ships hintless.
+		return defaultHintForCode(defaultCodeForType(kind))
 	}
 }
 

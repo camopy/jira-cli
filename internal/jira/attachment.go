@@ -231,7 +231,7 @@ func (s *attachmentService) Download(ctx context.Context, attachmentID string) (
 		ec := parseErrorCollection(msgBody)
 		return nil, resp, &APIError{
 			StatusCode:         res.StatusCode,
-			Type:               classifyStatus(res.StatusCode),
+			Type:               ClassifyStatus(res.StatusCode),
 			Message:            displayMessage(ec, string(msgBody)),
 			ErrorMessages:      ec.ErrorMessages,
 			FieldErrors:        ec.Errors,
