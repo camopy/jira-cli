@@ -1,3 +1,0 @@
-kind: fixed
-body: issue attachment download/delete now validate their issue-key argument (a traversal path or malformed key fails fast with exit 3), and negative --timeout, --max-retry-wait, and --limit values are rejected instead of silently falling back; 0 remains the documented default/disabled sentinel
-time: 2026-07-05T23:54:04.2145828-04:00

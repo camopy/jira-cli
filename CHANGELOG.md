@@ -1,6 +1,16 @@
 # Release Notes
 
 
+## [0.8.1](https://github.com/matcra587/jira-cli/releases/tag/v0.8.1) — 2026-07-06
+
+### Fixed
+
+- search jql/saved --fields now narrows the flat per-issue summary projection instead of silently switching the issues array to Jira's raw wire shape; --full remains the raw-record mode
+- worklog add --started now accepts ISO-8601 and relative times (yesterday, 2h ago), normalizes them to the exact timestamp format Jira requires, and rejects unparseable values at --dry-run instead of on submit
+- auth logout can now purge a credential whose profile was deleted from config: pass --base-url with the profile's old site and the orphaned keychain token is removed instead of failing with profile not found
+- issue attachment download/delete now validate their issue-key argument (a traversal path or malformed key fails fast with exit 3), and negative --timeout, --max-retry-wait, and --limit values are rejected instead of silently falling back; 0 remains the documented default/disabled sentinel
+- issue create/edit --json-input now accept flat-string values for object-valued system fields (project, issuetype, parent, priority, assignee, reporter, components, fixVersions, versions), lifting them to the wire shape Jira requires instead of passing --dry-run and failing on submit; explicit wire objects are untouched
+
 ## [0.8.0](https://github.com/matcra587/jira-cli/releases/tag/v0.8.0) — 2026-07-05
 
 ### Added
