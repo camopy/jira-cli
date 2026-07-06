@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/issuekey"
@@ -427,11 +428,11 @@ func classifyUntyped(err error) Error {
 	switch {
 	case strings.Contains(lower, "unsupported auth type"):
 		return NewError(ErrorTypeValidation, msg)
-	case strings.Contains(lower, "credential") || strings.Contains(lower, "auth"):
+	case xstrings.ContainsAny(lower, "credential", "auth"):
 		return NewError(ErrorTypeAuth, msg)
 	case strings.Contains(lower, "not found"):
 		return NewError(ErrorTypeNotFound, msg)
-	case strings.Contains(lower, "rate limit") || strings.Contains(lower, "too many"):
+	case xstrings.ContainsAny(lower, "rate limit", "too many"):
 		return NewError(ErrorTypeRateLimit, msg)
 	case strings.Contains(lower, "server"):
 		return NewError(ErrorTypeServer, msg)

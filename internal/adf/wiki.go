@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	xstrings "github.com/gechr/x/strings"
 )
 
 // This file normalizes Jira wiki markup into the GFM dialect the converter
@@ -59,7 +61,7 @@ func hasCommonMarkSignal(input string) bool {
 		case isTableSeparatorRow(t):
 			return true
 		}
-		if strings.Contains(t, "**") || strings.Contains(t, "](") || strings.Contains(t, "![") {
+		if xstrings.ContainsAny(t, "**", "](", "![") {
 			return true
 		}
 	}

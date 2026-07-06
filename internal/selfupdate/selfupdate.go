@@ -26,6 +26,7 @@ import (
 	"github.com/gechr/clive/updater/brew"
 	"github.com/gechr/clive/updater/github"
 	cliveversion "github.com/gechr/clive/version"
+	xstrings "github.com/gechr/x/strings"
 
 	"github.com/matcra587/jira-cli/internal/version"
 )
@@ -127,7 +128,7 @@ func detect(exe, mainVersion, buildBy string, vcsStamped bool) Channel {
 // tree. Scoop runs binaries from <root>/apps/<app>/<version>/ behind
 // <root>/shims/, and both segments survive custom SCOOP roots.
 func isScoopPath(p string) bool {
-	return strings.Contains(p, "/scoop/apps/") || strings.Contains(p, "/scoop/shims/")
+	return xstrings.ContainsAny(p, "/scoop/apps/", "/scoop/shims/")
 }
 
 // isBrewPath reports whether the normalized path lives under a Homebrew
