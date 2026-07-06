@@ -10,6 +10,9 @@ import (
 	"sort"
 	"strings"
 
+	xslices "github.com/gechr/x/slices"
+	xstrings "github.com/gechr/x/strings"
+
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -65,7 +68,7 @@ var (
 )
 
 // rankCandidates orders cands by their position in priority (trailing spaces
-// and case ignored), then alphabetically for the unlisted rest.
+// and case ignored), then naturally for the unlisted rest.
 func rankCandidates(cands, priority []string) []string {
 	rank := make(map[string]int, len(priority))
 	for i, p := range priority {
@@ -82,7 +85,7 @@ func rankCandidates(cands, priority []string) []string {
 		if ri != rj {
 			return ri < rj
 		}
-		return cands[i] < cands[j]
+		return xstrings.LessNatural(cands[i], cands[j])
 	})
 	return cands
 }
@@ -238,7 +241,7 @@ func candidatesFor(ref jira.JQLReference, c jqlContext) []string {
 		// ORDER BY ends the query: no AND/OR after a sort direction, and the
 		// comma-separated sort tail isn't modeled — offer nothing.
 	}
-	sort.Strings(out)
+	xslices.SortNatural(out)
 	return out
 }
 

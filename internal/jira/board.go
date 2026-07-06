@@ -13,10 +13,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
 
+	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/cache"
 )
 
@@ -296,8 +296,9 @@ func (s *boardService) ProjectsForBoard(ctx context.Context, boardID int) ([]str
 		}
 		startAt = nextOffset(startAt, len(wire.Values), pageSize, wire.MaxResults)
 	}
-	// Sort ascending for deterministic envelope round-trips.
-	slices.Sort(keys)
+	// Sort naturally (PROJ2 before PROJ10) for deterministic envelope
+	// round-trips.
+	xslices.SortNatural(keys)
 	return keys, lastResp, nil
 }
 

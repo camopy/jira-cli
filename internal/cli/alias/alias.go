@@ -6,11 +6,11 @@ import (
 	"io"
 	"os"
 	"slices"
-	"sort"
 	"strings"
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/gechr/x/shell"
+	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/cli/startup"
 	"github.com/matcra587/jira-cli/internal/config"
@@ -209,7 +209,7 @@ func completeAliasNames(cmd *cobra.Command, _ []string, _ string) ([]string, cob
 	for name := range cfg.Aliases {
 		out = append(out, name)
 	}
-	sort.Strings(out)
+	xslices.SortNatural(out)
 	return out, cobra.ShellCompDirectiveNoFileComp
 }
 
@@ -303,7 +303,7 @@ func sortedAliasNames(aliases map[string]string) []string {
 	for name := range aliases {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	xslices.SortNatural(names)
 	return names
 }
 

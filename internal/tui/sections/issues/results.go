@@ -3,7 +3,6 @@ package issues
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/gechr/primer/flash"
 	"github.com/gechr/primer/overlay"
 	"github.com/gechr/primer/scrollbar"
+	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/browser"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -78,7 +78,7 @@ func (b bulkResult) summary() string {
 	for k := range b.failed {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	xslices.SortNatural(keys)
 	return fmt.Sprintf("%d %s · failed: %s", len(b.succeeded), b.verb, strings.Join(keys, ", "))
 }
 
