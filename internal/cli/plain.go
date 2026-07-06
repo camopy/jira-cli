@@ -205,6 +205,8 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 		return WriteLinkTypesPlain(w, command, data, opts...)
 	case "boards.list":
 		return WriteBoardListPlain(w, command, data, opts...)
+	case "alias.list":
+		return WriteAliasListPlain(w, command, data, opts...)
 	case "user.search":
 		return writeUserSearchPlain(logger, data, cfg)
 	case "release.notes":
@@ -331,9 +333,31 @@ func plainFields(data any) []plainField {
 			writePlainField(&fields, key, v[key])
 		}
 	default:
+		// Any other string-keyed map (map[string]string, map[string]int, ...)
+		// renders one field per key like map[string]any above, instead of
+		// collapsing the whole map into a single value={...} line.
+		if m, ok := stringKeyedMap(data); ok {
+			return plainFields(m)
+		}
 		writePlainField(&fields, "value", v)
 	}
 	return fields
+}
+
+// stringKeyedMap converts any map with string-kinded keys to map[string]any so
+// the plain renderers can walk it per key. Non-map values and maps with
+// non-string keys report false.
+func stringKeyedMap(value any) (map[string]any, bool) {
+	rv := reflect.ValueOf(value)
+	if !rv.IsValid() || rv.Kind() != reflect.Map || rv.Type().Key().Kind() != reflect.String {
+		return nil, false
+	}
+	out := make(map[string]any, rv.Len())
+	iter := rv.MapRange()
+	for iter.Next() {
+		out[iter.Key().String()] = iter.Value().Interface()
+	}
+	return out, true
 }
 
 func writePlainField(fields *[]plainField, key string, value any) {
@@ -366,6 +390,12 @@ func writePlainValue(fields *[]plainField, key string, value any) {
 			writePlainValue(fields, key+"."+childKey, v[childKey])
 		}
 	default:
+		// Nested string-keyed maps of any value type take the map[string]any
+		// path above rather than collapsing to {...}.
+		if m, ok := stringKeyedMap(value); ok {
+			writePlainValue(fields, key, m)
+			return
+		}
 		writePlainLine(fields, key, value)
 	}
 }
