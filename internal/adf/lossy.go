@@ -17,7 +17,10 @@
 
 package adf
 
-import "sort"
+import (
+	"maps"
+	"slices"
+)
 
 // LossyResult is the typed return for ToMarkdownLossy. Markdown is the
 // best-effort GFM rendering; LossyConstructs is the sorted unique list
@@ -110,10 +113,5 @@ func sortedKeys(set map[string]struct{}) []string {
 	if len(set) == 0 {
 		return nil
 	}
-	out := make([]string, 0, len(set))
-	for k := range set {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
+	return slices.Sorted(maps.Keys(set))
 }

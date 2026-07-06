@@ -15,8 +15,10 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -489,12 +491,7 @@ func cappedObjectDesc(node, props map[string]any) string {
 
 // sortedSchemaKeys returns a map's keys sorted, for byte-stable output.
 func sortedSchemaKeys(m map[string]any) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
+	return slices.Sorted(maps.Keys(m))
 }
 
 // escapeTableCell makes a value safe inside a Markdown table cell: pipes would

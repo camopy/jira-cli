@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	xmaps "github.com/gechr/x/maps"
 	"github.com/gechr/x/shell"
 	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
@@ -205,10 +206,7 @@ func completeAliasNames(cmd *cobra.Command, _ []string, _ string) ([]string, cob
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	out := make([]string, 0, len(cfg.Aliases))
-	for name := range cfg.Aliases {
-		out = append(out, name)
-	}
+	out := xmaps.KeysSlice(cfg.Aliases)
 	xslices.SortNatural(out)
 	return out, cobra.ShellCompDirectiveNoFileComp
 }
@@ -299,10 +297,7 @@ func mustSplitAliasExpansion(expansion string) []string {
 }
 
 func sortedAliasNames(aliases map[string]string) []string {
-	names := make([]string, 0, len(aliases))
-	for name := range aliases {
-		names = append(names, name)
-	}
+	names := xmaps.KeysSlice(aliases)
 	xslices.SortNatural(names)
 	return names
 }

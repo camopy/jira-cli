@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"sort"
+
+	xmaps "github.com/gechr/x/maps"
 )
 
 // Document is the canonical ADF root.
@@ -143,13 +144,8 @@ func (n Node) MarshalJSON() ([]byte, error) {
 		}
 	}
 	if len(n.extra) > 0 {
-		keys := make([]string, 0, len(n.extra))
-		for k := range n.extra {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			emitRaw(k, n.extra[k])
+		for k, v := range xmaps.Sorted(n.extra) {
+			emitRaw(k, v)
 		}
 	}
 	buf.WriteByte('}')
@@ -222,13 +218,8 @@ func (m Mark) MarshalJSON() ([]byte, error) {
 		}
 	}
 	if len(m.extra) > 0 {
-		keys := make([]string, 0, len(m.extra))
-		for k := range m.extra {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			emitRaw(k, m.extra[k])
+		for k, v := range xmaps.Sorted(m.extra) {
+			emitRaw(k, v)
 		}
 	}
 	buf.WriteByte('}')

@@ -9,7 +9,8 @@ package keys
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 
 	"charm.land/bubbles/v2/key"
 )
@@ -147,13 +148,7 @@ func (m *Map) index() map[string]*key.Binding {
 // Names returns every rebindable binding name, sorted. Useful for docs and for
 // validating a config file's keybinding overrides.
 func (m *Map) Names() []string {
-	idx := m.index()
-	names := make([]string, 0, len(idx))
-	for name := range idx {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
+	return slices.Sorted(maps.Keys(m.index()))
 }
 
 // Rebind applies user overrides keyed by binding name (e.g. {"transition":

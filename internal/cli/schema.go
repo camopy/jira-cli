@@ -1,6 +1,9 @@
 package cli
 
-import "sort"
+import (
+	"maps"
+	"slices"
+)
 
 type CommandSchema struct {
 	Command      string         `json:"command"`
@@ -31,10 +34,5 @@ func (r *SchemaRegistry) Get(command string) (CommandSchema, bool) {
 }
 
 func (r *SchemaRegistry) Commands() []string {
-	out := make([]string, 0, len(r.commands))
-	for command := range r.commands {
-		out = append(out, command)
-	}
-	sort.Strings(out)
-	return out
+	return slices.Sorted(maps.Keys(r.commands))
 }

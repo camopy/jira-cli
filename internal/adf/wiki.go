@@ -2,7 +2,9 @@ package adf
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -216,11 +218,7 @@ func normalizeWikiMarkup(input string) wikiNormalized {
 		out = append(out, rewriteInline(line, seen))
 	}
 
-	constructs := make([]string, 0, len(seen))
-	for name := range seen {
-		constructs = append(constructs, name)
-	}
-	sort.Strings(constructs)
+	constructs := slices.Sorted(maps.Keys(seen))
 	return wikiNormalized{text: strings.Join(out, "\n"), constructs: constructs}
 }
 

@@ -2,9 +2,10 @@ package schema
 
 import (
 	"encoding/json"
-	"sort"
 	"strings"
 	"time"
+
+	xmaps "github.com/gechr/x/maps"
 
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
@@ -190,14 +191,9 @@ func flagGroups(flags *pflag.FlagSet, annotation string) [][]string {
 			}
 		}
 	})
-	keys := make([]string, 0, len(seen))
-	for key := range seen {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	out := make([][]string, 0, len(keys))
-	for _, key := range keys {
-		out = append(out, seen[key])
+	out := make([][]string, 0, len(seen))
+	for _, group := range xmaps.Sorted(seen) {
+		out = append(out, group)
 	}
 	return out
 }

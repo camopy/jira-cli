@@ -8,6 +8,7 @@ import (
 
 	"github.com/gechr/clog"
 	termansi "github.com/gechr/x/ansi"
+	xmaps "github.com/gechr/x/maps"
 	xslices "github.com/gechr/x/slices"
 )
 
@@ -34,15 +35,14 @@ func WriteAliasListPlain(w io.Writer, command string, data any, opts ...PlainOpt
 		return nil
 	}
 
-	names := make([]string, 0, len(aliases))
+	names := xmaps.KeysSlice(aliases)
+	xslices.SortNatural(names)
 	nameCol := 0
-	for name := range aliases {
-		names = append(names, name)
+	for _, name := range names {
 		if width := termansi.StringWidth(name); width > nameCol {
 			nameCol = width
 		}
 	}
-	xslices.SortNatural(names)
 	for _, name := range names {
 		line := style.bold(padRight(name, nameCol)) + style.dim("  →  ") + aliases[name]
 		logger.Info().Parts(clog.PartMessage).Msg(line)

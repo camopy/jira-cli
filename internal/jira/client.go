@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gechr/clog"
+	xmaps "github.com/gechr/x/maps"
 	xstrings "github.com/gechr/x/strings"
 )
 
@@ -114,14 +114,9 @@ func displayMessage(ec errorCollection, rawBody string) string {
 		return strings.Join(ec.ErrorMessages, "; ")
 	}
 	if len(ec.Errors) > 0 {
-		keys := make([]string, 0, len(ec.Errors))
-		for k := range ec.Errors {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		parts := make([]string, 0, len(keys))
-		for _, k := range keys {
-			parts = append(parts, k+": "+ec.Errors[k])
+		parts := make([]string, 0, len(ec.Errors))
+		for k, v := range xmaps.Sorted(ec.Errors) {
+			parts = append(parts, k+": "+v)
 		}
 		return strings.Join(parts, "; ")
 	}
@@ -633,13 +628,8 @@ func debugLogger(ctx context.Context) *clog.Logger {
 
 func debugHeaderDict(headers http.Header) *clog.Event {
 	dict := clog.Dict()
-	keys := make([]string, 0, len(headers))
-	for k := range headers {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		dict.Str(k, strings.Join(headers[k], ", "))
+	for k, values := range xmaps.Sorted(headers) {
+		dict.Str(k, strings.Join(values, ", "))
 	}
 	return dict
 }

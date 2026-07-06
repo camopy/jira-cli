@@ -2,8 +2,9 @@ package completion
 
 import (
 	"fmt"
+	"maps"
 	"os"
-	"sort"
+	"slices"
 
 	"github.com/gechr/clib/complete"
 
@@ -55,12 +56,7 @@ var completionEmitters = map[string]predictorEmitter{
 var HandledPredictors = sortedPredictorNames()
 
 func sortedPredictorNames() []string {
-	out := make([]string, 0, len(completionEmitters))
-	for name := range completionEmitters {
-		out = append(out, name)
-	}
-	sort.Strings(out)
-	return out
+	return slices.Sorted(maps.Keys(completionEmitters))
 }
 
 // CompletionHandler dispatches dynamic completion requests routed through

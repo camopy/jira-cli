@@ -8,7 +8,6 @@ import (
 	"io"
 	"reflect"
 	"regexp"
-	"sort"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -19,6 +18,7 @@ import (
 	"github.com/gechr/primer/table"
 	termansi "github.com/gechr/x/ansi"
 	"github.com/gechr/x/human"
+	xmaps "github.com/gechr/x/maps"
 	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/browser"
@@ -324,13 +324,8 @@ func plainFields(data any) []plainField {
 	fields := []plainField{}
 	switch v := data.(type) {
 	case map[string]any:
-		keys := make([]string, 0, len(v))
-		for key := range v {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			writePlainField(&fields, key, v[key])
+		for key, value := range xmaps.Sorted(v) {
+			writePlainField(&fields, key, value)
 		}
 	default:
 		// Any other string-keyed map (map[string]string, map[string]int, ...)
@@ -381,13 +376,8 @@ func writePlainValue(fields *[]plainField, key string, value any) {
 			writePlainLine(fields, key, normalizePlain(adf.ToPlain(doc)))
 			return
 		}
-		keys := make([]string, 0, len(v))
-		for childKey := range v {
-			keys = append(keys, childKey)
-		}
-		sort.Strings(keys)
-		for _, childKey := range keys {
-			writePlainValue(fields, key+"."+childKey, v[childKey])
+		for childKey, child := range xmaps.Sorted(v) {
+			writePlainValue(fields, key+"."+childKey, child)
 		}
 	default:
 		// Nested string-keyed maps of any value type take the map[string]any
@@ -1498,16 +1488,11 @@ func formatAuthPerms(perms map[string]any, s authPlainStyle) string {
 	if len(grants) == 0 {
 		return s.dim("(none reported)")
 	}
-	names := make([]string, 0, len(grants))
-	for k := range grants {
-		names = append(names, k)
-	}
-	sort.Strings(names)
-	parts := make([]string, 0, len(names))
+	parts := make([]string, 0, len(grants))
 	granted := 0
-	for _, name := range names {
+	for name, has := range xmaps.Sorted(grants) {
 		mark := s.no()
-		if grants[name] {
+		if has {
 			mark = s.ok()
 			granted++
 		}
@@ -1516,9 +1501,9 @@ func formatAuthPerms(perms map[string]any, s authPlainStyle) string {
 		parts = append(parts, mark+" "+short)
 	}
 	count := strings.TrimSuffix(formatHumanField(float64(granted)), ".0")
-	total := strings.TrimSuffix(formatHumanField(float64(len(names))), ".0")
+	total := strings.TrimSuffix(formatHumanField(float64(len(grants))), ".0")
 	prefix := ""
-	if granted == len(names) {
+	if granted == len(grants) {
 		prefix = s.ok() + " " + s.emph("all "+count) + s.dim(" · ")
 	} else {
 		prefix = s.bold(count) + s.dim("/"+total) + s.dim(" · ")

@@ -17,7 +17,8 @@ package pipeline
 
 import (
 	"fmt"
-	"sort"
+
+	xmaps "github.com/gechr/x/maps"
 
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli/adfmode"
@@ -106,17 +107,11 @@ func (e *FieldValidationError) Error() string {
 func ValidateFields(fields map[string]any, schema ScreenSchema, mode adfmode.Mode) (map[string]any, []adf.Warning, error) {
 	// Iterate keys in sorted order so strict mode reports a deterministic
 	// "first invalid field" — important for test reproducibility.
-	keys := make([]string, 0, len(fields))
-	for k := range fields {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
 	out := make(map[string]any, len(fields))
 	var warnings []adf.Warning
-	for _, k := range keys {
+	for k, v := range xmaps.Sorted(fields) {
 		if schema.ValidFields[k] {
-			out[k] = fields[k]
+			out[k] = v
 			continue
 		}
 		if mode == adfmode.ModeStrict {

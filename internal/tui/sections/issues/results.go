@@ -15,6 +15,7 @@ import (
 	"github.com/gechr/primer/flash"
 	"github.com/gechr/primer/overlay"
 	"github.com/gechr/primer/scrollbar"
+	xmaps "github.com/gechr/x/maps"
 	"github.com/gechr/x/ptr"
 	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/adf"
@@ -75,10 +76,7 @@ func (b bulkResult) summary() string {
 	if len(b.failed) == 0 {
 		return fmt.Sprintf("%d %s", len(b.succeeded), b.verb)
 	}
-	keys := make([]string, 0, len(b.failed))
-	for k := range b.failed {
-		keys = append(keys, k)
-	}
+	keys := xmaps.KeysSlice(b.failed)
 	xslices.SortNatural(keys)
 	return fmt.Sprintf("%d %s · failed: %s", len(b.succeeded), b.verb, strings.Join(keys, ", "))
 }
