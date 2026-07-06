@@ -1,3 +1,0 @@
-kind: fixed
-body: 'alias list human output now renders one name → expansion line per alias (natural-ordered) instead of the collapsed value={...} placeholder; the generic plain fallback also renders any string-keyed map per key, closing the class'
-time: 2026-07-06T11:48:34.2961381-04:00

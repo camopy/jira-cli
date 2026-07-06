@@ -1,6 +1,13 @@
 # Release Notes
 
 
+## [0.8.3](https://github.com/matcra587/jira-cli/releases/tag/v0.8.3) — 2026-07-06
+
+### Fixed
+
+- alias list human output now renders one name → expansion line per alias (natural-ordered) instead of the collapsed value={...} placeholder; the generic plain fallback also renders any string-keyed map per key, closing the class
+- auth login no longer wipes existing profiles when configuring a new one without --config: the fresh-config probe now stats the resolved default path instead of the raw (empty) flag value, so adding a second profile preserves the first
+
 ## [0.8.2](https://github.com/matcra587/jira-cli/releases/tag/v0.8.2) — 2026-07-06
 
 ### Fixed

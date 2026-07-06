@@ -1,3 +1,0 @@
-kind: fixed
-body: 'auth login no longer wipes existing profiles when configuring a new one without --config: the fresh-config probe now stats the resolved default path instead of the raw (empty) flag value, so adding a second profile preserves the first'
-time: 2026-07-06T11:57:27.1025484-04:00
