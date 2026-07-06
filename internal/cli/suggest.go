@@ -26,6 +26,13 @@ const suggestionLimit = 2
 // suggestionMaxDistance edit distance of input, closest first. Candidates
 // shorter than suggestionMinNameLen are skipped. The returned names are
 // the raw candidate strings — the caller adds any "--" prefix.
+//
+// This deliberately stays off xstrings.Closest: Suggestions is a multi-valued
+// field fed by Cobra's own SuggestionsFor on the unknown-command path, and
+// this helper keeps unknown-flag suggestions on the same contract — plain
+// Levenshtein at Cobra's fixed distance-2 default, up to two candidates.
+// Closest returns a single best match under a length-proportional Damerau
+// threshold, which would change the error payload shape and break that parity.
 func Suggest(input string, candidates []string) []string {
 	if input == "" {
 		return nil
