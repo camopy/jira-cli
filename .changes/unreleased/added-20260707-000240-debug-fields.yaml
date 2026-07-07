@@ -1,0 +1,3 @@
+kind: added
+body: 'Running a command with --debug now prints the error''s classification on the error line — its stable code and type, plus a retryable marker when the error is retryable — the same fields an agent reads from the JSON envelope.'
+time: 2026-07-07T00:02:40.334257-04:00

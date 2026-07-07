@@ -543,11 +543,20 @@ func writeCommandError(ctx context.Context, cmd *cobra.Command, err error) {
 	if logger == clog.Default {
 		logger = clog.New(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAuto))
 	}
-	logger.Error().Err(err).Send()
+	cliErr := outputErrorFor(err)
+	event := logger.Error().Err(err)
+	if clog.IsVerbose() {
+		// Under --debug the ERR line also carries the classification an
+		// agent would read from the envelope. OmitZero keeps the line
+		// lean: retryable renders only when true. The HTTP status is
+		// deliberately absent — the message and the --debug traffic trace
+		// both already carry it.
+		event = event.OmitZero(true).Str("code", cliErr.Code).Str("type", cliErr.Type).Bool("retryable", cliErr.Retryable)
+	}
+	event.Send()
 	// Surface the taxonomy's next-action hint to humans too. In machine mode
 	// the hint rides in the JSON envelope; here it renders as clog's dedicated
 	// Hint (💡) line so a human sees the same remediation an agent gets.
-	cliErr := outputErrorFor(err)
 	if cliErr.Hint != "" {
 		logger.Hint().Msg(cliErr.Hint)
 	}

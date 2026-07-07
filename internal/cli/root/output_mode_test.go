@@ -7,9 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gechr/clog"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/cli/issue"
+	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/spf13/cobra"
 )
 
@@ -267,4 +269,68 @@ func outputModeTestCommand(mode cli.Mode) (*cobra.Command, *bytes.Buffer, *bytes
 	ctx = cmdutil.WithCredentialWarnSink(ctx)
 	cmd.SetContext(ctx)
 	return cmd, stdout, stderr
+}
+
+// TestCommandErrorDebugShowsTaxonomyFields pins the --debug enrichment: the
+// human ERR line carries the envelope's code and type (and retryable when
+// true — OmitZero drops the false) so a debugging human sees the same
+// classification an agent gets. The HTTP status is deliberately absent: the
+// message and the --debug traffic trace both already carry it. The JSON
+// path is untouched — writeCommandError returns to the envelope writer
+// before any clog rendering, which the envelope contract tests pin. Not
+// parallel: clog.SetVerbose is process-global.
+func TestCommandErrorDebugShowsTaxonomyFields(t *testing.T) {
+	clog.SetVerbose(true)
+	defer clog.SetVerbose(false)
+
+	cmd, _, stderr := outputModeTestCommand(cli.ModePlain)
+	if err := cmd.Root().PersistentFlags().Set("output", "human"); err != nil {
+		t.Fatalf("Set(output) error = %v", err)
+	}
+	writeCommandError(cmd.Context(), cmd, &jira.APIError{StatusCode: 503, Type: jira.ErrorTypeServer, Message: "upstream text"})
+	got := stderr.String()
+	for _, want := range []string{"code=jira_server_error", "type=server", "retryable=true"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("debug ERR line missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "http_status=") {
+		t.Fatalf("debug ERR line must not duplicate the HTTP status:\n%s", got)
+	}
+
+	// A non-retryable failure keeps the line lean: OmitZero drops the
+	// false retryable, and no status field appears.
+	cmd2, _, stderr2 := outputModeTestCommand(cli.ModePlain)
+	if err := cmd2.Root().PersistentFlags().Set("output", "human"); err != nil {
+		t.Fatalf("Set(output) error = %v", err)
+	}
+	writeCommandError(cmd2.Context(), cmd2, &jira.APIError{StatusCode: 404, Type: jira.ErrorTypeNotFound, Message: "upstream text"})
+	got2 := stderr2.String()
+	for _, want := range []string{"code=jira_not_found", "type=not_found"} {
+		if !strings.Contains(got2, want) {
+			t.Fatalf("debug ERR line missing %q:\n%s", want, got2)
+		}
+	}
+	if strings.Contains(got2, "retryable=") || strings.Contains(got2, "http_status=") {
+		t.Fatalf("non-retryable debug ERR line must omit retryable/http_status:\n%s", got2)
+	}
+}
+
+// TestCommandErrorWithoutDebugStaysLean pins the default: without --debug
+// the ERR line stays message-only, no taxonomy fields.
+func TestCommandErrorWithoutDebugStaysLean(t *testing.T) {
+	clog.SetVerbose(false)
+
+	cmd, _, stderr := outputModeTestCommand(cli.ModePlain)
+	if err := cmd.Root().PersistentFlags().Set("output", "human"); err != nil {
+		t.Fatalf("Set(output) error = %v", err)
+	}
+	writeCommandError(cmd.Context(), cmd, &jira.APIError{StatusCode: 503, Type: jira.ErrorTypeServer, Message: "upstream text"})
+	got := stderr.String()
+	if strings.Contains(got, "code=") || strings.Contains(got, "http_status=") {
+		t.Fatalf("non-debug ERR line leaked taxonomy fields:\n%s", got)
+	}
+	if !strings.Contains(got, "upstream text") {
+		t.Fatalf("ERR line lost the error message:\n%s", got)
+	}
 }
