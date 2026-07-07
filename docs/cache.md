@@ -37,6 +37,7 @@ reading from disk when fresh and refetching from Jira when missing, stale, or
 | `statuses` | `--status` completion | 30 days |
 | `linktypes` | `--type` completion for [`issue link`](issue/links.md#link) | 90 days |
 | `priorities` | `--priority` completion | 90 days |
+| `resolutions` | resolution names for resolve transitions | 90 days |
 
 Every primer accepts `--refresh` (force a fetch even when fresh) and
 `--ttl-minutes <n>` (override the resource's freshness window for this call).
@@ -122,8 +123,9 @@ jira cache fields --refresh --output=json
 | `labels` | `labels` | flat strings, not objects |
 | `epics` | `epics` | `{ key, summary, status }` — maps `--epic <key>` to a parent link |
 | `linktypes` | `link_types` (snake_case) | `{ id, name, inward, outward, self }` |
-| `statuses` | `statuses` | `{ id, name }` from `GET /status`, instance-wide (not per-project) |
+| `statuses` | `statuses` | `{ id, name, status_category }` from `GET /status`, instance-wide (not per-project); the same display name recurs under different ids across workflows |
 | `priorities` | `priorities` | `{ id, name }` from `GET /priority` |
+| `resolutions` | `resolutions` | `{ id, name }` from `GET /resolution` — the tenant's resolution names for resolve transitions |
 
 ## boards
 
@@ -247,9 +249,9 @@ and was deleted, `false` when there was nothing to remove:
 ```
 
 Valid resources: `labels`, `projects`, `epics`, `fields`, `issuetypes`,
-`linktypes`, `boards`, `statuses`, `priorities`. An unknown name is rejected up
-front with `code=arg_value_invalid` (exit 3); the error message lists the valid
-set.
+`linktypes`, `boards`, `statuses`, `priorities`, `resolutions`. An unknown name
+is rejected up front with `code=arg_value_invalid` (exit 3); the error message
+lists the valid set.
 
 [Full flags & output fields →](reference/jira/cache/clear.md)
 
