@@ -8,6 +8,7 @@ import (
 	xmaps "github.com/gechr/x/maps"
 
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/cache/registry"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -288,9 +289,71 @@ func outputSchemas() map[string]any {
 			"warnings": map[string]any{"type": "array"},
 		},
 	}
-	return map[string]any{
-		"envelope": envelope,
-		"error":    errorSchema,
+	// Shared building blocks for the per-command entries below.
+	commentUser := map[string]any{
+		"type":        []string{"object", "null"},
+		"description": "Jira user identity; null when Jira reports none (e.g. an anonymized author).",
+		"properties": map[string]any{
+			"account_id":    map[string]any{"type": "string"},
+			"display_name":  map[string]any{"type": "string"},
+			"email_address": map[string]any{"type": "string"},
+		},
+	}
+	worklogEntry := map[string]any{
+		"type":        "object",
+		"description": "Jira worklog in its native shape.",
+		"properties": map[string]any{
+			"id":               map[string]any{"type": "string"},
+			"timeSpentSeconds": map[string]any{"type": "integer"},
+			"started":          map[string]any{"type": "string"},
+			"comment":          map[string]any{"type": "object", "description": "ADF document; absent when the worklog carries no comment."},
+		},
+	}
+	linkType := map[string]any{
+		"type":     "object",
+		"required": []string{"id", "name", "inward", "outward"},
+		"properties": map[string]any{
+			"id":      map[string]any{"type": "string"},
+			"name":    map[string]any{"type": "string"},
+			"inward":  map[string]any{"type": "string"},
+			"outward": map[string]any{"type": "string"},
+		},
+	}
+	// The cache_state trio plus the from_cache/fetched_at pair every
+	// cache-backed read reports (AddCacheStateFields + the primer data).
+	cacheStateProperties := map[string]any{
+		"from_cache":         map[string]any{"type": "boolean"},
+		"fetched_at":         map[string]any{"type": "string", "format": "date-time"},
+		"cache_state":        map[string]any{"type": "string", "description": "Effective disposition after the read: fresh, stale, missing, malformed, refresh, or empty."},
+		"cache_source_state": map[string]any{"type": "string", "description": "Disposition observed before any fetch (never the derived empty state)."},
+		"cache_empty":        map[string]any{"type": "boolean"},
+	}
+	keyedResults := map[string]any{
+		"type":        "object",
+		"description": "Canonical keyed multi-target result set: ordered per-key rows with independent ok/error outcomes; one failed key does not roll back the others.",
+		"required":    []string{"results", "succeeded", "failed"},
+		"properties": map[string]any{
+			"results": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type":     "object",
+					"required": []string{"key", "ok"},
+					"properties": map[string]any{
+						"key":   map[string]any{"type": "string"},
+						"ok":    map[string]any{"type": "boolean"},
+						"data":  map[string]any{"type": "object", "description": "Present when ok is true; the command's single-target data shape."},
+						"error": errorSchema,
+					},
+				},
+			},
+			"succeeded": map[string]any{"type": "integer"},
+			"failed":    map[string]any{"type": "integer"},
+		},
+	}
+	out := map[string]any{
+		"envelope":      envelope,
+		"error":         errorSchema,
+		"keyed_results": keyedResults,
 		"issue.view": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -409,8 +472,210 @@ func outputSchemas() map[string]any {
 		"worklog.add": map[string]any{
 			"type":     "object",
 			"required": []string{"issue", "worklog", "dry_run"},
+			"properties": map[string]any{
+				"issue":   map[string]any{"type": "string"},
+				"worklog": worklogEntry,
+				"dry_run": map[string]any{"type": "boolean"},
+			},
+		},
+		"worklog.list": map[string]any{
+			"type":     "object",
+			"required": []string{"issue", "worklogs"},
+			"properties": map[string]any{
+				"issue":    map[string]any{"type": "string"},
+				"worklogs": map[string]any{"type": "array", "items": worklogEntry},
+			},
+		},
+		"issue.comment.list": map[string]any{
+			"type":        "object",
+			"description": "Single-key form; multi-key reads carry the same object at results[].data with its pagination block inside.",
+			"required":    []string{"comments"},
+			"properties": map[string]any{
+				"comments": map[string]any{
+					"type": "array",
+					"items": map[string]any{
+						"type":     "object",
+						"required": []string{"body", "author", "update_author", "visibility"},
+						"properties": map[string]any{
+							"id":            map[string]any{"type": "string"},
+							"body":          map[string]any{"type": []string{"object", "null"}, "description": "Native ADF document; null when the comment has no body."},
+							"author":        commentUser,
+							"update_author": commentUser,
+							"created":       map[string]any{"type": "string", "format": "date-time"},
+							"updated":       map[string]any{"type": "string", "format": "date-time"},
+							"visibility": map[string]any{
+								"type":        []string{"object", "null"},
+								"description": "Role/group restriction; null when the comment is unrestricted.",
+								"properties": map[string]any{
+									"type":  map[string]any{"type": "string"},
+									"value": map[string]any{"type": "string"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"issue.attachment.list": map[string]any{
+			"type":        "object",
+			"description": "Single-key form; multi-key reads carry the same object at results[].data with its pagination block inside.",
+			"required":    []string{"attachments"},
+			"properties": map[string]any{
+				"attachments": map[string]any{
+					"type": "array",
+					"items": map[string]any{
+						"type":     "object",
+						"required": []string{"id", "filename", "mime_type", "size", "created", "author"},
+						"properties": map[string]any{
+							"id":        map[string]any{"type": "string"},
+							"filename":  map[string]any{"type": "string"},
+							"mime_type": map[string]any{"type": "string"},
+							"size":      map[string]any{"type": "integer"},
+							"created":   map[string]any{"type": "string", "format": "date-time"},
+							"author":    commentUser,
+						},
+					},
+				},
+			},
+		},
+		"issue.link.list": map[string]any{
+			"type":     "object",
+			"required": []string{"key", "links", "count"},
+			"properties": map[string]any{
+				"key":   map[string]any{"type": "string"},
+				"count": map[string]any{"type": "integer"},
+				"links": map[string]any{
+					"type":        "array",
+					"description": "Jira's inward/outward fork flattened into one direction-aware array, sorted by (direction, type.name, other_issue.key).",
+					"items": map[string]any{
+						"type":     "object",
+						"required": []string{"id", "type", "direction", "other_issue"},
+						"properties": map[string]any{
+							"id":        map[string]any{"type": "string"},
+							"type":      linkType,
+							"direction": map[string]any{"type": "string", "enum": []string{"inward", "outward"}},
+							"other_issue": map[string]any{
+								"type":     "object",
+								"required": []string{"key"},
+								"properties": map[string]any{
+									"key":     map[string]any{"type": "string"},
+									"summary": map[string]any{"type": "string"},
+									"status":  map[string]any{"type": "string"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"issue.link.types": map[string]any{
+			"type":     "object",
+			"required": []string{"link_types", "count"},
+			"properties": mergeProperties(map[string]any{
+				"link_types": map[string]any{"type": "array", "items": linkType},
+				"count":      map[string]any{"type": "integer"},
+			}, cacheStateProperties),
+		},
+		"issue.transition": map[string]any{
+			"type":        "object",
+			"description": "Dual-form: with a target STATUS the data reports the applied transition; without one the command is a read that lists the available transitions.",
+			"required":    []string{"issue"},
+			"properties": map[string]any{
+				"issue":                map[string]any{"type": "string"},
+				"transition":           map[string]any{"type": "string", "description": "Resolved transition id; present when a target was applied (or validated under --dry-run --validate-remote)."},
+				"transition_validated": map[string]any{"type": "boolean", "description": "Present on --dry-run --validate-remote."},
+				"dry_run":              map[string]any{"type": "boolean"},
+				"transitions": map[string]any{
+					"type":        "array",
+					"description": "Present on the no-target list form.",
+					"items": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"id":        map[string]any{"type": "string"},
+							"name":      map[string]any{"type": "string"},
+							"hasScreen": map[string]any{"type": "boolean"},
+						},
+					},
+				},
+			},
+		},
+		"boards.list": map[string]any{
+			"type":     "object",
+			"required": []string{"boards"},
+			"properties": mergeProperties(map[string]any{
+				"boards": map[string]any{
+					"type": "array",
+					"items": map[string]any{
+						"type":     "object",
+						"required": []string{"id", "name", "type", "project_keys"},
+						"properties": map[string]any{
+							"id":           map[string]any{"type": "integer"},
+							"name":         map[string]any{"type": "string"},
+							"type":         map[string]any{"type": "string"},
+							"project_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+						},
+					},
+				},
+				"truncated":        map[string]any{"type": "boolean"},
+				"truncated_reason": map[string]any{"type": "string"},
+			}, cacheStateProperties),
+		},
+		"cache.boards": map[string]any{
+			"type":     "object",
+			"required": []string{"profile", "boards_count"},
+			"properties": mergeProperties(map[string]any{
+				"profile":          map[string]any{"type": "string"},
+				"primed":           map[string]any{"type": "boolean", "description": "true when this invocation fetched from Jira and wrote the cache file."},
+				"boards_count":     map[string]any{"type": "integer"},
+				"ttl_seconds":      map[string]any{"type": "integer"},
+				"truncated":        map[string]any{"type": "boolean"},
+				"truncated_reason": map[string]any{"type": "string"},
+			}, cacheStateProperties),
+		},
+		"cache.refresh": keyedResults,
+		"cache.clear": map[string]any{
+			"type":     "object",
+			"required": []string{"profile", "removed"},
+			"properties": map[string]any{
+				"profile":  map[string]any{"type": "string"},
+				"resource": map[string]any{"type": "string", "description": "Present when one resource was targeted; absent on a whole-profile clear."},
+				"removed":  map[string]any{"type": []string{"integer", "boolean"}, "description": "File count on a whole-profile clear; whether the file existed on a single-resource clear."},
+			},
 		},
 	}
+	// Every flat-list cache primer shares one envelope shape; only the key
+	// the items ride under varies. Deriving the entries from the resource
+	// registry keeps the schema in lockstep with the actual `cache <name>`
+	// subcommands (boards is the special-cased non-list primer above).
+	for _, r := range registry.Registry {
+		if r.Fetch == nil {
+			continue
+		}
+		out["cache."+r.Name] = map[string]any{
+			"type":     "object",
+			"required": []string{"profile", r.Key(), "count"},
+			"properties": mergeProperties(map[string]any{
+				"profile": map[string]any{"type": "string"},
+				r.Key():   map[string]any{"type": "array", "description": "The cached " + r.Name + " list, served from disk or a fresh fetch."},
+				"count":   map[string]any{"type": "integer"},
+			}, cacheStateProperties),
+		}
+	}
+	return out
+}
+
+// mergeProperties combines a schema's own properties with a shared
+// property block (the cache-state trio) without either side mutating the
+// other.
+func mergeProperties(own, shared map[string]any) map[string]any {
+	merged := make(map[string]any, len(own)+len(shared))
+	for k, v := range shared {
+		merged[k] = v
+	}
+	for k, v := range own {
+		merged[k] = v
+	}
+	return merged
 }
 
 // inputSchemas publishes the canonical input shapes the mutation
@@ -435,6 +700,16 @@ func inputSchemas() map[string]any {
 			"content": map[string]any{"type": "array", "description": "Block-level ADF nodes. May be empty."},
 		},
 		"additionalProperties": false,
+	}
+	// The comment body schema is registered under the runnable group (the
+	// legacy `issue comment KEY` alias for add) AND its add/edit leaves:
+	// agents discover the leaves, so a schema keyed only to the group would
+	// leave the commands that actually take --json-input reporting no
+	// input schema.
+	commentBody := map[string]any{
+		"type":        "object",
+		"description": "issue comment --json-input body. The top-level object is a canonical ADF document (or {\"body\": <adf_document>}).",
+		"$ref":        "#/data/input_schemas/adf_document",
 	}
 	return map[string]any{
 		"adf_document": adfDocument,
@@ -479,11 +754,9 @@ func inputSchemas() map[string]any {
 				"comment":      map[string]any{"type": "object", "description": "Native comment block; its body is a canonical ADF document."},
 			},
 		},
-		"issue.comment": map[string]any{
-			"type":        "object",
-			"description": "issue comment --json-input body. The top-level object is a canonical ADF document (or {\"body\": <adf_document>}).",
-			"$ref":        "#/data/input_schemas/adf_document",
-		},
+		"issue.comment":      commentBody,
+		"issue.comment.add":  commentBody,
+		"issue.comment.edit": commentBody,
 		"worklog.add": map[string]any{
 			"type":        "object",
 			"description": "worklog add --json-input payload.",

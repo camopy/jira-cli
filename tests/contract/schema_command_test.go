@@ -166,6 +166,76 @@ func TestAgentSchemaPublishesLiveLeafPathsAndFlagGroups(t *testing.T) {
 	}
 }
 
+// TestAgentSchemaBindsLeafInputAndOutputSchemas pins the leaf bindings an
+// agent introspects: the comment add/edit leaves (the commands that
+// actually take --json-input) must carry an input schema — not just the
+// runnable group alias — and the read/list verbs must publish an output
+// schema so the response shape is discoverable from the schema surface
+// alone.
+func TestAgentSchemaBindsLeafInputAndOutputSchemas(t *testing.T) {
+	bin := buildJiraBinary(t)
+	out, err := exec.Command(bin, "--output=json", "agent", "schema").CombinedOutput()
+	if err != nil {
+		t.Fatalf("agent schema error = %v\n%s", err, out)
+	}
+	var env struct {
+		Data struct {
+			Commands      []agentSchemaCommand `json:"commands"`
+			InputSchemas  map[string]any       `json:"input_schemas"`
+			OutputSchemas map[string]any       `json:"output_schemas"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(out, &env); err != nil {
+		t.Fatalf("schema output is not JSON: %v\n%s", err, out)
+	}
+	for path, want := range map[string]string{
+		"jira issue comment":      "issue.comment",
+		"jira issue comment add":  "issue.comment.add",
+		"jira issue comment edit": "issue.comment.edit",
+	} {
+		cmd := findAgentSchemaCommand(env.Data.Commands, path)
+		if cmd == nil {
+			t.Fatalf("agent schema missing command_path %q", path)
+		}
+		if cmd.InputSchema != want {
+			t.Errorf("%s input schema = %q, want %q", path, cmd.InputSchema, want)
+		}
+		if env.Data.InputSchemas[want] == nil {
+			t.Errorf("data.input_schemas missing key %q", want)
+		}
+	}
+	for path, want := range map[string]string{
+		"jira issue comment list":    "issue.comment.list",
+		"jira issue attachment list": "issue.attachment.list",
+		"jira issue link list":       "issue.link.list",
+		"jira issue link types":      "issue.link.types",
+		"jira issue transition":      "issue.transition",
+		"jira worklog list":          "worklog.list",
+		"jira worklog add":           "worklog.add",
+		"jira boards list":           "boards.list",
+		"jira cache labels":          "cache.labels",
+		"jira cache linktypes":       "cache.linktypes",
+		"jira cache boards":          "cache.boards",
+		"jira cache refresh":         "cache.refresh",
+		"jira cache clear":           "cache.clear",
+	} {
+		cmd := findAgentSchemaCommand(env.Data.Commands, path)
+		if cmd == nil {
+			t.Fatalf("agent schema missing command_path %q", path)
+		}
+		if cmd.OutputSchema != want {
+			t.Errorf("%s output schema = %q, want %q", path, cmd.OutputSchema, want)
+		}
+		schema, ok := env.Data.OutputSchemas[want].(map[string]any)
+		if !ok {
+			t.Fatalf("data.output_schemas missing key %q", want)
+		}
+		if _, ok := schema["properties"]; !ok {
+			t.Errorf("output schema %q is a stub with no properties", want)
+		}
+	}
+}
+
 type agentSchemaCommand struct {
 	Name                   string               `json:"name"`
 	CommandPath            string               `json:"command_path"`

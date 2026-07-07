@@ -1,0 +1,3 @@
+kind: fixed
+body: '`jira agent schema` now binds the comment input schema to the `comment add`/`comment edit` leaves (they previously reported no input schema) and publishes output schemas for the read/list commands — comment, attachment, link, worklog, transition, boards, and cache — so agents can discover response shapes without trial calls.'
+time: 2026-07-07T01:10:00.000000-04:00
