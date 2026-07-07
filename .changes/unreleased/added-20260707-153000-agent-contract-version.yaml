@@ -1,0 +1,3 @@
+kind: added
+body: 'The agent contract is now versioned: `jira agent schema` reports the revision at `data.schema_version` and the full `jira agent guide` output stamps the same value, so an agent can detect a breaking change instead of discovering it mid-workflow. The scheme (what a major, minor, or patch bump means for the contract) is documented in the guide''s core_contract section.'
+time: 2026-07-07T15:30:00.000000-04:00

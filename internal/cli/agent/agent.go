@@ -240,12 +240,16 @@ $ jira agent fieldtypes --output=json`,
 // loadGuide assembles the preamble plus every workflow file in
 // workflowOrder, separated by a single blank line. The init() check
 // guarantees every workflowOrder slug has a corresponding file, so the
-// inner ReadFile is not expected to fail at runtime.
+// inner ReadFile is not expected to fail at runtime. The contract-version
+// line is rendered from the schema constant rather than baked into the
+// preamble so guide and schema can never report different versions.
 func loadGuide() string {
 	var b strings.Builder
 	if data, err := guideFS.ReadFile("guide/_preamble.md"); err == nil {
 		b.Write(data)
 	}
+	b.WriteString("\nContract version: " + schema.ContractVersion +
+		" — the same revision `jira agent schema` reports at `data.schema_version`; see the core_contract section for the scheme.\n")
 	for _, slug := range workflowOrder {
 		data, err := guideFS.ReadFile("guide/" + slug + ".md")
 		if err != nil {

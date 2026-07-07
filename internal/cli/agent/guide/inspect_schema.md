@@ -17,6 +17,7 @@ When: payload shape, available subcommands, ADF node support, or customfield enc
 
 **Save**
 > Requires `--output=json` (or `--output=compact`).
+- From `agent schema`: `data.schema_version` [string, required] — the semver contract revision; see → `core_contract` for what a major/minor/patch bump means.
 - `data[].kind` [string, required] — `node`, `mark`, or `field-type`.
 - `data[].name` [string, required] — e.g. `paragraph`, `strong`, `customfield_10010`.
 - `data[].status` [string, required] — `mvp` or `preserve-only`.

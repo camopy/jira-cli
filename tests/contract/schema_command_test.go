@@ -3,6 +3,7 @@ package contract
 import (
 	"encoding/json"
 	"os/exec"
+	"regexp"
 	"testing"
 )
 
@@ -18,6 +19,28 @@ func TestSchemaCommandIncludesCommandTree(t *testing.T) {
 	}
 	if env["data"] == nil {
 		t.Fatalf("schema missing data: %+v", env)
+	}
+}
+
+// The schema payload must carry the contract revision so an agent can
+// detect a breaking change before reusing saved recipes.
+func TestSchemaCommandReportsContractVersion(t *testing.T) {
+	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=json", "agent", "schema")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("schema error = %v\n%s", err, out)
+	}
+	var env struct {
+		Data struct {
+			SchemaVersion string `json:"schema_version"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(out, &env); err != nil {
+		t.Fatalf("schema output is not JSON: %v\n%s", err, out)
+	}
+	semver := regexp.MustCompile(`^\d+\.\d+\.\d+$`)
+	if !semver.MatchString(env.Data.SchemaVersion) {
+		t.Fatalf("data.schema_version = %q, want MAJOR.MINOR.PATCH semver", env.Data.SchemaVersion)
 	}
 }
 

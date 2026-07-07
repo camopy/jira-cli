@@ -45,6 +45,15 @@ type flagSchema struct {
 	Required    bool     `json:"required,omitempty"`
 }
 
+// ContractVersion is the semver of the agent-facing contract: the command
+// tree, envelope, exit codes, and guide semantics published by `agent schema`
+// (data.schema_version) and stamped on the full `agent guide` output. Bump
+// major for a breaking change to the envelope, exit codes, or an existing
+// flag/field; minor for additive surface (new command, flag, field, or guide
+// section); patch for wording-only changes. Independent of the binary
+// version — a release with no contract change keeps the same value.
+const ContractVersion = "1.0.0"
+
 // WriteSchema emits the CLI command schema. The envelope vs compact vs
 // human output shape is decided by the resolved --output mode.
 func WriteSchema(cmd *cobra.Command) error {
@@ -52,6 +61,7 @@ func WriteSchema(cmd *cobra.Command) error {
 	outputs := outputSchemas()
 	inputs := inputSchemas()
 	data := map[string]any{
+		"schema_version": ContractVersion,
 		"commands":       []commandSchema{schemaForCommand(root, inputs, outputs)},
 		"global_flags":   flagSchemas(root.PersistentFlags()),
 		"output_schemas": outputs,

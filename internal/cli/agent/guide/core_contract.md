@@ -38,6 +38,11 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 # rate-limit retry
 - Reads auto-retry a 429 (or a 503 carrying `Retry-After`) within `--max-retry-wait` (default `30s`; `0` disables; `JIRA_MAX_RETRY_WAIT` sets it for the process; an explicit flag wins). The budget is always capped by `--timeout`. Mutations are never auto-retried. Exit 4 means Jira still returned 429 after any applicable retry was exhausted or skipped.
 
+# contract version
+- `jira agent schema` reports the contract revision at `data.schema_version`; the full `jira agent guide` output stamps the same value after its preamble. The two always match — they version one contract.
+- The scheme is semver over the agent-facing contract, independent of the binary version: **major** = a breaking change to the envelope, exit codes, or an existing flag/field; **minor** = additive surface (new command, flag, output field, or guide section); **patch** = wording-only. A release that changes no contract keeps the version.
+- Snapshot the version once per session. On a major bump, re-read → `inspect_schema` and this guide before reusing saved recipes; a minor bump never invalidates them.
+
 **Run**
 - Canonical write: `jira <cmd> --no-input --json-input payload.json --output=json`
 - Pagination drain: `jira issue comment list KEY --all --output=json`

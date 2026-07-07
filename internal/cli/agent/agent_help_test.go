@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/matcra587/jira-cli/internal/cli/schema"
 )
 
 // The `agent guide` custom help func must write through the command's
@@ -26,5 +28,15 @@ func TestAgentGuideHelpWritesToCommandStream(t *testing.T) {
 	// The custom help appends a Sections block listing guide slugs.
 	if !strings.Contains(strings.ToLower(got), "section") {
 		t.Fatalf("agent guide help did not render the Sections block:\n%s", got)
+	}
+}
+
+// The assembled guide must stamp the contract version from the schema
+// constant, so `agent guide` and `agent schema` can never report
+// different revisions of the same contract.
+func TestGuideStampsContractVersion(t *testing.T) {
+	want := "Contract version: " + schema.ContractVersion
+	if got := loadGuide(); !strings.Contains(got, want) {
+		t.Fatalf("loadGuide() missing %q near the preamble", want)
 	}
 }
