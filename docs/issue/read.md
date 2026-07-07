@@ -23,7 +23,8 @@ jira issue view PROJ-123 --web
 jira issue view PROJ-1 PROJ-2 PROJ-3 -p 4 --output=json
 ```
 
-Human output prints the summary, status, assignee, and priority, then the
+Human output prints the summary, status, assignee, and priority, a one-line
+`transitions:` list of the valid workflow moves (`Name (id)`), then the
 rendered description. The JSON `data` is the raw Jira REST shape:
 
 ```json
@@ -39,10 +40,29 @@ rendered description. The JSON `data` is the raw Jira REST shape:
       "description": { "type": "doc", "version": 1, "content": [ … ] },
       "customfield_10019": "0|i0007r:",
       "customfield_10001": null
+    },
+    "transitions": [
+      { "id": "21", "name": "In Progress", "hasScreen": false }
+    ],
+    "editmeta": {
+      "fields": {
+        "priority": {
+          "name": "Priority",
+          "required": false,
+          "operations": ["set"],
+          "schema": { "type": "priority" },
+          "allowedValues": [ { "id": "1", "name": "Highest" } ]
+        }
+      }
     }
   }
 }
 ```
+
+Both `transitions` (the workflow moves valid from the current status) and
+`editmeta.fields` (editable fields with their `required` flag, `operations`, and
+`allowedValues`) ride the same read at no extra call — one `view` answers "what
+can I transition to" and "what may I edit" without a follow-up request.
 
 !!! warning "Raw Jira passthrough"
     `data.issue.fields` is Jira's own field shape: custom fields appear by their

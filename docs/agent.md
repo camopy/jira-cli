@@ -46,6 +46,8 @@ jira agent fieldtypes --output=json
 
 `agent schema` reports the binary's own contract as JSON:
 
+*   the agent-contract version at `data.schema_version` (semver; the full
+    `agent guide` output stamps the same value)
 *   command paths and subcommands
 *   global and local flags
 *   flag enums and completion predictors

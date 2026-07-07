@@ -107,7 +107,7 @@ run a command that reads with freshness intent: any primer (or
 
 ## The list primers
 
-These eight share the [envelope above](#the-shared-envelope); each differs only
+These flat-list primers share the [envelope above](#the-shared-envelope); each differs only
 in its payload field and item shape:
 
 ```sh
