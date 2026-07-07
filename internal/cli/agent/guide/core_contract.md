@@ -54,7 +54,7 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 - `meta.exit_code` [int, present on failure] — mirrors the process exit code; `data` is `null` when set.
 - `meta.pagination` [object, optional] — `startAt`, `maxResults`, `total` (only when the endpoint reports one), `isLast`, `nextCursor`; walk until `isLast=true`, resume via `--cursor` where supported. Absent entirely on mutations.
 - `data` [object, required on success] — command-specific payload; `null` on failure.
-- `errors[]` [array, required] — each entry carries `type`, `code` (stable snake_case — branch on this, never on `message`), `message`, `hint` (never empty), `retryable`. Optional fields when relevant: `flag` (argv-level: the offending flag name), `field` (payload-level: the offending JSON key), `path` (a document path within the offending value), `http_status`, `retry_after_seconds`, `rate_limit_remaining`, `provider`, `upstream_code`, `upstream_status`, `upstream_messages` (Jira's errorMessages array), `upstream_field_errors` (Jira's per-field errors map), `candidates` (structured disambiguation rows for `user_ambiguous` / `board_ambiguous`). Jira API errors leave `upstream_code` empty — Jira exposes no stable machine error code.
+- `errors[]` [array, required] — each entry carries `type`, `code` (stable snake_case — branch on this, never on `message`), `message`, `hint` (never empty), `retryable`. Optional fields when relevant: `flag` (argv-level: the offending flag name), `field` (payload-level: the offending JSON key), `path` (a document path within the offending value), `suggestions` ("did you mean" candidates for the input, as the caller would type them), `http_status`, `retry_after_seconds`, `rate_limit_remaining`, `provider`, `upstream_code`, `upstream_status`, `upstream_messages` (Jira's errorMessages array), `upstream_field_errors` (Jira's per-field errors map), `candidates` (structured disambiguation rows for `user_ambiguous` / `board_ambiguous`). Jira API errors leave `upstream_code` empty — Jira exposes no stable machine error code.
 - `warnings[]` [array, required] — non-fatal diagnostics; never blank on a successful command that degraded.
 
 **Behavior**
@@ -129,18 +129,20 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 |---|---|---|
 | Exit 1 | Authentication failure | → `auth_setup` |
 | Exit 2 | Not found (issue key, attachment id, link id, profile, etc.) | Re-resolve the identifier; check `auth_setup` if the resource should exist |
-| Exit 2, `code=profile_not_found` | `--profile` names a profile that is undefined or has no base URL | `jira config profile` to list; `jira auth login --profile <name>` to create or complete it |
+| Exit 2, `code=profile_not_defined` | `--profile` names a profile that does not exist | `jira config profile` to list; `jira auth login --profile <name>` to create it |
+| Exit 2, `code=profile_incomplete` | The profile exists but has no base URL | `jira auth login --profile <name>` to finish setting it up |
 | Exit 2, `code=jira_gone` | The resource was permanently deleted (HTTP 410) | Drop any cached reference to it |
 | Exit 3, `code=jira_bad_request` | Jira rejected the request body (HTTP 400) | Check `upstream_messages` / `upstream_field_errors`, correct the input |
 | Exit 3, `code=jira_conflict` | The resource changed since it was read (HTTP 409) | Re-fetch the issue, then retry against the latest version |
-| Exit 3, `code=flag_unknown` | Unrecognized flag (often a removed legacy boolean like `--json`/`--compact`/`--plain`/`--raw`) | Drop the flag; use `--output=json|compact` |
+| Exit 3, `code=flag_unknown` | Unrecognized flag (often a removed legacy boolean like `--json`/`--compact`/`--raw`) | Drop the flag; use `--output=json|compact` |
+| Exit 3, `code=flag_foreign` | A flag from a different Jira CLI (e.g. `--plain`, `--gjq`) | Use this CLI's equivalents from `suggestions` |
 | Exit 3, `code=flag_value_missing` | A flag that needs a value was given none | Supply the value |
 | Exit 3, `code=flag_value_invalid` | Flag value failed type or range parsing | Match the documented value set |
 | Exit 3, `code=flag_syntax_invalid` | Malformed flag token | Re-quote / re-escape the argv |
 | Exit 3, `code=required_flag_missing` | A required flag was not set; `flag` names the first one | Supply that flag |
 | Exit 3, `code=arg_count_invalid` | Wrong number of positional arguments | Match the documented arity |
 | Exit 3, `code=arg_value_invalid` | Positional argument value is outside the command's accepted set | Use one of the documented values |
-| Exit 3, `code=command_unknown` | Unrecognized command; `hint` may carry `Did you mean <name>?` | Use the suggested name |
+| Exit 3, `code=command_unknown` | Unrecognized command; `suggestions` may carry near-miss names | Use the suggested name |
 | Exit 3, `code=read_only` | `JIRA_READ_ONLY=true` or profile `read_only = true` | Unset / flip the profile, or do the work elsewhere |
 | Exit 6, `code=canceled` | SIGINT / root context canceled mid-request | Retry when ready |
 | Exit 7, `code=timeout` | The `--timeout` deadline elapsed | Raise `--timeout` or retry |

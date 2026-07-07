@@ -52,6 +52,15 @@ const (
 	// ErrorCodeOnePasswordUnavailable: the 1Password SDK or CLI could not be
 	// reached or rejected the request.
 	ErrorCodeOnePasswordUnavailable = errtax.CodeOnePasswordUnavailable
+	// ErrorCodeCredentialRejected: Jira rejected the email/token pair at
+	// login verification.
+	ErrorCodeCredentialRejected = errtax.CodeCredentialRejected
+	// ErrorCodeCredentialVerifyUnavailable: Jira could not be reached to
+	// verify the credential at login.
+	ErrorCodeCredentialVerifyUnavailable = errtax.CodeCredentialVerifyUnavailable
+	// ErrorCodeOnePasswordUnsupportedBuild: the binary was built without
+	// CGO, so 1Password support is compiled out.
+	ErrorCodeOnePasswordUnsupportedBuild = errtax.CodeOnePasswordUnsupportedBuild
 )
 
 // ErrorContext carries optional, fixed-shape context for a credential error.
@@ -136,8 +145,15 @@ func (e *CredentialError) Unwrap() error { return e.Wrapped }
 // Code returns the stable normalized failure code.
 func (e *CredentialError) Code() ErrorCode { return e.ErrCode }
 
-// Hint returns the short next-action hint.
-func (e *CredentialError) Hint() string { return e.HintMsg }
+// FlagName names the command-line flag the failure is scoped to, when
+// flag-scoped. The method is FlagName (not Flag) for symmetry with
+// CLIInputError, whose Flag is a field.
+func (e *CredentialError) FlagName() string { return e.Context.Flag }
+
+var (
+	_ errtax.Coded   = (*CredentialError)(nil)
+	_ errtax.Flagger = (*CredentialError)(nil)
+)
 
 // Retryable reports whether retrying the operation could succeed.
 func (e *CredentialError) Retryable() bool { return e.IsRetryable }

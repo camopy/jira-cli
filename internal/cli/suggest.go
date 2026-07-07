@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"slices"
 	"sort"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/agnivade/levenshtein"
@@ -62,4 +64,39 @@ func Suggest(input string, candidates []string) []string {
 		}
 	}
 	return out
+}
+
+// foreignFlagEquivalents maps a flag borrowed from another Jira CLI to
+// this CLI's equivalents, offered as suggestions when the unknown flag
+// has no near-miss match. Only flags with NO equivalent anywhere in this
+// CLI belong here — a flag that exists on some commands (raw, columns,
+// web) would produce a misleading suggestion, and a flag the failing
+// command accepts never reaches flag_unknown at all.
+var foreignFlagEquivalents = map[string][]string{
+	"plain":       {"--output=human", "--output=json"},
+	"gjq":         {"--output=json"},
+	"template":    {"--output=json"},
+	"no-headers":  {"--output=json"},
+	"no-truncate": {"--output=json"},
+	"paginate":    {"--limit", "--all", "--cursor"},
+}
+
+// ForeignFlagSuggestions resolves a flag name against the foreign-CLI
+// table, tolerating leading dashes and case drift in how the parser
+// reported it. It returns a fresh slice, or nil for a flag with no known
+// equivalent.
+func ForeignFlagSuggestions(flag string) []string {
+	return slices.Clone(foreignFlagEquivalents[normalizeFlagName(flag)])
+}
+
+// isForeignFlag reports whether the flag is in the foreign-CLI table.
+func isForeignFlag(flag string) bool {
+	_, ok := foreignFlagEquivalents[normalizeFlagName(flag)]
+	return ok
+}
+
+// normalizeFlagName strips leading dashes and case drift from a flag name
+// as the parser reported it.
+func normalizeFlagName(flag string) string {
+	return strings.ToLower(strings.TrimLeft(strings.TrimSpace(flag), "-"))
 }

@@ -196,14 +196,15 @@ func TestAuthLoginRejectedCredentialMapsRemediationToHint(t *testing.T) {
 	}
 
 	mapped := cli.MapError(err)
-	if mapped.Hint == "" {
-		t.Fatalf("mapped error hint is empty: %+v", mapped)
+	if mapped.Code != "credential_rejected" {
+		t.Fatalf("code = %q, want credential_rejected: %+v", mapped.Code, mapped)
 	}
 	if strings.Contains(mapped.Message, "check the email") || strings.Contains(mapped.Message, "--skip-verify") {
 		t.Fatalf("message still contains remediation instead of only symptom: %+v", mapped)
 	}
-	if !strings.Contains(mapped.Hint, "check the email") || !strings.Contains(mapped.Hint, "--skip-verify") {
-		t.Fatalf("hint does not carry credential remediation: %+v", mapped)
+	want := "Check the email and API token at id.atlassian.com, or pass --skip-verify to store the credential without checking."
+	if mapped.Hint != want {
+		t.Fatalf("hint = %q, want the credential_rejected registry hint", mapped.Hint)
 	}
 }
 
@@ -264,14 +265,15 @@ func TestAuthLoginVerificationServerErrorMapsRemediationToHint(t *testing.T) {
 	}
 
 	mapped := cli.MapError(err)
-	if mapped.Hint == "" {
-		t.Fatalf("mapped error hint is empty: %+v", mapped)
+	if mapped.Code != "credential_verify_unavailable" {
+		t.Fatalf("code = %q, want credential_verify_unavailable: %+v", mapped.Code, mapped)
 	}
 	if strings.Contains(mapped.Message, "--skip-verify") || strings.Contains(mapped.Message, "retry") {
 		t.Fatalf("message still contains remediation instead of only symptom: %+v", mapped)
 	}
-	if !strings.Contains(mapped.Hint, "retry") || !strings.Contains(mapped.Hint, "--skip-verify") {
-		t.Fatalf("hint does not carry verification remediation: %+v", mapped)
+	want := "Jira couldn't be reached to verify the credential — try again, or pass --skip-verify to store it without checking."
+	if mapped.Hint != want {
+		t.Fatalf("hint = %q, want the credential_verify_unavailable registry hint", mapped.Hint)
 	}
 }
 

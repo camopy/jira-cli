@@ -30,6 +30,11 @@ func newFlagError(cmd *cobra.Command, err error) error {
 		// edit-distance space is too small to suggest into.
 		if notExist.GetSpecifiedShortnames() == "" {
 			fe.Suggestions = suggestFlags(cmd, fe.Flag)
+			if len(fe.Suggestions) == 0 {
+				// A flag borrowed from another Jira CLI has no near-miss
+				// here — offer that CLI's actual equivalents instead.
+				fe.Suggestions = cli.ForeignFlagSuggestions(fe.Flag)
+			}
 		}
 		return fe
 	}

@@ -850,6 +850,43 @@ func (c *Client) relativeEscapedPath(req *http.Request) (string, bool) {
 	return "/" + strings.TrimPrefix(path, basePath), true
 }
 
+// CodeForStatus derives the taxonomy code for an HTTP status. It moves in
+// lockstep with ClassifyStatus and the errtax registry: a status added here
+// MUST carry a registry row (the taxonomy guard enumerates the pairing) —
+// a jira_* code with no hint is the exact gap that guard exists to catch.
+// An unmapped status falls back to its classified type's catch-all code.
+func CodeForStatus(status int) errtax.Code {
+	switch status {
+	case http.StatusUnauthorized:
+		return errtax.CodeJiraUnauthorized
+	case http.StatusForbidden:
+		return errtax.CodeJiraForbidden
+	case http.StatusNotFound:
+		return errtax.CodeJiraNotFound
+	case http.StatusConflict:
+		return errtax.CodeJiraConflict
+	case http.StatusGone:
+		return errtax.CodeJiraGone
+	case http.StatusTooManyRequests:
+		return errtax.CodeJiraRateLimited
+	case http.StatusBadRequest:
+		return errtax.CodeJiraBadRequest
+	default:
+		if status >= http.StatusInternalServerError {
+			return errtax.CodeJiraServerError
+		}
+		return errtax.DefaultCode(ClassifyStatus(status))
+	}
+}
+
+// Code classifies the API failure by its HTTP status.
+func (e *APIError) Code() errtax.Code { return CodeForStatus(e.StatusCode) }
+
+var _ errtax.Coded = (*APIError)(nil)
+
+// ClassifyStatus reports the error type for an HTTP status. It stays an
+// independent status→type switch (never derived from CodeForStatus plus the
+// registry) so the taxonomy lockstep test compares two genuine sources.
 func ClassifyStatus(code int) ErrorType {
 	switch {
 	case code == http.StatusUnauthorized || code == http.StatusForbidden:

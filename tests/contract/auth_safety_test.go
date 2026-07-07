@@ -152,7 +152,7 @@ workday_seconds = 28800
 	if err == nil {
 		t.Fatalf("auth login with rejected new-profile credential succeeded:\n%s", out)
 	}
-	authFailureExitCode := cli.ExitCode(cli.NewError(cli.ErrorTypeAuth, "auth verification failed"))
+	authFailureExitCode := cli.ExitCode(cli.Error{Type: string(cli.ErrorTypeAuth)})
 	assertExitCode(t, err, authFailureExitCode, "auth verification failures -> exit 1")
 	if got := verifyHits.Load(); got == 0 {
 		t.Fatalf("auth login failed before reaching credential verification:\n%s", out)

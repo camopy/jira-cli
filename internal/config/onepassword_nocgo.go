@@ -27,7 +27,7 @@ func (OnePasswordStore) Delete(context.Context, SecretRef) error {
 func onePasswordNoCGOError() error {
 	return &CredentialError{
 		Type:        ErrorTypeAuth,
-		ErrCode:     ErrorCodeOnePasswordUnavailable,
+		ErrCode:     ErrorCodeOnePasswordUnsupportedBuild,
 		Message:     "1Password support is unavailable in this build",
 		HintMsg:     "use a CGO-enabled source build or choose the keyring or env credential backend",
 		IsRetryable: false,

@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/matcra587/jira-cli/internal/errtax"
 )
 
 const DefaultMaxExpansion = 1000
@@ -42,9 +44,10 @@ func (e *ExpansionLimitError) Error() string {
 	return fmt.Sprintf("issue key expansion exceeds maximum of %d keys", e.Max)
 }
 
-func (e *ExpansionLimitError) Hint() string {
-	return "Split the key set into smaller invocations, or use project/JQL filters for discovery instead of probing a huge range."
-}
+// Code classifies the failure under issue_key_expansion_limit.
+func (e *ExpansionLimitError) Code() errtax.Code { return errtax.CodeIssueKeyExpansionLimit }
+
+var _ errtax.Coded = (*ExpansionLimitError)(nil)
 
 // ParseExpressions expands issue-key expressions into canonical Jira keys.
 // Supported forms are single keys, comma lists, and inclusive ranges using

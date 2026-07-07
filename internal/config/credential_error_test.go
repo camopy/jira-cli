@@ -23,7 +23,7 @@ func TestCredentialErrorExposesStructuredMetadata(t *testing.T) {
 	if err.Code() != ErrorCodeCredentialMissing {
 		t.Fatalf("Code() = %q", err.Code())
 	}
-	if err.Hint() == "" {
+	if err.HintMsg == "" {
 		t.Fatal("Hint() is empty")
 	}
 	if err.Retryable() {
@@ -170,8 +170,8 @@ func TestClassifyCredentialErrorDoesNotLeakSecrets(t *testing.T) {
 	if ce == nil {
 		t.Fatal("ClassifyCredentialError() = nil")
 	}
-	if containsSecretLike(ce.Message) || containsSecretLike(ce.Hint()) {
-		t.Fatalf("classified error leaked an upstream secret: msg=%q hint=%q", ce.Message, ce.Hint())
+	if containsSecretLike(ce.Message) || containsSecretLike(ce.HintMsg) {
+		t.Fatalf("classified error leaked an upstream secret: msg=%q hint=%q", ce.Message, ce.HintMsg)
 	}
 }
 

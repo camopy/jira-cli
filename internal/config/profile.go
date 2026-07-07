@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+
+	"github.com/matcra587/jira-cli/internal/errtax"
 )
 
 const (
@@ -350,6 +352,11 @@ func (e ProfileNotDefinedError) Error() string {
 
 func (ProfileNotDefinedError) Unwrap() error { return ErrProfileNotDefined }
 
+// Code classifies the failure under profile_not_defined: a typoed or
+// unprovisioned --profile fails closed instead of degrading into
+// fabricated empty results.
+func (ProfileNotDefinedError) Code() errtax.Code { return errtax.CodeProfileNotDefined }
+
 // ProfileIncompleteError is returned when a requested profile exists but
 // cannot serve live commands because it has no base URL (and no cloud_id to
 // derive one). Callers recover the name with errors.As.
@@ -360,6 +367,16 @@ type ProfileIncompleteError struct {
 func (e ProfileIncompleteError) Error() string {
 	return fmt.Sprintf("profile %q has no base URL configured", e.Name)
 }
+
+// Code classifies the failure under profile_incomplete: the profile
+// cannot serve live commands until it has a base URL.
+func (ProfileIncompleteError) Code() errtax.Code { return errtax.CodeProfileIncomplete }
+
+// The value forms pin the intended value receivers.
+var (
+	_ errtax.Coded = ProfileNotDefinedError{}
+	_ errtax.Coded = ProfileIncompleteError{}
+)
 
 // Profile resolves a profile by name, falling back to the default profile
 // when name is empty. A name that matches no defined profile yields a

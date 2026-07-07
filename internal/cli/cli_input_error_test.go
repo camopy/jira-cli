@@ -3,6 +3,8 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"github.com/matcra587/jira-cli/internal/errtax"
 )
 
 // allCLIInputKinds is every kind the taxonomy defines. A test that
@@ -20,19 +22,20 @@ var allCLIInputKinds = []CLIInputKind{
 }
 
 // TestEveryCLIInputKindCarriesACodeAndHint pins the invariant that every
-// kind resolves to a specific code (never the generic validation_failed
-// fallback) and a non-empty remediation hint. A kind that falls through
-// either branch hands an agent a failure with no stable code to branch on
-// or no next step — the exact gaps this typed-error layer exists to close.
+// kind resolves to a specific registered code (never the generic
+// validation_failed fallback) whose registry row carries a non-empty
+// remediation hint. A kind that falls through either branch hands an
+// agent a failure with no stable code to branch on or no next step.
 func TestEveryCLIInputKindCarriesACodeAndHint(t *testing.T) {
 	for _, kind := range allCLIInputKinds {
 		e := NewCLIInputError(kind, "input failed")
-		code := e.code()
-		if code == "" || code == "validation_failed" {
+		code := e.Code()
+		if code == errtax.CodeUnknown || code == errtax.CodeValidationFailed {
 			t.Errorf("kind %d resolves to %q, not a specific cli-input code", kind, code)
 		}
-		if hint := e.hint(); hint == "" {
-			t.Errorf("kind %d (code %q) yields no hint", kind, code)
+		spec, ok := errtax.Lookup(code)
+		if !ok || spec.Hint == "" {
+			t.Errorf("kind %d (code %q) has no registry hint", kind, code)
 		}
 	}
 }
@@ -55,51 +58,16 @@ func TestCLIInputCodesAreStable(t *testing.T) {
 		t.Fatalf("want map has %d entries, taxonomy has %d", len(want), len(allCLIInputKinds))
 	}
 	for kind, code := range want {
-		if got := NewCLIInputError(kind, "x").code(); got != code {
+		if got := string(NewCLIInputError(kind, "x").Code()); got != code {
 			t.Errorf("kind %d: code = %q, want %q", kind, got, code)
-		}
-	}
-}
-
-// TestCLIInputHintLeadsWithSuggestion verifies a "did you mean" candidate
-// is surfaced ahead of the per-kind guidance, and that the guidance still
-// follows so the caller always has a fallback step.
-func TestCLIInputHintLeadsWithSuggestion(t *testing.T) {
-	e := NewCLIInputError(InputFlagUnknown, "unknown flag: --outpt")
-	e.Suggestions = []string{"--output"}
-	hint := e.hint()
-	if !strings.HasPrefix(hint, "Did you mean --output?") {
-		t.Errorf("hint should lead with the suggestion, got %q", hint)
-	}
-	if !strings.Contains(hint, e.baseHint()) {
-		t.Errorf("hint should still carry the per-kind guidance, got %q", hint)
-	}
-
-	noSuggest := NewCLIInputError(InputFlagUnknown, "unknown flag: --outpt")
-	if got := noSuggest.hint(); got != noSuggest.baseHint() {
-		t.Errorf("hint without suggestions = %q, want bare baseHint", got)
-	}
-}
-
-func TestDidYouMean(t *testing.T) {
-	cases := []struct {
-		in   []string
-		want string
-	}{
-		{nil, ""},
-		{[]string{"--output"}, "Did you mean --output?"},
-		{[]string{"--output", "--timeout"}, "Did you mean --output or --timeout?"},
-	}
-	for _, c := range cases {
-		if got := didYouMean(c.in); got != c.want {
-			t.Errorf("didYouMean(%v) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }
 
 // TestMapCLIInputErrorThroughMapError verifies the MapError leg: a
 // *CLIInputError becomes an exit-3 validation envelope carrying the typed
-// code, the hint, and the offending flag — never the substring classifier.
+// code, the static registry hint, the offending flag, and the "did you
+// mean" candidates in the suggestions field — never woven into the hint.
 func TestMapCLIInputErrorThroughMapError(t *testing.T) {
 	in := NewCLIInputError(InputFlagUnknown, "unknown flag: --outpt")
 	in.Flag = "outpt"
@@ -115,8 +83,14 @@ func TestMapCLIInputErrorThroughMapError(t *testing.T) {
 	if got.Flag != "outpt" {
 		t.Errorf("Flag = %q, want outpt", got.Flag)
 	}
-	if !strings.Contains(got.Hint, "--output") {
-		t.Errorf("Hint should carry the suggestion, got %q", got.Hint)
+	if got.Hint != errtax.HintFor(errtax.CodeFlagUnknown) {
+		t.Errorf("Hint = %q, want the static registry hint", got.Hint)
+	}
+	if strings.Contains(got.Hint, "Did you mean") {
+		t.Errorf("hint must not embed suggestions, got %q", got.Hint)
+	}
+	if len(got.Suggestions) != 1 || got.Suggestions[0] != "--output" {
+		t.Errorf("Suggestions = %v, want [--output]", got.Suggestions)
 	}
 	if got.Retryable {
 		t.Error("a cli-input failure must not be retryable")

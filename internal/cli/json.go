@@ -76,10 +76,13 @@ type Error struct {
 	Hint      string `json:"hint"`
 	Retryable bool   `json:"retryable"`
 
-	// Flag / Field / Path scope a validation failure to an input.
-	Flag  string `json:"flag,omitempty"`
-	Field string `json:"field,omitempty"`
-	Path  string `json:"path,omitempty"`
+	// Flag / Field / Path scope a validation failure to an input;
+	// Suggestions carries "did you mean" candidates for it, pre-formatted
+	// as the caller would type them (e.g. "--output").
+	Flag        string   `json:"flag,omitempty"`
+	Field       string   `json:"field,omitempty"`
+	Path        string   `json:"path,omitempty"`
+	Suggestions []string `json:"suggestions,omitempty"`
 
 	// HTTPStatus / RetryAfterSeconds carry transport metadata.
 	HTTPStatus         int `json:"http_status,omitempty"`

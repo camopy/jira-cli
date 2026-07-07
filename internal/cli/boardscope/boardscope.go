@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	"github.com/matcra587/jira-cli/internal/errtax"
 	"github.com/spf13/cobra"
 
 	xstrings "github.com/gechr/x/strings"
@@ -32,15 +33,36 @@ const (
 
 // ValidationError is a typed error that asks the error mapper to classify the
 // failure as a validation error (exit 3) — used for both default-board-missing
-// and ambiguous-name disambiguation. Its BoardCandidates method lets the
+// and ambiguous-name disambiguation. Its CandidateRows method lets the
 // envelope writer surface disambiguation choices.
 type ValidationError struct {
 	Msg        string
 	Candidates []map[string]any
 }
 
-func (e ValidationError) Error() string                     { return e.Msg }
-func (e ValidationError) BoardCandidates() []map[string]any { return e.Candidates }
+func (e ValidationError) Error() string { return e.Msg }
+
+// Code varies with state, as the taxonomy contract requires: multiple
+// boards matched → board_ambiguous, so the caller picks from candidates[];
+// a candidate-less failure (a configured default_board that no longer
+// resolves) keeps the validation_failed catch-all and its canonical hint.
+func (e ValidationError) Code() errtax.Code {
+	if len(e.Candidates) > 0 {
+		return errtax.CodeBoardAmbiguous
+	}
+	return errtax.CodeValidationFailed
+}
+
+// CandidateRows surfaces the disambiguation rows for the envelope's
+// candidates[] field. The method is CandidateRows (not Candidates)
+// because Candidates is a field.
+func (e ValidationError) CandidateRows() []map[string]any { return e.Candidates }
+
+// The value forms pin the intended value receivers.
+var (
+	_ errtax.Coded      = ValidationError{}
+	_ errtax.Candidated = ValidationError{}
+)
 
 // FromFlags reads the active command's `--board NAME` / `--board-id N` flag
 // values, falls through to the active profile's `default_board` config (when

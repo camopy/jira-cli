@@ -1,6 +1,10 @@
 package cli
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/matcra587/jira-cli/internal/errtax"
+)
 
 // PromptKind names why an interactive prompt did not yield a value.
 type PromptKind int
@@ -45,26 +49,16 @@ func (e *PromptError) Error() string {
 
 func (e *PromptError) Unwrap() error { return e.Err }
 
-// promptCode is the stable snake_case envelope code for a prompt kind.
-func (e *PromptError) promptCode() string {
+// Code is the stable snake_case envelope code for a prompt kind.
+func (e *PromptError) Code() errtax.Code {
 	switch e.Kind {
 	case PromptCanceled:
-		return "prompt_canceled"
+		return errtax.CodePromptCanceled
 	case PromptUnavailable:
-		return "prompt_unavailable"
+		return errtax.CodePromptUnavailable
 	default:
-		return "prompt_aborted"
+		return errtax.CodePromptAborted
 	}
 }
 
-// promptHint is the next-action hint for a prompt failure.
-func (e *PromptError) promptHint() string {
-	switch e.Kind {
-	case PromptCanceled:
-		return "The prompt was interrupted; rerun the command when ready."
-	case PromptUnavailable:
-		return "Provide the value via a flag or --json-input so no prompt is needed."
-	default:
-		return "Rerun and complete the prompt, or supply the value via a flag."
-	}
-}
+var _ errtax.Coded = (*PromptError)(nil)

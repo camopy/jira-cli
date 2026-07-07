@@ -61,8 +61,8 @@ func TestErrorEnvelopeOmitsMetaProfile(t *testing.T) {
 }
 
 // TestStructuredErrorsCarryCodeHintRetryable asserts a typed credential
-// error maps onto code/hint/retryable from the typed source, never from
-// substring matching.
+// error maps onto its code from the typed source, with the hint and
+// retryability supplied by the registry — never substring matching.
 func TestStructuredErrorsCarryCodeHintRetryable(t *testing.T) {
 	src := &config.CredentialError{
 		Type:        config.ErrorTypeAuth,
@@ -75,7 +75,7 @@ func TestStructuredErrorsCarryCodeHintRetryable(t *testing.T) {
 	if got.Code != "credential_missing" {
 		t.Fatalf("Code = %q, want credential_missing", got.Code)
 	}
-	if got.Hint != "store a credential for this profile, then retry" {
+	if got.Hint != "No credential is saved for this profile — run `jira auth login` to add one." {
 		t.Fatalf("Hint = %q", got.Hint)
 	}
 	if got.Retryable {

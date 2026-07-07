@@ -10,6 +10,7 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/config"
+	"github.com/matcra587/jira-cli/internal/errtax"
 	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
@@ -24,6 +25,7 @@ var taxonomyRegistry = map[string]struct {
 }{
 	// validation (exit 3)
 	"flag_unknown":              {"validation", 3},
+	"flag_foreign":              {"validation", 3},
 	"flag_value_missing":        {"validation", 3},
 	"flag_value_invalid":        {"validation", 3},
 	"flag_syntax_invalid":       {"validation", 3},
@@ -41,22 +43,31 @@ var taxonomyRegistry = map[string]struct {
 	"user_ambiguous":            {"validation", 3},
 	"board_ambiguous":           {"validation", 3},
 	"dry_run_blocked":           {"validation", 3},
-	"validation_failed":         {"validation", 3},
+	// The three credential-input codes are validation, matching both their
+	// construction sites (which set a validation Type) and the semantics:
+	// an empty token, an unusable profile name, and an ambiguous 1Password
+	// item are "correct your input" failures, with the ambiguity code
+	// paralleling user_ambiguous and board_ambiguous above.
+	"credential_empty":               {"validation", 3},
+	"credential_namespace_collision": {"validation", 3},
+	"onepassword_item_ambiguous":     {"validation", 3},
+	"validation_failed":              {"validation", 3},
 	// auth (exit 1)
 	"jira_unauthorized":              {"auth", 1},
 	"jira_forbidden":                 {"auth", 1},
 	"credential_missing":             {"auth", 1},
-	"credential_empty":               {"auth", 1},
 	"credential_source_conflict":     {"auth", 1},
 	"credential_backend_unavailable": {"auth", 1},
 	"credential_migration_failed":    {"auth", 1},
 	"credential_cleanup_failed":      {"auth", 1},
-	"credential_namespace_collision": {"auth", 1},
-	"onepassword_item_ambiguous":     {"auth", 1},
 	"onepassword_unavailable":        {"auth", 1},
+	"credential_rejected":            {"auth", 1},
+	"credential_verify_unavailable":  {"auth", 1},
+	"onepassword_unsupported_build":  {"auth", 1},
 	"auth_failed":                    {"auth", 1},
 	// not_found (exit 2)
-	"profile_not_found": {"not_found", 2},
+	"profile_not_defined": {"not_found", 2},
+	"profile_incomplete":  {"not_found", 2},
 	"jira_not_found":    {"not_found", 2},
 	"jira_gone":         {"not_found", 2},
 	"not_found":         {"not_found", 2},
@@ -75,12 +86,20 @@ var taxonomyRegistry = map[string]struct {
 	"timeout":           {"server", 7},
 }
 
-// boardAmbiguousStub satisfies ValidationCandidatesError the way the board
-// resolution wrapper in cmd/jira does.
+// boardAmbiguousStub mirrors boardscope.ValidationError: a Coded
+// validation failure whose code varies with the candidate rows.
 type boardAmbiguousStub struct{ cands []map[string]any }
 
-func (e boardAmbiguousStub) Error() string                     { return `board "dev" matched 2 boards` }
-func (e boardAmbiguousStub) BoardCandidates() []map[string]any { return e.cands }
+func (e boardAmbiguousStub) Error() string { return `board "dev" matched 2 boards` }
+
+func (e boardAmbiguousStub) Code() errtax.Code {
+	if len(e.cands) > 0 {
+		return errtax.CodeBoardAmbiguous
+	}
+	return errtax.CodeValidationFailed
+}
+
+func (e boardAmbiguousStub) CandidateRows() []map[string]any { return e.cands }
 
 func jiraStatusError(status int) error {
 	return &jira.APIError{
@@ -126,8 +145,8 @@ func taxonomyCases() []struct {
 		{"board ambiguous", boardAmbiguousStub{cands: []map[string]any{{"id": 1}, {"id": 2}}}, "board_ambiguous", false},
 		{"board failure without candidates", boardAmbiguousStub{}, "validation_failed", false},
 		{"credential error passthrough", &config.CredentialError{Type: config.ErrorTypeAuth, ErrCode: config.ErrorCodeCredentialMissing, Message: "no credential stored for profile", HintMsg: "run `jira auth login`"}, "credential_missing", false},
-		{"profile not defined", config.ProfileNotDefinedError{Name: "nope"}, "profile_not_found", false},
-		{"profile incomplete", config.ProfileIncompleteError{Name: "half"}, "profile_not_found", false},
+		{"profile not defined", config.ProfileNotDefinedError{Name: "nope"}, "profile_not_defined", false},
+		{"profile incomplete", config.ProfileIncompleteError{Name: "half"}, "profile_incomplete", false},
 		{"context deadline", context.DeadlineExceeded, "timeout", false},
 		{"context canceled", context.Canceled, "canceled", false},
 		{"jira 400", jiraStatusError(400), "jira_bad_request", true},
@@ -191,6 +210,12 @@ func TestErrorTaxonomyRegistryFullyDriven(t *testing.T) {
 		"credential_namespace_collision": true,
 		"onepassword_item_ambiguous":     true,
 		"onepassword_unavailable":        true,
+		// Set at their construction sites too; driven cases arrive with
+		// the registry-driven guard.
+		"flag_foreign":                  true,
+		"credential_rejected":           true,
+		"credential_verify_unavailable": true,
+		"onepassword_unsupported_build": true,
 	}
 	driven := map[string]bool{}
 	for _, tc := range taxonomyCases() {

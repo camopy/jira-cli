@@ -294,3 +294,22 @@ func TestAssembledTreeRejectsUnknownCommand(t *testing.T) {
 		t.Errorf("Suggestions = %v, want issue first", ie.Suggestions)
 	}
 }
+
+// A foreign-CLI flag has no near-miss among the command's real flags, so
+// the unknown-flag error falls back to the foreign-equivalents table for
+// its suggestions.
+func TestNewFlagErrorForeignFlagSuggestsEquivalents(t *testing.T) {
+	cmd := &cobra.Command{Use: "list"}
+	cmd.Flags().String("output", "", "")
+
+	got := newFlagError(cmd, parseFails(t, cmd, []string{"--plain"}))
+	ie := asInputError(t, got)
+
+	if ie.Flag != "plain" {
+		t.Errorf("Flag = %q, want plain", ie.Flag)
+	}
+	want := []string{"--output=human", "--output=json"}
+	if !slices.Equal(ie.Suggestions, want) {
+		t.Errorf("Suggestions = %v, want %v", ie.Suggestions, want)
+	}
+}

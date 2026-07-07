@@ -9,7 +9,7 @@ import (
 )
 
 func TestStructuredErrorsAndExitCodes(t *testing.T) {
-	err := cli.NewError(cli.ErrorTypeRateLimit, "slow down")
+	err := cli.Error{Type: string(cli.ErrorTypeRateLimit), Code: "rate_limited", Message: "slow down"}
 	if code := cli.ExitCode(err); code != 4 {
 		t.Fatalf("ExitCode() = %d", code)
 	}

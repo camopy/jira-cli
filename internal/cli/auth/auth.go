@@ -439,7 +439,7 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 					if errors.As(verifyErr, &apiErr) && apiErr.Type == jira.ErrorTypeAuth {
 						return &config.CredentialError{
 							Type:        config.ErrorTypeAuth,
-							ErrCode:     config.ErrorCode("auth_failed"),
+							ErrCode:     config.ErrorCodeCredentialRejected,
 							Message:     fmt.Sprintf("invalid Atlassian account email or API token - Jira rejected the credential (HTTP %s)", strings.TrimSpace(xhttp.Status(apiErr.StatusCode))),
 							HintMsg:     "check the email and that the API token is current at id.atlassian.com, or pass --skip-verify to store it without checking",
 							IsRetryable: false,
@@ -447,7 +447,7 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 					}
 					return &config.CredentialError{
 						Type:        config.ErrorTypeAuth,
-						ErrCode:     config.ErrorCodeCredentialBackendUnavailable,
+						ErrCode:     config.ErrorCodeCredentialVerifyUnavailable,
 						Message:     "could not verify the credential against Jira",
 						HintMsg:     "the site may be temporarily unavailable - retry, or pass --skip-verify to store it without checking",
 						IsRetryable: true,

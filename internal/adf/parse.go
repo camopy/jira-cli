@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/matcra587/jira-cli/internal/errtax"
 )
 
 // Warning is a structured non-fatal diagnostic emitted by best-effort ADF
@@ -30,6 +32,11 @@ type LossyConversionError struct {
 
 func (e LossyConversionError) Error() string { return e.Warning.Message }
 
+// Code classifies the strict-mode abort under markdown_lossy_conversion.
+func (e LossyConversionError) Code() errtax.Code { return errtax.CodeMarkdownLossyConversion }
+
+var _ errtax.Coded = LossyConversionError{}
+
 // Implement cli.WarningSource so commands can do cli.WarningFrom(adfW)
 // without either package importing the other's concrete type.
 func (w Warning) WarningType() string     { return w.Type }
@@ -55,6 +62,11 @@ type InvalidDocumentError struct {
 func (e *InvalidDocumentError) Error() string {
 	return "value is not an ADF document: got a JSON " + e.Got + ", want an object"
 }
+
+// Code classifies the failure under the taxonomy's adf_invalid code.
+func (e *InvalidDocumentError) Code() errtax.Code { return errtax.CodeADFInvalid }
+
+var _ errtax.Coded = (*InvalidDocumentError)(nil)
 
 // Parse decodes ADF JSON into a typed Document and returns any best-effort
 // warnings collected during the decode. Unknown nodes/marks are preserved

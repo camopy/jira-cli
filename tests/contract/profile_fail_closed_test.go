@@ -54,7 +54,7 @@ type profileErrorEnvelope struct {
 	} `json:"errors"`
 }
 
-func assertProfileNotFound(t *testing.T, stdout []byte, exitCode int, args []string) {
+func assertProfileNotFound(t *testing.T, stdout []byte, exitCode int, wantCode string, args []string) {
 	t.Helper()
 	if exitCode != 2 {
 		t.Errorf("jira %v: exit = %d, want 2", args, exitCode)
@@ -75,17 +75,17 @@ func assertProfileNotFound(t *testing.T, stdout []byte, exitCode int, args []str
 	if env.Errors[0].Type != "not_found" {
 		t.Errorf("jira %v: errors[0].type = %q, want %q", args, env.Errors[0].Type, "not_found")
 	}
-	if env.Errors[0].Code != "profile_not_found" {
-		t.Errorf("jira %v: errors[0].code = %q, want %q", args, env.Errors[0].Code, "profile_not_found")
+	if env.Errors[0].Code != wantCode {
+		t.Errorf("jira %v: errors[0].code = %q, want %q", args, env.Errors[0].Code, wantCode)
 	}
 	if env.Errors[0].Hint == "" {
 		t.Errorf("jira %v: errors[0].hint is empty, want remediation", args)
 	}
 }
 
-// An unknown --profile must fail closed with exit 2 / profile_not_found on
-// every command shape that used to fabricate success: view echoed the key
-// back, list returned an "empty project", auth status ignored the flag.
+// An unknown --profile must fail closed with exit 2 / profile_not_defined
+// on every command shape that used to fabricate success: view echoed the
+// key back, list returned an "empty project", auth status ignored the flag.
 func TestUnknownProfileFailsClosed(t *testing.T) {
 	cfg := jiraConfig(t, "https://jira.invalid")
 	for name, args := range map[string][]string{
@@ -96,13 +96,14 @@ func TestUnknownProfileFailsClosed(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			stdout, _, exitCode := runJira(t, args...)
-			assertProfileNotFound(t, stdout, exitCode, args)
+			assertProfileNotFound(t, stdout, exitCode, "profile_not_defined", args)
 		})
 	}
 }
 
 // A profile that exists but has no base_url is just as unusable as an
-// undefined one: same exit 2 / profile_not_found, never a fabricated result.
+// undefined one: same exit 2, under its own profile_incomplete code, never
+// a fabricated result.
 func TestIncompleteProfileFailsClosed(t *testing.T) {
 	cfg := jiraConfigWithIncompleteProfile(t, "https://jira.invalid")
 	for name, args := range map[string][]string{
@@ -111,7 +112,7 @@ func TestIncompleteProfileFailsClosed(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			stdout, _, exitCode := runJira(t, args...)
-			assertProfileNotFound(t, stdout, exitCode, args)
+			assertProfileNotFound(t, stdout, exitCode, "profile_incomplete", args)
 		})
 	}
 }

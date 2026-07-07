@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+
+	"github.com/matcra587/jira-cli/internal/errtax"
 )
 
 // ErrUserNotFound is returned by ResolveUser when /user/search yields zero
@@ -26,6 +28,40 @@ type AmbiguousUserError struct {
 func (e *AmbiguousUserError) Error() string {
 	return fmt.Sprintf("ambiguous user %q — %d candidates", e.Query, len(e.Candidates))
 }
+
+// Code classifies the failure under the taxonomy's user_ambiguous code.
+func (e *AmbiguousUserError) Code() errtax.Code { return errtax.CodeUserAmbiguous }
+
+// CandidateRows flattens the /user/search candidates into envelope
+// candidate rows so an agent can pick a winner without re-querying. The
+// method is CandidateRows (not Candidates) because the struct carries a
+// Candidates field. Nil candidates and absent fields are skipped; the
+// returned slice is never nil.
+func (e *AmbiguousUserError) CandidateRows() []map[string]any {
+	rows := make([]map[string]any, 0, len(e.Candidates))
+	for _, c := range e.Candidates {
+		if c == nil {
+			continue
+		}
+		row := map[string]any{}
+		if c.AccountID != nil {
+			row["account_id"] = *c.AccountID
+		}
+		if c.DisplayName != nil {
+			row["display_name"] = *c.DisplayName
+		}
+		if c.EmailAddress != nil {
+			row["email_address"] = *c.EmailAddress
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+var (
+	_ errtax.Coded      = (*AmbiguousUserError)(nil)
+	_ errtax.Candidated = (*AmbiguousUserError)(nil)
+)
 
 // User identity returned by /rest/api/3/myself. Subset of the full response —
 // only the fields we use for assign-to-me, profile bootstrap and `whoami`.

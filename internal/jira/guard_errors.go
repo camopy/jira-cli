@@ -6,6 +6,8 @@
 // catch-all.
 package jira
 
+import "github.com/matcra587/jira-cli/internal/errtax"
+
 // ReadOnlyError reports a mutation refused because read-only mode is active
 // (the JIRA_READ_ONLY env var or the profile's read_only=true).
 type ReadOnlyError struct {
@@ -28,3 +30,14 @@ type DryRunBlockedError struct {
 func (e *DryRunBlockedError) Error() string {
 	return "dry-run is active; refusing to send " + e.Method + " " + e.Path
 }
+
+// Code classifies a read-only refusal under the taxonomy's read_only code.
+func (e *ReadOnlyError) Code() errtax.Code { return errtax.CodeReadOnly }
+
+// Code classifies a dry-run transport block under dry_run_blocked.
+func (e *DryRunBlockedError) Code() errtax.Code { return errtax.CodeDryRunBlocked }
+
+var (
+	_ errtax.Coded = (*ReadOnlyError)(nil)
+	_ errtax.Coded = (*DryRunBlockedError)(nil)
+)

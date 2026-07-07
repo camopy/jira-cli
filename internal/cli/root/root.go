@@ -600,7 +600,7 @@ func ExitCode(err error) int {
 // shape. It delegates entirely to the central cli.MapError mapper, which
 // uses errors.As for every typed error — credential, Jira API,
 // rate-limit, and the command-local board-validation wrapper (via the
-// cli.ValidationCandidatesError interface). There is no command-local
+// errtax.Coded interface). There is no command-local
 // special case: every error envelope is built one way.
 func outputErrorFor(err error) cli.Error {
 	return cli.MapError(err)

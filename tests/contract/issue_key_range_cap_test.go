@@ -53,7 +53,7 @@ func TestIssueKeyRangeExpansionCapIsEnforcedBeforeCredentialsOrNetwork(t *testin
 			if !strings.Contains(env.Errors[0].Message, "issue key expansion exceeds maximum of 1000 keys") {
 				t.Fatalf("%s range cap message = %q", tt.name, env.Errors[0].Message)
 			}
-			if !strings.Contains(env.Errors[0].Hint, "Split the key set into smaller invocations") {
+			if !strings.Contains(env.Errors[0].Hint, "Ask for fewer keys at once") {
 				t.Fatalf("%s range cap hint = %q", tt.name, env.Errors[0].Hint)
 			}
 			if got := calls.Load(); got != before {
