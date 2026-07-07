@@ -74,6 +74,10 @@ go test ./internal/adf/... -run TestValidate
 
 US spelling in code, comments, and identifiers: the linter's misspell rule is locale `US`, so British spellings (`behaviour`, `colour`) fail the build.
 
+## Error hints
+
+Every error code carries a `hint` — the next action, in the plain words a person would use, not a recap of what failed. A hint is read both by a human (it prints as the 💡 line under the error) and by an agent (the JSON envelope's `hint`), so keep it jargon-free: don't point at envelope fields like `candidates[]`, and when the fix needs a value the caller doesn't have, name the command that surfaces it (e.g. `jira user search`, `jira boards list`). Every hint is static, defined in the `internal/errtax` registry keyed by code — a hint never embeds a runtime value. If a specific matters (the offending value, a "did you mean" suggestion), put it in the error `message` or a structured envelope field, not the hint; if two error types want different hints, give them different codes. The taxonomy guard fails the build if any code has an empty hint, and `TestHintsAvoidEnvelopeJargon` fails it if a hint names an envelope-only field.
+
 ## Changelog
 
 User-facing changes are recorded as small [changie](https://changie.dev) fragments — one file per change — and assembled into `CHANGELOG.md` at release time. This way the release notes never depend on anyone reconstructing them from the git log after the fact.

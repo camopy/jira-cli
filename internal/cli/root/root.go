@@ -544,6 +544,16 @@ func writeCommandError(ctx context.Context, cmd *cobra.Command, err error) {
 		logger = clog.New(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAuto))
 	}
 	logger.Error().Err(err).Send()
+	// Surface the taxonomy's next-action hint to humans too. In machine mode
+	// the hint rides in the JSON envelope; here it renders as clog's dedicated
+	// Hint (💡) line so a human sees the same remediation an agent gets.
+	cliErr := outputErrorFor(err)
+	if cliErr.Hint != "" {
+		logger.Hint().Msg(cliErr.Hint)
+	}
+	if len(cliErr.Suggestions) > 0 {
+		logger.Hint().Msgf("Did you mean %s?", strings.Join(cliErr.Suggestions, " or "))
+	}
 }
 
 // jsonEnvelopeRequested returns true when the resolved output mode is a

@@ -80,6 +80,21 @@ All user-visible failures map through `internal/cli/errors.go`:
 *   Stable snake_case codes with a `hint` that adds action beyond
     `message`; Jira HTTP statuses map to `jira_*` codes and hints in
     lockstep tables guarded by a test.
+*   **Writing a hint.** A hint is the next action in the plain words a person
+    would use — not a recap of `message`. Say what to do, not what failed. It
+    serves both a human (it renders as clog's 💡 line under the error on
+    stderr) and an agent (the envelope `hint`), so avoid envelope-only jargon
+    like `candidates[]`; when the fix needs a value the caller doesn't have
+    yet, name the command that surfaces it (`jira user search`,
+    `jira boards list`). Every hint is static — defined in the
+    `internal/errtax` registry keyed by code — and every code carries a
+    non-empty one (the taxonomy guard enforces it). A hint never interpolates
+    a runtime value: if a specific matters (the offending value, a "did you
+    mean" suggestion), it belongs in the error `message` or a structured
+    envelope field (`field`, `suggestions[]`), never baked into the hint. If
+    two error types want different hints, give them different codes rather
+    than one code with per-instance text. The jargon ban is machine-enforced
+    by `TestHintsAvoidEnvelopeJargon` in `internal/errtax`.
 *   Exit codes are a published contract: `0` ok, `1` auth, `2` not-found,
     `3` validation, `4` rate-limit, `5` server, `6` canceled, `7` timeout.
     `main.go` owns process exit and maps `ErrCompletionHandled` → 0.
