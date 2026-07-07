@@ -18,10 +18,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/matcra587/jira-cli/internal/cache"
 )
 
 // boardsListServer fakes the agile board endpoint plus per-board
@@ -220,6 +223,7 @@ func TestBoardsListSurfacesTruncationWarning(t *testing.T) {
 	body := `{
 		"profile":"test",
 		"resource":"boards",
+		"schema":` + strconv.Itoa(cache.SchemaVersion) + `,
 		"fetched_at":"` + fetched + `",
 		"data": {
 			"items":[{"id":42,"name":"Eng","type":"scrum","project_keys":["ENG"]}],

@@ -73,6 +73,7 @@ var Registry = []Resource{
 	{Name: "boards", Short: "Cache and print the visible Jira agile boards", TTLMinutes: 28 * ttlDay, Fetch: nil},
 	{Name: "statuses", Short: "Cache and print the visible Jira status list", TTLMinutes: 30 * ttlDay, Fetch: fetchStatusesForCache},
 	{Name: "priorities", Short: "Cache and print the visible Jira priority list", TTLMinutes: 90 * ttlDay, Fetch: fetchPrioritiesForCache},
+	{Name: "resolutions", Short: "Cache and print the configured Jira resolution list", TTLMinutes: 90 * ttlDay, Fetch: fetchResolutionsForCache},
 }
 
 // ResourceNames returns the resource names in registry order.
@@ -221,24 +222,61 @@ func fetchLinkTypesForCache(ctx context.Context, client *jira.Client) (json.RawM
 	return cmdutil.MarshalNonNilSlice(types)
 }
 
-// cacheNamedValue is the cached subset of a workflow status or priority:
-// the name completion offers and the id for the shell tooltip.
+// cacheNamedValue is the cached subset of a flat named Jira metadata value
+// (priority, resolution): the name completion offers and the id for the
+// shell tooltip.
 type cacheNamedValue struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
+// cacheStatus is the cached subset of a workflow status. Status ids are NOT
+// unique per display name: Jira defines statuses per workflow, so the same
+// name ("To Do") recurs under different ids. StatusCategory carries the
+// workflow category key (new, indeterminate, done) so a name or id can be
+// mapped to its category without a live call.
+type cacheStatus struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	StatusCategory string `json:"status_category,omitempty"`
+}
+
 func fetchStatusesForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
-	return fetchNamedValuesForCache(ctx, client, "rest/api/3/status")
+	req, err := client.NewRequest(ctx, "GET", "rest/api/3/status", nil)
+	if err != nil {
+		return nil, err
+	}
+	var raw []struct {
+		ID             string `json:"id"`
+		Name           string `json:"name"`
+		StatusCategory struct {
+			Key string `json:"key"`
+		} `json:"statusCategory"`
+	}
+	if _, err := client.Do(req, &raw); err != nil {
+		return nil, err
+	}
+	out := make([]cacheStatus, 0, len(raw))
+	for _, v := range raw {
+		if v.Name == "" {
+			continue
+		}
+		out = append(out, cacheStatus{ID: v.ID, Name: v.Name, StatusCategory: v.StatusCategory.Key})
+	}
+	return cmdutil.MarshalNonNilSlice(out)
 }
 
 func fetchPrioritiesForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
 	return fetchNamedValuesForCache(ctx, client, "rest/api/3/priority")
 }
 
+func fetchResolutionsForCache(ctx context.Context, client *jira.Client) (json.RawMessage, error) {
+	return fetchNamedValuesForCache(ctx, client, "rest/api/3/resolution")
+}
+
 // fetchNamedValuesForCache fills the cache for a flat {id,name} Jira metadata
-// list (statuses, priorities). Both endpoints return an unpaginated array, so
-// one GET fills the cache that completion reads for --status and --priority.
+// list (priorities, resolutions). Both endpoints return an unpaginated array,
+// so one GET fills the cache that completion and resolve transitions read.
 func fetchNamedValuesForCache(ctx context.Context, client *jira.Client, path string) (json.RawMessage, error) {
 	req, err := client.NewRequest(ctx, "GET", path, nil)
 	if err != nil {

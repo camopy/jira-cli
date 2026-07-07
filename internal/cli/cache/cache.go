@@ -49,8 +49,8 @@ func NewCommand() *cobra.Command {
 // newCachePrimerCommand builds the `cache <name>` primer for a registry
 // resource. The read-then-fetch flow, envelope shape, and flag surface are
 // identical across every flat-list resource (labels, projects, epics, fields,
-// issuetypes, linktypes, statuses, priorities); only the resource identity
-// and its Fetch vary, both carried by the registry entry.
+// issuetypes, linktypes, statuses, priorities, resolutions); only the resource
+// identity and its Fetch vary, both carried by the registry entry.
 func newCachePrimerCommand(r registry.Resource) *cobra.Command {
 	var refresh bool
 	var ttlMinutes int

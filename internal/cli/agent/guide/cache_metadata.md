@@ -12,8 +12,9 @@ When: a `--project` / `--type` / `--board` / `--label` filter resolves to an une
 - `issuetypes` — visible instance-level issue types and subtask markers. It is not scoped to a project's create screen.
 - `linktypes` — drives `--type` completion on `jira issue link` and pins the canonical names per instance.
 - `boards` — drives `--board` completion; resolves names to project lists for the `project in (...)` JQL clause (see → `discover_board`).
-- `statuses` — drives `--status` completion; instance-wide workflow status names, not scoped to a project's workflow.
+- `statuses` — drives `--status` completion; instance-wide workflow status names, not scoped to a project's workflow. Each entry carries `id`, `name`, and `status_category` (`new`, `indeterminate`, or `done`). Status ids are NOT unique per name: Jira defines statuses per workflow, so the same name recurs under different ids — map a name to its category here, but resolve the id for a move per issue via → `transition_issue`.
 - `priorities` — drives `--priority` completion; instance priority names.
+- `resolutions` — the tenant's resolution names (`Done`, `Fixed`, `Won't Do`, … vary per instance). Prime before a resolve transition that requires a `resolution` field instead of guessing.
 
 # when to use cache vs live API
 - Multiple writes / repeated reads in the same session → cache.
@@ -25,7 +26,7 @@ When: a `--project` / `--type` / `--board` / `--label` filter resolves to an une
 - A CLI upgrade that changes a cached shape invalidates the old entry automatically: a schema-version mismatch is treated as absent, so the next freshness-sensitive read (any primer or `jira cache refresh`) refetches it and you never parse a stale shape. Completion reads return empty on a mismatch rather than refetching.
 
 **Run**
-- Per-resource prime: `jira cache labels --output=json`, `jira cache projects --output=json`, `jira cache epics --output=json`, `jira cache fields --output=json`, `jira cache issuetypes --output=json`, `jira cache linktypes --output=json`, `jira cache boards --output=json`, `jira cache statuses --output=json`, `jira cache priorities --output=json`.
+- Per-resource prime: `jira cache labels --output=json`, `jira cache projects --output=json`, `jira cache epics --output=json`, `jira cache fields --output=json`, `jira cache issuetypes --output=json`, `jira cache linktypes --output=json`, `jira cache boards --output=json`, `jira cache statuses --output=json`, `jira cache priorities --output=json`, `jira cache resolutions --output=json`.
 - Force refresh: `jira cache fields --refresh --output=json`
 - TTL gate (refetch if older than N minutes): `jira cache fields --ttl-minutes 5 --output=json`
 - Prime everything in one call (TTL-gated; add `--force` to ignore freshness): `jira cache refresh --output=json`
@@ -33,8 +34,8 @@ When: a `--project` / `--type` / `--board` / `--label` filter resolves to an une
 - Wipe one: `jira cache clear labels`
 - Wipe everything for the active profile: `jira cache clear`
 - Valid clear resources: `labels`, `projects`, `epics`, `fields`,
-  `issuetypes`, `linktypes`, `boards`, `statuses`, `priorities`. Unknown names fail
-  before touching the cache with `code=arg_value_invalid`.
+  `issuetypes`, `linktypes`, `boards`, `statuses`, `priorities`, `resolutions`.
+  Unknown names fail before touching the cache with `code=arg_value_invalid`.
 - Recommended once-per-session prime for agents:
   ```sh
   jira cache fields     --refresh --output=json   # so you can map customfield_NNNN → name
@@ -48,7 +49,8 @@ When: a `--project` / `--type` / `--board` / `--label` filter resolves to an une
 
 **Save**
 > Requires `--output=json`.
-- `data.<resource>[]` [array, required] — the cached list (`data.labels[]`, `data.projects[]`, `data.fields[]`, `data.issuetypes[]`, `data.epics[]`, `data.link_types[]`, `data.boards[]`).
+- `data.<resource>[]` [array, required] — the cached list (`data.labels[]`, `data.projects[]`, `data.fields[]`, `data.issuetypes[]`, `data.epics[]`, `data.link_types[]`, `data.boards[]`, `data.statuses[]`, `data.priorities[]`, `data.resolutions[]`).
+- `data.statuses[]` entries carry `id`, `name`, `status_category`; `data.priorities[]` and `data.resolutions[]` entries carry `id`, `name`. Status names repeat across workflows with different ids — treat the name+category pair as the stable handle, not the id.
 - `data.from_cache` [bool] — true when read from disk, false when this call hit Jira.
 - `data.fetched_at` [string] — RFC3339 timestamp of the most recent fetch.
 - `data.count` [int, where applicable] — number of items in the cached list.

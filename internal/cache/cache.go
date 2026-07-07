@@ -27,14 +27,14 @@ import (
 // refreshing" to commands and completion functions.
 const DefaultTTL = 1 * time.Hour
 
-// SchemaVersion is the on-disk cache-entry shape version. The current,
-// originally-unversioned shape is version 0, so legacy entries written before
-// this field existed (which decode to Schema=0) stay valid — no upgrade wipes
-// a usable cache. The first change to a cached resource's shape bumps this
-// constant; every entry stamped with the old version then fails the read-time
-// check below and is refetched, so a CLI upgrade can never mis-parse a stale
-// shape. This is what lets the per-resource TTLs run long.
-const SchemaVersion = 0
+// SchemaVersion is the on-disk cache-entry shape version. Any change to a
+// cached resource's shape bumps this constant; every entry stamped with an
+// older version then fails the read-time check below and is refetched, so a
+// CLI upgrade can never mis-parse a stale shape. This is what lets the
+// per-resource TTLs run long. Version 1 added status_category to cached
+// statuses (version 0 was the originally-unversioned shape; entries written
+// before the field existed decode to Schema=0 and are refetched).
+const SchemaVersion = 1
 
 // Entry wraps a cached value with its fetch timestamp + source profile.
 // Stored verbatim on disk so consumers can introspect age and provenance.

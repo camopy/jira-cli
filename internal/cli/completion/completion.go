@@ -11,6 +11,7 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/cache"
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/cache/registry"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/cli/jql"
 	"github.com/matcra587/jira-cli/internal/cli/startup"
@@ -115,7 +116,7 @@ func emitAliases(globals startup.Globals) {
 }
 
 func emitCacheResources() {
-	for _, r := range []string{"labels", "projects", "epics", "fields", "issuetypes", "linktypes", "boards", "statuses", "priorities"} {
+	for _, r := range registry.ResourceNames() {
 		_, _ = fmt.Fprintln(os.Stdout, r)
 	}
 }

@@ -107,6 +107,7 @@ func TestCacheStaleness(t *testing.T) {
 	stale := cache.Entry{
 		Profile:   "default",
 		Resource:  "labels",
+		Schema:    cache.SchemaVersion,
 		FetchedAt: old.UTC(),
 		Data:      json.RawMessage(`["old"]`),
 	}

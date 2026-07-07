@@ -95,6 +95,7 @@ var operationVerbs = map[string]OperationVerb{
 	"cache.priorities":          {"caching", "cached", "cache", "priorities"},
 	"cache.projects":            {"caching", "cached", "cache", "projects"},
 	"cache.refresh":             {"refreshing", "refreshed", "refresh", "caches"},
+	"cache.resolutions":         {"caching", "cached", "cache", "resolutions"},
 	"cache.statuses":            {"caching", "cached", "cache", "statuses"},
 	"epic.add":                  {"adding", "added", "add", "issues to epic"},
 	"epic.board":                {"rendering", "rendered", "render", "epic board"},

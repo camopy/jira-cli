@@ -9,9 +9,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/matcra587/jira-cli/internal/cache"
 )
 
 func TestCacheLinkTypesRoundTrip(t *testing.T) {
@@ -186,6 +189,7 @@ func writeLinkTypesCacheEntry(t *testing.T, cacheRoot, cfg, baseURL string, fetc
 	body := []byte(`{
 		"profile":"` + cacheKeyForTestConfig(t, cfg, "test", baseURL) + `",
 		"resource":"linktypes",
+		"schema":` + strconv.Itoa(cache.SchemaVersion) + `,
 		"fetched_at":"` + fetchedAt.UTC().Format(time.RFC3339) + `",
 		"data":` + data + `
 	}`)

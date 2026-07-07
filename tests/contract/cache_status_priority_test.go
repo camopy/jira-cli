@@ -1,7 +1,7 @@
-// Contract tests for `jira cache statuses` / `jira cache priorities` and the
-// matching `cachestatus` / `cachepriority` completion predictors. Both Jira
-// endpoints return a flat {id,name} array, so one GET fills a cache that
-// completion reads for `--status` / `--priority`.
+// Contract tests for `jira cache statuses` / `jira cache priorities` /
+// `jira cache resolutions` and the matching `cachestatus` / `cachepriority`
+// completion predictors. The Jira endpoints return flat unpaginated arrays,
+// so one GET fills a cache that completion and discovery reads serve from.
 package contract
 
 import (
@@ -11,10 +11,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/matcra587/jira-cli/internal/cache"
 )
 
 // namedValueServer serves a flat {id,name} array at wantPath and 404s
@@ -37,8 +40,9 @@ func TestCacheStatusesAndPrioritiesRoundTrip(t *testing.T) {
 		path     string
 		body     string
 	}{
-		{"statuses", "/rest/api/3/status", `[{"id":"1","name":"To Do"},{"id":"3","name":"In Progress"},{"id":"10001","name":"Done"}]`},
+		{"statuses", "/rest/api/3/status", `[{"id":"1","name":"To Do","statusCategory":{"key":"new"}},{"id":"3","name":"In Progress","statusCategory":{"key":"indeterminate"}},{"id":"10001","name":"Done","statusCategory":{"key":"done"}}]`},
 		{"priorities", "/rest/api/3/priority", `[{"id":"1","name":"Highest"},{"id":"3","name":"Medium"}]`},
+		{"resolutions", "/rest/api/3/resolution", `[{"id":"10000","name":"Done"},{"id":"10001","name":"Won't Do"}]`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.resource, func(t *testing.T) {
@@ -73,6 +77,16 @@ func TestCacheStatusesAndPrioritiesRoundTrip(t *testing.T) {
 			values, _ := data[tc.resource].([]any)
 			if len(values) != int(wantCount) {
 				t.Fatalf("data.%s length = %d, want %v", tc.resource, len(values), wantCount)
+			}
+			if tc.resource == "statuses" {
+				// Cached statuses must keep the workflow category so a
+				// name/id can be mapped without a live call.
+				for i, want := range []string{"new", "indeterminate", "done"} {
+					entry, _ := values[i].(map[string]any)
+					if entry["status_category"] != want {
+						t.Fatalf("statuses[%d].status_category = %v, want %q", i, entry["status_category"], want)
+					}
+				}
 			}
 
 			cachePath := filepath.Join(cacheRoot, "jira-cli", cacheKeyForTestConfig(t, cfg, "test", srv.URL), tc.resource+".json")
@@ -173,7 +187,8 @@ func writeNamedValueCache(t *testing.T, cacheRoot, cfg, resource, data string) {
 		t.Fatalf("MkdirAll cache dir: %v", err)
 	}
 	body := []byte(`{"profile":"` + key + `","resource":"` + resource +
-		`","fetched_at":"` + time.Now().UTC().Format(time.RFC3339) + `","data":` + data + `}`)
+		`","schema":` + strconv.Itoa(cache.SchemaVersion) +
+		`,"fetched_at":"` + time.Now().UTC().Format(time.RFC3339) + `","data":` + data + `}`)
 	if err := os.WriteFile(filepath.Join(dir, resource+".json"), body, 0o600); err != nil {
 		t.Fatalf("write cache file: %v", err)
 	}
