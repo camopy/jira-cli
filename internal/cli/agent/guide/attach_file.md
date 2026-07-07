@@ -86,6 +86,7 @@ When: a binary or non-Jira artifact (log, screenshot, exported report) must trav
 
 **Behavior**
 - Download is clobber-protected — an existing file at the target path is not overwritten silently.
+- Download `--to` is confined to the working directory: a `..` traversal or an absolute path outside it exits `3` before any HTTP call. See → `security_posture`.
 - Each project can pin its own upload size cap; the per-project cap is enforced by Jira, not the CLI.
 - `-p` / `--parallelism` is bounded to 1..16 and affects multi-key attachment add/list.
 - For multi-key uploads, prefer `--file` for each path so positional filenames are not confused with issue-key expressions.
@@ -96,6 +97,7 @@ When: a binary or non-Jira artifact (log, screenshot, exported report) must trav
 | exit 5, upstream 413 | Upload exceeded the per-project attachment size cap; upstream message is preserved verbatim in `errors[].message` | Shrink/split the file; cap is server-set, not CLI-configurable |
 | exit 3 on delete | `--force` missing under `--no-input` | Re-run with `--force` |
 | exit 3 on download | Target file already exists (clobber guard) | Choose a fresh `--to` path or remove the stale file first |
+| exit 3 on download, "outside the working directory" | `--to` escapes the working directory (`..` traversal or an outside absolute path) | Use a path inside the working directory, or launch the CLI from the directory you want the file in |
 | exit 2 (`not_found`) | Wrong attachment id | Re-list and copy `data.attachments[].id` verbatim |
 
 **Next**

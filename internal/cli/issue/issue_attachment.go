@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	xfilepath "github.com/gechr/x/filepath"
 	"github.com/gechr/x/ptr"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
@@ -494,9 +495,15 @@ $ jira issue attachment download PROJ-123 10500 --to ./report.pdf --dry-run`,
 			}
 			attachmentID := args[1]
 			mode, target := resolveDownloadMode(output)
-			// Clobber-protect for an explicit --to target happens BEFORE
-			// any HTTP call.
+			// Path confinement, then clobber-protect, both BEFORE any
+			// HTTP call. A --to that escapes the working directory (via
+			// `..` traversal or an outside absolute path) is rejected —
+			// the agent security posture treats the operator as
+			// untrusted, so downloads are sandboxed to the working tree.
 			if target != "" {
+				if err := confineDownloadTarget(target); err != nil {
+					return err
+				}
 				if _, err := os.Stat(target); err == nil && !force {
 					return fmt.Errorf("attachment download: validation: %s already exists; pass --force to overwrite", target)
 				} else if err != nil && !os.IsNotExist(err) {
@@ -530,11 +537,16 @@ $ jira issue attachment download PROJ-123 10500 --to ./report.pdf --dry-run`,
 			}
 			defer func() { _ = body.Close() }()
 			// In TTY current-dir mode, derive the filename from
-			// the Content-Disposition the server sent.
+			// the Content-Disposition the server sent. The name is
+			// base-named already; the same confinement check as --to
+			// keeps every write path behind one guard.
 			if mode == downloadModeCurrentDir && target == "" {
 				target = filenameFromContentDisposition(resp)
 				if target == "" {
 					target = "attachment-" + attachmentID
+				}
+				if err := confineDownloadTarget(target); err != nil {
+					return err
 				}
 				if _, err := os.Stat(target); err == nil && !force {
 					return fmt.Errorf("attachment download: validation: %s already exists; pass --force to overwrite", target)
@@ -581,6 +593,29 @@ func resolveDownloadMode(output string) (downloadMode, string) {
 		return downloadModeCurrentDir, ""
 	}
 	return downloadModeOutput, output
+}
+
+// confineDownloadTarget confines a download target to the current
+// working directory: a `..` traversal or an absolute path resolving
+// outside it is rejected with a validation error (exit 3) before any
+// HTTP call or write. Downloads are the one place a Jira command takes
+// a user-supplied output path, and the agent security posture treats
+// the operator as untrusted — an agent talked into `--to ../../.ssh/x`
+// must fail fast, not write outside the tree it was launched in. An
+// absolute path that stays inside the working directory is allowed.
+// The containment check is lexical (Abs+Clean, no EvalSymlinks) — the
+// untrusted input is the path the operator passes, not the tree the
+// CLI was launched in, so symlink resolution is deliberately out of
+// scope.
+func confineDownloadTarget(target string) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("attachment download: resolve working directory: %w", err)
+	}
+	if !xfilepath.IsWithin(cwd, target) {
+		return fmt.Errorf("attachment download: validation: --to %s resolves outside the working directory %s; use a path inside it", target, cwd)
+	}
+	return nil
 }
 
 // writeDownloadFile streams body bytes to target via io.Copy. Uses

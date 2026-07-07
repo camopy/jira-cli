@@ -36,6 +36,7 @@ var workflowOrder = []string{
 	"inspect_schema",
 	"configure_editor",
 	"safe_mutation",
+	"security_posture",
 	"read_issue",
 	"list_issues",
 	"search_jql",

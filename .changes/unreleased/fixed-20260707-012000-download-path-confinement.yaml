@@ -1,0 +1,3 @@
+kind: fixed
+body: '`issue attachment download --to` is now confined to the working directory: a `..` traversal or an absolute path outside it is rejected before any HTTP call, so an agent (or a crafted instruction) can no longer write downloads outside the tree it was launched in. A new `security_posture` section in `jira agent guide` documents the threat model.'
+time: 2026-07-07T01:20:00.000000-04:00

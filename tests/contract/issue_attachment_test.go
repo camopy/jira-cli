@@ -313,14 +313,17 @@ func TestAttachmentDownloadModesAndClobberProtect(t *testing.T) {
 	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
 
 	t.Run("--to writes file and emits envelope", func(t *testing.T) {
-		out := filepath.Join(t.TempDir(), "local.png")
-		cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json",
-			"issue", "attachment", "download", "PROJ-1", "10042", "--to", out)
+		// --to is confined to the working directory, so the download runs
+		// with its cwd inside the temp dir and a relative target.
+		workDir := t.TempDir()
+		cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "--output=json",
+			"issue", "attachment", "download", "PROJ-1", "10042", "--to", "local.png")
+		cmd.Dir = workDir
 		stdout, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("attachment download error = %v\n%s", err, stdout)
 		}
-		got, err := os.ReadFile(out)
+		got, err := os.ReadFile(filepath.Join(workDir, "local.png"))
 		if err != nil {
 			t.Fatalf("ReadFile: %v", err)
 		}
@@ -335,8 +338,8 @@ func TestAttachmentDownloadModesAndClobberProtect(t *testing.T) {
 		if got, _ := data["mode"].(string); got != "output" {
 			t.Fatalf("data.mode = %q, want output", got)
 		}
-		if got, _ := data["written_to"].(string); got != out {
-			t.Fatalf("data.written_to = %q, want %q", got, out)
+		if got, _ := data["written_to"].(string); got != "local.png" {
+			t.Fatalf("data.written_to = %q, want local.png", got)
 		}
 		if bytesField, _ := data["bytes"].(float64); int(bytesField) != len(payload) {
 			t.Fatalf("data.bytes = %v, want %d", bytesField, len(payload))
@@ -344,13 +347,15 @@ func TestAttachmentDownloadModesAndClobberProtect(t *testing.T) {
 	})
 
 	t.Run("--to existing file without --force exits 3", func(t *testing.T) {
-		existing := filepath.Join(t.TempDir(), "existing.png")
+		workDir := t.TempDir()
+		existing := filepath.Join(workDir, "existing.png")
 		if err := os.WriteFile(existing, []byte("KEEP"), 0o600); err != nil {
 			t.Fatalf("WriteFile: %v", err)
 		}
 		bin := buildJiraBinary(t)
 		cmd := exec.Command(bin, "--config", cfg, "--output=json", "--no-input",
-			"issue", "attachment", "download", "PROJ-1", "10042", "--to", existing)
+			"issue", "attachment", "download", "PROJ-1", "10042", "--to", "existing.png")
+		cmd.Dir = workDir
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
@@ -376,12 +381,14 @@ func TestAttachmentDownloadModesAndClobberProtect(t *testing.T) {
 	})
 
 	t.Run("--to existing file with --force overwrites", func(t *testing.T) {
-		existing := filepath.Join(t.TempDir(), "existing.png")
+		workDir := t.TempDir()
+		existing := filepath.Join(workDir, "existing.png")
 		if err := os.WriteFile(existing, []byte("OLD"), 0o600); err != nil {
 			t.Fatalf("WriteFile: %v", err)
 		}
-		cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json",
-			"issue", "attachment", "download", "PROJ-1", "10042", "--to", existing, "--force")
+		cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "--output=json",
+			"issue", "attachment", "download", "PROJ-1", "10042", "--to", "existing.png", "--force")
+		cmd.Dir = workDir
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("download --force error = %v\n%s", err, out)
@@ -394,4 +401,71 @@ func TestAttachmentDownloadModesAndClobberProtect(t *testing.T) {
 			t.Fatalf("file bytes after --force = %q, want %q", string(got), payload)
 		}
 	})
+
+	// An absolute --to that stays inside the working directory remains
+	// allowed — confinement is about escapes, not path spelling.
+	t.Run("--to absolute path inside working dir is allowed", func(t *testing.T) {
+		workDir := t.TempDir()
+		out := filepath.Join(workDir, "abs.png")
+		cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "--output=json",
+			"issue", "attachment", "download", "PROJ-1", "10042", "--to", out)
+		cmd.Dir = workDir
+		stdout, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("attachment download error = %v\n%s", err, stdout)
+		}
+		if got, err := os.ReadFile(out); err != nil || string(got) != payload {
+			t.Fatalf("ReadFile = %q, %v; want %q", string(got), err, payload)
+		}
+	})
+}
+
+// `attachment download --to` is confined to the working directory: a
+// `..` traversal or an absolute path outside it is a validation error
+// (exit 3) rejected BEFORE any HTTP call — the guard fires even with no
+// server behind the profile, which is exactly what this test relies on.
+func TestAttachmentDownloadRejectsWorkingDirEscape(t *testing.T) {
+	cfg := jiraConfig(t, "http://127.0.0.1:1")
+	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
+	bin := buildJiraBinary(t)
+
+	for name, target := range map[string]string{
+		"relative traversal":     filepath.Join("..", "escape.bin"),
+		"nested traversal":       filepath.Join("sub", "..", "..", "escape.bin"),
+		"absolute outside tree":  filepath.Join(os.TempDir(), "escape.bin"),
+		"traversal with dry-run": filepath.Join("..", "escape.bin"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			args := []string{
+				"--config", cfg, "--output=json", "--no-input",
+				"issue", "attachment", "download", "PROJ-1", "10042", "--to", target,
+			}
+			if name == "traversal with dry-run" {
+				args = append(args, "--dry-run")
+			}
+			cmd := exec.Command(bin, args...)
+			cmd.Dir = t.TempDir()
+			var stdout, stderr bytes.Buffer
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
+			err := cmd.Run()
+			if err == nil {
+				t.Fatalf("download --to %q succeeded; want exit 3\n%s", target, stdout.String())
+			}
+			var exitErr *exec.ExitError
+			if !stdlibErrors.As(err, &exitErr) {
+				t.Fatalf("err is not *exec.ExitError: %v", err)
+			}
+			if exitErr.ExitCode() != 3 {
+				t.Fatalf("exit code = %d, want 3 (path confinement)\n%s%s", exitErr.ExitCode(), stdout.String(), stderr.String())
+			}
+			combined := stdout.String() + stderr.String()
+			if !strings.Contains(combined, "outside the working directory") {
+				t.Fatalf("rejection lacks the remediation message:\n%s", combined)
+			}
+			if _, err := os.Stat(filepath.Join(cmd.Dir, "..", "escape.bin")); err == nil {
+				t.Fatalf("escape file was written outside the working directory")
+			}
+		})
+	}
 }

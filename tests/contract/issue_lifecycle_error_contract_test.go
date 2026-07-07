@@ -72,7 +72,10 @@ func TestLifecycleCommandsErrorContract(t *testing.T) {
 		{"attachment.list", []string{"issue", "attachment", "list", "PROJ-1"}},
 		{"attachment.add", []string{"issue", "attachment", "add", "PROJ-1", "--file", tmpFile}},
 		{"attachment.delete", []string{"issue", "attachment", "delete", "PROJ-1", "99", "--force"}},
-		{"attachment.download", []string{"issue", "attachment", "download", "PROJ-1", "99", "--to", filepath.Join(t.TempDir(), "out.bin")}},
+		// --to must stay inside the working directory (path confinement).
+		// Every case in this matrix fails at the HTTP layer, so the
+		// relative target is never actually written.
+		{"attachment.download", []string{"issue", "attachment", "download", "PROJ-1", "99", "--to", "error-contract-out.bin"}},
 		{"comment.list", []string{"issue", "comment", "list", "PROJ-1"}},
 		{"comment.add", []string{"issue", "comment", "add", "PROJ-1", "--json-input", bodyJSON, "--no-input"}},
 		{"comment.edit", []string{"issue", "comment", "edit", "PROJ-1", "500", "--json-input", bodyJSON, "--no-input"}},
