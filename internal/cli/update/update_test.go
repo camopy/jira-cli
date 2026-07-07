@@ -166,3 +166,30 @@ func TestRunLiveArchiveUpdateRequiresForceWhenHeadless(t *testing.T) {
 		})
 	}
 }
+
+// The headless --force gate error must be typed: it must map to
+// validation_failed / exit 3 without ever reaching the legacy substring
+// classifier. Not parallel: the probe is a package-level seam.
+func TestRunForceGateErrorIsTypedNotSubstringClassified(t *testing.T) {
+	stubChannel(t, selfupdate.ChannelArchive)
+	cmd := newTestCommand(t, cli.Detection{IsTTY: false})
+
+	var probed []error
+	cli.ClassifyUntypedProbe = func(err error) { probed = append(probed, err) }
+	t.Cleanup(func() { cli.ClassifyUntypedProbe = nil })
+
+	err := run(cmd, false, false)
+	if err == nil {
+		t.Fatal("run() = nil, want the --force gate error")
+	}
+	mapped := cli.MapError(err)
+	for _, p := range probed {
+		t.Errorf("error reached the substring classifier (must be typed): %v", p)
+	}
+	if mapped.Code != "validation_failed" {
+		t.Errorf("code = %q, want validation_failed (error: %v)", mapped.Code, err)
+	}
+	if got := cli.ExitCode(mapped); got != 3 {
+		t.Errorf("exit = %d, want 3 (error: %v)", got, err)
+	}
+}

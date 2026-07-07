@@ -100,7 +100,12 @@ $ jira --profile prod auth whoami --output=json`,
 				return clientErr
 			}
 			if !ok {
-				return fmt.Errorf("jira base URL is required for auth.whoami")
+				// The profile resolved but has no base URL — the same
+				// incomplete-profile failure cmdutil.JiraClientForCommand
+				// raises for a requested profile. Typed so it classifies as
+				// profile_incomplete (exit 2) rather than being substring-
+				// guessed as an auth failure off the "auth.whoami" text.
+				return config.ProfileIncompleteError{Name: profile.Name}
 			}
 			var user *jira.CurrentUser
 			if err := cmdutil.Spin(cmd, "auth.whoami", func(ctx context.Context) error {
@@ -358,8 +363,12 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 			// store. Moving a secret between backends is `auth migrate`'s job —
 			// it stages the new write and cleans up the old one transactionally
 			// — so login refuses it rather than switching as a side-effect.
+			// Typed as a flag-value failure: this is bad command-line input
+			// (validation, exit 3), not an authentication failure.
 			if cmd.Flags().Changed("backend") && previousProfile.SecretBackend != "" && flagBackend != previousProfile.SecretBackend {
-				return fmt.Errorf("validation: profile %q stores its credential in %s; run `jira auth migrate --backend %s` to move it", profile.Name, previousProfile.SecretBackend, flagBackend)
+				mismatch := cli.NewCLIInputError(cli.InputFlagValueInvalid, fmt.Sprintf("profile %q stores its credential in %s; run `jira auth migrate --backend %s` to move it", profile.Name, previousProfile.SecretBackend, flagBackend))
+				mismatch.Flag = "backend"
+				return mismatch
 			}
 			if onePasswordAccount != "" {
 				profile.OnePasswordAccount = onePasswordAccount
@@ -1317,11 +1326,7 @@ $ jira auth logout old-work --base-url acme.atlassian.net`,
 			// own intent.
 			det := cmdutil.DetectorFromContext(cmd)
 			if !force && (!det.IsTTY || det.Agent || cmdutil.NoInputRequested(cmd)) {
-				// Worded without "auth": the untyped classifier buckets any
-				// "auth"-bearing message as an auth failure, and this gate is
-				// a validation failure (exit 3) like its destructive-mutation
-				// siblings.
-				return errors.New("logout requires --force in headless / agent / --no-input mode")
+				return cli.NewCLIInputError(cli.InputForceRequired, "auth logout requires --force in headless / agent / --no-input mode")
 			}
 			// Revoke the credential from its backend. An absent credential is
 			// not an error: removed=false reports there was nothing to remove.

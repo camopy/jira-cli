@@ -697,7 +697,10 @@ func handleResolveErr(cmd *cobra.Command, command string, err error) error {
 		return cmdutil.EnvelopeWritten(fmt.Errorf("validation: %w", err))
 	}
 	if errors.Is(err, jira.ErrUserNotFound) {
-		return fmt.Errorf("not found: %w", err)
+		// Typed not_found (exit 2): the live /user/search genuinely found
+		// nobody — a missing Jira resource, not bad input. The wrap keeps
+		// the sentinel visible to errors.Is.
+		return cli.NewNotFoundError("", err)
 	}
 	return err
 }

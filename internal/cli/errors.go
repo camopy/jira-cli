@@ -209,10 +209,21 @@ func isNilValue(err error) bool {
 	return v.Kind() == reflect.Pointer && v.IsNil()
 }
 
+// ClassifyUntypedProbe is a test seam: when non-nil, classifyUntyped
+// reports every error that reaches the legacy substring classifier, so a
+// test can prove an intentional command error is typed rather than
+// substring-guessed. Nil in production; exported because the probing
+// tests drive real commands from outside this package. Tests that set it
+// must not run in parallel.
+var ClassifyUntypedProbe func(error)
+
 // classifyUntyped is the legacy substring classifier for bare errors
 // that carry no typed metadata. It is strictly terminal — typed errors
 // must not reach it, and no new branches belong here.
 func classifyUntyped(err error) Error {
+	if ClassifyUntypedProbe != nil {
+		ClassifyUntypedProbe(err)
+	}
 	msg := err.Error()
 	lower := strings.ToLower(msg)
 	var kind errtax.Type

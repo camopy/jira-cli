@@ -434,7 +434,7 @@ $ jira issue attachment delete PROJ-123 10500 --force`,
 			// fallback in headless mode.
 			if !force {
 				if !det.IsTTY || det.Agent || noInput {
-					return fmt.Errorf("attachment delete requires --force in headless / agent / --no-input mode")
+					return cli.NewCLIInputError(cli.InputForceRequired, "attachment delete requires --force in headless / agent / --no-input mode")
 				}
 				if ok, err := confirmDestructive(cmd, "attachment delete", attachmentID); err != nil {
 					return err

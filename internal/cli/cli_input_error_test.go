@@ -19,6 +19,7 @@ var allCLIInputKinds = []CLIInputKind{
 	InputArgCountInvalid,
 	InputArgValueInvalid,
 	InputCommandUnknown,
+	InputForceRequired,
 }
 
 // TestEveryCLIInputKindCarriesACodeAndHint pins the invariant that every
@@ -26,11 +27,20 @@ var allCLIInputKinds = []CLIInputKind{
 // validation_failed fallback) whose registry row carries a non-empty
 // remediation hint. A kind that falls through either branch hands an
 // agent a failure with no stable code to branch on or no next step.
+//
+// InputForceRequired is the one deliberate exception: every --force gate
+// has always emitted validation_failed, and the kind exists to type the
+// gates without bumping that agent-visible code — so for it the invariant
+// is the opposite (it MUST stay on the generic code).
 func TestEveryCLIInputKindCarriesACodeAndHint(t *testing.T) {
 	for _, kind := range allCLIInputKinds {
 		e := NewCLIInputError(kind, "input failed")
 		code := e.Code()
-		if code == errtax.CodeUnknown || code == errtax.CodeValidationFailed {
+		if kind == InputForceRequired {
+			if code != errtax.CodeValidationFailed {
+				t.Errorf("InputForceRequired resolves to %q, want the stable validation_failed code", code)
+			}
+		} else if code == errtax.CodeUnknown || code == errtax.CodeValidationFailed {
 			t.Errorf("kind %d resolves to %q, not a specific cli-input code", kind, code)
 		}
 		spec, ok := errtax.Lookup(code)
@@ -53,6 +63,7 @@ func TestCLIInputCodesAreStable(t *testing.T) {
 		InputArgCountInvalid:     "arg_count_invalid",
 		InputArgValueInvalid:     "arg_value_invalid",
 		InputCommandUnknown:      "command_unknown",
+		InputForceRequired:       "validation_failed",
 	}
 	if len(want) != len(allCLIInputKinds) {
 		t.Fatalf("want map has %d entries, taxonomy has %d", len(want), len(allCLIInputKinds))

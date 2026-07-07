@@ -391,7 +391,7 @@ $ jira issue link delete PROJ-123 10001 --force`,
 			det := cmdutil.DetectorFromContext(cmd)
 			if !force {
 				if !det.IsTTY || det.Agent || noInput {
-					return fmt.Errorf("issue link delete requires --force in headless / agent / --no-input mode")
+					return cli.NewCLIInputError(cli.InputForceRequired, "issue link delete requires --force in headless / agent / --no-input mode")
 				}
 				if ok, err := confirmDestructive(cmd, "link delete", linkID); err != nil {
 					return err

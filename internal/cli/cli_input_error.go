@@ -26,6 +26,10 @@ const (
 	InputCommandUnknown
 	// InputArgValueInvalid is a positional argument value outside the accepted set.
 	InputArgValueInvalid
+	// InputForceRequired is a destructive or state-wiping run refused
+	// because headless / agent / --no-input context needs explicit --force
+	// consent.
+	InputForceRequired
 )
 
 // CLIInputError is the typed error every command-line input failure is
@@ -79,6 +83,11 @@ func (e *CLIInputError) Code() errtax.Code {
 		return errtax.CodeArgValueInvalid
 	case InputCommandUnknown:
 		return errtax.CodeCommandUnknown
+	case InputForceRequired:
+		// Deliberately the generic validation code every --force gate has
+		// always emitted: typing hardens classification without bumping
+		// the agent-visible code contract.
+		return errtax.CodeValidationFailed
 	default:
 		return errtax.CodeValidationFailed
 	}

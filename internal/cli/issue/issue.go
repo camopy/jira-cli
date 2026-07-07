@@ -1149,7 +1149,13 @@ func resolveAssigneeField(input string, profile config.Profile) (wire any, email
 		if profile.AccountID != "" {
 			return map[string]string{"accountId": profile.AccountID}, "", true, nil
 		}
-		return nil, "", false, fmt.Errorf("--assignee me requires profile.account_id; run `jira auth whoami --save` to populate it")
+		// Typed as a bad --assignee value so it classifies as
+		// flag_value_invalid (validation, exit 3) rather than being
+		// substring-guessed as an auth failure off the "jira auth whoami"
+		// hint text.
+		aerr := cli.NewCLIInputError(cli.InputFlagValueInvalid, "--assignee me requires profile.account_id; run `jira auth whoami --save` to populate it")
+		aerr.Flag = "assignee"
+		return nil, "", false, aerr
 	default:
 		if email, ok, err := assigneeEmailFrom(v); err != nil {
 			return nil, "", false, err
@@ -2480,7 +2486,7 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 				// We refuse to prompt headless callers and refuse to
 				// proceed without explicit consent.
 				if !det.IsTTY || det.Agent || noInput {
-					return fmt.Errorf("issue %s requires --force in headless / agent / --no-input mode", name)
+					return cli.NewCLIInputError(cli.InputForceRequired, fmt.Sprintf("issue %s requires --force in headless / agent / --no-input mode", name))
 				}
 				// TTY human → huh confirmation prompt.
 				if ok, err := confirmDestructive(cmd, name, keys[0]); err != nil {
@@ -2546,7 +2552,7 @@ func runDestructiveIssueMany(
 	in destructiveIssueManyInput,
 ) error {
 	if !in.DryRun && !in.Force {
-		return fmt.Errorf("validation: issue %s with multiple keys requires --force", name)
+		return cli.NewCLIInputError(cli.InputForceRequired, fmt.Sprintf("issue %s with multiple keys requires --force", name))
 	}
 	var client *jira.Client
 	var service jira.IssueService

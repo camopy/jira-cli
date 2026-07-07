@@ -719,7 +719,7 @@ $ jira issue comment delete PROJ-123 10042 --force`,
 			det := cmdutil.DetectorFromContext(cmd)
 			if !force {
 				if !det.IsTTY || det.Agent || noInput {
-					return fmt.Errorf("issue comment delete requires --force in headless / agent / --no-input mode")
+					return cli.NewCLIInputError(cli.InputForceRequired, "issue comment delete requires --force in headless / agent / --no-input mode")
 				}
 				if ok, err := confirmDestructive(cmd, "comment delete", args[1]); err != nil {
 					return err

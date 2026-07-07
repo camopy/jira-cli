@@ -164,7 +164,10 @@ $ jira search saved my-open-bugs --output=json`,
 			}
 			query, ok := queries[args[0]]
 			if !ok {
-				return fmt.Errorf("saved query %q not found", args[0])
+				// A bad query name is bad command-line input (validation,
+				// exit 3) — the lookup is a local file, not a Jira
+				// resource.
+				return cli.NewCLIInputError(cli.InputArgValueInvalid, fmt.Sprintf("saved query %q not found", args[0]))
 			}
 			client, _, hasClient, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {

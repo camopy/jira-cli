@@ -176,7 +176,9 @@ The JSON `data` carries the saved-query metadata — `source: "saved"`, `key`,
 }
 ```
 
-A name with no matching file exits 2 with a `not_found` error.
+A name with no matching file is rejected as invalid input: exit 3 with a
+`validation` error (`code=arg_value_invalid`) — the lookup is a local file,
+not a Jira resource.
 
 ### File format
 

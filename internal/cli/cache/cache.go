@@ -3,7 +3,6 @@ package cache
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -350,7 +349,7 @@ $ jira cache clear labels --force --output=json`,
 			det := cmdutil.DetectorFromContext(cmd)
 			headless := !det.IsTTY || det.Agent || cmdutil.NoInputRequested(cmd)
 			if !dryRun && !force && headless {
-				return errors.New("cache clear requires --force in headless / agent / --no-input mode")
+				return cli.NewCLIInputError(cli.InputForceRequired, "cache clear requires --force in headless / agent / --no-input mode")
 			}
 			key := cmdutil.CacheKeyForProfile(cmd, profile)
 			if len(args) == 0 {

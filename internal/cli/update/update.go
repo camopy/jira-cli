@@ -5,11 +5,11 @@ package update
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
 
+	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/selfupdate"
 	"github.com/matcra587/jira-cli/internal/version"
@@ -96,7 +96,7 @@ func run(cmd *cobra.Command, dryRun, force bool) error {
 	det := cmdutil.DetectorFromContext(cmd)
 	headless := !det.IsTTY || det.Agent || cmdutil.NoInputRequested(cmd)
 	if !dryRun && !force && headless {
-		return errors.New("update requires --force in headless / agent / --no-input mode")
+		return cli.NewCLIInputError(cli.InputForceRequired, "update requires --force in headless / agent / --no-input mode")
 	}
 
 	up, err := newUpdater(channel)

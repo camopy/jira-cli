@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/adf"
+	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/cli/schema"
 	"github.com/matcra587/jira-cli/internal/jira/customfield"
@@ -128,9 +129,10 @@ $ jira agent guide safe_mutation`,
 			if len(args) == 1 {
 				section, ok := loadGuideSection(args[0])
 				if !ok {
-					// Heuristic classifier (root.outputErrorFor) picks
-					// up "not found" → ErrorTypeNotFound (exit 2).
-					return fmt.Errorf("guide section %q not found", args[0])
+					// A bad section slug is bad command-line input
+					// (validation, exit 3) — nothing was looked up in
+					// Jira, so not_found would be misleading.
+					return cli.NewCLIInputError(cli.InputArgValueInvalid, fmt.Sprintf("guide section %q not found", args[0]))
 				}
 				out = section
 			} else {
