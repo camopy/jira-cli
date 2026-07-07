@@ -1,6 +1,13 @@
 # Release Notes
 
 
+## [0.9.1](https://github.com/matcra587/jira-cli/releases/tag/v0.9.1) — 2026-07-07
+
+### Added
+
+- Running a command with --debug now prints the error's classification on the error line — its stable code and type, plus a retryable marker when the error is retryable — the same fields an agent reads from the JSON envelope.
+- Rate-limited commands now say how long to wait: when Jira sends a Retry-After, human output adds a 'retry in Ns' line under the rate-limit hint.
+
 ## [0.9.0](https://github.com/matcra587/jira-cli/releases/tag/v0.9.0) — 2026-07-06
 
 ### Added
