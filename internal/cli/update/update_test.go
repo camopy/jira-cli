@@ -114,6 +114,27 @@ func TestRunForcedUpdateInstallsAndReports(t *testing.T) {
 	}
 }
 
+func TestRunInteractiveUpdateInstallsWithoutPrompt(t *testing.T) {
+	fake := stubUpdater(t, selfupdate.ChannelArchive, "v1.0.0", "v2.0.0")
+	cmd := newTestCommand(t, cli.Detection{IsTTY: true, Mode: cli.ModeJSON})
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	if err := run(cmd, false, false); err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	var env map[string]any
+	if err := json.Unmarshal(out.Bytes(), &env); err != nil {
+		t.Fatalf("stdout is not a JSON envelope: %v\nout=%s", err, out.String())
+	}
+	data, _ := env["data"].(map[string]any)
+	if data["updated"] != true {
+		t.Errorf("data = %v, want updated=true", data)
+	}
+	if !fake.updated {
+		t.Error("interactive update must install without a confirmation prompt")
+	}
+}
+
 func TestRunUnknownChannelFailsWithGuidance(t *testing.T) {
 	stubChannel(t, selfupdate.ChannelUnknown)
 	cmd := newTestCommand(t, cli.Detection{IsTTY: true})

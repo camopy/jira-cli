@@ -10,7 +10,7 @@ When: the installed version is behind the latest release and the workflow (or a 
 **Run**
 - Check only (agent): `jira update --dry-run --output=json`
 - Live update (agent): `jira update --force --output=json`
-- Interactive: `jira update` (a TTY gets a confirmation prompt)
+- Interactive: `jira update` (no confirmation prompt — running the command is the consent; progress renders on stderr)
 
 **Save**
 > Requires `--output=json`.

@@ -8,10 +8,8 @@ import (
 	"errors"
 	"fmt"
 
-	"charm.land/huh/v2"
 	"github.com/spf13/cobra"
 
-	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/selfupdate"
 	"github.com/matcra587/jira-cli/internal/version"
@@ -47,8 +45,9 @@ func NewCommand() *cobra.Command {
 			"command reports the exact update command to run instead of touching them.\n\n" +
 			"`--dry-run` resolves the channel and latest release and reports whether an update is " +
 			"available without changing anything. A live self-replace requires `--force` in " +
-			"headless, agent, or `--no-input` mode; an interactive terminal is prompted. A " +
-			"from-source build has no update channel and fails with guidance.",
+			"headless, agent, or `--no-input` mode; an interactive terminal proceeds without a " +
+			"confirmation prompt — running the command is the consent. A from-source build has " +
+			"no update channel and fails with guidance.",
 		Example: `$ jira update
 
 # Report the channel and latest release without changing anything
@@ -126,18 +125,11 @@ func run(cmd *cobra.Command, dryRun, force bool) error {
 		return cmdutil.WriteEnvelope(cmd, "update", data)
 	}
 
-	if !force {
-		// Headless callers were rejected above, so this is a TTY human:
-		// confirm before replacing their binary.
-		ok, err := confirmUpdate(cmd, current, latest)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return cli.NewPromptError(cli.PromptAborted, "update", nil)
-		}
-	}
-
+	// No confirmation prompt for a TTY human: invoking `update` is itself the
+	// intent (there is no argument to fat-finger, and the self-replace is
+	// checksum-verified and rollback-safe). Headless callers were rejected
+	// above unless they consented with --force.
+	//
 	// clive owns the progress spinners and the old→new report line on stderr;
 	// wrapping it in cmdutil.Spin would nest spinners.
 	if err := up.Update(cmd.Context()); err != nil { //nolint:gocritic // not a Jira call; clive renders its own spinner
@@ -158,29 +150,4 @@ func writeManaged(cmd *cobra.Command, channel selfupdate.Channel, current, hint 
 		"updated": false,
 		"dry_run": dryRun,
 	})
-}
-
-// confirmUpdate prompts a TTY human before the binary is replaced. Mirrors
-// the destructive-mutation confirmation semantics: Esc/Ctrl-C declines,
-// context cancellation keeps its identity as a typed prompt error.
-func confirmUpdate(cmd *cobra.Command, current, latest string) (bool, error) {
-	confirmed := false
-	confirm := huh.NewConfirm().
-		Title(fmt.Sprintf("Update jira-cli %s -> %s?", current, latest)).
-		Description("The running binary will be replaced in place.").
-		Affirmative("Yes, update").
-		Negative("Cancel").
-		Value(&confirmed)
-	form := huh.NewForm(huh.NewGroup(confirm))
-	if err := form.RunWithContext(cmd.Context()); err != nil {
-		switch {
-		case errors.Is(err, huh.ErrUserAborted):
-			return false, nil
-		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-			return false, cli.NewPromptError(cli.PromptCanceled, "update confirmation", err)
-		default:
-			return false, cli.NewPromptError(cli.PromptUnavailable, "update confirmation", err)
-		}
-	}
-	return confirmed, nil
 }
