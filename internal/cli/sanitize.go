@@ -30,6 +30,30 @@ func SanitizeTerminalText(s string) string {
 	return b.String()
 }
 
+// SanitizeTerminalBlock makes multi-line display text safe for a
+// terminal: ANSI escape sequences are stripped and control bytes
+// dropped exactly as in SanitizeTerminalText, but tab and newline
+// survive so legitimate multi-line Jira content (descriptions, comment
+// bodies) keeps its layout. A CRLF is normalized to a newline and any
+// bare carriage return is dropped, so Jira text cannot use a lone CR to
+// overwrite earlier output on the line.
+func SanitizeTerminalBlock(s string) string {
+	if s == "" {
+		return s
+	}
+	s = termansi.Strip(s)
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r != '\t' && r != '\n' && isControlRune(r) {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
 // SanitizeCompletionField makes a single shell-completion candidate
 // field safe. Shell completion is one tab-separated record per line, so
 // an embedded tab, newline or carriage return in a candidate field would

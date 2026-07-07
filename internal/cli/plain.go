@@ -168,6 +168,18 @@ func WritePlain(w io.Writer, data any) error {
 // explicit switch is the whole dispatch — there is deliberately no
 // parallel renderer registry.
 func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOption) error {
+	// Human-mode render boundary: every renderer below pulls its display
+	// strings from this Jira-controlled payload, so string VALUES are
+	// sanitized once here — one systematic boundary instead of
+	// per-renderer whack-a-mole, and a future renderer cannot reopen the
+	// hole. Keys are left untouched (renderers look fields up by literal
+	// name), and no legitimate logic value (status category, color name,
+	// issue key) carries control bytes, so sanitizing values is
+	// display-safe. A typed payload (e.g. issue view's *jira.Issue, the
+	// issue-list rows) bypasses this map walk; those are covered at their
+	// own extraction boundaries — formatHumanField for the table, and
+	// stringFromMap / issueDescriptionPlain for the bespoke map renderers.
+	data = sanitizePlainData(data)
 	cfg := defaultPlainConfig()
 	for _, opt := range opts {
 		opt(&cfg)
@@ -213,6 +225,47 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 		return writeReleaseNotesPlain(w, data, cfg)
 	default:
 		return writeGenericPlain(logger, cfg, messageForCommand(command), data)
+	}
+}
+
+// sanitizePlainData deep-sanitizes every string VALUE in a plain-render
+// payload through SanitizeTerminalBlock (multi-line content such as
+// descriptions and comment bodies keeps its layout; ANSI escapes and
+// other control bytes are dropped). It rebuilds maps and slices rather
+// than mutating the caller's data, walks the JSON-ish shapes the
+// renderers consume (map[string]any, []any, []map[string]any,
+// []string), and leaves typed values untouched — those reach the
+// terminal via formatHumanField, which sanitizes on extraction.
+func sanitizePlainData(value any) any {
+	switch v := value.(type) {
+	case string:
+		return SanitizeTerminalBlock(v)
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for key, child := range v {
+			out[key] = sanitizePlainData(child)
+		}
+		return out
+	case []any:
+		out := make([]any, len(v))
+		for i, child := range v {
+			out[i] = sanitizePlainData(child)
+		}
+		return out
+	case []map[string]any:
+		out := make([]map[string]any, len(v))
+		for i, child := range v {
+			out[i], _ = sanitizePlainData(child).(map[string]any)
+		}
+		return out
+	case []string:
+		out := make([]string, len(v))
+		for i, s := range v {
+			out[i] = SanitizeTerminalBlock(s)
+		}
+		return out
+	default:
+		return value
 	}
 }
 
@@ -390,8 +443,18 @@ func writePlainValue(fields *[]plainField, key string, value any) {
 	}
 }
 
+// writePlainLine is the human-mode render boundary for generic plain
+// fields. Keys and string values can carry Jira-controlled text
+// (summaries, descriptions, custom field names), so both are sanitized
+// here — one choke point for every field the generic renderer emits —
+// before clog writes them to the terminal. Machine modes are protected
+// by the JSON encoder; this is the human-mode counterpart.
 func writePlainLine(fields *[]plainField, key string, value any) {
-	*fields = append(*fields, plainField{key: key, value: plainFieldValue(value)})
+	rendered := plainFieldValue(value)
+	if s, ok := rendered.(string); ok {
+		rendered = SanitizeTerminalText(s)
+	}
+	*fields = append(*fields, plainField{key: SanitizeTerminalText(key), value: rendered})
 }
 
 func writeIssueListPlain(logger *clog.Logger, data any, cfg plainConfig) error {
@@ -779,7 +842,7 @@ func buildIssueRows(issues []map[string]any) []issueTableRow {
 			Status:      formatHumanField(issue["status"]),
 			StatusCat:   formatHumanField(issue["status_category"]),
 			StatusColor: formatHumanField(issue["status_color"]),
-			Assignee:    formatAssignee(issue["assignee"]),
+			Assignee:    SanitizeTerminalBlock(formatAssignee(issue["assignee"])),
 			Priority:    formatHumanField(issue["priority"]),
 			Updated:     formatHumanField(issue["updated"]),
 		})
@@ -1218,15 +1281,19 @@ func issueMapFromJiraIssue(issue *jira.Issue) map[string]any {
 	return row
 }
 
+// formatHumanField extracts a display string from a (possibly typed)
+// Jira value. It is a render boundary: typed issue rows bypass the
+// sanitizePlainData map walk, so the extracted string is sanitized here
+// before it can reach a table cell or message line.
 func formatHumanField(value any) string {
 	if value == nil {
 		return ""
 	}
 	switch v := value.(type) {
 	case string:
-		return v
+		return SanitizeTerminalBlock(v)
 	default:
-		return fmt.Sprint(v)
+		return SanitizeTerminalBlock(fmt.Sprint(v))
 	}
 }
 

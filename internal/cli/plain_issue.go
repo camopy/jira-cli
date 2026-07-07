@@ -255,15 +255,22 @@ func mapFromAny(value any) map[string]any {
 	return out
 }
 
+// stringFromMap extracts a display string from a plain-render map. It is
+// the map-side render boundary for the bespoke renderers (issue view,
+// transitions) that read a typed payload back through mapFromAny — that
+// re-marshal bypasses the WriteCommandPlain data walk, so the extracted
+// string is sanitized here, exactly as formatHumanField covers the typed
+// table path. Keys the renderers pass on as identifiers (issue keys) are
+// control-byte-free, so sanitizing them is a no-op.
 func stringFromMap(m map[string]any, key string) string {
 	if m == nil {
 		return ""
 	}
 	switch value := m[key].(type) {
 	case string:
-		return value
+		return SanitizeTerminalBlock(value)
 	case fmt.Stringer:
-		return value.String()
+		return SanitizeTerminalBlock(value.String())
 	default:
 		return ""
 	}
@@ -293,5 +300,8 @@ func issueDescriptionPlain(fields map[string]any) string {
 	if !ok {
 		return ""
 	}
-	return normalizePlain(adf.ToPlain(doc))
+	// The ADF is flattened straight from the (possibly typed, hence
+	// un-walked) issue payload, so the rendered text is sanitized here at
+	// the render boundary before it reaches the terminal.
+	return SanitizeTerminalBlock(normalizePlain(adf.ToPlain(doc)))
 }

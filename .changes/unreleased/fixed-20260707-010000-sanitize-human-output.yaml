@@ -1,0 +1,3 @@
+kind: fixed
+body: 'Human output now strips ANSI escape and control bytes from Jira-controlled text (summaries, descriptions, error messages), so a crafted issue or error can no longer inject color codes or corrupt your terminal.'
+time: 2026-07-07T01:00:00.000000-04:00

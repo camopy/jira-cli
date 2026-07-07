@@ -316,6 +316,30 @@ func TestCommandErrorDebugShowsTaxonomyFields(t *testing.T) {
 	}
 }
 
+// TestCommandErrorSanitizesServerControlledText is the guardrail for the
+// human error path: a Jira error message is server-controlled text, so an
+// embedded ANSI escape or BEL must never reach the terminal. The JSON
+// modes are protected by the JSON encoder; this pins the human-mode
+// counterpart at the writeCommandError render boundary.
+func TestCommandErrorSanitizesServerControlledText(t *testing.T) {
+	cmd, _, stderr := outputModeTestCommand(cli.ModePlain)
+	if err := cmd.Root().PersistentFlags().Set("output", "human"); err != nil {
+		t.Fatalf("Set(output) error = %v", err)
+	}
+	writeCommandError(cmd.Context(), cmd, &jira.APIError{
+		StatusCode: 404,
+		Type:       jira.ErrorTypeNotFound,
+		Message:    "The attachment with id '9\x1b[31m9\x079' does not exist",
+	})
+	got := stderr.String()
+	if strings.ContainsAny(got, "\x1b\x07\x00") {
+		t.Fatalf("server-controlled control bytes reached the terminal:\n%q", got)
+	}
+	if !strings.Contains(got, "'999'") {
+		t.Fatalf("sanitized message lost its printable text:\n%q", got)
+	}
+}
+
 // TestCommandErrorWithoutDebugStaysLean pins the default: without --debug
 // the ERR line stays message-only, no taxonomy fields.
 func TestCommandErrorWithoutDebugStaysLean(t *testing.T) {

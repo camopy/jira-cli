@@ -544,7 +544,12 @@ func writeCommandError(ctx context.Context, cmd *cobra.Command, err error) {
 		logger = clog.New(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAuto))
 	}
 	cliErr := outputErrorFor(err)
-	event := logger.Error().Err(err)
+	// Human render boundary: the message (which may embed Jira's upstream
+	// text), the hint, and the suggestions are written through the terminal
+	// sanitizer so server-controlled bytes can never smuggle ANSI/control
+	// sequences onto the user's terminal. Machine modes are protected by
+	// the JSON encoder; this is the human-mode counterpart.
+	event := logger.Error().Err(errors.New(cli.SanitizeTerminalText(err.Error())))
 	if clog.IsVerbose() {
 		// Under --debug the ERR line also carries the classification an
 		// agent would read from the envelope. OmitZero keeps the line
@@ -558,7 +563,7 @@ func writeCommandError(ctx context.Context, cmd *cobra.Command, err error) {
 	// the hint rides in the JSON envelope; here it renders as clog's dedicated
 	// Hint (💡) line so a human sees the same remediation an agent gets.
 	if cliErr.Hint != "" {
-		logger.Hint().Msg(cliErr.Hint)
+		logger.Hint().Msg(cli.SanitizeTerminalText(cliErr.Hint))
 	}
 	// A rate-limited call knows exactly how long to wait: render the
 	// per-instance figure on its own line under the static hint (only a
@@ -567,7 +572,7 @@ func writeCommandError(ctx context.Context, cmd *cobra.Command, err error) {
 		logger.Hint().Msgf("retry in %ds", cliErr.RetryAfterSeconds)
 	}
 	if len(cliErr.Suggestions) > 0 {
-		logger.Hint().Msgf("Did you mean %s?", strings.Join(cliErr.Suggestions, " or "))
+		logger.Hint().Msgf("Did you mean %s?", cli.SanitizeTerminalText(strings.Join(cliErr.Suggestions, " or ")))
 	}
 }
 
