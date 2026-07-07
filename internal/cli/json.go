@@ -28,12 +28,18 @@ type Envelope struct {
 // Meta is the envelope's command-context block. Machine envelopes omit
 // profile entirely — a command that must report a profile puts it in
 // command-specific data. ExitCode is present only on failure envelopes.
+//
+// RequestID is a locally generated correlation id; UpstreamRequestID is
+// Jira's own trace id (Atl-Traceid / X-ARequestId) for the exchange —
+// the value to quote to Atlassian support — present whenever the command
+// had a Jira response to read it from.
 type Meta struct {
-	Command    string      `json:"command"`
-	ExitCode   *int        `json:"exit_code,omitempty"`
-	Timestamp  string      `json:"timestamp"`
-	RequestID  string      `json:"request_id,omitempty"`
-	Pagination *Pagination `json:"pagination,omitempty"`
+	Command           string      `json:"command"`
+	ExitCode          *int        `json:"exit_code,omitempty"`
+	Timestamp         string      `json:"timestamp"`
+	RequestID         string      `json:"request_id,omitempty"`
+	UpstreamRequestID string      `json:"upstream_request_id,omitempty"`
+	Pagination        *Pagination `json:"pagination,omitempty"`
 }
 
 // Pagination is the JSON envelope's output-shape descriptor for paginated
@@ -95,6 +101,10 @@ type Error struct {
 	Provider       string `json:"provider,omitempty"`
 	UpstreamCode   string `json:"upstream_code,omitempty"`
 	UpstreamStatus int    `json:"upstream_status,omitempty"`
+	// UpstreamRequestID is Jira's trace id for the failed exchange
+	// (Atl-Traceid / X-ARequestId) — the value Atlassian support can
+	// correlate, unlike the locally generated meta.request_id.
+	UpstreamRequestID string `json:"upstream_request_id,omitempty"`
 
 	// UpstreamMessages / UpstreamFieldErrors preserve Jira's
 	// ErrorCollection body verbatim. Wording is not contractual; these

@@ -252,6 +252,7 @@ func outputSchemas() map[string]any {
 			"provider":            map[string]any{"type": "string"},
 			"upstream_code":       map[string]any{"type": "string"},
 			"upstream_status":     map[string]any{"type": "integer"},
+			"upstream_request_id": map[string]any{"type": "string", "description": "Jira's own trace id (Atl-Traceid / X-ARequestId) for the failed exchange — quote it to Atlassian support. meta.request_id is local and has no server-side meaning."},
 		},
 	}
 	envelope := map[string]any{
@@ -263,10 +264,11 @@ func outputSchemas() map[string]any {
 				"type":     "object",
 				"required": []string{"command", "timestamp"},
 				"properties": map[string]any{
-					"command":    map[string]any{"type": "string"},
-					"exit_code":  map[string]any{"type": "integer", "description": "Present only on failure envelopes."},
-					"timestamp":  map[string]any{"type": "string", "format": "date-time"},
-					"request_id": map[string]any{"type": "string"},
+					"command":             map[string]any{"type": "string"},
+					"exit_code":           map[string]any{"type": "integer", "description": "Present only on failure envelopes."},
+					"timestamp":           map[string]any{"type": "string", "format": "date-time"},
+					"request_id":          map[string]any{"type": "string", "description": "Locally generated correlation id; no server-side meaning."},
+					"upstream_request_id": map[string]any{"type": "string", "description": "Jira's own trace id (Atl-Traceid / X-ARequestId) for the exchange; present when the command had a Jira response to read it from."},
 					"pagination": map[string]any{
 						"type":        "object",
 						"description": "Canonical pagination block, identical on every paginated command: meta.pagination on single-target reads, and the same shape at results[].data.pagination inside keyed multi-key results. isLast and nextCursor are the authoritative walk signals. Mutation envelopes omit the block entirely.",

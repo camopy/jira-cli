@@ -216,9 +216,12 @@ jira --debug <subcommand> ... --output=json
 ```
 
 `--debug` logs the full HTTP roundtrip (request URL, headers, response
-status, response body) to stderr. The token is redacted. `request_id`
-in `meta.request_id` correlates the CLI invocation with Atlassian's
-side; quote it when filing a Jira support ticket.
+status, response body) to stderr. The token is redacted.
+`meta.upstream_request_id` carries Jira's own trace id (the
+`Atl-Traceid` response header) whenever the command reached Jira; quote
+it when filing a Jira support ticket. `meta.request_id` is a locally
+generated id for correlating CLI invocations with your own logs — it
+has no meaning to Atlassian.
 
 ## See also
 

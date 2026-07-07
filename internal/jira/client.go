@@ -73,6 +73,12 @@ type APIError struct {
 	// Jira sends it. Zero can mean either absent or exhausted; callers use
 	// it as diagnostic context only.
 	RateLimitRemaining int
+	// UpstreamRequestID is Jira's own trace id for the failed exchange,
+	// read from the Atl-Traceid (preferred) or X-ARequestId response
+	// header. It is the value Atlassian support can correlate a failure
+	// against; the envelope's request_id is a local value with no
+	// server-side meaning. Empty when neither header was present.
+	UpstreamRequestID string
 	// Cause preserves transport/body/JSON failures for errors.Is/As while
 	// keeping the public APIError message stable.
 	Cause error
@@ -479,17 +485,19 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 		// rather than degrade into a JSON-decode failure downstream.
 		// Caller maps server → exit 5.
 		return resp, &APIError{
-			StatusCode: res.StatusCode,
-			Type:       ErrorTypeServer,
-			Message:    "read response body: " + readErr.Error(),
-			Cause:      readErr,
+			StatusCode:        res.StatusCode,
+			Type:              ErrorTypeServer,
+			Message:           "read response body: " + readErr.Error(),
+			UpstreamRequestID: upstreamRequestID(res),
+			Cause:             readErr,
 		}
 	}
 	if truncated && res.StatusCode >= 200 && res.StatusCode <= 299 {
 		return resp, &APIError{
-			StatusCode: res.StatusCode,
-			Type:       ErrorTypeServer,
-			Message:    fmt.Sprintf("response body exceeded %d bytes", maxResponseBodyBytes),
+			StatusCode:        res.StatusCode,
+			Type:              ErrorTypeServer,
+			Message:           fmt.Sprintf("response body exceeded %d bytes", maxResponseBodyBytes),
+			UpstreamRequestID: upstreamRequestID(res),
 		}
 	}
 	if len(body) > 0 {
@@ -507,6 +515,7 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 			UpstreamStatus:     ec.Status,
 			RetryAfterSeconds:  resp.Rate.RetryAfterSeconds,
 			RateLimitRemaining: resp.Rate.Remaining,
+			UpstreamRequestID:  upstreamRequestID(res),
 		}
 		return resp, apiErr
 	}
@@ -522,10 +531,11 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 				snippet = snippet[:maxErrorBodyBytes]
 			}
 			return resp, &APIError{
-				StatusCode: res.StatusCode,
-				Type:       ErrorTypeServer,
-				Message:    "response body is not valid JSON: " + err.Error() + "; body prefix: " + strings.TrimSpace(string(snippet)),
-				Cause:      err,
+				StatusCode:        res.StatusCode,
+				Type:              ErrorTypeServer,
+				Message:           "response body is not valid JSON: " + err.Error() + "; body prefix: " + strings.TrimSpace(string(snippet)),
+				UpstreamRequestID: upstreamRequestID(res),
+				Cause:             err,
 			}
 		}
 	}
@@ -722,6 +732,20 @@ func redactSensitiveText(text string) string {
 		}
 	}
 	return text
+}
+
+// upstreamRequestID extracts Jira's own trace id from a response.
+// Atlassian emits it as Atl-Traceid (preferred; the id support quotes)
+// with X-ARequestId as the older per-node spelling. Empty when neither
+// header is present.
+func upstreamRequestID(res *http.Response) string {
+	if res == nil {
+		return ""
+	}
+	if v := strings.TrimSpace(res.Header.Get("Atl-Traceid")); v != "" {
+		return v
+	}
+	return strings.TrimSpace(res.Header.Get("X-ARequestId"))
 }
 
 func parseRate(res *http.Response) Rate {

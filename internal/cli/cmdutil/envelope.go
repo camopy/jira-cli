@@ -35,10 +35,11 @@ func WriteEnvelopeWithErrors(cmd *cobra.Command, command string, data any, error
 	env := cli.Envelope{
 		OK: false,
 		Meta: cli.Meta{
-			Command:   command,
-			ExitCode:  &exit,
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
-			RequestID: cli.NewRequestID(),
+			Command:           command,
+			ExitCode:          &exit,
+			Timestamp:         time.Now().UTC().Format(time.RFC3339),
+			RequestID:         cli.NewRequestID(),
+			UpstreamRequestID: firstUpstreamRequestID(errorsOut),
 		},
 		Data:     data,
 		Errors:   errorsOut,
@@ -47,6 +48,20 @@ func WriteEnvelopeWithErrors(cmd *cobra.Command, command string, data any, error
 	// Machine mode: the failure envelope goes to stdout, the same stream as
 	// success, so a consumer piping stdout gets a parseable ok:false result.
 	return writeEnvelopeJSON(cmd, cmd.OutOrStdout(), env)
+}
+
+// firstUpstreamRequestID surfaces a Jira-side trace id from the error set
+// into meta, so a consumer that only reads meta can still hand Atlassian
+// support a correlatable id. The first error carrying one wins — the set
+// is ordered worst-first, and a keyed multi-target run has one id per
+// entry anyway.
+func firstUpstreamRequestID(errorsOut []cli.Error) string {
+	for _, e := range errorsOut {
+		if e.UpstreamRequestID != "" {
+			return e.UpstreamRequestID
+		}
+	}
+	return ""
 }
 
 // WriteEnvelopeWithResponseAndErrors emits an ok:false envelope with both a
@@ -68,11 +83,12 @@ func WriteEnvelopeWithResponseAndErrors(cmd *cobra.Command, command string, data
 	env := cli.Envelope{
 		OK: false,
 		Meta: cli.Meta{
-			Command:    command,
-			ExitCode:   &exit,
-			Timestamp:  time.Now().UTC().Format(time.RFC3339),
-			RequestID:  cli.NewRequestID(),
-			Pagination: paginationFromResponse(resp),
+			Command:           command,
+			ExitCode:          &exit,
+			Timestamp:         time.Now().UTC().Format(time.RFC3339),
+			RequestID:         cli.NewRequestID(),
+			UpstreamRequestID: resp.UpstreamRequestID(),
+			Pagination:        paginationFromResponse(resp),
 		},
 		Data:     data,
 		Errors:   errorsOut,
@@ -308,10 +324,11 @@ func WriteEnvelopeWithResponseAndWarnings(cmd *cobra.Command, command string, da
 	env := cli.Envelope{
 		OK: true,
 		Meta: cli.Meta{
-			Command:    command,
-			Timestamp:  time.Now().UTC().Format(time.RFC3339),
-			RequestID:  cli.NewRequestID(),
-			Pagination: paginationFromResponse(resp),
+			Command:           command,
+			Timestamp:         time.Now().UTC().Format(time.RFC3339),
+			RequestID:         cli.NewRequestID(),
+			UpstreamRequestID: resp.UpstreamRequestID(),
+			Pagination:        paginationFromResponse(resp),
 		},
 		Data:     data,
 		Errors:   []cli.Error{},

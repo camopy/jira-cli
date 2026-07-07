@@ -78,7 +78,10 @@ on stderr.
 *   **`meta.exit_code`**, present only on failure, equal to the process exit
   code (see table below).
 *   **`meta.request_id`**, a 32-character hex id for correlating CLI invocations
-  with logs.
+  with logs. Generated locally; it has no meaning to Atlassian.
+*   **`meta.upstream_request_id`**, Jira's own trace id (the `Atl-Traceid`
+  or `X-ARequestId` response header) when the command reached Jira. Quote
+  this one to Atlassian support; it also rides on each `errors[]` entry.
 *   **`data`**, command-specific payload. `compact` emits only this value.
 *   **`errors[]`**, populated on failure: `{type, code, message, hint,
   retryable, …}`. Agents branch on `code` (stable snake_case), never on

@@ -153,6 +153,46 @@ func TestJiraAPIErrorPreservesSchemaBackedFields(t *testing.T) {
 	}
 }
 
+// TestJiraAPIErrorCarriesUpstreamRequestID asserts Jira's trace id
+// (Atl-Traceid / X-ARequestId) survives onto the envelope error AND the
+// failure envelope's meta, so an agent can hand Atlassian support a
+// correlatable id from either place — the local request_id cannot be
+// correlated upstream.
+func TestJiraAPIErrorCarriesUpstreamRequestID(t *testing.T) {
+	src := &jira.APIError{
+		StatusCode:        500,
+		Type:              jira.ErrorTypeServer,
+		Message:           "internal error",
+		UpstreamRequestID: "trace-abc-123",
+	}
+	got := cli.MapError(src)
+	if got.UpstreamRequestID != "trace-abc-123" {
+		t.Fatalf("error UpstreamRequestID = %q, want trace-abc-123", got.UpstreamRequestID)
+	}
+	env := cli.ErrorEnvelope("issue.view", src)
+	if env.Meta.UpstreamRequestID != "trace-abc-123" {
+		t.Fatalf("meta UpstreamRequestID = %q, want trace-abc-123", env.Meta.UpstreamRequestID)
+	}
+	b, err := json.Marshal(env)
+	if err != nil {
+		t.Fatalf("marshal envelope: %v", err)
+	}
+	var decoded struct {
+		Meta struct {
+			UpstreamRequestID string `json:"upstream_request_id"`
+		} `json:"meta"`
+		Errors []struct {
+			UpstreamRequestID string `json:"upstream_request_id"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(b, &decoded); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if decoded.Meta.UpstreamRequestID != "trace-abc-123" || len(decoded.Errors) != 1 || decoded.Errors[0].UpstreamRequestID != "trace-abc-123" {
+		t.Fatalf("upstream_request_id not serialized in meta and errors[]:\n%s", b)
+	}
+}
+
 // TestRateLimitErrorCarriesRetryAfter asserts a 429 Jira API error maps
 // Retry-After onto retry_after_seconds and marks the error retryable.
 func TestRateLimitErrorCarriesRetryAfter(t *testing.T) {

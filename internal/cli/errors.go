@@ -200,6 +200,7 @@ func enrichAPIUpstream(out *Error, apiErr *jira.APIError) {
 	out.UpstreamStatus = apiErr.UpstreamStatus
 	out.UpstreamMessages = apiErr.ErrorMessages
 	out.UpstreamFieldErrors = apiErr.FieldErrors
+	out.UpstreamRequestID = apiErr.UpstreamRequestID
 }
 
 // isNilValue reports whether the interface holds a typed-nil pointer.
@@ -245,6 +246,10 @@ func ErrorEnvelope(command string, err error) Envelope {
 			ExitCode:  &exit,
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 			RequestID: NewRequestID(),
+			// The Jira-side trace id rides in meta as well as the error
+			// entry so a consumer that only reads meta can still hand
+			// Atlassian support a correlatable id.
+			UpstreamRequestID: cliErr.UpstreamRequestID,
 		},
 		Data:     nil,
 		Errors:   []Error{cliErr},

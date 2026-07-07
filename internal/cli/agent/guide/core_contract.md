@@ -50,11 +50,12 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 - `ok` [bool, required] — `true` on success, `false` on failure.
 - `meta.command` [string, required] — dotted command path (e.g. `issue.create`).
 - `meta.timestamp` [string, required] — ISO 8601 UTC.
-- `meta.request_id` [string, required] — request correlation id.
+- `meta.request_id` [string, required] — locally generated correlation id; no server-side meaning.
+- `meta.upstream_request_id` [string, optional] — Jira's own trace id (`Atl-Traceid` / `X-ARequestId`) for the exchange; present when the command had a Jira response to read it from. Quote THIS id to Atlassian support.
 - `meta.exit_code` [int, present on failure] — mirrors the process exit code; `data` is `null` when set.
 - `meta.pagination` [object, optional] — `startAt`, `maxResults`, `total` (only when the endpoint reports one), `isLast`, `nextCursor`; walk until `isLast=true`, resume via `--cursor` where supported. Absent entirely on mutations.
 - `data` [object, required on success] — command-specific payload; `null` on failure.
-- `errors[]` [array, required] — each entry carries `type`, `code` (stable snake_case — branch on this, never on `message`), `message`, `hint` (never empty), `retryable`. Optional fields when relevant: `flag` (argv-level: the offending flag name), `field` (payload-level: the offending JSON key), `path` (a document path within the offending value), `suggestions` ("did you mean" candidates for the input, as the caller would type them), `http_status`, `retry_after_seconds`, `rate_limit_remaining`, `provider`, `upstream_code`, `upstream_status`, `upstream_messages` (Jira's errorMessages array), `upstream_field_errors` (Jira's per-field errors map), `candidates` (structured disambiguation rows for `user_ambiguous` / `board_ambiguous`). Jira API errors leave `upstream_code` empty — Jira exposes no stable machine error code.
+- `errors[]` [array, required] — each entry carries `type`, `code` (stable snake_case — branch on this, never on `message`), `message`, `hint` (never empty), `retryable`. Optional fields when relevant: `flag` (argv-level: the offending flag name), `field` (payload-level: the offending JSON key), `path` (a document path within the offending value), `suggestions` ("did you mean" candidates for the input, as the caller would type them), `http_status`, `retry_after_seconds`, `rate_limit_remaining`, `provider`, `upstream_code`, `upstream_status`, `upstream_messages` (Jira's errorMessages array), `upstream_field_errors` (Jira's per-field errors map), `upstream_request_id` (Jira's trace id for the failed exchange — quote it to Atlassian support), `candidates` (structured disambiguation rows for `user_ambiguous` / `board_ambiguous`). Jira API errors leave `upstream_code` empty — Jira exposes no stable machine error code.
 - `warnings[]` [array, required] — non-fatal diagnostics; never blank on a successful command that degraded.
 
 **Behavior**
@@ -120,7 +121,7 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
   | 6    | Canceled (`code=canceled`: SIGINT or the root context canceled mid-request; retryable) |
   | 7    | Timeout (`code=timeout`: the `--timeout` deadline elapsed; retryable — raise `--timeout`) |
 
-- `--debug` redacts `Authorization`, `Cookie`, and `X-Atlassian-Token` headers to `REDACTED` in the dumped traffic. `Atl-Traceid` is preserved — quote it on Atlassian support tickets.
+- `--debug` redacts `Authorization`, `Cookie`, and `X-Atlassian-Token` headers to `REDACTED` in the dumped traffic. `Atl-Traceid` is preserved — and captured structurally as `meta.upstream_request_id` / `errors[].upstream_request_id`, so no `--debug` scrape is needed to correlate a failure with Atlassian support.
 - Bounded drains (boards cache, etc.) emit a `cache-truncated` warning naming the bound that fired, and surface `truncated` / `truncated_reason` in `data`.
 - Read-only blocks happen at the HTTP transport layer — there is no per-command boilerplate to forget.
 

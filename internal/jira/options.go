@@ -62,6 +62,14 @@ type Response struct {
 	RawBody       json.RawMessage
 }
 
+// UpstreamRequestID returns Jira's own trace id for the exchange (the
+// Atl-Traceid / X-ARequestId response header) so envelopes can carry a
+// value Atlassian support can correlate. Empty when the response carried
+// neither header.
+func (r Response) UpstreamRequestID() string {
+	return upstreamRequestID(r.Response)
+}
+
 func (r Response) NextCursor() string {
 	if r.TokenPage {
 		return r.NextPageToken
