@@ -1,3 +1,0 @@
-kind: added
-body: 'Two discovery gaps are closed. A new `jira cache resolutions` command lists the tenant''s resolution names (they vary per instance), so a resolve transition that requires a `resolution` field can be planned instead of guessed. Cached statuses now carry `status_category` (`new`, `indeterminate`, or `done`) alongside `id` and `name`, and the guide documents that status ids repeat across workflows — map a name to its category from the cache, and resolve the id per issue via the transition list.'
-time: 2026-07-07T16:00:00.000000-04:00

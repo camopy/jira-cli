@@ -1,3 +1,0 @@
-kind: changed
-body: '`jira update` no longer asks for a yes/no confirmation in an interactive terminal — running the command is the consent, and the self-replace is already checksum-verified and rollback-safe. `--dry-run` still previews without changing anything, and headless, agent, and `--no-input` runs still require `--force`.'
-time: 2026-07-07T14:25:00.000000-04:00
