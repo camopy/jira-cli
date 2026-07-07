@@ -1,6 +1,17 @@
 # Release Notes
 
 
+## [0.9.0](https://github.com/matcra587/jira-cli/releases/tag/v0.9.0) — 2026-07-06
+
+### Added
+
+- Errors are now easier to act on: human output prints the next-step hint (and a did-you-mean suggestion for unknown flags or commands), the JSON envelope carries those in a new `suggestions` field, and hints across the CLI were rewritten in plain language.
+
+### Fixed
+
+- error envelopes now carry a complete, guarded taxonomy: read-only refusals emit code read_only, dry-run transport guards dry_run_blocked, wrong-shape ADF payloads adf_invalid (the raw json unmarshal text no longer leaks), issue-key expansion limits, ambiguous users and ambiguous boards their own codes, invalid --output values route through flag_value_invalid, every code ships a non-empty hint, a permanently deleted resource (HTTP 410) now exits 2 (not found) instead of 3, and exits 6 (canceled) / 7 (timeout) plus all emitted error fields are documented in the agent contract
+- Several credential and 1Password error hints now point at the correct fix — including a 1Password failure on a build without 1Password support, and a login that can't reach Jira to verify, which previously suggested remediation that did not apply.
+
 ## [0.8.4](https://github.com/matcra587/jira-cli/releases/tag/v0.8.4) — 2026-07-06
 
 ### Fixed
