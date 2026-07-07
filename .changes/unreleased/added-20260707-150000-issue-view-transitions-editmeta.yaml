@@ -1,0 +1,3 @@
+kind: added
+body: '`issue view` now surfaces the discovery data Jira already returns on the read instead of discarding it: `data.issue.transitions[]` lists the workflow moves valid from the current status, and `data.issue.editmeta.fields` lists the editable fields with their required flag, accepted operations, and allowed values — so an agent or script can plan an edit or transition from a single read. The human view gains a one-line transitions summary.'
+time: 2026-07-07T15:00:00.000000-04:00

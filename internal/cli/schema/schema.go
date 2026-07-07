@@ -361,7 +361,7 @@ func outputSchemas() map[string]any {
 			"properties": map[string]any{
 				"issue": map[string]any{
 					"type":        "object",
-					"description": "Present for single-key issue view success.",
+					"description": "Present for single-key issue view success. Carries Jira's issue shape plus `transitions` (valid workflow moves from the current status) and `editmeta.fields` (editable fields with required/operations/allowedValues).",
 				},
 				"results": map[string]any{
 					"type":        "array",

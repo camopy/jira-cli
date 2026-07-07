@@ -62,10 +62,33 @@ func WriteIssueViewPlain(w io.Writer, command string, data any, opts ...PlainOpt
 		assignee,
 	))
 
+	if transitions := issueTransitionsPlain(issue); transitions != "" {
+		logger.Info().Parts(clog.PartMessage).Msg("  transitions: " + transitions)
+	}
+
 	if description := issueDescriptionPlain(fields); description != "" {
 		logger.Info().Parts(clog.PartMessage).Msg("  " + description)
 	}
 	return nil
+}
+
+// issueTransitionsPlain flattens the expanded workflow transitions to a
+// one-line "Name (id)" list so a human sees the valid moves in the same
+// read. Empty when the payload carries no transitions.
+func issueTransitionsPlain(issue map[string]any) string {
+	transitions := normalizeMapList(issue["transitions"])
+	parts := make([]string, 0, len(transitions))
+	for _, transition := range transitions {
+		name := stringFromMap(transition, "name")
+		id := stringFromMap(transition, "id")
+		switch {
+		case name != "" && id != "":
+			parts = append(parts, name+" ("+id+")")
+		case name != "":
+			parts = append(parts, name)
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 func writeIssueViewManyPlain(logger *clog.Logger, command string, results []map[string]any, cfg plainConfig) error {

@@ -23,9 +23,12 @@ When: known issue keys need full payloads for downstream reasoning — transitio
 - Common single-key values are nested under `data.issue.fields.*`, for example `data.issue.fields.summary`, `data.issue.fields.status.name`, `data.issue.fields.assignee.accountId`, and `data.issue.fields.priority.name`.
 - Common multi-key values are nested under `data.results[].issue.fields.*` for entries with `ok: true`.
 - Jira custom fields keep their raw IDs under `fields.customfield_NNNNN`.
+- `data.issue.transitions[]` [array] — the workflow moves valid from the current status (`id`, `name`, `hasScreen`). Plan a → `transition_issue` from these instead of a separate discovery call.
+- `data.issue.editmeta.fields` [object] — editable fields keyed by field id, each with `name`, `required`, `operations` (set/add/remove/edit), `schema.type`, and `allowedValues` (`id`/`name`/`value`) when the field is constrained. Plan an → `edit_issue` payload from this instead of trial-and-error.
 
 **Behavior**
 - The CLI still emits its standard envelope (`ok`, `meta`, `data`, `errors`, `warnings`). Within each issue object, field names follow Jira's JSON shape, including camelCase keys such as `accountId`.
+- `view` requests `expand=transitions,editmeta` on the same GET, so `transitions` and `editmeta` cost no extra call. Absence of either key means Jira did not return it (permissions or screen config), not a CLI projection.
 - Single-key reads preserve the existing `data.issue` shape. Multi-key reads switch to `data.results[]`; do not parse `data.issue` after passing more than one key.
 - Multi-key reads do not fail fast. One missing or unauthorized key produces `ok: false`, a non-empty `error` in that result entry, a top-level error envelope, and retained successes for the other keys.
 - In `--output=json`, partial-failure envelopes follow the core contract for failures: the whole envelope, including retained `data.results[]` successes, is written to stdout with `ok:false`. Parse stdout on non-zero exits.

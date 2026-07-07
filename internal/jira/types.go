@@ -19,6 +19,16 @@ type Issue struct {
 	Worklogs     []*Worklog   `json:"worklogs,omitempty"`
 	LinkedIssues []*Issue     `json:"linked_issues,omitempty"`
 	Subtasks     []*Issue     `json:"subtasks,omitempty"`
+	// Transitions carries the workflow transitions Jira returns under
+	// expand=transitions — the moves valid from the issue's current status.
+	// Populated by issue view so a read answers "what can I transition to"
+	// without a second call.
+	Transitions []*Transition `json:"transitions,omitempty"`
+	// EditMeta carries the edit-screen metadata Jira returns under
+	// expand=editmeta — which fields are editable, whether they are
+	// required, and their allowed values. Populated by issue view so an
+	// edit can be planned from the same read.
+	EditMeta *EditMeta `json:"editmeta,omitempty"`
 }
 
 type IssueFields struct {
@@ -148,6 +158,49 @@ type Transition struct {
 	// silently discards fields and update blocks sent to a screenless
 	// transition, so payload-carrying transitions must check it.
 	HasScreen *bool `json:"hasScreen,omitempty"`
+}
+
+// EditMeta is the issue edit-screen metadata Jira returns under
+// expand=editmeta on GET issue: a map keyed by field id of what the edit
+// screen accepts. The struct keeps Jira's wire shape (camelCase keys) but
+// trims each field to the agent-useful subset — unknown keys are dropped on
+// unmarshal rather than carried opaquely.
+type EditMeta struct {
+	Fields map[string]EditMetaField `json:"fields,omitempty"`
+}
+
+// EditMetaField describes one editable field on an issue's edit screen.
+type EditMetaField struct {
+	Name     string `json:"name,omitempty"`
+	Key      string `json:"key,omitempty"`
+	Required bool   `json:"required"`
+	// Operations lists the verbs the field accepts in an update block
+	// (set, add, remove, edit, copy).
+	Operations []string             `json:"operations,omitempty"`
+	Schema     *EditMetaFieldSchema `json:"schema,omitempty"`
+	// AllowedValues enumerates the values Jira accepts for the field,
+	// trimmed to their identifying keys. Absent when the field is
+	// free-form.
+	AllowedValues []EditMetaAllowedValue `json:"allowedValues,omitempty"`
+}
+
+// EditMetaFieldSchema is the type identity of an editable field.
+type EditMetaFieldSchema struct {
+	Type string `json:"type,omitempty"`
+	// Items is the element type when Type is "array".
+	Items string `json:"items,omitempty"`
+	// Custom is the fully-qualified custom-field type identifier; empty
+	// for system fields.
+	Custom string `json:"custom,omitempty"`
+}
+
+// EditMetaAllowedValue is one allowed value of an edit-screen field. Jira
+// mixes shapes per field type — options carry `value`, versions/components/
+// priorities carry `name` — so both are kept and the blank one omitted.
+type EditMetaAllowedValue struct {
+	ID    string `json:"id,omitempty"`
+	Name  string `json:"name,omitempty"`
+	Value string `json:"value,omitempty"`
 }
 
 type ProjectFieldSchema struct {

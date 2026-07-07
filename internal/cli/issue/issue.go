@@ -273,7 +273,10 @@ func runIssueViewMany(cmd *cobra.Command, keys []string, parallelism int) error 
 }
 
 func issueViewGetOptions() *jira.IssueGetOptions {
-	return &jira.IssueGetOptions{Expand: []string{"renderedFields", "names", "schema", "transitions", "operations"}}
+	// transitions and editmeta ride the same GET and are surfaced in the
+	// issue payload (Issue.Transitions / Issue.EditMeta) so one read
+	// answers "what can I transition to" and "what may I edit".
+	return &jira.IssueGetOptions{Expand: []string{"renderedFields", "names", "schema", "transitions", "operations", "editmeta"}}
 }
 
 func issueViewManyEnvelopeData(results []cmdutil.KeyResult[*jira.Issue]) (issueViewManyData, []cli.Error, error) {

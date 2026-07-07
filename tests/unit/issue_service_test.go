@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -68,6 +69,70 @@ func TestIssueServiceListGetPaginationAndRateLimit(t *testing.T) {
 	}
 	if *issue.Fields.Summary != "hello" {
 		t.Fatalf("summary = %q", *issue.Fields.Summary)
+	}
+}
+
+// Expanded transitions and editmeta must survive the typed Issue decode and
+// re-marshal under their wire keys — they are the one-read discovery surface
+// issue view publishes.
+func TestIssueGetSurfacesTransitionsAndEditMeta(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.String()
+		_, _ = w.Write([]byte(`{
+			"key": "PROJ-1",
+			"fields": {"summary": "hello"},
+			"transitions": [{"id": "21", "name": "In Progress", "hasScreen": false}],
+			"editmeta": {"fields": {"priority": {
+				"name": "Priority",
+				"key": "priority",
+				"required": false,
+				"operations": ["set"],
+				"schema": {"type": "priority"},
+				"allowedValues": [{"id": "1", "name": "High"}, {"id": "3", "name": "Low"}]
+			}}}
+		}`))
+	}))
+	defer srv.Close()
+
+	service := jira.NewIssueService(jira.NewClient(jira.WithBaseURL(srv.URL + "/")))
+	issue, _, err := service.Get(context.Background(), "PROJ-1", &jira.IssueGetOptions{Expand: []string{"transitions", "editmeta"}})
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if !strings.Contains(gotPath, "expand=transitions%2Ceditmeta") {
+		t.Fatalf("Get() path = %q, want expand=transitions,editmeta", gotPath)
+	}
+	if len(issue.Transitions) != 1 || *issue.Transitions[0].ID != "21" || *issue.Transitions[0].Name != "In Progress" {
+		t.Fatalf("Transitions = %+v, want one In Progress (21)", issue.Transitions)
+	}
+	if issue.EditMeta == nil {
+		t.Fatal("EditMeta = nil, want the expanded editmeta block")
+	}
+	priority, ok := issue.EditMeta.Fields["priority"]
+	if !ok {
+		t.Fatalf("EditMeta.Fields = %+v, want a priority entry", issue.EditMeta.Fields)
+	}
+	if priority.Name != "Priority" || len(priority.Operations) != 1 || priority.Operations[0] != "set" {
+		t.Fatalf("priority editmeta = %+v", priority)
+	}
+	if priority.Schema == nil || priority.Schema.Type != "priority" {
+		t.Fatalf("priority schema = %+v, want type priority", priority.Schema)
+	}
+	if len(priority.AllowedValues) != 2 || priority.AllowedValues[0].Name != "High" {
+		t.Fatalf("priority allowedValues = %+v", priority.AllowedValues)
+	}
+
+	// The envelope marshals the typed Issue back to JSON: the discovery
+	// blocks must keep their wire keys so agents can address them.
+	out, err := json.Marshal(issue)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	for _, want := range []string{`"transitions"`, `"editmeta"`, `"allowedValues"`, `"hasScreen"`} {
+		if !strings.Contains(string(out), want) {
+			t.Fatalf("marshaled issue missing %s: %s", want, out)
+		}
 	}
 }
 
