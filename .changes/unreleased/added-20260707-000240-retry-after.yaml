@@ -1,0 +1,3 @@
+kind: added
+body: 'Rate-limited commands now say how long to wait: when Jira sends a Retry-After, human output adds a ''retry in Ns'' line under the rate-limit hint.'
+time: 2026-07-07T00:02:40.334257-04:00

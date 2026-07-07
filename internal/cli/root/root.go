@@ -560,6 +560,12 @@ func writeCommandError(ctx context.Context, cmd *cobra.Command, err error) {
 	if cliErr.Hint != "" {
 		logger.Hint().Msg(cliErr.Hint)
 	}
+	// A rate-limited call knows exactly how long to wait: render the
+	// per-instance figure on its own line under the static hint (only a
+	// 429 carries Retry-After, so a positive value scopes the line).
+	if cliErr.RetryAfterSeconds > 0 {
+		logger.Hint().Msgf("retry in %ds", cliErr.RetryAfterSeconds)
+	}
 	if len(cliErr.Suggestions) > 0 {
 		logger.Hint().Msgf("Did you mean %s?", strings.Join(cliErr.Suggestions, " or "))
 	}

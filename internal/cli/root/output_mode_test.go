@@ -334,3 +334,22 @@ func TestCommandErrorWithoutDebugStaysLean(t *testing.T) {
 		t.Fatalf("ERR line lost the error message:\n%s", got)
 	}
 }
+
+// TestCommandErrorRateLimitShowsRetryAfter pins the per-instance wait: a
+// 429 with Retry-After renders a "retry in Ns" line after the static
+// rate-limit hint. The envelope's retry_after_seconds field is pinned
+// separately by the error contract tests.
+func TestCommandErrorRateLimitShowsRetryAfter(t *testing.T) {
+	cmd, _, stderr := outputModeTestCommand(cli.ModePlain)
+	if err := cmd.Root().PersistentFlags().Set("output", "human"); err != nil {
+		t.Fatalf("Set(output) error = %v", err)
+	}
+	writeCommandError(cmd.Context(), cmd, &jira.APIError{StatusCode: 429, Type: jira.ErrorTypeRateLimit, Message: "rate limited", RetryAfterSeconds: 42})
+	got := stderr.String()
+	if !strings.Contains(got, "retry in 42s") {
+		t.Fatalf("rate-limit error missing the retry-in line:\n%s", got)
+	}
+	if !strings.Contains(got, "Jira is rate-limiting you") {
+		t.Fatalf("rate-limit error lost its static hint:\n%s", got)
+	}
+}
