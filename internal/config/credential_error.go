@@ -3,54 +3,55 @@ package config
 import (
 	"errors"
 	"fmt"
+
+	"github.com/matcra587/jira-cli/internal/errtax"
 )
 
-// ErrorType is the broad classification of a credential or auth failure. It
-// maps onto the CLI's existing top-level error categories so the output layer
-// can pick an exit code without inspecting the specific code.
-type ErrorType string
+// ErrorType aliases the shared taxonomy type so credential failures and
+// the envelope mapper speak one enum.
+type ErrorType = errtax.Type
 
 const (
 	// ErrorTypeAuth marks a credential or backend failure: the credential is
 	// missing, the backend is unreachable, or a provider rejected the request.
-	ErrorTypeAuth ErrorType = "auth"
+	ErrorTypeAuth = errtax.TypeAuth
 	// ErrorTypeValidation marks a caller-input failure: a conflicting flag
 	// combination, an empty credential, or an unsafe profile name.
-	ErrorTypeValidation ErrorType = "validation"
+	ErrorTypeValidation = errtax.TypeValidation
 )
 
 // ErrorCode is the stable, normalized failure code for a credential or auth
-// error. The Go identifier is MixedCaps; the underlying string value is the
-// snake_case code that downstream layers serialize on the wire.
-type ErrorCode string
+// error, aliased onto the shared taxonomy code so CredentialError satisfies
+// errtax.Coded without conversion.
+type ErrorCode = errtax.Code
 
 const (
 	// ErrorCodeCredentialSourceConflict: more than one credential input
 	// source was supplied for one operation.
-	ErrorCodeCredentialSourceConflict ErrorCode = "credential_source_conflict"
+	ErrorCodeCredentialSourceConflict = errtax.CodeCredentialSourceConflict
 	// ErrorCodeCredentialMissing: no credential is stored or configured for
 	// the profile.
-	ErrorCodeCredentialMissing ErrorCode = "credential_missing"
+	ErrorCodeCredentialMissing = errtax.CodeCredentialMissing
 	// ErrorCodeCredentialEmpty: a credential was supplied but is empty.
-	ErrorCodeCredentialEmpty ErrorCode = "credential_empty"
+	ErrorCodeCredentialEmpty = errtax.CodeCredentialEmpty
 	// ErrorCodeCredentialBackendUnavailable: the credential backend could not
 	// be reached or failed to service the request.
-	ErrorCodeCredentialBackendUnavailable ErrorCode = "credential_backend_unavailable"
+	ErrorCodeCredentialBackendUnavailable = errtax.CodeCredentialBackendUnavailable
 	// ErrorCodeCredentialMigrationFailed: a backend-switch migration could
 	// not complete; no metadata was changed.
-	ErrorCodeCredentialMigrationFailed ErrorCode = "credential_migration_failed"
+	ErrorCodeCredentialMigrationFailed = errtax.CodeCredentialMigrationFailed
 	// ErrorCodeCredentialCleanupFailed: a migration succeeded but the old
 	// secret could not be removed from the source backend.
-	ErrorCodeCredentialCleanupFailed ErrorCode = "credential_cleanup_failed"
+	ErrorCodeCredentialCleanupFailed = errtax.CodeCredentialCleanupFailed
 	// ErrorCodeCredentialNamespaceCollision: a profile name cannot be encoded
 	// into a credential namespace that round-trips uniquely.
-	ErrorCodeCredentialNamespaceCollision ErrorCode = "credential_namespace_collision"
+	ErrorCodeCredentialNamespaceCollision = errtax.CodeCredentialNamespaceCollision
 	// ErrorCodeOnePasswordItemAmbiguous: more than one 1Password item matched
 	// the configured title.
-	ErrorCodeOnePasswordItemAmbiguous ErrorCode = "onepassword_item_ambiguous"
+	ErrorCodeOnePasswordItemAmbiguous = errtax.CodeOnePasswordItemAmbiguous
 	// ErrorCodeOnePasswordUnavailable: the 1Password SDK or CLI could not be
 	// reached or rejected the request.
-	ErrorCodeOnePasswordUnavailable ErrorCode = "onepassword_unavailable"
+	ErrorCodeOnePasswordUnavailable = errtax.CodeOnePasswordUnavailable
 )
 
 // ErrorContext carries optional, fixed-shape context for a credential error.

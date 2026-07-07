@@ -9,18 +9,22 @@ import (
 	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/config"
+	"github.com/matcra587/jira-cli/internal/errtax"
 	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
-type ErrorType string
+// ErrorType aliases the shared taxonomy type; the historical cli names
+// remain for the command layer.
+type ErrorType = errtax.Type
 
+// The taxonomy types, re-exported under cli's historical names.
 const (
-	ErrorTypeAuth       ErrorType = "auth"
-	ErrorTypeNotFound   ErrorType = "not_found"
-	ErrorTypeValidation ErrorType = "validation"
-	ErrorTypeRateLimit  ErrorType = "rate_limit"
-	ErrorTypeServer     ErrorType = "server"
+	ErrorTypeAuth       = errtax.TypeAuth
+	ErrorTypeNotFound   = errtax.TypeNotFound
+	ErrorTypeValidation = errtax.TypeValidation
+	ErrorTypeRateLimit  = errtax.TypeRateLimit
+	ErrorTypeServer     = errtax.TypeServer
 )
 
 // NewError builds a structured Error with a normalized code derived from

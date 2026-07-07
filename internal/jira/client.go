@@ -16,6 +16,8 @@ import (
 	"github.com/gechr/clog"
 	xmaps "github.com/gechr/x/maps"
 	xstrings "github.com/gechr/x/strings"
+
+	"github.com/matcra587/jira-cli/internal/errtax"
 )
 
 const (
@@ -27,14 +29,17 @@ const (
 	maxResponseBodyBytes = 16 << 20
 )
 
-type ErrorType string
+// ErrorType aliases the shared taxonomy type so jira's status
+// classification and the envelope mapper speak one enum.
+type ErrorType = errtax.Type
 
+// The taxonomy types, re-exported under jira's historical names.
 const (
-	ErrorTypeAuth       ErrorType = "auth"
-	ErrorTypeNotFound   ErrorType = "not_found"
-	ErrorTypeValidation ErrorType = "validation"
-	ErrorTypeRateLimit  ErrorType = "rate_limit"
-	ErrorTypeServer     ErrorType = "server"
+	ErrorTypeAuth       = errtax.TypeAuth
+	ErrorTypeNotFound   = errtax.TypeNotFound
+	ErrorTypeValidation = errtax.TypeValidation
+	ErrorTypeRateLimit  = errtax.TypeRateLimit
+	ErrorTypeServer     = errtax.TypeServer
 )
 
 // APIError is the typed error returned for any non-2xx Jira REST
