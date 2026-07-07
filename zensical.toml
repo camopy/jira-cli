@@ -99,6 +99,7 @@ nav = [
                 { "priorities" = "reference/jira/cache/priorities.md" },
                 { "projects" = "reference/jira/cache/projects.md" },
                 { "refresh" = "reference/jira/cache/refresh.md" },
+                { "resolutions" = "reference/jira/cache/resolutions.md" },
                 { "statuses" = "reference/jira/cache/statuses.md" },
             ] },
             { "config" = [
