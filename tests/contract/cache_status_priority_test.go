@@ -111,7 +111,7 @@ func TestCacheStatusesAndPrioritiesRoundTrip(t *testing.T) {
 			}
 
 			// `cache clear <resource>` removes the file.
-			if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", tc.resource, "--output=json"); err != nil {
+			if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", tc.resource, "--force", "--output=json"); err != nil {
 				t.Fatalf("cache clear %s: %v", tc.resource, err)
 			}
 			if _, err := os.Stat(cachePath); !os.IsNotExist(err) {

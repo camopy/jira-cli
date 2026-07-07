@@ -42,8 +42,28 @@ func TestCacheClearBoardsRemovesFile(t *testing.T) {
 		t.Fatalf("cache file should exist pre-clear: %v", err)
 	}
 
+	// Headless live clear without --force must refuse before touching files.
+	if out, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "boards", "--output=json"); err == nil || !strings.Contains(string(out), "--force") {
+		t.Fatalf("headless cache clear without --force: err=%v out=%s", err, out)
+	}
+	if _, err := os.Stat(cachePath); err != nil {
+		t.Fatalf("refused clear must leave the cache file in place: %v", err)
+	}
+
+	// --dry-run reports what a live clear would remove and touches nothing.
+	out, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "boards", "--dry-run", "--output=json")
+	if err != nil {
+		t.Fatalf("cache clear --dry-run: %v\n%s", err, out)
+	}
+	if !envelopeHasKV(t, out, "removed", true) || !envelopeHasKV(t, out, "dry_run", true) {
+		t.Fatalf("cache clear --dry-run output = %s", out)
+	}
+	if _, err := os.Stat(cachePath); err != nil {
+		t.Fatalf("dry-run clear removed the cache file: %v", err)
+	}
+
 	// Clear → file removed, exit 0.
-	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "boards", "--output=json"); err != nil {
+	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "boards", "--force", "--output=json"); err != nil {
 		t.Fatalf("cache clear boards: %v", err)
 	}
 	if _, err := os.Stat(cachePath); !os.IsNotExist(err) {
@@ -51,7 +71,7 @@ func TestCacheClearBoardsRemovesFile(t *testing.T) {
 	}
 
 	// Idempotent: clear again → exit 0, no error.
-	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "boards", "--output=json"); err != nil {
+	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "boards", "--force", "--output=json"); err != nil {
 		t.Fatalf("idempotent cache clear boards: %v", err)
 	}
 }
@@ -123,7 +143,7 @@ func TestCacheClearRejectsUnknownResource(t *testing.T) {
 	if !strings.Contains(message, `unknown cache resource "bogus"`) {
 		t.Fatalf("error message %q does not name the bad resource", message)
 	}
-	for _, resource := range []string{"labels", "projects", "epics", "fields", "issuetypes", "linktypes", "boards", "statuses", "priorities"} {
+	for _, resource := range []string{"labels", "projects", "epics", "fields", "issuetypes", "linktypes", "boards", "statuses", "priorities", "resolutions"} {
 		if !strings.Contains(message, resource) {
 			t.Fatalf("error message %q does not name valid resource %q", message, resource)
 		}

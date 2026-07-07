@@ -6,14 +6,14 @@ When: a `--board <name>` filter is needed and the board's numeric id is unknown,
 - First time on this profile (cache empty): prime it with `jira cache boards`. `boards list` also primes transparently on the first run when the cache is empty.
 - Already primed, just want the listing: `jira boards list`.
 - Cache exists but you suspect it's stale (new board, renamed board): `jira boards list --refresh` to force a re-prime.
-- Need to start over: `jira cache clear boards` drops the cache file; the next call re-primes.
+- Need to start over: `jira cache clear boards --force` drops the cache file (`--force` is required in agent context); the next call re-primes.
 - Very large instance hitting the default safety bound: `--unbounded` to disable.
 
 **Run**
 - Explicit prime: `jira cache boards --output=json`
 - Listing (envelope or table): `jira boards list --output=json`
 - Force refresh: `jira boards list --refresh --output=json`
-- Drop the cache: `jira cache clear boards`
+- Drop the cache (agent context): `jira cache clear boards --force --output=json`
 - Remove the pagination bound: `jira boards list --unbounded --output=json`
 
 **Save**

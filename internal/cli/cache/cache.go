@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -296,6 +297,7 @@ func emitCachedBoardsEnvelope(cmd *cobra.Command, profileName string, entry cach
 }
 
 func cacheClearCommand() *cobra.Command {
+	var dryRun, force bool
 	cmd := &cobra.Command{
 		Use:   "clear [resource]",
 		Short: "Remove cached metadata",
@@ -303,15 +305,22 @@ func cacheClearCommand() *cobra.Command {
 			"is stale, malformed, or should be rebuilt on the next command.\n\n" +
 			"With no argument, the command removes every cache file under the profile. " +
 			"With a resource name such as `labels`, `projects`, or `boards`, it removes " +
-			"only that cache file.",
+			"only that cache file.\n\n" +
+			"`--dry-run` reports what a live clear would remove without touching the files. " +
+			"A live clear requires `--force` in headless, agent, or `--no-input` mode; an " +
+			"interactive terminal proceeds without a prompt — the wipe is recoverable by " +
+			"re-priming.",
 		Args: cobra.MaximumNArgs(1),
 		Example: `$ jira cache clear
 
 # Target a single cached resource
 $ jira cache clear boards
 
-# Report whether a resource cache file was removed
-$ jira cache clear labels --output=json`,
+# Report what would be removed without removing anything
+$ jira cache clear --dry-run --output=json
+
+# Non-interactive (agent / script) clear
+$ jira cache clear labels --force --output=json`,
 		Annotations: map[string]string{"clib": "dynamic-args='cacheresource'"},
 		ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 			if len(args) > 0 {
@@ -334,17 +343,38 @@ $ jira cache clear labels --output=json`,
 			if err != nil {
 				return err
 			}
+			// Wiping local state is a mutation: headless, agent, and
+			// --no-input callers must consent with --force. --dry-run never
+			// mutates, so it stays open; an interactive terminal proceeds
+			// without a prompt — a cleared cache is rebuilt by re-priming.
+			det := cmdutil.DetectorFromContext(cmd)
+			headless := !det.IsTTY || det.Agent || cmdutil.NoInputRequested(cmd)
+			if !dryRun && !force && headless {
+				return errors.New("cache clear requires --force in headless / agent / --no-input mode")
+			}
+			key := cmdutil.CacheKeyForProfile(cmd, profile)
 			if len(args) == 0 {
-				n, err := cache.ClearProfile(cmdutil.CacheKeyForProfile(cmd, profile))
+				var n int
+				if dryRun {
+					n, err = cache.CountProfile(key)
+				} else {
+					n, err = cache.ClearProfile(key)
+				}
 				if err != nil {
 					return err
 				}
 				return cmdutil.WriteEnvelope(cmd, "cache.clear", map[string]any{
 					"profile": profile.Name,
 					"removed": n,
+					"dry_run": dryRun,
 				})
 			}
-			ok, err := cache.Clear(cmdutil.CacheKeyForProfile(cmd, profile), args[0])
+			var ok bool
+			if dryRun {
+				ok, err = cache.Exists(key, args[0])
+			} else {
+				ok, err = cache.Clear(key, args[0])
+			}
 			if err != nil {
 				return err
 			}
@@ -352,9 +382,12 @@ $ jira cache clear labels --output=json`,
 				"profile":  profile.Name,
 				"resource": args[0],
 				"removed":  ok,
+				"dry_run":  dryRun,
 			})
 		},
 	}
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Report what would be removed without removing anything")
+	cmdutil.AddForceFlag(cmd.Flags(), &force, "Confirm the clear in headless / agent / --no-input mode")
 	return cmd
 }
 

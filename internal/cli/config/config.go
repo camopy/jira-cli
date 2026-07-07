@@ -243,17 +243,23 @@ $ jira config get profiles.default.base_url`,
 }
 
 func configSetCommand() *cobra.Command {
-	return &cobra.Command{
+	var dryRun bool
+	cmd := &cobra.Command{
 		Use:   "set KEY VALUE",
 		Short: "Set a configuration value",
 		Long: "Set one supported config key and save the file. Use it for small local edits " +
 			"such as theme settings, default project values, and TUI preferences.\n\n" +
-			"The new value is validated before saving. Secrets are not written through " +
-			"`config set`; use `jira auth login` or `jira auth migrate` for credentials.",
+			"The new value is validated before saving. `--dry-run` runs the same validation " +
+			"and reports the current and new value without writing the file. Secrets are not " +
+			"written through `config set`; use `jira auth login` or `jira auth migrate` for " +
+			"credentials.",
 		Example: `$ jira config set theme.name dracula
 
 # Set the default project for a profile
-$ jira config set profiles.default.default_project PROJ`,
+$ jira config set profiles.default.default_project PROJ
+
+# Validate and preview the change without writing the file
+$ jira config set theme.name dracula --dry-run --output=json`,
 		Args:              cobra.ExactArgs(2),
 		Annotations:       map[string]string{"clib": "dynamic-args='configkey,configvalue'"},
 		ValidArgsFunction: completeConfigSetArgs,
@@ -262,18 +268,32 @@ $ jira config set profiles.default.default_project PROJ`,
 			if err != nil {
 				return err
 			}
+			// The pre-write value rides the envelope so a preview (and the
+			// live write) reports what the change replaces.
+			previous, _ := cfg.Get(args[0])
 			if err := cfg.Set(args[0], args[1]); err != nil {
 				return err
 			}
 			if err := cfg.Validate(); err != nil {
 				return err
 			}
+			data := map[string]any{
+				"key":            args[0],
+				"value":          args[1],
+				"previous_value": previous,
+				"dry_run":        dryRun,
+			}
+			if dryRun {
+				return cmdutil.WriteEnvelope(cmd, "config.set", data)
+			}
 			if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
 				return err
 			}
-			return cmdutil.WriteEnvelope(cmd, "config.set", map[string]any{"key": args[0], "value": args[1]})
+			return cmdutil.WriteEnvelope(cmd, "config.set", data)
 		},
 	}
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Validate and preview the change without writing the file")
+	return cmd
 }
 
 // completeConfigKeys lists every valid config key (profile-scoped keys

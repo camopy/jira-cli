@@ -31,8 +31,9 @@ When: a `--project` / `--type` / `--board` / `--label` filter resolves to an une
 - TTL gate (refetch if older than N minutes): `jira cache fields --ttl-minutes 5 --output=json`
 - Prime everything in one call (TTL-gated; add `--force` to ignore freshness): `jira cache refresh --output=json`
 - Prime a subset with bounded concurrency: `jira cache refresh fields projects issuetypes -p 3 --output=json`
-- Wipe one: `jira cache clear labels`
-- Wipe everything for the active profile: `jira cache clear`
+- Wipe one (agent context needs `--force`): `jira cache clear labels --force --output=json`
+- Wipe everything for the active profile: `jira cache clear --force --output=json`
+- Preview a wipe without removing anything: `jira cache clear --dry-run --output=json` (`data.removed` reports what a live run would remove; `data.dry_run: true`)
 - Valid clear resources: `labels`, `projects`, `epics`, `fields`,
   `issuetypes`, `linktypes`, `boards`, `statuses`, `priorities`, `resolutions`.
   Unknown names fail before touching the cache with `code=arg_value_invalid`.

@@ -54,6 +54,26 @@ func TestConfigInitProfileGetSetMetadataOnly(t *testing.T) {
 		t.Fatalf("default_profile envelope = %q", out)
 	}
 
+	// --dry-run validates and previews without writing the file.
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "config", "set", "theme.path", "/tmp/theme.toml", "--dry-run")
+	if out, err = cmd.CombinedOutput(); err != nil {
+		t.Fatalf("config set --dry-run error = %v\n%s", err, out)
+	}
+	if !envelopeHasKV(t, out, "dry_run", true) || !envelopeHasKV(t, out, "value", "/tmp/theme.toml") {
+		t.Fatalf("config set --dry-run output = %s", out)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("config set --dry-run wrote the file\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+
 	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "config", "set", "theme.path", "/tmp/theme.toml")
 	if out, err = cmd.CombinedOutput(); err != nil {
 		t.Fatalf("config set error = %v\n%s", err, out)

@@ -30,6 +30,11 @@ This is not a command — it's the cross-cutting contract that `clone_issue`, `m
 - Local-only preview (does not contact Jira): `watchers add --dry-run` when `--user` is locally derivable (`accountId:<id>`, or `me` on a profile that carries an account id), `issue link --dry-run`, `issue weblink --dry-run`, `worklog add --dry-run`, and `issue delete --dry-run`.
 - Hybrid resolve: `watchers add --dry-run --validate-remote` does a read-only `/user/search` to resolve a bare name or email but still issues no watcher POST/DELETE.
 
+# local state mutations (no Jira call at all)
+- The same triad covers the commands that mutate local state: `cache clear` (wipes cache files), `config set` (writes config.toml), `auth switch` (changes the default profile), `auth logout` (revokes a stored credential), and `update` (replaces the binary). Each takes `--dry-run` for a no-write preview.
+- Headless / agent / `--no-input` gating: `cache clear`, `auth logout`, and `update` require `--force` for the live run. `config set` and `auth switch` are ungated by design — both are single-value writes reversed by setting the previous value back.
+- None of these prompt an interactive TTY: the verb plus its explicit target carries the intent (`logout <profile>` names its victim, a cleared cache re-primes, the binary self-replace is checksum-verified and rollback-safe).
+
 **Run** (sequence, per mutation)
 1. Dry-run: same command with `--dry-run --output=json`; verify payload shape, ADF validity, and any `*_resolved` flags before committing. Add `--validate-remote` when you want the live screen checked too (read-only; `data.validated_remotely: true` confirms it ran).
 2. Real write: drop `--dry-run`, keep `--output=json`, add the target's confirmation flag (`--force` for `clone_issue` / `move_issue` / `delete_issue` / attachment delete / link delete; `--no-input` + field flags or `--json-input` for `edit_issue` and `add_comment`).

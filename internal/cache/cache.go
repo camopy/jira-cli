@@ -149,6 +149,45 @@ func Write(profile, resource string, data json.RawMessage) (Entry, error) {
 	return entry, nil
 }
 
+// Exists reports whether a cache file is present for (profile, resource) —
+// what a Clear would remove — without touching it. The dry-run half of
+// `cache clear <resource>`.
+func Exists(profile, resource string) (bool, error) {
+	path, err := Path(profile, resource)
+	if err != nil {
+		return false, err
+	}
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// CountProfile reports how many cache files a ClearProfile would remove,
+// without removing anything. The dry-run half of a whole-profile
+// `cache clear`.
+func CountProfile(profile string) (int, error) {
+	dir := filepath.Join(dirRoot(), sanitize(profile))
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	n := 0
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		n++
+	}
+	return n, nil
+}
+
 // Clear removes the cache file for (profile, resource). Returns ok=true
 // when a file existed and was removed; ok=false silently when none.
 func Clear(profile, resource string) (bool, error) {

@@ -34,7 +34,7 @@ workday_seconds = 28800
 	}
 	// No credential was ever stored for "work"; logout must still succeed and
 	// report removed=false rather than erroring on a missing keyring entry.
-	cmd := exec.Command(bin, "--config", path, "--output=json", "auth", "logout", "work")
+	cmd := exec.Command(bin, "--config", path, "--output=json", "auth", "logout", "work", "--force")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("auth logout of an absent credential error = %v\n%s", err, out)

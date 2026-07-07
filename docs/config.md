@@ -122,6 +122,14 @@ value back by its dotted key:
 jira config get profiles.default.default_project --output=json
 ```
 
+`config set --dry-run` runs the same key and value validation and reports the
+current and new value without writing the file — useful for previewing a
+scripted change:
+
+```sh
+jira config set theme.name dracula --dry-run --output=json
+```
+
 !!! note "Dotted keys only"
     `config get` / `set` address values by full dotted path
     (`profiles.default.default_project`), not bare names — the same name can

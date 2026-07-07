@@ -14,6 +14,7 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 - Set `--no-input` on every mutation when scripting. Under it the CLI never prompts, never reads stdin implicitly, and never silently no-ops.
 - Only `--json-input -` (command payload) and `--secret-stdin` (auth secret) may read stdin under `--no-input`.
 - Destructive ops (`delete` / `clone` / `move` / `comment delete` / `link delete` / `attachment delete`) still require `--force` on top of `--no-input` → see `safe_mutation`.
+- Local-state wipes follow the same rule headless: `cache clear`, `auth logout`, and `update` require `--force` in agent / non-TTY / `--no-input` context; each takes `--dry-run` for a no-write preview.
 
 # pagination
 - One shape, one place: every paginated read emits the camelCase block (`startAt`, `maxResults`, `total`, `isLast`, `nextCursor`) at `meta.pagination`; keyed multi-key results carry the same shape at `results[].data.pagination`. Mutations emit no pagination block.

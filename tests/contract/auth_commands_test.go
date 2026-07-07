@@ -64,6 +64,26 @@ func TestAuthLoginSwitchAndLogoutMetadataOnly(t *testing.T) {
 		}
 	}
 
+	// --dry-run resolves and previews the switch without writing config.
+	beforeSwitch, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "auth", "switch", "work", "--dry-run")
+	if out, err = cmd.CombinedOutput(); err != nil {
+		t.Fatalf("auth switch --dry-run error = %v\n%s", err, out)
+	}
+	if !envelopeHasKV(t, out, "active", "work") || !envelopeHasKV(t, out, "dry_run", true) {
+		t.Fatalf("auth switch --dry-run output = %s", out)
+	}
+	afterSwitch, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if string(beforeSwitch) != string(afterSwitch) {
+		t.Fatalf("auth switch --dry-run wrote the config file")
+	}
+
 	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "auth", "switch", "work")
 	if out, err = cmd.CombinedOutput(); err != nil {
 		t.Fatalf("auth switch error = %v\n%s", err, out)
@@ -80,7 +100,25 @@ func TestAuthLoginSwitchAndLogoutMetadataOnly(t *testing.T) {
 	if err := os.WriteFile(op, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
 		t.Fatalf("WriteFile(fake op) error = %v", err)
 	}
+	// --dry-run names the credential a live logout would remove without
+	// opening the backend (no fake `op` needed on PATH for this call).
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "auth", "logout", "work", "--dry-run")
+	if out, err = cmd.CombinedOutput(); err != nil {
+		t.Fatalf("auth logout --dry-run error = %v\n%s", err, out)
+	}
+	if !envelopeHasKV(t, out, "profile", "work") || !envelopeHasKV(t, out, "dry_run", true) {
+		t.Fatalf("auth logout --dry-run output = %s", out)
+	}
+
+	// Headless live logout without --force must refuse: revoking a stored
+	// credential is destructive (recovery = re-entering the token).
 	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "auth", "logout", "work")
+	out, err = cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "--force") {
+		t.Fatalf("headless auth logout without --force: err=%v out=%s", err, out)
+	}
+
+	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "auth", "logout", "work", "--force")
 	cmd.Env = append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	if out, err = cmd.CombinedOutput(); err != nil {
 		t.Fatalf("auth logout error = %v\n%s", err, out)

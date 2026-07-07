@@ -1241,6 +1241,7 @@ func httpStatusOf(resp *jira.Response) int {
 
 func authLogoutCommand() *cobra.Command {
 	var baseURL string
+	var dryRun, force bool
 	cmd := &cobra.Command{
 		Use:   "logout PROFILE",
 		Short: "Remove stored credentials",
@@ -1249,6 +1250,11 @@ func authLogoutCommand() *cobra.Command {
 			"using that Jira account.\n\n" +
 			"The profile entry remains in config, so site metadata and defaults are kept. " +
 			"If no credential exists, the command succeeds and reports `removed: false`.\n\n" +
+			"Removing a credential is destructive — getting it back means re-entering the " +
+			"token. `--dry-run` reports the credential a live logout would remove without " +
+			"touching the backend. A live logout requires `--force` in headless, agent, or " +
+			"`--no-input` mode; an interactive terminal proceeds without a prompt — naming " +
+			"the profile is the intent.\n\n" +
 			"A credential can outlive its profile: deleting the profile from config does " +
 			"not remove the stored secret. The keychain entry is keyed by site host and " +
 			"profile name, so passing `--base-url` supplies the missing half of that " +
@@ -1256,7 +1262,10 @@ func authLogoutCommand() *cobra.Command {
 		Example: `$ jira auth logout work
 
 # Report whether a credential was removed
-$ jira auth logout work --output=json
+$ jira auth logout work --force --output=json
+
+# Report which credential would be removed, without removing it
+$ jira auth logout work --dry-run --output=json
 
 # Purge the credential of a profile already deleted from config
 $ jira auth logout old-work --base-url acme.atlassian.net`,
@@ -1291,6 +1300,29 @@ $ jira auth logout old-work --base-url acme.atlassian.net`,
 			if err != nil {
 				return err
 			}
+			if dryRun {
+				// Preview names the credential a live run would revoke
+				// without opening the secret backend at all.
+				return cmdutil.WriteEnvelope(cmd, "auth.logout", map[string]any{
+					"profile": profile.Name,
+					"backend": string(profile.SecretBackend),
+					"removed": false,
+					"dry_run": true,
+				})
+			}
+			// Destructive op safety: recovering a revoked credential means
+			// re-entering the token, so headless / agent / --no-input callers
+			// must consent with --force. A TTY human proceeds unprompted —
+			// logout takes an explicit profile name, so the verb carries its
+			// own intent.
+			det := cmdutil.DetectorFromContext(cmd)
+			if !force && (!det.IsTTY || det.Agent || cmdutil.NoInputRequested(cmd)) {
+				// Worded without "auth": the untyped classifier buckets any
+				// "auth"-bearing message as an auth failure, and this gate is
+				// a validation failure (exit 3) like its destructive-mutation
+				// siblings.
+				return errors.New("logout requires --force in headless / agent / --no-input mode")
+			}
 			// Revoke the credential from its backend. An absent credential is
 			// not an error: removed=false reports there was nothing to remove.
 			// A note is returned when revocation left a user-named 1Password
@@ -1302,25 +1334,33 @@ $ jira auth logout old-work --base-url acme.atlassian.net`,
 			if note != "" {
 				cmdutil.RecordCredentialWarnings(cmd, []string{note})
 			}
-			return cmdutil.WriteEnvelope(cmd, "auth.logout", map[string]any{"profile": profile.Name, "removed": removed})
+			return cmdutil.WriteEnvelope(cmd, "auth.logout", map[string]any{"profile": profile.Name, "removed": removed, "dry_run": false})
 		},
 	}
 	cmdutil.AddStringVar(cmd.Flags(), &baseURL, "base-url", "", "Jira site of the credential to remove; required to purge a credential whose profile was deleted from config", clib.FlagExtra{Group: "Configuration", Placeholder: "URL", Terse: "site URL"})
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Report the credential a live logout would remove without touching the backend")
+	cmdutil.AddForceFlag(cmd.Flags(), &force, "Confirm the credential removal in headless / agent / --no-input mode")
 	return cmd
 }
 
 func authSwitchCommand() *cobra.Command {
-	return &cobra.Command{
+	var dryRun bool
+	cmd := &cobra.Command{
 		Use:   "switch PROFILE",
 		Short: "Switch active profile",
 		Long: "Set the config file's default profile. Use it when most upcoming commands " +
 			"should target a different Jira site or account without passing `--profile` " +
 			"each time.\n\n" +
-			"This changes local config only. It does not verify credentials or contact Jira.",
+			"This changes local config only. It does not verify credentials or contact " +
+			"Jira. `--dry-run` resolves the target profile and reports the switch without " +
+			"writing the config file.",
 		Example: `$ jira auth switch work
 
 # Return the new active profile as JSON
-$ jira auth switch work --output=json`,
+$ jira auth switch work --output=json
+
+# Resolve and preview the switch without writing config
+$ jira auth switch work --dry-run --output=json`,
 		Args:              cobra.ExactArgs(1),
 		Annotations:       map[string]string{"clib": "dynamic-args='profile'"},
 		ValidArgsFunction: cmdutil.CompleteProfileNames,
@@ -1333,13 +1373,23 @@ $ jira auth switch work --output=json`,
 			if err != nil {
 				return err
 			}
+			data := map[string]any{
+				"active":   profile.Name,
+				"previous": cfg.DefaultProfile,
+				"dry_run":  dryRun,
+			}
+			if dryRun {
+				return cmdutil.WriteEnvelope(cmd, "auth.switch", data)
+			}
 			cfg.DefaultProfile = profile.Name
 			if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
 				return err
 			}
-			return cmdutil.WriteEnvelope(cmd, "auth.switch", map[string]any{"active": profile.Name})
+			return cmdutil.WriteEnvelope(cmd, "auth.switch", data)
 		},
 	}
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Resolve and preview the switch without writing config")
+	return cmd
 }
 
 func authRefreshCommand() *cobra.Command {

@@ -156,6 +156,17 @@ jira auth status --output json     # machine-readable health check
 jira auth logout <profile>         # remove a stored credential
 ```
 
+Removing a credential is destructive — getting it back means re-entering the
+token — so a script, agent, or `--no-input` invocation must pass `--force`.
+An interactive terminal proceeds without a prompt: naming the profile is the
+intent. `--dry-run` reports which credential a live logout would remove
+without touching the secret backend:
+
+```sh
+jira auth logout work --dry-run --output json
+jira auth logout work --force --output json
+```
+
 A stored credential outlives its profile: deleting the profile from config
 does not remove the secret from the keychain, and a plain
 `jira auth logout <profile>` refuses a name that is no longer in config. Pass

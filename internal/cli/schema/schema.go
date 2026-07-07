@@ -651,7 +651,8 @@ func outputSchemas() map[string]any {
 			"properties": map[string]any{
 				"profile":  map[string]any{"type": "string"},
 				"resource": map[string]any{"type": "string", "description": "Present when one resource was targeted; absent on a whole-profile clear."},
-				"removed":  map[string]any{"type": []string{"integer", "boolean"}, "description": "File count on a whole-profile clear; whether the file existed on a single-resource clear."},
+				"removed":  map[string]any{"type": []string{"integer", "boolean"}, "description": "File count on a whole-profile clear; whether the file existed on a single-resource clear. Under --dry-run, what a live clear would remove."},
+				"dry_run":  map[string]any{"type": "boolean"},
 			},
 		},
 	}

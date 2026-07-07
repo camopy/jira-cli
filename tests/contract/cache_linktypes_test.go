@@ -111,7 +111,7 @@ func TestCacheLinkTypesRoundTrip(t *testing.T) {
 		t.Fatalf("expected 2 hits after --ttl-minutes 120 against fresh cache, got %d", hits.Load())
 	}
 
-	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "linktypes", "--output=json"); err != nil {
+	if _, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "linktypes", "--force", "--output=json"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(cachePath); !os.IsNotExist(err) {
@@ -227,7 +227,7 @@ func TestCacheClearProfileRemovesLinkTypes(t *testing.T) {
 	if _, err := os.Stat(cachePath); err != nil {
 		t.Fatalf("cache file missing pre-clear: %v", err)
 	}
-	out, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "--output=json")
+	out, err := runWithEnv(bin, env, "--config", cfg, "cache", "clear", "--force", "--output=json")
 	if err != nil {
 		t.Fatalf("cache clear: %v\n%s", err, out)
 	}

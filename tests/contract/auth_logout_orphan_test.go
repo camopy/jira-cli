@@ -72,7 +72,7 @@ func TestAuthLogoutPurgesOrphanedCredentialWithBaseURL(t *testing.T) {
 	// The shorthand site spelling must resolve to the same host the login
 	// wrote the entry under.
 	out, err := exec.Command(bin, "--config", cfg, "--output=json",
-		"auth", "logout", "ghost", "--base-url", "ghost.atlassian.net").CombinedOutput()
+		"auth", "logout", "ghost", "--base-url", "ghost.atlassian.net", "--force").CombinedOutput()
 	if err != nil {
 		t.Fatalf("auth logout of an orphaned credential error = %v\n%s", err, out)
 	}

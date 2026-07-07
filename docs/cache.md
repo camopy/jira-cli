@@ -253,6 +253,17 @@ Valid resources: `labels`, `projects`, `epics`, `fields`, `issuetypes`,
 is rejected up front with `code=arg_value_invalid` (exit 3); the error message
 lists the valid set.
 
+`--dry-run` reports what a live clear would remove — the same `data.removed`
+shape with `dry_run: true` — without touching any file. In a script, agent, or
+CI context (non-TTY, or `--no-input`) a live clear requires `--force`; an
+interactive terminal proceeds without a prompt, since a cleared cache is
+rebuilt by the next prime:
+
+```sh
+jira cache clear --dry-run --output=json
+jira cache clear projects --force --output=json
+```
+
 [Full flags & output fields →](reference/jira/cache/clear.md)
 
 ## Fleet operations
@@ -268,7 +279,8 @@ envelope.
     `jira cache clear` in a CI prelude on every job — combined with parallel
     jobs — turns every cache miss into a synchronised Jira fetch. Cold-start a
     shared step once at workflow level, then let per-job invocations read the
-    warm cache.
+    warm cache. CI is a non-TTY context, so a live clear there also needs
+    `--force`.
 
 *   Warm the cache once in a setup step, then share the cache directory (e.g.
     GitHub Actions `actions/cache` keyed on profile + base URL) across the matrix.
