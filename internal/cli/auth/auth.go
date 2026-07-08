@@ -1084,7 +1084,14 @@ $ jira auth status --output=json`,
 				if err := cmdutil.WriteEnvelopeWithErrors(cmd, "auth.status", data, statusErrors); err != nil {
 					return err
 				}
-				return cmdutil.EnvelopeWritten(fmt.Errorf("auth status found %d unhealthy profile(s)", len(statusErrors)))
+				worst := statusErrors[0]
+				for _, e := range statusErrors[1:] {
+					if cli.ExitCode(e) > cli.ExitCode(worst) {
+						worst = e
+					}
+				}
+				msg := fmt.Sprintf("auth status found %d unhealthy profile(s)", len(statusErrors))
+				return cmdutil.EnvelopeWritten(cli.NewCodedError(cli.AggregateCode(worst), msg))
 			}
 			return cmdutil.WriteEnvelope(cmd, "auth.status", data)
 		},

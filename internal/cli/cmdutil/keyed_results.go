@@ -99,7 +99,8 @@ func keyedResultsPartialFailureError(command string, data KeyedResultsData, top 
 	if data.Succeeded == 0 {
 		status = "no keys completed successfully"
 	}
-	return fmt.Errorf("%s completed with %d of %d failed (%s); %s", strings.ReplaceAll(command, ".", " "), data.Failed, total, reason, status)
+	msg := fmt.Sprintf("%s completed with %d of %d failed (%s); %s", strings.ReplaceAll(command, ".", " "), data.Failed, total, reason, status)
+	return cli.NewCodedError(cli.AggregateCode(top), msg)
 }
 
 func keyedResultsFailureReason(top cli.Error) string {

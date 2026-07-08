@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"reflect"
-	"strings"
 	"time"
 
-	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/errtax"
@@ -224,24 +222,17 @@ func classifyUntyped(err error) Error {
 	if ClassifyUntypedProbe != nil {
 		ClassifyUntypedProbe(err)
 	}
-	msg := err.Error()
-	lower := strings.ToLower(msg)
-	var kind errtax.Type
-	switch {
-	case strings.Contains(lower, "unsupported auth type"):
-		kind = errtax.TypeValidation
-	case xstrings.ContainsAny(lower, "credential", "auth"):
-		kind = errtax.TypeAuth
-	case strings.Contains(lower, "not found"):
-		kind = errtax.TypeNotFound
-	case xstrings.ContainsAny(lower, "rate limit", "too many"):
-		kind = errtax.TypeRateLimit
-	case strings.Contains(lower, "server"):
-		kind = errtax.TypeServer
-	default:
-		kind = errtax.TypeValidation
-	}
-	return newFromCode(errtax.DefaultCode(kind), msg)
+	// Every error that legitimately needs a non-validation class — auth,
+	// not_found, rate_limit, server — is typed at its source via
+	// errtax.Coded and resolved by MapError's typed tiers before reaching
+	// here. Anything that lands in this terminal fallback is, by
+	// definition, uncategorized: classify it as validation (exit 3), the
+	// safe conservative default. This deliberately does NOT substring-match
+	// the message — text like "auth_type", a "credential-env" flag name, or
+	// a "... (jira not found)" aggregate summary would misroute an ordinary
+	// error into the wrong exit code. If a bare error needs another class,
+	// type it at the source; never add a substring branch here.
+	return newFromCode(errtax.CodeValidationFailed, err.Error())
 }
 
 // ErrorEnvelope builds a failure envelope: ok:false, data:null,

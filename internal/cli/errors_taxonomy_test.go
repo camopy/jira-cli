@@ -176,10 +176,16 @@ func taxonomyCases() []struct {
 		{"jira 410", jiraStatusError(410), "jira_gone", "", true},
 		{"jira 429", jiraStatusError(429), "jira_rate_limited", "", true},
 		{"jira 500", jiraStatusError(500), "jira_server_error", "", true},
-		{"untyped auth", errors.New("credential rejected by backend"), "auth_failed", "", false},
-		{"untyped not found", errors.New("widget not found"), "not_found", "", false},
-		{"untyped rate limit", errors.New("rate limit exceeded upstream"), "rate_limited", "", false},
-		{"untyped server", errors.New("server exploded"), "server_error", "", false},
+		// The terminal fallback no longer substring-classifies: an untyped
+		// error is validation regardless of message text. These rows guard
+		// against reintroducing the branches — "credential"/"not found"/
+		// "rate limit"/"server" text must NOT reroute an untyped error into
+		// auth/not_found/rate_limit/server. Anything that needs those codes
+		// is typed at its source.
+		{"untyped 'credential' text stays validation", errors.New("credential rejected by backend"), "validation_failed", "", false},
+		{"untyped 'not found' text stays validation", errors.New("widget not found"), "validation_failed", "", false},
+		{"untyped 'rate limit' text stays validation", errors.New("rate limit exceeded upstream"), "validation_failed", "", false},
+		{"untyped 'server' text stays validation", errors.New("server exploded"), "validation_failed", "", false},
 		{"untyped fallback", errors.New("something odd happened"), "validation_failed", "", false},
 	}
 }
@@ -230,6 +236,17 @@ func TestErrorTaxonomyRegistryFullyDriven(t *testing.T) {
 		"credential_migration_failed":    true,
 		"credential_cleanup_failed":      true,
 		"onepassword_unavailable":        true,
+		// The type-default catch-alls. The legacy substring classifier was
+		// retired — classifyUntyped now always returns validation_failed —
+		// so these are produced only at call sites, never by the mapper:
+		// not_found by cli.NotFoundError, and the auth/rate_limit/server
+		// defaults by errtax.DefaultCode where the Jira client or a
+		// multi-key aggregate classifies a status/type that has no more
+		// specific code.
+		"not_found":    true,
+		"auth_failed":  true,
+		"rate_limited": true,
+		"server_error": true,
 	}
 	driven := map[string]bool{}
 	for _, tc := range taxonomyCases() {

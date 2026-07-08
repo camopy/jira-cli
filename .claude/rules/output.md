@@ -74,9 +74,11 @@ All user-visible failures map through `internal/cli/errors.go`:
 
 *   `MapError` chains `errors.As` adapters for every typed error (CLIInput,
     Prompt, context cancel/deadline, Credential, `jira.APIError`, issuekey,
-    board candidates, ambiguous-user). The substring classifier at the
-    bottom is legacy fallback only — new errors get a typed adapter, never a
-    substring match.
+    board candidates, ambiguous-user). The terminal fallback classifies any
+    untyped error as validation (exit 3) without inspecting its message —
+    every non-validation class (auth/not_found/rate_limit/server) is typed
+    at its source via an adapter or `errtax.Coded`. Never match `err.Error()`
+    substrings to pick a class; type the error where it is built.
 *   Stable snake_case codes with a `hint` that adds action beyond
     `message`; Jira HTTP statuses map to `jira_*` codes and hints in
     lockstep tables guarded by a test.

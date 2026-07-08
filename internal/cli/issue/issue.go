@@ -321,7 +321,8 @@ func issueViewPartialFailureError(data issueViewManyData, top cli.Error) error {
 	if data.Succeeded == 0 {
 		status = "no issues were read successfully"
 	}
-	return fmt.Errorf("issue view completed with %d of %d failed (%s); %s", data.Failed, total, reason, status)
+	msg := fmt.Sprintf("issue view completed with %d of %d failed (%s); %s", data.Failed, total, reason, status)
+	return cli.NewCodedError(cli.AggregateCode(top), msg)
 }
 
 func issueViewFailureReason(top cli.Error) string {
@@ -690,7 +691,8 @@ func issueListKeyChunkPartialFailureError(succeeded, failed int, top cli.Error) 
 	if succeeded == 0 {
 		status = "no issue chunks were read successfully"
 	}
-	return fmt.Errorf("issue list completed with %d of %d key chunks failed (%s); %s", failed, total, reason, status)
+	msg := fmt.Sprintf("issue list completed with %d of %d key chunks failed (%s); %s", failed, total, reason, status)
+	return cli.NewCodedError(cli.AggregateCode(top), msg)
 }
 
 func issueListKeyChunks(inputs []string) ([]string, error) {
