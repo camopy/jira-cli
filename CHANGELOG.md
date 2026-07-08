@@ -1,6 +1,12 @@
 # Release Notes
 
 
+## [0.10.3](https://github.com/matcra587/jira-cli/releases/tag/v0.10.3) — 2026-07-08
+
+### Fixed
+
+- Surface write failures (broken pipe, disk quota) on paginated list and search envelopes instead of silently swallowing them.
+
 ## [0.10.2](https://github.com/matcra587/jira-cli/releases/tag/v0.10.2) — 2026-07-08
 
 ### Added

@@ -1,3 +1,0 @@
-kind: fixed
-body: Surface write failures (broken pipe, disk quota) on paginated list and search envelopes instead of silently swallowing them.
-time: 2026-07-08T04:52:25.126888881-04:00
