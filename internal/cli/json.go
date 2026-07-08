@@ -164,6 +164,17 @@ func WriteEnvelope(w io.Writer, env Envelope) error {
 	return writeJSON(w, env, clog.JSONFlat, clog.ColorNever, nil)
 }
 
+// WriteEnvelopeDocument serializes a pre-built envelope document (a value that
+// already carries the ok/meta/data/errors/warnings shape — typically a map)
+// through the same clog flat path cli.WriteEnvelope uses, so a broken-pipe or
+// quota write failure surfaces via errWriter instead of being swallowed. It
+// exists for the raw-warning path, whose warnings carry arbitrary structured
+// fields the typed Warning struct does not model, so the document cannot be
+// funneled through the typed Envelope without dropping data.
+func WriteEnvelopeDocument(w io.Writer, doc any) error {
+	return writeJSON(w, doc, clog.JSONFlat, clog.ColorNever, nil)
+}
+
 // WriteCompact serializes the JSON data payload to w without the
 // envelope wrapper, with null-valued keys dropped recursively so the
 // agent-facing payload stays lean. json and human modes keep the full,

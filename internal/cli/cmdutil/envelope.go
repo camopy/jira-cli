@@ -1,7 +1,6 @@
 package cmdutil
 
 import (
-	"encoding/json"
 	"io"
 	"time"
 
@@ -163,6 +162,12 @@ func writeRawWarningEnvelope(cmd *cobra.Command, command string, data any, warni
 	if pagination != nil {
 		meta["pagination"] = pagination
 	}
+	// The raw-warning path keeps its warnings as maps: they carry arbitrary
+	// structured fields (rate-limit retry seconds, drain cut reasons) the typed
+	// Warning struct does not model, so folding them into cli.Warning would
+	// drop data. Build the envelope document as a map and route it through the
+	// shared clog writer — same byte-shape as before, now with the errWriter
+	// wrapper capturing broken-pipe / quota write failures.
 	body := map[string]any{
 		"ok":       true,
 		"meta":     meta,
@@ -173,8 +178,7 @@ func writeRawWarningEnvelope(cmd *cobra.Command, command string, data any, warni
 	if UseHumanJSONOutput(cmd) {
 		return cli.WriteHumanJSON(cmd.OutOrStdout(), body, HumanJSONPrintTheme(cmd))
 	}
-	enc := json.NewEncoder(cmd.OutOrStdout())
-	return enc.Encode(body)
+	return cli.WriteEnvelopeDocument(cmd.OutOrStdout(), body)
 }
 
 // foldWarnings merges a non-empty warning slice into a compact-mode data
