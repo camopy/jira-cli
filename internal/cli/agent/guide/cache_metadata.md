@@ -81,7 +81,8 @@ Envelope shape (using `linktypes` as an example):
 ```
 
 `jira cache refresh` uses the shared multi-key shape instead, not the per-resource envelope above:
-- `data.results[]` — one row per resource: `{key, ok, data:{status, from_cache, count, fetched_at, duration_ms}}`; `status` is `fresh` (skipped, still in window) or `refreshed` (refetched). A failed resource has `ok:false` and an `error` instead of `data`.
+- `data.results[]` — one row per resource: `{key, ok, data:{status, from_cache, count, fetched_at, duration_ms, dry_run}}`; `status` is `fresh` (skipped, still in window), `refreshed` (refetched), or `would-refresh` (a `--dry-run` preview: stale, and a live run would refetch it). A failed resource has `ok:false` and an `error` instead of `data`.
+- `cache refresh --dry-run` reports which resources are stale (`would-refresh`) without refetching, contacting Jira, or needing a credential — a local-only preview.
 - `data.succeeded` / `data.failed` [int] — totals.
 - Partial failure → top-level `ok:false`, failures mirrored into `errors[]`, `meta.exit_code` set to the highest per-resource failure code; successes are retained in `data.results`.
 

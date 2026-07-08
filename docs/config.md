@@ -72,7 +72,9 @@ more when you point at several sites.
     ```
 
     `config init` needs both `--base-url` and `--email`, never prompts, and never
-    writes a credential — run [`auth login`](auth.md) next.
+    writes a credential — run [`auth login`](auth.md) next. Add `--dry-run` to
+    validate and preview the profile without writing the file (`config theme`
+    takes `--dry-run` too).
 
 === "Several profiles"
 

@@ -210,11 +210,16 @@ parallel. `--ttl-minutes <n>` overrides every window for the run, and
 rest — successes stay in `data.results`, failures go to `errors[]`, and the
 command exits with the highest per-resource failure code.
 
+`--dry-run` reports which resources are stale — each row's `status` is
+`would-refresh` — and writes nothing, without refetching, contacting Jira, or
+needing a credential, so it works offline as a local preview.
+
 The output is the shared multi-key shape: a `results[]` keyed by resource name,
-each carrying `status` (`fresh` / `refreshed`), `from_cache`, `count`,
-`fetched_at`, and `duration_ms`, plus `succeeded` / `failed` totals. A partial
-failure sets `ok: false`, replaces the failing resource's `data` with an
-`error`, and mirrors it into top-level `errors[]`:
+each carrying `status` (`fresh` / `refreshed`, or `would-refresh` under
+`--dry-run`), `from_cache`, `count`, `fetched_at`, `duration_ms`, and `dry_run`,
+plus `succeeded` / `failed` totals. A partial failure sets `ok: false`, replaces
+the failing resource's `data` with an `error`, and mirrors it into top-level
+`errors[]`:
 
 ```json
 {

@@ -1,0 +1,3 @@
+kind: added
+body: 'Add --dry-run to the local-state mutations that lacked it: alias set/delete/import, config init, config theme, and cache refresh now preview the change and write nothing under --dry-run, reporting data.dry_run true. cache refresh --dry-run reports which resources are stale without contacting Jira.'
+time: 2026-07-08T11:45:41.109917841-04:00

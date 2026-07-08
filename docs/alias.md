@@ -24,7 +24,9 @@ The second line runs the stored expansion verbatim.
 Create or replace an alias. The expansion is the rest of a `jira` command line —
 quote any embedded arguments so the parent shell passes them through verbatim.
 Setting a name that already exists overwrites the previous expansion without a
-prompt; there's no `--force` here.
+prompt; there's no `--force` here, but `--dry-run` previews the change (it
+returns `data.dry_run: true` and writes nothing). `alias delete` and `alias
+import` take `--dry-run` too.
 
 ```sh
 jira alias set inbox "issue list --assignee me --status 'To Do,In Progress'"

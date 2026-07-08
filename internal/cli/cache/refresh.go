@@ -14,6 +14,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cache/registry"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -35,7 +36,7 @@ type refreshOutcome struct {
 // resource failing does not abort the rest, and the partial-failure envelope
 // keeps the successes while exiting non-zero.
 func cacheRefreshCommand() *cobra.Command {
-	var force, unbounded bool
+	var force, unbounded, dryRun bool
 	var parallelism, ttlOverride int
 	cmd := &cobra.Command{
 		Use:   "refresh [resource...]",
@@ -73,14 +74,31 @@ $ jira cache refresh --force --output=json`,
 				}
 			}
 
-			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
-			if err != nil {
-				return err
+			var (
+				client   *jira.Client
+				hasURL   bool
+				cacheKey string
+			)
+			if dryRun {
+				// Local-only preview: resolve the cache key from config without
+				// building a Jira client (which would require a credential), so
+				// --dry-run never needs auth and never contacts Jira.
+				cfg, cfgErr := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
+				if cfgErr != nil {
+					return cfgErr
+				}
+				cacheKey = cmdutil.CacheKeyForProfile(cmd, cmdutil.ActiveProfile(cmd, cfg))
+			} else {
+				c, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
+				if err != nil {
+					return err
+				}
+				client, hasURL = c, ok
+				cacheKey = cmdutil.CacheKeyForProfile(cmd, profile)
 			}
-			cacheKey := cmdutil.CacheKeyForProfile(cmd, profile)
 
 			fn := func(ctx context.Context, name string) (refreshOutcome, error) {
-				return refreshResource(ctx, cacheKey, client, ok, name, force, unbounded, ttlOverride)
+				return refreshResource(ctx, cacheKey, client, hasURL, name, force, unbounded, ttlOverride, dryRun)
 			}
 			results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "cache.refresh", resources, parallelism, fn)
 			if err != nil {
@@ -98,6 +116,7 @@ $ jira cache refresh --force --output=json`,
 						"count":       o.count,
 						"fetched_at":  o.fetchedAt.UTC().Format(time.RFC3339),
 						"duration_ms": o.durationMS,
+						"dry_run":     dryRun,
 					}
 				})
 		},
@@ -109,13 +128,14 @@ $ jira cache refresh --force --output=json`,
 		clib.FlagExtra{Group: "Cache", Placeholder: "N", Terse: "freshness window"})
 	cmdutil.AddBoolVar(cmd.Flags(), &unbounded, "unbounded", false, "For boards, walk every page (disables the default cap)",
 		clib.FlagExtra{Group: "Pagination", Terse: "walk every page"})
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Report which resources are stale without refetching or writing (never contacts Jira)")
 	return cmd
 }
 
 // refreshResource refreshes one resource: it serves a still-fresh cache
 // untouched (unless force), otherwise refetches and writes. boards is fetched
 // through PrimeAndCacheBoards because its cache is an object, not a flat list.
-func refreshResource(ctx context.Context, cacheKey string, client *jira.Client, hasBaseURL bool, name string, force, unbounded bool, ttlOverride int) (refreshOutcome, error) {
+func refreshResource(ctx context.Context, cacheKey string, client *jira.Client, hasBaseURL bool, name string, force, unbounded bool, ttlOverride int, dryRun bool) (refreshOutcome, error) {
 	start := time.Now()
 	r, found := registry.ByName(name)
 	if !found {
@@ -138,6 +158,25 @@ func refreshResource(ctx context.Context, cacheKey string, client *jira.Client, 
 				durationMS: time.Since(start).Milliseconds(),
 			}, nil
 		}
+	}
+
+	if dryRun {
+		// Local-only preview: the resource is stale (or --force), so a live run
+		// would refetch it. Report that without contacting Jira or writing; the
+		// count and timestamp come from the existing cache entry when present.
+		count, fetchedAt := 0, time.Time{}
+		fromCache := false
+		if entry, present, _, readErr := cache.Read(cacheKey, r.Name, ttl); readErr == nil && present {
+			fromCache = true
+			count, fetchedAt = cachedCount(r, entry.Data), entry.FetchedAt
+		}
+		return refreshOutcome{
+			status:     "would-refresh",
+			fromCache:  fromCache,
+			count:      count,
+			fetchedAt:  fetchedAt,
+			durationMS: time.Since(start).Milliseconds(),
+		}, nil
 	}
 
 	if !hasBaseURL {

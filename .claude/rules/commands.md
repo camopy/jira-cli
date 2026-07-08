@@ -121,7 +121,13 @@ Resolve gates through `cmdutil`, never by reading env/config ad hoc:
     and never contacts Jira. `dryRunRequested` (gates.go) tolerates the flag's
     absence and fails SAFE (a guard that cannot read its flag assumes dry-run
     is ON). It is also threaded into the Jira client so the service layer
-    refuses mutating requests as a safety net.
+    refuses mutating requests as a safety net. `--dry-run` belongs on **every**
+    mutation, not just Jira writes: the local-state ones (`config set`/`init`/
+    `theme`, `alias set`/`delete`/`import`, `cache clear`/`refresh`) preview and
+    write nothing under it, with `data.dry_run: true`. "Local-only" is literal —
+    a dry run must not build a Jira client or require a credential, so resolve
+    anything auth-dependent (e.g. a profile cache key) from config directly on
+    the dry-run path (see `cache refresh`).
 *   **Read-only** — `cmdutil.ReadOnlyEnabled`: `JIRA_READ_ONLY` env wins on the
     OFF→ON direction only; enforcement lives at the HTTP transport (see
     [security.md](security.md)).

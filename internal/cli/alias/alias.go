@@ -54,7 +54,8 @@ $ jira alias list --output=json`,
 }
 
 func aliasSetCommand() *cobra.Command {
-	return &cobra.Command{
+	var dryRun bool
+	cmd := &cobra.Command{
 		Use:   "set NAME EXPANSION...",
 		Short: "Create a shortcut for a jira command",
 		Example: `# Alias "mine" to list issues assigned to you
@@ -89,17 +90,25 @@ $ jira alias set mybugs "issue list --assignee me --output=json"`,
 			if cfg.Aliases == nil {
 				cfg.Aliases = map[string]string{}
 			}
+			previous := cfg.Aliases[name]
 			cfg.Aliases[name] = expansion
+			data := map[string]any{"name": name, "expansion": expansion, "previous": previous, "dry_run": dryRun}
+			if dryRun {
+				return cmdutil.WriteEnvelope(cmd, "alias.set", data)
+			}
 			if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
 				return err
 			}
-			return cmdutil.WriteEnvelope(cmd, "alias.set", map[string]any{"name": name, "expansion": expansion})
+			return cmdutil.WriteEnvelope(cmd, "alias.set", data)
 		},
 	}
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview the alias without writing the config file")
+	return cmd
 }
 
 func aliasDeleteCommand() *cobra.Command {
-	return &cobra.Command{
+	var dryRun bool
+	cmd := &cobra.Command{
 		Use:     "delete NAME",
 		Aliases: []string{"del", "rm"},
 		Short:   "Delete an alias",
@@ -120,17 +129,23 @@ $ jira alias delete mine --output=json`,
 				return err
 			}
 			_, existed := cfg.Aliases[args[0]]
+			data := map[string]any{"name": args[0], "deleted": existed, "dry_run": dryRun}
+			if dryRun {
+				return cmdutil.WriteEnvelope(cmd, "alias.delete", data)
+			}
 			delete(cfg.Aliases, args[0])
 			if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
 				return err
 			}
-			return cmdutil.WriteEnvelope(cmd, "alias.delete", map[string]any{"name": args[0], "deleted": existed})
+			return cmdutil.WriteEnvelope(cmd, "alias.delete", data)
 		},
 	}
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview the deletion without writing the config file")
+	return cmd
 }
 
 func aliasImportCommand() *cobra.Command {
-	var clobber bool
+	var clobber, dryRun bool
 	cmd := &cobra.Command{
 		Use:   "import [FILENAME|-]",
 		Short: "Import aliases from a YAML file",
@@ -186,17 +201,23 @@ $ jira --config team-jira.yaml alias import aliases.yaml`,
 				cfg.Aliases[name] = expansion
 				imported = append(imported, name)
 			}
-			if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
-				return err
-			}
-			return cmdutil.WriteEnvelope(cmd, "alias.import", map[string]any{
+			data := map[string]any{
 				"imported": len(imported),
 				"aliases":  imported,
 				"skipped":  skipped,
-			})
+				"dry_run":  dryRun,
+			}
+			if dryRun {
+				return cmdutil.WriteEnvelope(cmd, "alias.import", data)
+			}
+			if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
+				return err
+			}
+			return cmdutil.WriteEnvelope(cmd, "alias.import", data)
 		},
 	}
 	cmdutil.AddBoolVar(cmd.Flags(), &clobber, "clobber", false, "Overwrite existing aliases of the same name", clib.FlagExtra{Group: "Safety", Terse: "overwrite existing"})
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Validate and preview the merge without writing the config file")
 	return cmd
 }
 

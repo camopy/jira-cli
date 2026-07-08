@@ -28,6 +28,7 @@ func NewCommand() *cobra.Command {
 
 func configThemeCommand() *cobra.Command {
 	var name, path string
+	var dryRun bool
 	cmd := &cobra.Command{
 		Use:   "theme",
 		Short: "Manage theme configuration",
@@ -67,14 +68,17 @@ $ jira config theme --path ./my-theme.toml`,
 				if err := cfg.Validate(); err != nil {
 					return err
 				}
-				if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
-					return err
+				if !dryRun {
+					if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
+						return err
+					}
 				}
 			}
 			return cmdutil.WriteEnvelope(cmd, "config.theme", map[string]any{
 				"name":    cfg.Theme.Name,
 				"path":    cfg.Theme.Path,
 				"changed": changed,
+				"dry_run": dryRun,
 			})
 		},
 	}
@@ -93,11 +97,13 @@ $ jira config theme --path ./my-theme.toml`,
 		Placeholder: "PATH",
 		Hint:        "file",
 	})
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Validate and preview the theme change without writing the file")
 	return cmd
 }
 
 func configInitCommand() *cobra.Command {
 	var baseURL, email string
+	var dryRun bool
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Create initial configuration",
@@ -139,14 +145,17 @@ $ jira --config ./jira.toml config init --base-url https://acme.atlassian.net --
 			if err := cfg.Validate(); err != nil {
 				return err
 			}
-			if err := config.Save(cmdutil.ConfigPath(cmd), &cfg); err != nil {
-				return err
+			if !dryRun {
+				if err := config.Save(cmdutil.ConfigPath(cmd), &cfg); err != nil {
+					return err
+				}
 			}
 			return cmdutil.WriteEnvelope(cmd, "config.init", map[string]any{
 				"profile":     profile,
 				"base_url":    baseURL,
 				"auth_type":   string(config.AuthTypeToken),
 				"stored_auth": false,
+				"dry_run":     dryRun,
 			})
 		},
 	}
@@ -154,6 +163,7 @@ $ jira --config ./jira.toml config init --base-url https://acme.atlassian.net --
 		clib.FlagExtra{Group: "Configuration", Placeholder: "URL", Terse: "Jira base URL"})
 	cmdutil.AddStringVar(cmd.Flags(), &email, "email", "", "Jira account email",
 		clib.FlagExtra{Group: "Configuration", Placeholder: "EMAIL", Terse: "account email"})
+	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Validate and preview the config without writing the file")
 	return cmd
 }
 

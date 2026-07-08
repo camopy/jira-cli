@@ -31,8 +31,8 @@ This is not a command — it's the cross-cutting contract that `clone_issue`, `m
 - Hybrid resolve: `watchers add --dry-run --validate-remote` does a read-only `/user/search` to resolve a bare name or email but still issues no watcher POST/DELETE.
 
 # local state mutations (no Jira call at all)
-- The same triad covers the commands that mutate local state: `cache clear` (wipes cache files), `config set` (writes config.toml), `auth switch` (changes the default profile), `auth logout` (revokes a stored credential), and `update` (replaces the binary). Each takes `--dry-run` for a no-write preview.
-- Headless / agent / `--no-input` gating: `cache clear`, `auth logout`, and `update` require `--force` for the live run. `config set` and `auth switch` are ungated by design — both are single-value writes reversed by setting the previous value back.
+- The same triad covers the commands that mutate local state: `cache clear` (wipes cache files) and `cache refresh` (refetches metadata), `config set` / `config init` / `config theme` (write config.toml), `alias set` / `alias delete` / `alias import` (write aliases into config.toml), `auth switch` (changes the default profile), `auth logout` (revokes a stored credential), and `update` (replaces the binary). Each takes `--dry-run` for a no-write preview — including `cache refresh --dry-run`, which reports which resources are stale (`would-refresh`) without refetching, contacting Jira, or needing a credential.
+- Headless / agent / `--no-input` gating: `cache clear`, `auth logout`, and `update` require `--force` for the live run. The rest — `config set` / `init` / `theme`, `alias set` / `delete` / `import`, `cache refresh`, and `auth switch` — are ungated by design: local, reversible writes.
 - None of these prompt an interactive TTY: the verb plus its explicit target carries the intent (`logout <profile>` names its victim, a cleared cache re-primes, the binary self-replace is checksum-verified and rollback-safe).
 
 **Run** (sequence, per mutation)
