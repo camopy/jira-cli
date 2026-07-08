@@ -1,3 +1,0 @@
-kind: changed
-body: Require --force to delete an alias in headless, agent, or --no-input mode, matching cache clear; interactive terminals are unaffected.
-time: 2026-07-08T13:25:37.61856473-04:00

@@ -1,6 +1,16 @@
 # Release Notes
 
 
+## [0.10.6](https://github.com/matcra587/jira-cli/releases/tag/v0.10.6) — 2026-07-08
+
+### Added
+
+- Show a description and worked examples in --help for each top-level command group (issue, config, cache, auth, and the rest).
+
+### Changed
+
+- Require --force to delete an alias in headless, agent, or --no-input mode, matching cache clear; interactive terminals are unaffected.
+
 ## [0.10.5](https://github.com/matcra587/jira-cli/releases/tag/v0.10.5) — 2026-07-08
 
 ### Added
