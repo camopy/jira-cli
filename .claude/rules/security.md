@@ -78,6 +78,18 @@ GoReleaser-built and cosign-signed; gosec + govulncheck run in `mise run ci`
 and the hk pre-commit hooks. A new dependency needs justification —
 gechr-first (see [go.md](go.md)).
 
+The `security` task runs govulncheck through `cmd/check-vuln`, not bare:
+govulncheck has no native allowlist, and `-format json` never sets a non-zero
+exit, so `check-vuln` parses the stream, treats a symbol-level finding (a
+function in `trace[0]` — package `init` counts) as affecting the build, and
+owns the exit code. It carries one reviewed allowlist (`allowed`), each entry
+an advisory ID plus the reason it is safe to ship. Add an ID there **only**
+with a written reason after judging reachability — the first resort is always
+to fix the code or bump the dependency. The allowlist is rot-hostile: an entry
+that stops firing (upstream fixed it, the DB withdrew it, the import went away)
+fails the build until removed, the same discipline nolintlint enforces on
+`//nolint`. `check-vuln` is itself the guardrail — there is no separate test.
+
 ## Gates
 
 Destructive commands require `--force`; headless mutations require
