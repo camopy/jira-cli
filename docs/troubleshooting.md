@@ -106,12 +106,15 @@ See [Cache](cache.md) for the full resource list.
     lists the valid values. Common cases: `cache clear <unknown>`,
     `config theme --name <unknown>`.
 
+`exit 3` with `code=issue_type_unknown`
+:   The `--type` value names no issue type on the project's create
+    screen. The valid type names are returned in `errors[0].suggestions`;
+    pick one of those.
+
 `exit 3` with `screen schema could not be resolved in strict mode`
 :   Strict mode could not fetch the create screen for the payload's
-    project and issue type — usually an unknown project key or issue
-    type name for the instance, or no live connection to resolve the
-    screen. Check the names with [`cache projects`](cache.md) and
-    [`cache issuetypes`](cache.md).
+    project — usually an unknown project key, or no live connection to
+    resolve the screen. Check the project with [`cache projects`](cache.md).
 
 `exit 1` with `auth_failed` on a previously-working profile
 :   Token rotated upstream. Re-run `auth login`.

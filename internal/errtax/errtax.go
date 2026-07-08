@@ -38,13 +38,22 @@ const (
 	// CodeFlagForeign is a recognized flag from a different Jira CLI — not
 	// a typo, so it gets an orientation hint instead of a spelling one;
 	// this CLI's equivalents ride the envelope's suggestions field.
-	CodeFlagForeign             Code = "flag_foreign"
-	CodeFlagValueMissing        Code = "flag_value_missing"
-	CodeFlagValueInvalid        Code = "flag_value_invalid"
-	CodeFlagSyntaxInvalid       Code = "flag_syntax_invalid"
-	CodeRequiredFlagMissing     Code = "required_flag_missing"
-	CodeArgCountInvalid         Code = "arg_count_invalid"
-	CodeArgValueInvalid         Code = "arg_value_invalid"
+	CodeFlagForeign         Code = "flag_foreign"
+	CodeFlagValueMissing    Code = "flag_value_missing"
+	CodeFlagValueInvalid    Code = "flag_value_invalid"
+	CodeFlagSyntaxInvalid   Code = "flag_syntax_invalid"
+	CodeRequiredFlagMissing Code = "required_flag_missing"
+	CodeArgCountInvalid     Code = "arg_count_invalid"
+	CodeArgValueInvalid     Code = "arg_value_invalid"
+	// CodeIssueTypeUnknown is a --type value that names no issue type on the
+	// project's create screen. The CLI resolves the type against the fetched
+	// list in-code, so a miss is a bad input value (validation, exit 3), not a
+	// Jira 404 — the valid names ride the envelope's suggestions field.
+	CodeIssueTypeUnknown Code = "issue_type_unknown"
+	// CodeSavedQueryUnknown is a `search saved NAME` value that matches no
+	// saved query. The names live in the user's queries directory, not in
+	// --help, so this gets its own hint rather than reusing arg_value_invalid.
+	CodeSavedQueryUnknown       Code = "saved_query_unknown"
 	CodeCommandUnknown          Code = "command_unknown"
 	CodePromptAborted           Code = "prompt_aborted"
 	CodePromptCanceled          Code = "prompt_canceled"
@@ -168,6 +177,8 @@ var registry = map[Code]Spec{
 	CodeRequiredFlagMissing:     {Type: TypeValidation, Exit: 3, Hint: "This command needs that flag — run it with --help to see which ones are required.", Retryable: false},
 	CodeArgCountInvalid:         {Type: TypeValidation, Exit: 3, Hint: "Check how many arguments the command takes; its usage line is in --help.", Retryable: false},
 	CodeArgValueInvalid:         {Type: TypeValidation, Exit: 3, Hint: "That isn't one of the accepted values — run the command with --help to see the choices.", Retryable: false},
+	CodeIssueTypeUnknown:        {Type: TypeValidation, Exit: 3, Hint: "Pass one of the project's issue types.", Retryable: false},
+	CodeSavedQueryUnknown:       {Type: TypeValidation, Exit: 3, Hint: "Pass one of your saved query names — they live in the queries_path directory.", Retryable: false},
 	CodeCommandUnknown:          {Type: TypeValidation, Exit: 3, Hint: "Run `jira --help` to see the available commands.", Retryable: false},
 	CodePromptAborted:           {Type: TypeValidation, Exit: 3, Hint: "Run it again and finish the prompt, or pass the value as a flag so it doesn't need to ask.", Retryable: false},
 	CodePromptCanceled:          {Type: TypeValidation, Exit: 3, Hint: "Run it again when you're ready to answer.", Retryable: false},
@@ -205,7 +216,7 @@ var registry = map[Code]Spec{
 	// not_found (exit 2)
 	CodeProfileNotDefined: {Type: TypeNotFound, Exit: 2, Hint: "See your profiles with `jira config profile`, or create one with `jira auth login --profile <name>`.", Retryable: false},
 	CodeProfileIncomplete: {Type: TypeNotFound, Exit: 2, Hint: "Finish setting up the profile — run `jira auth login --profile <name>` to give it a base URL.", Retryable: false},
-	CodeJiraNotFound:      {Type: TypeNotFound, Exit: 2, Hint: "Double-check the issue key or ID exists and that this account can see it.", Retryable: false},
+	CodeJiraNotFound:      {Type: TypeNotFound, Exit: 2, Hint: "Double-check the identifier exists and that this account can see it.", Retryable: false},
 	CodeJiraGone:          {Type: TypeNotFound, Exit: 2, Hint: "This was permanently deleted in Jira — stop referring to it.", Retryable: false},
 	CodeNotFound:          {Type: TypeNotFound, Exit: 2, Hint: "Re-check the identifier — it doesn't exist, or this account can't see it.", Retryable: false},
 	// rate_limit (exit 4)

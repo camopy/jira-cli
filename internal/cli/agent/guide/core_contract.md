@@ -149,6 +149,7 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 | Exit 3, `code=required_flag_missing` | A required flag was not set; `flag` names the first one | Supply that flag |
 | Exit 3, `code=arg_count_invalid` | Wrong number of positional arguments | Match the documented arity |
 | Exit 3, `code=arg_value_invalid` | Positional argument value is outside the command's accepted set | Use one of the documented values |
+| Exit 3, `code=issue_type_unknown` | `--type` names no issue type on the project's create screen (validation, not a 404) | Use one of the names in `errors[0].suggestions` |
 | Exit 3, `code=command_unknown` | Unrecognized command; `suggestions` may carry near-miss names | Use the suggested name |
 | Exit 3, `code=read_only` | `JIRA_READ_ONLY=true` or profile `read_only = true` | Unset / flip the profile, or do the work elsewhere |
 | Exit 6, `code=canceled` | SIGINT / root context canceled mid-request | Retry when ready |

@@ -79,6 +79,14 @@ All user-visible failures map through `internal/cli/errors.go`:
     every non-validation class (auth/not_found/rate_limit/server) is typed
     at its source via an adapter or `errtax.Coded`. Never match `err.Error()`
     substrings to pick a class; type the error where it is built.
+*   **Never synthesize a fake HTTP status on a hand-built `APIError` to borrow
+    a transport class.** A miss the CLI computes locally — a `--type` value
+    absent from the fetched issuetypes list, a name not in a cached set — is
+    **validation (exit 3)**, typed at its source with a dedicated error
+    (`jira.IssueTypeUnknownError`), not a `&APIError{StatusCode: 404}` that
+    would drag it into not-found (exit 2). Real 404s come only from the
+    transport (`client.go`). Guarded by
+    `TestNoSyntheticAPIErrorStatusInServices` in `tests/guardrails`.
 *   Stable snake_case codes with a `hint` that adds action beyond
     `message`; Jira HTTP statuses map to `jira_*` codes and hints in
     lockstep tables guarded by a test.
@@ -95,8 +103,20 @@ All user-visible failures map through `internal/cli/errors.go`:
     mean" suggestion), it belongs in the error `message` or a structured
     envelope field (`field`, `suggestions[]`), never baked into the hint. If
     two error types want different hints, give them different codes rather
-    than one code with per-instance text. The jargon ban is machine-enforced
-    by `TestHintsAvoidEnvelopeJargon` in `internal/errtax`.
+    than one code with per-instance text. A **catch-all or multi-resource
+    code** must keep its hint resource-neutral: `jira_not_found` maps every
+    Jira 404 (issue, board, attachment, user, comment, link, project), so its
+    hint says "the identifier", never "the issue key" — naming one resource
+    misleads on all the others; put the resource specifics in the `message`.
+    Both bans are machine-enforced in `internal/errtax` —
+    `TestHintsAvoidEnvelopeJargon` (jargon) and
+    `TestSharedNotFoundHintIsResourceNeutral` (the shared-404 hint). Watch the
+    reuse trap in the other direction too: `arg_value_invalid`'s hint sends the
+    caller to `--help`, so only use it where `--help` actually lists the
+    accepted values. A lookup whose valid values live elsewhere — a saved-query
+    name in `queries_path`, an issue type on a project's create screen — needs
+    its own code (`saved_query_unknown`, `issue_type_unknown`) with a hint that
+    points at the real source, and offers the values via `suggestions[]`.
 *   Exit codes are a published contract: `0` ok, `1` auth, `2` not-found,
     `3` validation, `4` rate-limit, `5` server, `6` canceled, `7` timeout.
     `main.go` owns process exit and maps `ErrCompletionHandled` → 0.

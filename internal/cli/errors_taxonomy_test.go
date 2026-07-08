@@ -32,6 +32,8 @@ var taxonomyRegistry = map[string]struct {
 	"required_flag_missing":     {"validation", 3},
 	"arg_count_invalid":         {"validation", 3},
 	"arg_value_invalid":         {"validation", 3},
+	"issue_type_unknown":        {"validation", 3},
+	"saved_query_unknown":       {"validation", 3},
 	"command_unknown":           {"validation", 3},
 	"prompt_aborted":            {"validation", 3},
 	"prompt_canceled":           {"validation", 3},
@@ -140,6 +142,8 @@ func taxonomyCases() []struct {
 		{"required flag missing", NewCLIInputError(InputRequiredFlagMissing, "required flag(s) --summary not set"), "required_flag_missing", "This command needs that flag — run it with --help to see which ones are required.", true},
 		{"arg count invalid", NewCLIInputError(InputArgCountInvalid, "accepts 1 arg(s), received 0"), "arg_count_invalid", "Check how many arguments the command takes; its usage line is in --help.", true},
 		{"arg value invalid", NewCLIInputError(InputArgValueInvalid, `invalid argument "x"`), "arg_value_invalid", "That isn't one of the accepted values — run the command with --help to see the choices.", true},
+		{"issue type unknown", &jira.IssueTypeUnknownError{IssueType: "Buug", ProjectKey: "KAN", Available: []string{"Task", "Bug"}}, "issue_type_unknown", "Pass one of the project's issue types.", false},
+		{"saved query unknown", NewCLIInputError(InputSavedQueryUnknown, `saved query "nope" not found`), "saved_query_unknown", "Pass one of your saved query names — they live in the queries_path directory.", true},
 		{"command unknown", NewCLIInputError(InputCommandUnknown, `unknown command "nope"`), "command_unknown", "Run `jira --help` to see the available commands.", true},
 		{"prompt aborted", &PromptError{Kind: PromptAborted, Prompt: "auth login"}, "prompt_aborted", "Run it again and finish the prompt, or pass the value as a flag so it doesn't need to ask.", false},
 		{"prompt canceled", &PromptError{Kind: PromptCanceled, Prompt: "auth login"}, "prompt_canceled", "Run it again when you're ready to answer.", false},
@@ -327,6 +331,47 @@ func TestOutputFlagValueRoutesThroughFlagValueInvalid(t *testing.T) {
 	}
 	if ExitCode(mapped) != 3 {
 		t.Errorf("exit = %d, want 3", ExitCode(mapped))
+	}
+}
+
+// TestUnknownIssueTypeMapsToValidationWithSuggestions pins the reclassification
+// of a bad --type: the CLI resolves the name against the fetched issuetypes
+// list in-code, so a miss is a validation failure (exit 3) — not the Jira 404
+// it used to synthesize — and the project's valid type names ride the
+// suggestions field, never the static hint.
+func TestUnknownIssueTypeMapsToValidationWithSuggestions(t *testing.T) {
+	err := &jira.IssueTypeUnknownError{IssueType: "Buug", ProjectKey: "KAN", Available: []string{"Task", "Bug", "Story"}}
+	// Wrapped exactly as the mutation pipeline surfaces it, to prove the
+	// classification survives the join + %w chain.
+	wrapped := fmt.Errorf("screen schema unavailable: project or issue type not found: %w", err)
+	got := MapError(wrapped)
+
+	if got.Type != string(ErrorTypeValidation) {
+		t.Errorf("Type = %q, want validation", got.Type)
+	}
+	if got.Code != "issue_type_unknown" {
+		t.Errorf("Code = %q, want issue_type_unknown", got.Code)
+	}
+	if ExitCode(got) != 3 {
+		t.Errorf("ExitCode = %d, want 3", ExitCode(got))
+	}
+	if got.Flag != "type" {
+		t.Errorf("Flag = %q, want type", got.Flag)
+	}
+	want := []string{"Task", "Bug", "Story"}
+	if len(got.Suggestions) != len(want) {
+		t.Fatalf("Suggestions = %v, want %v", got.Suggestions, want)
+	}
+	for i := range want {
+		if got.Suggestions[i] != want[i] {
+			t.Fatalf("Suggestions = %v, want %v", got.Suggestions, want)
+		}
+	}
+	if !strings.Contains(got.Message, "KAN") || !strings.Contains(got.Message, "Buug") {
+		t.Errorf("Message = %q, want it to name the bad type and project", got.Message)
+	}
+	if strings.Contains(got.Hint, "Task") {
+		t.Errorf("valid types must ride suggestions, not the static hint: %q", got.Hint)
 	}
 }
 

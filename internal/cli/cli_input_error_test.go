@@ -18,6 +18,8 @@ var allCLIInputKinds = []CLIInputKind{
 	InputRequiredFlagMissing,
 	InputArgCountInvalid,
 	InputArgValueInvalid,
+	InputIssueTypeUnknown,
+	InputSavedQueryUnknown,
 	InputCommandUnknown,
 	InputForceRequired,
 }
@@ -62,6 +64,8 @@ func TestCLIInputCodesAreStable(t *testing.T) {
 		InputRequiredFlagMissing: "required_flag_missing",
 		InputArgCountInvalid:     "arg_count_invalid",
 		InputArgValueInvalid:     "arg_value_invalid",
+		InputIssueTypeUnknown:    "issue_type_unknown",
+		InputSavedQueryUnknown:   "saved_query_unknown",
 		InputCommandUnknown:      "command_unknown",
 		InputForceRequired:       "validation_failed",
 	}

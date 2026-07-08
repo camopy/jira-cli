@@ -3,6 +3,7 @@ package search
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/matcra587/jira-cli/internal/browser"
@@ -13,6 +14,17 @@ import (
 	"github.com/matcra587/jira-cli/internal/jql"
 	"github.com/spf13/cobra"
 )
+
+// sortedQueryNames returns the saved-query names in stable alphabetical order,
+// for the "did you mean" suggestions on an unknown `search saved NAME`.
+func sortedQueryNames(queries map[string]config.Query) []string {
+	names := make([]string, 0, len(queries))
+	for name := range queries {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
 
 // NewCommand returns the `search` command group for running Jira searches.
 func NewCommand() *cobra.Command {
@@ -166,9 +178,12 @@ $ jira search saved my-open-bugs --output=json`,
 			query, ok := queries[args[0]]
 			if !ok {
 				// A bad query name is bad command-line input (validation,
-				// exit 3) — the lookup is a local file, not a Jira
-				// resource.
-				return cli.NewCLIInputError(cli.InputArgValueInvalid, fmt.Sprintf("saved query %q not found", args[0]))
+				// exit 3) — the lookup is a local file, not a Jira resource,
+				// and the valid names live in queries_path, not --help, so it
+				// gets its own code with the names offered as suggestions.
+				e := cli.NewCLIInputError(cli.InputSavedQueryUnknown, fmt.Sprintf("saved query %q not found", args[0]))
+				e.Suggestions = sortedQueryNames(queries)
+				return e
 			}
 			client, _, hasClient, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {

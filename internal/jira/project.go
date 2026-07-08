@@ -204,15 +204,33 @@ func (s *projectService) GetFieldSchemaForProfile(ctx context.Context, profile, 
 	return &schema, lastResp, nil
 }
 
+// IssueTypeUnknownError reports a --type value that matches no issue type on
+// a project's create screen. The name is resolved against the fetched
+// issuetypes list in-code, so a miss is a bad input value, NOT a Jira 404 —
+// the CLI maps this to a validation error (exit 3) and surfaces Available as
+// the envelope's "did you mean" suggestions. Do not give it a synthetic HTTP
+// status: a hand-built 404 would drag a local lookup miss into the not-found
+// bucket (see .claude/rules/output.md).
+type IssueTypeUnknownError struct {
+	IssueType  string
+	ProjectKey string
+	Available  []string // creatable issue-type names, for suggestions
+}
+
+func (e *IssueTypeUnknownError) Error() string {
+	return "issue type " + e.IssueType + " not found on the create screen for project " + e.ProjectKey
+}
+
 // resolveIssueTypeID walks the paginated createmeta issuetypes endpoint
 // and returns the id of the issue type whose name matches issueType. An
 // issueType value that already looks like a numeric id is returned
-// as-is. An unknown name is an error: calling the field-metadata
-// endpoint with a name in the id slot would 404 on real Cloud.
+// as-is. An unknown name returns *IssueTypeUnknownError carrying the
+// project's valid type names — a validation failure, not a 404.
 func (s *projectService) resolveIssueTypeID(ctx context.Context, projectKey, issueType string) (string, error) {
 	if isNumericID(issueType) {
 		return issueType, nil
 	}
+	var available []string
 	startAt := 0
 	for {
 		q := url.Values{}
@@ -231,17 +249,14 @@ func (s *projectService) resolveIssueTypeID(ctx context.Context, projectKey, iss
 			if it.Name == issueType {
 				return it.ID, nil
 			}
+			available = append(available, it.Name)
 		}
 		startAt += len(page.IssueTypes)
 		if len(page.IssueTypes) == 0 || startAt >= page.Total {
 			break
 		}
 	}
-	return "", &APIError{
-		Type:       ErrorTypeNotFound,
-		StatusCode: 404,
-		Message:    "issue type " + issueType + " not found on the create screen for project " + projectKey,
-	}
+	return "", &IssueTypeUnknownError{IssueType: issueType, ProjectKey: projectKey, Available: available}
 }
 
 // isNumericID reports whether s is a non-empty all-digit string — the

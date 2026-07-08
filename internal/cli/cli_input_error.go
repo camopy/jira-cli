@@ -26,6 +26,14 @@ const (
 	InputCommandUnknown
 	// InputArgValueInvalid is a positional argument value outside the accepted set.
 	InputArgValueInvalid
+	// InputIssueTypeUnknown is a --type value naming no issue type on the
+	// project's create screen — resolved against the fetched list in-code, so a
+	// miss is validation, not a Jira 404.
+	InputIssueTypeUnknown
+	// InputSavedQueryUnknown is a `search saved NAME` value that matches no
+	// saved query in the queries directory — a local-file lookup, so its hint
+	// points at that directory rather than at --help.
+	InputSavedQueryUnknown
 	// InputForceRequired is a destructive or state-wiping run refused
 	// because headless / agent / --no-input context needs explicit --force
 	// consent.
@@ -81,6 +89,10 @@ func (e *CLIInputError) Code() errtax.Code {
 		return errtax.CodeArgCountInvalid
 	case InputArgValueInvalid:
 		return errtax.CodeArgValueInvalid
+	case InputIssueTypeUnknown:
+		return errtax.CodeIssueTypeUnknown
+	case InputSavedQueryUnknown:
+		return errtax.CodeSavedQueryUnknown
 	case InputCommandUnknown:
 		return errtax.CodeCommandUnknown
 	case InputForceRequired:

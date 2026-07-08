@@ -90,7 +90,8 @@ Both payload shapes are accepted interchangeably on create and edit: the flat co
 **Recover**
 | Symptom | Cause | Next |
 |---|---|---|
-| `screen schema unavailable: project or issue type not found: pipeline: project/issue-type schema not found`, or a live 404 like `issue type Story not found on the create screen for project <PROJECT_KEY>` | The issue type may exist globally but is not on that project's create screen, or Jira createmeta could not resolve the pairing | Pick a type from Jira's create dialog for that project. `cache issuetypes` cannot prove this pairing yet |
+| `issue type Story not found on the create screen for project <PROJECT_KEY>` (exit 3, `code=issue_type_unknown`) | The `--type` value names no issue type on that project's create screen — resolved against the fetched list in-code, so it's validation, not a 404 | Pick one of the valid type names in `errors[0].suggestions` (or from Jira's create dialog) |
+| `screen schema unavailable: project or issue type not found` (exit 3) | The project key is unknown, or there is no live connection to resolve the create screen | Check the project with `cache projects`; confirm connectivity |
 | `Operation value must be an Atlassian Document` on `environment` | Passed `environment` as a plain string; on most modern Jira instances it is an ADF field | Re-run with a full ADF doc value for `environment` (same shape as `description`) |
 | `Operation value must be an Atlassian Document` on `description` | Plain string for `description` | Wrap in `{type: "doc", version: 1, content: [...]}` or use `description_markdown` |
 | `unknown_adf_node` / `unknown_adf_mark` warning | Best-effort run kept an unsupported node | Re-run with `--adf-strict` to surface and fix, or accept the degradation |

@@ -51,6 +51,13 @@ func newEditScreenSchemaFetcher(ctx context.Context, lookup editSchemaLookup, pr
 // the pipeline's refresh-once + strict/best-effort policy governs the
 // outcome. The underlying error is preserved for the message.
 func classifySchemaError(err error) error {
+	// A bad --type value is a definite user error — fatal in every mode like a
+	// 404, but it stays a validation failure (exit 3), reclassified downstream
+	// by MapError. It carries no HTTP status, so match it explicitly.
+	var typeErr *jira.IssueTypeUnknownError
+	if errors.As(err, &typeErr) {
+		return errors.Join(pipeline.ErrSchemaNotFound, err)
+	}
 	var apiErr *jira.APIError
 	if errors.As(err, &apiErr) && (apiErr.StatusCode == 404 || apiErr.Type == jira.ErrorTypeNotFound) {
 		return errors.Join(pipeline.ErrSchemaNotFound, err)

@@ -85,11 +85,32 @@ func MapError(err error) Error {
 	if out, ok := mapContextError(err); ok {
 		return out
 	}
+	if out, ok := mapIssueTypeUnknown(err); ok {
+		return out
+	}
 	var coded errtax.Coded
 	if errors.As(err, &coded) {
 		return assemble(err, coded)
 	}
 	return classifyUntyped(err)
+}
+
+// mapIssueTypeUnknown adapts a *jira.IssueTypeUnknownError — a --type value
+// naming no issue type on the project's create screen. The name is resolved
+// against the fetched list in-code, so a miss is a bad input value (validation,
+// exit 3), never a Jira 404. The valid names ride the envelope's suggestions
+// field. It runs before the generic Coded/untyped paths so the flag and
+// suggestions are attached instead of collapsing to the bare validation
+// fallback.
+func mapIssueTypeUnknown(err error) (Error, bool) {
+	var typeErr *jira.IssueTypeUnknownError
+	if !errors.As(err, &typeErr) {
+		return Error{}, false
+	}
+	ie := NewCLIInputError(InputIssueTypeUnknown, typeErr.Error())
+	ie.Flag = "type"
+	ie.Suggestions = typeErr.Available
+	return assemble(err, ie), true
 }
 
 // mapPromptError adapts a *PromptError. Every interactive-prompt

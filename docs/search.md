@@ -177,8 +177,9 @@ The JSON `data` carries the saved-query metadata — `source: "saved"`, `key`,
 ```
 
 A name with no matching file is rejected as invalid input: exit 3 with a
-`validation` error (`code=arg_value_invalid`) — the lookup is a local file,
-not a Jira resource.
+`validation` error (`code=saved_query_unknown`), and the valid saved-query
+names are returned in `errors[0].suggestions`. The lookup is a local file, not
+a Jira resource.
 
 ### File format
 

@@ -89,6 +89,22 @@ func TestHintsAvoidEnvelopeJargon(t *testing.T) {
 	}
 }
 
+// TestSharedNotFoundHintIsResourceNeutral guards the catch-all 404 hint.
+// CodeJiraNotFound is the code EVERY Jira 404 maps to — bad board ids,
+// attachment ids, account ids, comment/link ids, project keys, not just issue
+// keys. Naming one resource in its hint misleads on all the others, so the
+// shared hint must stay resource-neutral; per-resource specifics belong in the
+// error message.
+func TestSharedNotFoundHintIsResourceNeutral(t *testing.T) {
+	t.Parallel()
+	hint := strings.ToLower(errtax.HintFor(errtax.CodeJiraNotFound))
+	for _, tok := range []string{"issue key", "board", "attachment", "comment", "link", "project key", "account id"} {
+		if strings.Contains(hint, tok) {
+			t.Errorf("CodeJiraNotFound hint names the specific resource %q but the code fires for every 404; keep it resource-neutral: %q", tok, hint)
+		}
+	}
+}
+
 func TestHintFor(t *testing.T) {
 	t.Parallel()
 	t.Run("registered code returns its hint", func(t *testing.T) {
@@ -161,8 +177,8 @@ func TestCodes(t *testing.T) {
 		t.Error("Codes() contains duplicates")
 	}
 	// The registered code count moves only when the taxonomy contract does.
-	if len(codes) != 48 {
-		t.Errorf("registry has %d codes, want 48 — update the contract and this count together", len(codes))
+	if len(codes) != 50 {
+		t.Errorf("registry has %d codes, want 50 — update the contract and this count together", len(codes))
 	}
 	// Codes() must be a fresh allocation each call: sorting or mutating one
 	// return value must not affect the next.

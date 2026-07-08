@@ -179,7 +179,7 @@ func TestCommandErrorsAreTypedNotSubstringClassified(t *testing.T) {
 		{
 			"search-saved-unknown-query",
 			[]string{"search", "saved", "no-such-query"},
-			jiraConfigWithEmptyQueries, "arg_value_invalid", 3,
+			jiraConfigWithEmptyQueries, "saved_query_unknown", 3,
 		},
 
 		// A genuinely absent Jira user (live /user/search returned zero
