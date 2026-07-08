@@ -1,3 +1,0 @@
-kind: fixed
-body: 'Sharpen error guidance: the generic Jira 404 hint no longer assumes the identifier is an issue key (it also covers boards, attachments, users, comments, and links); a --type value with no match on a project''s create screen now exits 3 (validation) with the valid issue types offered as suggestions instead of a misleading not-found; and an unknown search saved name points to the queries directory rather than --help.'
-time: 2026-07-08T10:47:22.73772981-04:00
