@@ -1,0 +1,3 @@
+kind: added
+body: Show a description and worked examples in --help for each top-level command group (issue, config, cache, auth, and the rest).
+time: 2026-07-08T13:25:36.240157771-04:00

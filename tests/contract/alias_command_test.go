@@ -56,7 +56,8 @@ func TestAliasSetListDeleteAndExpansion(t *testing.T) {
 		t.Fatalf("alias expansion seenJQL=%q output=%s", seenJQL, out)
 	}
 
-	cmd = exec.Command(buildJiraBinary(t), "--config", cfg, "alias", "delete", "mine")
+	// The test harness is non-TTY, so alias delete is headless and needs --force.
+	cmd = exec.Command(buildJiraBinary(t), "--config", cfg, "alias", "delete", "mine", "--force")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("alias delete error = %v\n%s", err, out)

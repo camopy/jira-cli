@@ -16,6 +16,18 @@ var epicIssueKeyArg = map[string]string{"clib": "dynamic-args='issuekey'"}
 // NewCommand returns the `epic` command group: list, board, add, and remove.
 func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("epic", "Work with Jira epics", "resources")
+	cmd.Long = "Organize issues under epics and inspect epic membership. `jira epic list` " +
+		"shows epics, `jira epic board` summarizes each epic's child issues by status, and " +
+		"`jira epic add` / `jira epic remove` attach and detach child issues.\n\n" +
+		"Epics are issues of the epic type; these subcommands manage the epic-child links so " +
+		"you never hand-edit the epic-link field."
+	cmd.Example = `$ jira epic list
+
+# Summarize each epic's child issues by status
+$ jira epic board
+
+# Attach issues to an epic
+$ jira epic add PROJ-123 PROJ-100`
 	cmd.AddCommand(epicListCommand())
 	cmd.AddCommand(epicBoardCommand())
 	cmd.AddCommand(epicAddCommand())

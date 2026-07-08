@@ -19,6 +19,15 @@ import (
 func NewCommand() *cobra.Command {
 	var builder jql.BuildOptions
 	cmd := cmdutil.GroupCommand("jql", "Build JQL queries", "resources")
+	cmd.Long = "Build and check JQL without leaving the terminal. `jira jql build` assembles " +
+		"a query from flags (project, status, assignee), `jira jql validate` checks a query " +
+		"string against Jira, and `jira jql reference` prints the field and operator " +
+		"cheatsheet.\n\n" +
+		"The built query is what `jira search jql` runs — compose it here, then pass it there."
+	cmd.Example = `$ jira jql build --project ENG --status "In Progress"
+
+# Validate a hand-written query
+$ jira jql validate "project = ENG AND assignee = currentUser()"`
 	build := &cobra.Command{
 		Use:   "build",
 		Short: "Build a JQL query from flags",

@@ -28,6 +28,15 @@ import (
 // view`, `boards rename`, etc.
 func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("boards", "Browse the boards visible to this profile", "resources")
+	cmd.Long = "Browse the agile boards visible to the active profile. `jira boards list` " +
+		"shows each board with its id, type, and backing project — the ids that `jira issue " +
+		"list --board` resolves against.\n\n" +
+		"Boards are cached per profile; run `jira cache refresh boards` to refetch after a " +
+		"board is created or renamed."
+	cmd.Example = `$ jira boards list
+
+# Machine-readable board ids for scripting
+$ jira boards list --output=json`
 	cmd.AddCommand(boardsListCommand())
 	return cmd
 }

@@ -12,6 +12,7 @@ import (
 	xmaps "github.com/gechr/x/maps"
 	"github.com/gechr/x/shell"
 	xslices "github.com/gechr/x/slices"
+	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/cli/startup"
 	"github.com/matcra587/jira-cli/internal/config"
@@ -22,6 +23,18 @@ import (
 // NewCommand returns the `alias` command group for managing command aliases.
 func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("alias", "Manage command aliases", "configuration")
+	cmd.Long = "Manage local command shortcuts that expand before jira dispatches. `jira " +
+		"alias set` stores a shortcut, `jira alias list` shows them, `jira alias delete` " +
+		"removes one, and `jira alias import` merges a YAML set.\n\n" +
+		"Aliases are local config and expand before command parsing, so they never contact " +
+		"Jira; a shortcut cannot shadow a built-in command."
+	cmd.Example = `# Alias "mine" to your assigned issues
+$ jira alias set mine "issue list --assignee me"
+
+$ jira alias list
+
+# Remove an alias (headless callers must pass --force)
+$ jira alias delete mine --force`
 	cmd.AddCommand(aliasDeleteCommand())
 	cmd.AddCommand(aliasImportCommand())
 	cmd.AddCommand(aliasListCommand())
@@ -107,13 +120,17 @@ $ jira alias set mybugs "issue list --assignee me --output=json"`,
 }
 
 func aliasDeleteCommand() *cobra.Command {
-	var dryRun bool
+	var dryRun, force bool
 	cmd := &cobra.Command{
 		Use:     "delete NAME",
 		Aliases: []string{"del", "rm"},
 		Short:   "Delete an alias",
 		Long: "Remove one alias from the active config file. Use it when a shortcut is " +
 			"stale or conflicts with the command you now want to run.\n\n" +
+			"Removing local state is a mutation: a live delete requires `--force` in " +
+			"headless, agent, or `--no-input` mode, matching `jira cache clear`; an " +
+			"interactive terminal proceeds without a prompt, since an alias is one line to " +
+			"re-add. `--dry-run` previews the delete without writing.\n\n" +
 			"Deleting a missing alias still returns structured output showing that " +
 			"nothing was removed.",
 		Args:              cobra.ExactArgs(1),
@@ -122,8 +139,20 @@ func aliasDeleteCommand() *cobra.Command {
 		Example: `$ jira alias delete mine
 
 # Report whether the alias existed
-$ jira alias delete mine --output=json`,
+$ jira alias delete mine --output=json
+
+# Non-interactive (agent / script) delete
+$ jira alias delete mine --force`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Deleting local state is a mutation: headless, agent, and
+			// --no-input callers must consent with --force. --dry-run never
+			// mutates, so it stays open; an interactive terminal proceeds
+			// without a prompt — the alias is trivially re-added.
+			det := cmdutil.DetectorFromContext(cmd)
+			headless := !det.IsTTY || det.Agent || cmdutil.NoInputRequested(cmd)
+			if !dryRun && !force && headless {
+				return cli.NewCLIInputError(cli.InputForceRequired, "alias delete requires --force in headless / agent / --no-input mode")
+			}
 			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
 				return err
@@ -141,6 +170,7 @@ $ jira alias delete mine --output=json`,
 		},
 	}
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Preview the deletion without writing the config file")
+	cmdutil.AddForceFlag(cmd.Flags(), &force, "Delete without the interactive-mode guard (required in headless / agent / --no-input mode)")
 	return cmd
 }
 

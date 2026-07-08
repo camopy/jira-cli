@@ -17,6 +17,15 @@ import (
 // comment commands.
 func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("user", "Look up Jira users", "resources")
+	cmd.Long = "Look up Jira users by name or email. `jira user search` returns matching " +
+		"accounts with their accountId — the value `--assignee` and `--reporter` need when " +
+		"`me` will not do.\n\n" +
+		"There is no user cache, so completion offers only `me`/`none`; this is the discovery " +
+		"path for every other account."
+	cmd.Example = `$ jira user search ada
+
+# Get an accountId for scripting an assignment
+$ jira user search ada@example.com --output=json`
 	cmd.AddCommand(searchCommand())
 	return cmd
 }

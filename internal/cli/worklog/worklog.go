@@ -247,6 +247,14 @@ func runWorklogAddMany(cmd *cobra.Command, keys []string, parallelism int, in wo
 // NewCommand returns the `worklog` command group for managing issue worklogs.
 func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("worklog", "Manage issue worklogs", "resources")
+	cmd.Long = "Log and review time against issues. `jira worklog add` records time with a " +
+		"duration and optional comment; `jira worklog list` shows the entries on an issue.\n\n" +
+		"Durations use Jira workday semantics — `workday_seconds` on the profile sets the day " +
+		"length, so `1d` is a working day, not 24 hours."
+	cmd.Example = `$ jira worklog add PROJ-123 --time-spent 2h30m
+
+# Review logged time on an issue
+$ jira worklog list PROJ-123`
 	cmd.AddCommand(worklogAddCommand())
 	cmd.AddCommand(worklogListCommand())
 	return cmd

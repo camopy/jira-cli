@@ -22,6 +22,16 @@ import (
 // NewCommand returns the `adf` command group.
 func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("adf", "Convert and lint rich text between Markdown and ADF", "agent")
+	cmd.Long = "Convert and preview Atlassian Document Format (ADF) rich text. `jira adf " +
+		"convert` translates Markdown into the ADF the write commands accept, and `jira adf " +
+		"render` shows how an ADF document displays in the terminal.\n\n" +
+		"Use it to check what a description or comment will look like before a mutation, or to " +
+		"move rich text in and out of Markdown."
+	cmd.Example = `# Convert Markdown to ADF
+$ jira adf convert --input notes.md
+
+# Preview an ADF document as it renders in the terminal
+$ jira adf render --input description.json`
 	cmd.AddCommand(convertCommand())
 	cmd.AddCommand(renderCommand())
 	return cmd

@@ -34,6 +34,20 @@ var cacheClearResources = registry.ResourceNames()
 // Reads are cheap (single file) — see `internal/cache` for the format.
 func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("cache", "Prime / inspect the local Jira metadata cache", "agent")
+	cmd.Long = "Prime and inspect the local Jira metadata cache that powers fast listing and " +
+		"shell completion. `jira cache refresh` refetches stale resources (or all with " +
+		"`--force`), `jira cache clear` removes cached files, and `jira cache boards` shows " +
+		"the cached boards.\n\n" +
+		"The cache lives under a per-profile directory and is always safe to clear — the next " +
+		"command re-primes what it needs. `--dry-run` previews any of these without touching " +
+		"Jira or disk."
+	cmd.Example = `$ jira cache refresh
+
+# Refetch everything, ignoring freshness
+$ jira cache refresh --force
+
+# Remove cached metadata for the active profile
+$ jira cache clear`
 	for _, r := range registry.Registry {
 		if r.Fetch == nil {
 			cmd.AddCommand(cacheBoardsCommand())

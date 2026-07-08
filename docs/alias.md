@@ -26,7 +26,7 @@ quote any embedded arguments so the parent shell passes them through verbatim.
 Setting a name that already exists overwrites the previous expansion without a
 prompt; there's no `--force` here, but `--dry-run` previews the change (it
 returns `data.dry_run: true` and writes nothing). `alias delete` and `alias
-import` take `--dry-run` too.
+import` take `--dry-run` too. `alias delete` also takes `--force` (see below).
 
 ```sh
 jira alias set inbox "issue list --assignee me --status 'To Do,In Progress'"
@@ -63,10 +63,14 @@ jira alias list
 
 ## delete
 
-Drop a single alias by name.
+Drop a single alias by name. Removing local state is a mutation, so — like
+`cache clear` — a live delete needs `--force` in headless, agent, or
+`--no-input` mode; an interactive terminal proceeds without a prompt. `--dry-run`
+previews the delete without writing.
 
 ```sh
-jira alias delete inbox
+jira alias delete inbox            # interactive terminal
+jira alias delete inbox --force    # agent / script / piped
 ```
 
 ```json

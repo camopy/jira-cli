@@ -26,6 +26,19 @@ import (
 // NewCommand returns the `auth` command group for managing Jira authentication.
 func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("auth", "Manage Jira authentication", "configuration")
+	cmd.Long = "Manage how jira authenticates to each profile's site. `jira auth login` " +
+		"stores an API token in the profile's secret backend, `jira auth status` and `jira " +
+		"auth whoami` report the current identity, and `jira auth migrate` moves a credential " +
+		"between the keyring and 1Password.\n\n" +
+		"Tokens never live in the config file — only in the OS keyring, 1Password, or a " +
+		"`JIRA_TOKEN_*` env var. `jira auth logout` removes a profile's stored token."
+	cmd.Example = `$ jira auth login --base-url https://example.atlassian.net --email you@example.com
+
+# Show the active identity
+$ jira auth status
+
+# Remove the stored token for a profile
+$ jira auth logout`
 	cmd.AddCommand(authLoginCommand())
 	cmd.AddCommand(authStatusCommand())
 	cmd.AddCommand(authLogoutCommand())

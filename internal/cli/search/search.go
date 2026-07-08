@@ -29,6 +29,15 @@ func sortedQueryNames(queries map[string]config.Query) []string {
 // NewCommand returns the `search` command group for running Jira searches.
 func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("search", "Run Jira searches", "resources")
+	cmd.Long = "Run Jira searches from a query or a saved file. `jira search jql` runs a JQL " +
+		"string and returns matching issues; `jira search saved` runs a `.jql` file from your " +
+		"`queries_path` by name.\n\n" +
+		"Results page transparently and honor `--output`; use `jira jql build` first if you " +
+		"want help composing the query."
+	cmd.Example = `$ jira search jql "project = ENG AND statusCategory != Done"
+
+# Run a saved query by name
+$ jira search saved my-open-bugs`
 	cmd.AddCommand(searchJQLCommand())
 	cmd.AddCommand(searchSavedCommand())
 	return cmd

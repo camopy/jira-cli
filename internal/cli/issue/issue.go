@@ -33,6 +33,20 @@ import (
 // NewCommand returns the `issue` verb and all its sub-commands.
 func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("issue", "Work with Jira issues", "resources")
+	cmd.Long = "Read, create, and manage Jira issues across their lifecycle. `jira issue " +
+		"list`, `jira issue mine`, and `jira issue view` read; `jira issue create`, `jira " +
+		"issue edit`, and `jira issue transition` change; and the comment, link, attachment, " +
+		"and watcher subcommands cover the metadata around an issue.\n\n" +
+		"Subcommands honor the active profile's defaults (project, issue type, board) and " +
+		"take `--output` for machine formats; every mutation accepts `--dry-run` to preview " +
+		"without contacting Jira."
+	cmd.Example = `$ jira issue list --assignee me
+
+# Create an issue, printing the machine envelope
+$ jira issue create --summary "Fix login" --output=json
+
+# Advance an issue through its workflow
+$ jira issue transition PROJ-12 "In Progress"`
 	// Group the subcommands so `jira issue --help` reads as a task flow rather
 	// than one flat list: what to read, what to change, and the metadata around
 	// an issue (comments, links, attachments, watchers).

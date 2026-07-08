@@ -136,6 +136,12 @@ Resolve gates through `cmdutil`, never by reading env/config ad hoc:
     best-effort; conflicting inputs resolve to the safe default.
 *   **Headless** — mutations require `--no-input` in agent/non-TTY context;
     destructive commands additionally require `--force`. Do not weaken either.
+    This covers **local-state removals**, not just Jira writes: `cache clear`
+    and `alias delete` gate the live run behind `--force` off a TTY (the
+    `DetectorFromContext` + `NoInputRequested` headless check, refusing with
+    `cli.InputForceRequired`), while upserts (`config set`/`init`/`theme`,
+    `alias set`/`import`, `cache refresh`, `auth switch`) stay open. `--dry-run`
+    is always allowed.
 *   **Retry budget** — `cmdutil.MaxRetryWaitFor`: `--max-retry-wait` (root
     persistent flag, read from root's flagset because inherited flags may not
     be merged yet) > `JIRA_MAX_RETRY_WAIT` > 30s default; always capped by the
@@ -144,7 +150,10 @@ Resolve gates through `cmdutil`, never by reading env/config ad hoc:
 ## Help text (Short / Long / Example)
 
 Help renders through clib (`cmdutil.NewHelpRenderer`); every command defines
-`Short`, `Long`, and `Example`. House style, by field:
+`Short`, `Long`, and `Example` — **group parents included**. `cmdutil.GroupCommand`
+sets only `Short`, so a parent must set `cmd.Long` / `cmd.Example` after it. The
+guardrail `TestEveryCommandHasHelpText` (internal/cli/root) walks the live tree
+and fails on any authored command missing one. House style, by field:
 
 *   **`Long` → double-quoted string**, concatenated with `+` across source
     lines at word boundaries. clib wraps at render time — do not hand-wrap

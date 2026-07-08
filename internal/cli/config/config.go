@@ -18,6 +18,18 @@ import (
 // theme.
 func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("config", "Manage configuration", "configuration")
+	cmd.Long = "Read and edit the jira configuration file. `jira config init` creates it, " +
+		"`jira config get` / `jira config set` read and write dotted keys, `jira config " +
+		"profile` lists profiles, and `jira config theme` sets the output theme.\n\n" +
+		"Config holds metadata only — never tokens (see `jira auth`). `set`, `init`, and " +
+		"`theme` take `--dry-run` to validate and preview a change without writing the file."
+	cmd.Example = `$ jira config init --base-url https://example.atlassian.net --email you@example.com
+
+# Set a default project
+$ jira config set profiles.default.default_project ENG
+
+# Read a value back
+$ jira config get profiles.default.default_project`
 	cmd.AddCommand(configInitCommand())
 	cmd.AddCommand(configProfileCommand())
 	cmd.AddCommand(configGetCommand())

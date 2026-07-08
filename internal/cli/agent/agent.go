@@ -68,6 +68,16 @@ var workflowOrder = []string{
 // with the CLI in two calls (tree + how-to).
 func NewCommand() *cobra.Command {
 	cmd := cmdutil.GroupCommand("agent", "Agent tooling: schema and guide for AI coding assistants", "agent")
+	cmd.Long = "Emit the machine-readable contract that AI coding assistants consume. `jira " +
+		"agent schema` prints the full command and envelope schema, `jira agent guide` prints " +
+		"the embedded usage guide, and `jira agent adf-matrix` / `jira agent fieldtypes` " +
+		"describe rich-text and custom-field handling.\n\n" +
+		"These are the authoritative behavior spec: an agent reads them to learn the flags, " +
+		"output shapes, and exit codes before driving the CLI."
+	cmd.Example = `$ jira agent schema
+
+# Read one guide section
+$ jira agent guide core_contract`
 	cmd.AddCommand(agentSchemaCommand())
 	cmd.AddCommand(agentGuideCommand())
 	cmd.AddCommand(agentADFMatrixCommand())
