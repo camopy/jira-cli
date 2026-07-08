@@ -1,6 +1,12 @@
 # Release Notes
 
 
+## [0.10.2](https://github.com/matcra587/jira-cli/releases/tag/v0.10.2) — 2026-07-08
+
+### Added
+
+- Extend shell tab-completion: the issue transition status argument (--transition) now completes status names, and search saved completes saved-query names.
+
 ## [0.10.1](https://github.com/matcra587/jira-cli/releases/tag/v0.10.1) — 2026-07-08
 
 ### Fixed
