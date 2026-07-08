@@ -74,7 +74,7 @@ func TestCreateNativeBodySurvivesScreenValidation(t *testing.T) {
 func TestTransitionNativeBodyDryRun(t *testing.T) {
 	payload := writeJSON(t, "transition.json",
 		`{"transition":{"id":"31"},"fields":{"resolution":{"name":"Done"}},"update":{"labels":[{"add":"native"}]}}`)
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"issue", "transition", "PROJ-1", "--dry-run", "--no-input",
 		"--json-input", payload, "--output=json").Output()
 	if err != nil {
@@ -137,7 +137,7 @@ func TestTransitionNativeBodySubmitsUpdateBlock(t *testing.T) {
 // agreement is not.
 func TestTransitionTargetConflictRejected(t *testing.T) {
 	payload := writeJSON(t, "transition.json", `{"transition":{"id":"31"}}`)
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"issue", "transition", "PROJ-1", "Done", "--dry-run", "--no-input",
 		"--json-input", payload, "--output=json").CombinedOutput()
 	if err == nil {
@@ -150,7 +150,7 @@ func TestTransitionTargetConflictRejected(t *testing.T) {
 
 func TestTransitionTargetAgreementAccepted(t *testing.T) {
 	payload := writeJSON(t, "transition.json", `{"transition":{"name":"done"}}`)
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"issue", "transition", "PROJ-1", "Done", "--dry-run", "--no-input",
 		"--json-input", payload, "--output=json").Output()
 	if err != nil {
@@ -164,7 +164,7 @@ func TestTransitionTargetAgreementAccepted(t *testing.T) {
 func TestTransitionUpdateCommentConflictsWithCommentKey(t *testing.T) {
 	payload := writeJSON(t, "transition.json",
 		`{"transition":{"id":"31"},"comment":{"type":"doc","version":1,"content":[]},"update":{"comment":[{"add":{"body":{"type":"doc","version":1,"content":[]}}}]}}`)
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"issue", "transition", "PROJ-1", "--dry-run", "--no-input",
 		"--json-input", payload, "--output=json").CombinedOutput()
 	if err == nil {
@@ -181,7 +181,7 @@ func TestTransitionUpdateCommentConflictsWithCommentKey(t *testing.T) {
 func TestEditNativeUpdateBlockDryRun(t *testing.T) {
 	payload := writeJSON(t, "edit.json",
 		`{"fields":{"labels":["kept"]},"update":{"labels":[{"add":"native"}]}}`)
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"issue", "edit", "PROJ-1", "--dry-run", "--no-input",
 		"--json-input", payload, "--output=json").Output()
 	if err != nil {
@@ -207,7 +207,7 @@ func TestEditNativeUpdateBlockDryRun(t *testing.T) {
 
 func TestEditUpdateOnlyPayloadSkipsEditor(t *testing.T) {
 	payload := writeJSON(t, "edit.json", `{"update":{"labels":[{"add":"native"}]}}`)
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"issue", "edit", "PROJ-1", "--dry-run", "--no-input",
 		"--json-input", payload, "--output=json").Output()
 	if err != nil {
@@ -253,7 +253,7 @@ func TestEditNativeUpdateBlockSubmits(t *testing.T) {
 func TestLinkJSONInputDryRun(t *testing.T) {
 	payload := writeJSON(t, "link.json",
 		`{"type":{"name":"Blocks"},"inwardIssue":{"key":"PROJ-1"},"outwardIssue":{"key":"PROJ-2"},"comment":{"body":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"text","text":"linked"}]}]}}}`)
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"issue", "link", "--dry-run", "--no-input",
 		"--json-input", payload, "--output=json").Output()
 	if err != nil {
@@ -307,7 +307,7 @@ func TestLinkJSONInputSubmitsNativeBody(t *testing.T) {
 
 func TestLinkJSONInputConflictsWithToFlag(t *testing.T) {
 	payload := writeJSON(t, "link.json", `{"type":{"name":"Blocks"},"inwardIssue":{"key":"PROJ-1"},"outwardIssue":{"key":"PROJ-2"}}`)
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"issue", "link", "PROJ-1", "--to", "PROJ-2", "--type", "Blocks",
 		"--json-input", payload, "--output=json").CombinedOutput()
 	if err == nil {
@@ -320,7 +320,7 @@ func TestLinkJSONInputConflictsWithToFlag(t *testing.T) {
 
 func TestLinkJSONInputInwardConflictRejected(t *testing.T) {
 	payload := writeJSON(t, "link.json", `{"type":{"name":"Blocks"},"inwardIssue":{"key":"PROJ-1"},"outwardIssue":{"key":"PROJ-2"}}`)
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"issue", "link", "PROJ-9", "--dry-run", "--no-input",
 		"--json-input", payload, "--output=json").CombinedOutput()
 	if err == nil {
@@ -333,7 +333,7 @@ func TestLinkJSONInputInwardConflictRejected(t *testing.T) {
 
 func TestLinkJSONInputRejectsUnknownKeys(t *testing.T) {
 	payload := writeJSON(t, "link.json", `{"type":{"name":"Blocks"},"inwardIssue":{"key":"PROJ-1"},"outwardIssue":{"key":"PROJ-2"},"commnet":{}}`)
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"issue", "link", "--dry-run", "--no-input",
 		"--json-input", payload, "--output=json").CombinedOutput()
 	if err == nil {

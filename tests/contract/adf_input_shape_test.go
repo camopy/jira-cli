@@ -20,7 +20,7 @@ func TestADFInputShape_WorklogAcceptsCanonicalComment(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"--output=json", "worklog", "add", "PROJ-1",
 		"--json-input", path, "--dry-run", "--no-input")
 	out, err := cmd.CombinedOutput()
@@ -53,7 +53,7 @@ func TestADFInputShape_WorklogRejectsInvalidComment(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"--output=json", "worklog", "add", "PROJ-1",
 		"--json-input", path, "--dry-run", "--no-input")
 	var env struct {
@@ -68,7 +68,7 @@ func TestADFInputShape_WorklogRejectsInvalidComment(t *testing.T) {
 // agent schema must publish the canonical ADF input shape so dry-run,
 // live submit, and the schema surface describe the same fields.
 func TestADFInputShape_AgentSchemaDescribesCanonicalShape(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=json", "agent", "schema")
+	cmd := exec.Command(buildJiraBinary(t), "--output=json", "agent", "schema")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("agent schema error = %v\n%s", err, out)

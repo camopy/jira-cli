@@ -49,7 +49,7 @@ func TestEpicBoardCallsServiceWithPerEpicChildIssueCounts(t *testing.T) {
 	defer srv.Close()
 
 	cfg := jiraConfig(t, srv.URL)
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "epic", "board", "--output=json")
+	cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "epic", "board", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("epic board error = %v\n%s", err, out)

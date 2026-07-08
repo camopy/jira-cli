@@ -14,7 +14,7 @@ import (
 func TestUnknownForeignFlagProducesOrientationAndSuggestions(t *testing.T) {
 	// Output (not CombinedOutput): the envelope is stdout-only, and `go
 	// run` appends its own exit-status line to stderr on failure.
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"issue", "view", "PROJ-1", "--plain", "--output=json").Output()
 	if err == nil {
 		t.Fatalf("--plain must be rejected:\n%s", out)
@@ -53,7 +53,7 @@ func TestUnknownForeignFlagProducesOrientationAndSuggestions(t *testing.T) {
 // added to either side without the other fails here or in the unit tests.
 func TestForeignFlagTableNamesNoRealFlags(t *testing.T) {
 	foreign := []string{"plain", "gjq", "template", "no-headers", "no-truncate", "paginate"}
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"agent", "schema", "--output=compact").Output()
 	if err != nil {
 		t.Fatalf("agent schema: %v\n%s", err, out)

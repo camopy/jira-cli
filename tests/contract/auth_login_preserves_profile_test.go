@@ -39,7 +39,7 @@ func TestAuthLoginNoInputPreservesExistingProfileFields(t *testing.T) {
 
 	// Act: update only the base_url (e.g. after a URL migration).
 	cmd := exec.Command(
-		"go", "run", "../../cmd/jira",
+		buildJiraBinary(t),
 		"--config", path,
 		"auth", "login",
 		"--no-input",

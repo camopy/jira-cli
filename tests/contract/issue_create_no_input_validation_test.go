@@ -24,7 +24,7 @@ func writeTempJSON(t *testing.T, body string) string {
 // fail at the input boundary, not silently flow through with empty values.
 func TestIssueCreateNoInputDryRunRejectsMissingRequiredFields(t *testing.T) {
 	cfg := emptyBaseURLConfig(t)
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"--config", cfg, "issue", "create", "--no-input", "--dry-run", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -45,7 +45,7 @@ func TestIssueCreateNoInputDryRunRejectsMissingRequiredFields(t *testing.T) {
 func TestIssueCreateNoInputDryRunAcceptsCompleteJSONInput(t *testing.T) {
 	path := writeTempJSON(t, `{"project_key":"PROJ","issue_type":"Task","summary":"Hello"}`)
 	cfg := emptyBaseURLConfig(t)
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg,
+	cmd := exec.Command(buildJiraBinary(t), "--config", cfg,
 		"issue", "create", "--no-input", "--dry-run", "--json-input", path, "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {

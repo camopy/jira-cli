@@ -69,7 +69,7 @@ func TestDefaultBoardPerProfileSemantics(t *testing.T) {
 	primedBoardsCache(t, cacheRoot, cfg, "work", srv.srv.URL, twoBoardCacheJSON)
 
 	// Run 1: default profile (no --profile flag)
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "list", "--output=json")
+	cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "issue", "list", "--output=json")
 	cmd.Env = append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -88,7 +88,7 @@ func TestDefaultBoardPerProfileSemantics(t *testing.T) {
 
 	// Run 2: --profile work
 	cmd = exec.Command(
-		"go", "run", "../../cmd/jira", "--config", cfg,
+		buildJiraBinary(t), "--config", cfg,
 		"--profile", "work",
 		"issue", "list", "--output=json",
 	)

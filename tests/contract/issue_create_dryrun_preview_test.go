@@ -14,7 +14,7 @@ func TestIssueCreateDryRunOmitsIssueAndPopulatesPreview(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"project_key":"PROJ","issue_type":"Task","summary":"Hello world"}`), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "create",
+	cmd := exec.Command(buildJiraBinary(t), "issue", "create",
 		"--dry-run", "--no-input", "--json-input", path, "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -42,7 +42,7 @@ func TestIssueCreateDryRunOmitsIssueAndPopulatesPreview(t *testing.T) {
 }
 
 func TestIssueCreateConvenienceFlagsPopulatePreview(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "create",
+	cmd := exec.Command(buildJiraBinary(t), "issue", "create",
 		"--summary", "Example issue summary",
 		"--project", "PROJ",
 		"--type", "Task",
@@ -89,7 +89,7 @@ func TestIssueCreateProjectFlagConflictsWithWireProjectInJSON(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"summary":"S","issue_type":"Task","project":{"key":"FROMJSON"}}`), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "create",
+	cmd := exec.Command(buildJiraBinary(t), "issue", "create",
 		"--project", "FROMFLAG", "--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
 	out, err := cmd.CombinedOutput()
@@ -107,7 +107,7 @@ func TestIssueCreateDryRunConvertsMarkdownDescriptionToADF(t *testing.T) {
 	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "create",
+	cmd := exec.Command(buildJiraBinary(t), "issue", "create",
 		"--dry-run", "--no-input", "--json-input", path, "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {

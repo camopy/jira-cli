@@ -14,11 +14,11 @@ import (
 
 func TestDestructiveIssueCommandsRequireForceOrDryRun(t *testing.T) {
 	for _, sub := range []string{"clone", "move", "delete"} {
-		cmd := exec.Command("go", "run", "../../cmd/jira", "issue", sub, "PROJ-1")
+		cmd := exec.Command(buildJiraBinary(t), "issue", sub, "PROJ-1")
 		if err := cmd.Run(); err == nil {
 			t.Fatalf("issue %s without --force/--dry-run succeeded", sub)
 		}
-		cmd = exec.Command("go", "run", "../../cmd/jira", "issue", sub, "PROJ-1", "--dry-run", "--no-input")
+		cmd = exec.Command(buildJiraBinary(t), "issue", sub, "PROJ-1", "--dry-run", "--no-input")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("issue %s dry-run error = %v\n%s", sub, err, out)
 		}
@@ -27,7 +27,7 @@ func TestDestructiveIssueCommandsRequireForceOrDryRun(t *testing.T) {
 
 func TestDeleteSubtasksFlagOnlyAppearsOnDelete(t *testing.T) {
 	for _, sub := range []string{"clone", "move"} {
-		cmd := exec.Command("go", "run", "../../cmd/jira", "issue", sub, "--help")
+		cmd := exec.Command(buildJiraBinary(t), "issue", sub, "--help")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("issue %s --help error = %v\n%s", sub, err, out)
@@ -37,7 +37,7 @@ func TestDeleteSubtasksFlagOnlyAppearsOnDelete(t *testing.T) {
 		}
 	}
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "delete", "--help")
+	cmd := exec.Command(buildJiraBinary(t), "issue", "delete", "--help")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue delete --help error = %v\n%s", err, out)
@@ -85,7 +85,7 @@ func TestIssueMoveCanonicalProjectIssueTypePayloadBypassesSourceEditScreen(t *te
 	if err := os.WriteFile(input, []byte(`{"fields":{"project":{"key":"JCT"},"issuetype":{"name":"Task"}}}`), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", jiraConfig(t, srv.URL), "issue", "move", "PROJ-1", "--force", "--no-input", "--json-input", input, "--output=json")
+	cmd := exec.Command(buildJiraBinary(t), "--config", jiraConfig(t, srv.URL), "issue", "move", "PROJ-1", "--force", "--no-input", "--json-input", input, "--output=json")
 	cmd.Env = append(os.Environ(), "JIRA_TOKEN_DEFAULT=test-token")
 	out, err := cmd.CombinedOutput()
 	if err != nil {

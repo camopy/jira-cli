@@ -20,7 +20,7 @@ func createPreviewFields(t *testing.T, cfg, payload string) map[string]any {
 	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	out, err := exec.Command("go", "run", "../../cmd/jira", "--config", cfg,
+	out, err := exec.Command(buildJiraBinary(t), "--config", cfg,
 		"issue", "create", "--no-input", "--dry-run",
 		"--json-input", path, "--output=json").Output()
 	if err != nil {
@@ -59,7 +59,7 @@ func editPreviewFields(t *testing.T, payload string) map[string]any {
 	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"issue", "edit", "PROJ-1", "--no-input", "--dry-run",
 		"--json-input", path, "--output=json").Output()
 	if err != nil {

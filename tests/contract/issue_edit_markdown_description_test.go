@@ -173,7 +173,7 @@ func TestIssueEditDescriptionMarkdownJSONKeySubmitsValidatedADF(t *testing.T) {
 // TestIssueEditDescriptionMarkdownDryRunPreview proves --dry-run previews the
 // encoded ADF under data.fields.description and never contacts Jira.
 func TestIssueEditDescriptionMarkdownDryRunPreview(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "edit", "PROJ-1", "--dry-run", "--no-input",
 		"--markdown", "# Title\n\nText body", "--output=json")
 	out, err := cmd.CombinedOutput()
@@ -206,7 +206,7 @@ func TestIssueEditDescriptionMarkdownDryRunPreview(t *testing.T) {
 // routes the same converted ADF into every per-key result, with no aliasing
 // across the fan-out.
 func TestIssueEditDescriptionMarkdownMultiKeyDryRun(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "edit", "PROJ-1", "PROJ-2", "--dry-run", "--no-input",
 		"--markdown", "# Shared\n\nBody para", "--output=json")
 	out, err := cmd.CombinedOutput()
@@ -248,7 +248,7 @@ func TestIssueEditMarkdownExcludesJSONInput(t *testing.T) {
 	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "edit", "PROJ-1", "--dry-run", "--no-input",
 		"--json-input", path,
 		"--markdown", "# From flag\n\nflag body", "--output=json")
@@ -304,7 +304,7 @@ func TestIssueEditDescriptionMarkdownStrictAbortsBeforeWire(t *testing.T) {
 // proceeds through a lossy conversion, encoding what it can and surfacing a
 // markdown_lossy_conversion warning instead of aborting.
 func TestIssueEditDescriptionMarkdownBestEffortWarns(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"--adf-best-effort", "issue", "edit", "PROJ-1", "--dry-run", "--no-input",
 		"--markdown", "intro\n\n<div>\nraw\n</div>\n", "--output=json")
 	out, err := cmd.CombinedOutput()

@@ -8,7 +8,7 @@ import (
 
 func TestIssueListJSONSchemaAndCompact(t *testing.T) {
 	cfg := emptyBaseURLConfig(t)
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "list", "--output=json")
+	cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "issue", "list", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue list --json error = %v\n%s", err, out)
@@ -21,7 +21,7 @@ func TestIssueListJSONSchemaAndCompact(t *testing.T) {
 		t.Fatalf("issue list envelope missing fields: %+v", env)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "list", "--output=compact")
+	cmd = exec.Command(buildJiraBinary(t), "--config", cfg, "issue", "list", "--output=compact")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue list --compact error = %v\n%s", err, out)

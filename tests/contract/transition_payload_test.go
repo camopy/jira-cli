@@ -22,7 +22,7 @@ func TestTransitionDryRunPreviewsCommentAndFields(t *testing.T) {
 	if err := os.WriteFile(payload, []byte(`{"fields":{"resolution":{"name":"Done"}},"comment":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"text","text":"closing note"}]}]}}`), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"issue", "transition", "PROJ-1", "Done", "--dry-run", "--no-input",
 		"--json-input", payload, "--output=json").Output()
 	if err != nil {
@@ -51,7 +51,7 @@ func TestTransitionDryRunPreviewsCommentAndFields(t *testing.T) {
 }
 
 func TestTransitionMarkdownCommentConverts(t *testing.T) {
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"issue", "transition", "PROJ-1", "Done", "--dry-run", "--no-input",
 		"--markdown", "released in **v1.2.3**", "--output=json").Output()
 	if err != nil {
@@ -63,7 +63,7 @@ func TestTransitionMarkdownCommentConverts(t *testing.T) {
 }
 
 func TestTransitionPayloadRequiresTarget(t *testing.T) {
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"issue", "transition", "PROJ-1", "--dry-run", "--no-input",
 		"--markdown", "note without a status", "--output=json").CombinedOutput()
 	if err == nil {
@@ -79,7 +79,7 @@ func TestTransitionMarkdownExcludesJSONInput(t *testing.T) {
 	if err := os.WriteFile(payload, []byte(`{"fields":{}}`), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"issue", "transition", "PROJ-1", "Done", "--dry-run", "--no-input",
 		"--markdown", "x", "--json-input", payload, "--output=json").CombinedOutput()
 	if err == nil {

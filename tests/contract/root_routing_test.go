@@ -8,7 +8,7 @@ import (
 )
 
 func TestRootNonTTYJSONDiscovery(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=json")
+	cmd := exec.Command(buildJiraBinary(t), "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("root command error = %v\n%s", err, out)
@@ -26,7 +26,7 @@ func TestRootNonTTYJSONDiscovery(t *testing.T) {
 }
 
 func TestRootInteractiveFlagRequiresTTY(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "-i")
+	cmd := exec.Command(buildJiraBinary(t), "-i")
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("jira -i succeeded without a TTY:\n%s", out)

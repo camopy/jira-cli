@@ -34,6 +34,10 @@ Contract tests execute the real binary (`runJira(t, args...)`-style helpers
 returning stdout/stderr/exit code) against `httptest.NewServer` Jira stubs,
 then unmarshal stdout as the envelope:
 
+*   Route command execution through the compile-once `buildJiraBinary` helper
+    (`tests/contract/binary_test.go`), never `go run`/`go build` the CLI per
+    test — a per-test compile dominates suite wall time. Enforced by
+    `tests/guardrails/contract_compiles_once_test.go`.
 *   Assert envelope fields **structurally** — unmarshal into a target and
     check fields; never string-match whole JSON blobs.
 *   Error paths assert the error envelope arrives on **stdout** with the
@@ -58,8 +62,9 @@ then unmarshal stdout as the envelope:
 Invariants get guardrail tests (`tests/guardrails/`): every declared
 completion predictor is handled, error code/hint tables stay in lockstep,
 the embedded guide's sections match its declared order (backed by the
-`init()` panic). When a rule in `.claude/rules/` becomes mechanically
-checkable, add a guardrail for it.
+`init()` panic), the contract suite never `go run`/`go build`s the CLI
+per test (`contract_compiles_once_test.go`). When a rule in `.claude/rules/`
+becomes mechanically checkable, add a guardrail for it.
 
 ## Seams and hygiene
 

@@ -29,7 +29,7 @@ type configThemeSchemaFlag struct {
 }
 
 func TestConfigThemePublishesClibMetadata(t *testing.T) {
-	out, err := exec.Command("go", "run", "../../cmd/jira", "--output=json", "agent", "schema").CombinedOutput()
+	out, err := exec.Command(buildJiraBinary(t), "--output=json", "agent", "schema").CombinedOutput()
 	if err != nil {
 		t.Fatalf("agent schema error = %v\n%s", err, out)
 	}

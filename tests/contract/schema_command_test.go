@@ -8,7 +8,7 @@ import (
 )
 
 func TestSchemaCommandIncludesCommandTree(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=json", "agent", "schema")
+	cmd := exec.Command(buildJiraBinary(t), "--output=json", "agent", "schema")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("schema error = %v\n%s", err, out)
@@ -25,7 +25,7 @@ func TestSchemaCommandIncludesCommandTree(t *testing.T) {
 // The schema payload must carry the contract revision so an agent can
 // detect a breaking change before reusing saved recipes.
 func TestSchemaCommandReportsContractVersion(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=json", "agent", "schema")
+	cmd := exec.Command(buildJiraBinary(t), "--output=json", "agent", "schema")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("schema error = %v\n%s", err, out)
@@ -45,7 +45,7 @@ func TestSchemaCommandReportsContractVersion(t *testing.T) {
 }
 
 func TestSchemaCommandIncludesDetailedFlagSignatures(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=json", "agent", "schema")
+	cmd := exec.Command(buildJiraBinary(t), "--output=json", "agent", "schema")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("schema error = %v\n%s", err, out)

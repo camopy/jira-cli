@@ -13,7 +13,7 @@ import (
 
 func TestIssueEditNoInputJSONInputDryRunShowsPreviewPayload(t *testing.T) {
 	input := issueEditPayloadFile(t)
-	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "edit", "PROJ-1", "--dry-run", "--no-input", "--json-input", input, "--output=json")
+	cmd := exec.Command(buildJiraBinary(t), "issue", "edit", "PROJ-1", "--dry-run", "--no-input", "--json-input", input, "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue edit dry-run json-input error = %v\n%s", err, out)
@@ -73,7 +73,7 @@ func TestIssueEditNoInputJSONInputCallsJiraUpdateWithFieldsAndADF(t *testing.T) 
 
 	cfg := jiraConfig(t, srv.URL)
 	input := issueEditPayloadFile(t)
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "edit", "PROJ-1", "--no-input", "--json-input", input, "--output=json")
+	cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "issue", "edit", "PROJ-1", "--no-input", "--json-input", input, "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue edit json-input error = %v\n%s", err, out)
@@ -104,7 +104,7 @@ func TestIssueEditFlatJSONInputTreatedAsFields(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "edit", "PROJ-1", "--dry-run", "--no-input", "--json-input", input, "--output=json")
+	cmd := exec.Command(buildJiraBinary(t), "issue", "edit", "PROJ-1", "--dry-run", "--no-input", "--json-input", input, "--output=json")
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("flat edit payload must be accepted as the field set, got %v\n%s", err, out)
@@ -125,7 +125,7 @@ func TestIssueEditFlatJSONInputTreatedAsFields(t *testing.T) {
 }
 
 func TestIssueEditNoFieldInputKeepsDistinctMissingInputMessage(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "edit", "PROJ-1", "--dry-run", "--no-input", "--output=json")
+	cmd := exec.Command(buildJiraBinary(t), "issue", "edit", "PROJ-1", "--dry-run", "--no-input", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("issue edit accepted empty no-input edit:\n%s", out)

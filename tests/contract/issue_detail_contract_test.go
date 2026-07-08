@@ -40,8 +40,8 @@ func assertIssueDetailUsesSingleSearchRequest(t *testing.T, commandArgs []string
 	}))
 	defer srv.Close()
 
-	args := append([]string{"run", "../../cmd/jira", "--config", jiraConfig(t, srv.URL), "--output=json"}, commandArgs...)
-	cmd := exec.Command("go", args...)
+	args := append([]string{"--config", jiraConfig(t, srv.URL), "--output=json"}, commandArgs...)
+	cmd := exec.Command(buildJiraBinary(t), args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("%s error = %v\n%s", strings.Join(commandArgs, " "), err, out)

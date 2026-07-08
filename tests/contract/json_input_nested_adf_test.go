@@ -23,7 +23,7 @@ func TestJSONInputNestedADF_IssueEditRejectsUnknownNode(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "edit", "JCT-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
@@ -53,7 +53,7 @@ func TestJSONInputNestedADF_IssueEditRejectsMissingAttr(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "edit", "JCT-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
@@ -79,7 +79,7 @@ func TestJSONInputNestedADF_IssueEditAcceptsValid(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "edit", "JCT-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
@@ -107,7 +107,7 @@ func TestJSONInputNestedADF_CommentRejectsMissingAttr(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "comment", "JCT-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")

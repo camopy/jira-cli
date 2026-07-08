@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -36,8 +37,8 @@ func TestReadOnlyModeBlocksMutationsAtHTTPLayer(t *testing.T) {
 		{"worklog add", []string{"worklog", "add", "PROJ-1", "--time-spent", "30m", "--no-input", "--output=json"}},
 		{"epic add", []string{"epic", "add", "PROJ-1", "EPIC-1", "--no-input", "--output=json"}},
 	} {
-		args := append([]string{"run", "../../cmd/jira", "--config", cfg}, tc.args...)
-		cmd := exec.Command("go", args...)
+		args := append([]string{"--config", cfg}, tc.args...)
+		cmd := exec.Command(buildJiraBinary(t), args...)
 		cmd.Env = append(os.Environ(), "JIRA_READ_ONLY=1")
 		out, err := cmd.CombinedOutput()
 		if err == nil {
@@ -47,8 +48,9 @@ func TestReadOnlyModeBlocksMutationsAtHTTPLayer(t *testing.T) {
 		if !strings.Contains(strings.ToLower(got), "read-only") {
 			t.Fatalf("%s did not mention read-only in error:\n%s", tc.name, out)
 		}
-		if !strings.Contains(got, "exit status 3") {
-			t.Fatalf("%s did not exit with validation code 3:\n%s", tc.name, out)
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) || exitErr.ExitCode() != 3 {
+			t.Fatalf("%s did not exit with validation code 3: err=%v\n%s", tc.name, err, out)
 		}
 	}
 }
@@ -68,8 +70,8 @@ func TestReadOnlyModeAllowsReadsAndDryRuns(t *testing.T) {
 			"--json-input", writeIssueCreatePayload(t), "--output=json",
 		}},
 	} {
-		args := append([]string{"run", "../../cmd/jira", "--config", cfg}, tc.args...)
-		cmd := exec.Command("go", args...)
+		args := append([]string{"--config", cfg}, tc.args...)
+		cmd := exec.Command(buildJiraBinary(t), args...)
 		cmd.Env = append(os.Environ(), "JIRA_READ_ONLY=1", "JIRA_TOKEN_DEFAULT=test-token")
 		out, err := cmd.CombinedOutput()
 		if err != nil {

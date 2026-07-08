@@ -18,7 +18,7 @@ func TestMarkdownFileReadsBodyFromFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte("## Update\n\nrolled out to **staging**\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "comment", "add", "PROJ-1", "--dry-run", "--no-input",
 		"--markdown-file", path, "--output=json")
 	out, err := cmd.Output()
@@ -45,7 +45,7 @@ func TestMarkdownFileReadsBodyFromFile(t *testing.T) {
 }
 
 func TestMarkdownFileDashReadsStdin(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"worklog", "add", "PROJ-1", "--time-spent", "30m", "--dry-run", "--no-input",
 		"--markdown-file", "-", "--output=json")
 	cmd.Stdin = strings.NewReader("piped **worklog** note\n")
@@ -75,11 +75,10 @@ func TestMarkdownFileExcludesOtherBodySources(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			args := append([]string{
-				"run", "../../cmd/jira",
 				"issue", "edit", "PROJ-1", "--dry-run", "--no-input",
 				"--markdown-file", path, "--output=json",
 			}, extra...)
-			out, err := exec.Command("go", args...).CombinedOutput()
+			out, err := exec.Command(buildJiraBinary(t), args...).CombinedOutput()
 			if err == nil {
 				t.Fatalf("--markdown-file %s must be rejected:\n%s", name, out)
 			}
@@ -110,7 +109,7 @@ default_issue_type = "Task"
 	if err := os.WriteFile(payload, []byte(`{"summary":"x","issuetype":{"name":"Task"},"project":{"key":"PROJ"}}`), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg,
+	cmd := exec.Command(buildJiraBinary(t), "--config", cfg,
 		"issue", "create", "--no-input", "--dry-run",
 		"--json-input", payload, "--output=json")
 	out, err := cmd.Output()

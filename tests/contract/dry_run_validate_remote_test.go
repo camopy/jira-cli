@@ -42,7 +42,7 @@ func createMetaServer(t *testing.T) *httptest.Server {
 }
 
 func TestValidateRemoteRequiresDryRun(t *testing.T) {
-	out, err := exec.Command("go", "run", "../../cmd/jira",
+	out, err := exec.Command(buildJiraBinary(t),
 		"issue", "create", "--no-input", "--validate-remote",
 		"--summary", "x", "--project", "PROJ", "--type", "Task",
 		"--output=json").CombinedOutput()

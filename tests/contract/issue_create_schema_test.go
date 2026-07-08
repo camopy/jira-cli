@@ -10,7 +10,7 @@ func TestIssueCreateJSONSchemaDryRunNoInput(t *testing.T) {
 	// Spec: --no-input requires complete input. Supply project_key + issue_type
 	// + summary explicitly via --json-input so the headless contract holds.
 	path := writeTempJSON(t, `{"project_key":"PROJ","issue_type":"Task","summary":"hello"}`)
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "create", "--dry-run", "--no-input", "--json-input", path, "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {

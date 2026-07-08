@@ -32,8 +32,8 @@ secret_backend = "keyring"
 
 func mineJQL(t *testing.T, cfg string, extraArgs ...string) string {
 	t.Helper()
-	args := append([]string{"run", "../../cmd/jira", "--config", cfg, "issue", "mine", "--as-jql", "--output=json"}, extraArgs...)
-	out, err := exec.Command("go", args...).CombinedOutput()
+	args := append([]string{"--config", cfg, "issue", "mine", "--as-jql", "--output=json"}, extraArgs...)
+	out, err := exec.Command(buildJiraBinary(t), args...).CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue mine --as-jql error = %v\n%s", err, out)
 	}

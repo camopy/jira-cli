@@ -56,7 +56,7 @@ func TestDefaultBoardWinsExclusivelyOverDefaultProject(t *testing.T) {
 	)
 	primedBoardsCache(t, cacheRoot, cfg, "default", srv.srv.URL, twoBoardCacheJSON)
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "list", "--output=json")
+	cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "issue", "list", "--output=json")
 	cmd.Env = append(os.Environ(), "XDG_CACHE_HOME="+cacheRoot)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

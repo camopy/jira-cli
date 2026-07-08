@@ -14,7 +14,7 @@ func TestConfigInitProfileGetSetMetadataOnly(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 
 	cmd := exec.Command(
-		"go", "run", "../../cmd/jira",
+		buildJiraBinary(t),
 		"--config", path,
 		"--output=json",
 		"config", "init",
@@ -36,7 +36,7 @@ func TestConfigInitProfileGetSetMetadataOnly(t *testing.T) {
 		t.Fatalf("config file contains secret material:\n%s", content)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "config", "get", "default_profile")
+	cmd = exec.Command(buildJiraBinary(t), "--config", path, "--output=json", "config", "get", "default_profile")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("config get error = %v\n%s", err, out)
@@ -59,7 +59,7 @@ func TestConfigInitProfileGetSetMetadataOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "config", "set", "theme.path", "/tmp/theme.toml", "--dry-run")
+	cmd = exec.Command(buildJiraBinary(t), "--config", path, "--output=json", "config", "set", "theme.path", "/tmp/theme.toml", "--dry-run")
 	if out, err = cmd.CombinedOutput(); err != nil {
 		t.Fatalf("config set --dry-run error = %v\n%s", err, out)
 	}
@@ -74,12 +74,12 @@ func TestConfigInitProfileGetSetMetadataOnly(t *testing.T) {
 		t.Fatalf("config set --dry-run wrote the file\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "config", "set", "theme.path", "/tmp/theme.toml")
+	cmd = exec.Command(buildJiraBinary(t), "--config", path, "--output=json", "config", "set", "theme.path", "/tmp/theme.toml")
 	if out, err = cmd.CombinedOutput(); err != nil {
 		t.Fatalf("config set error = %v\n%s", err, out)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "config", "profile")
+	cmd = exec.Command(buildJiraBinary(t), "--config", path, "--output=json", "config", "profile")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("config --help error = %v\n%s", err, out)
@@ -148,7 +148,7 @@ workday_seconds = 28800
 
 func TestConfigThemeRejectsUnknownPreset(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "config", "theme", "--name", "no-such-theme")
+	cmd := exec.Command(buildJiraBinary(t), "--config", path, "--output=json", "config", "theme", "--name", "no-such-theme")
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("config theme accepted unknown preset:\n%s", out)

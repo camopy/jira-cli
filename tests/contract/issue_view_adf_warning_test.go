@@ -48,7 +48,7 @@ func TestIssueViewJSONDoesNotEmitFalseADFWarning(t *testing.T) {
 	defer srv.Close()
 	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", jiraConfig(t, srv.URL),
+	cmd := exec.Command(buildJiraBinary(t), "--config", jiraConfig(t, srv.URL),
 		"--output=json", "issue", "view", "PROJ-1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -96,7 +96,7 @@ func TestIssueViewHumanEmitsRealADFWarning(t *testing.T) {
 	defer srv.Close()
 	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", jiraConfig(t, srv.URL),
+	cmd := exec.Command(buildJiraBinary(t), "--config", jiraConfig(t, srv.URL),
 		"--output=human", "issue", "view", "PROJ-1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {

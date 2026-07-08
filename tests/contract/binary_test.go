@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 )
@@ -35,7 +36,12 @@ func jiraBinary() (string, error) {
 			jiraBinaryErr = err
 			return
 		}
+		// go build appends .exe on Windows when -o names an extensionless
+		// path, so the exec path must carry it too or lookups fail there.
 		bin := filepath.Join(dir, "jira")
+		if runtime.GOOS == "windows" {
+			bin += ".exe"
+		}
 		build := exec.Command("go", "build", "-o", bin, "../../cmd/jira")
 		if out, buildErr := build.CombinedOutput(); buildErr != nil {
 			jiraBinaryErr = &buildError{output: string(out), err: buildErr}

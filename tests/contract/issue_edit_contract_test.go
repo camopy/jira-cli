@@ -10,7 +10,7 @@ func TestIssueEditDryRunEditNoInputContract(t *testing.T) {
 	// --no-input must include at least one field to mutate; --summary is
 	// the cheapest field to exercise the dry-run envelope path. An empty
 	// edit under --no-input is now a validation error.
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "edit", "PROJ-1", "--dry-run", "--no-input",
 		"--summary", "renamed", "--output=json")
 	out, err := cmd.CombinedOutput()

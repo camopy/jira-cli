@@ -29,7 +29,7 @@ func TestAliasSetListDeleteAndExpansion(t *testing.T) {
 	defer srv.Close()
 
 	cfg := jiraConfig(t, srv.URL)
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "alias", "set", "mine", "--", "issue", "list", "--jql", "project = PROJ")
+	cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "alias", "set", "mine", "--", "issue", "list", "--jql", "project = PROJ")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("alias set error = %v\n%s", err, out)
@@ -38,7 +38,7 @@ func TestAliasSetListDeleteAndExpansion(t *testing.T) {
 		t.Fatalf("alias set output = %s", out)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "alias", "list", "--output=json")
+	cmd = exec.Command(buildJiraBinary(t), "--config", cfg, "alias", "list", "--output=json")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("alias list error = %v\n%s", err, out)
@@ -47,7 +47,7 @@ func TestAliasSetListDeleteAndExpansion(t *testing.T) {
 		t.Fatalf("alias list output = %s", out)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "mine", "--output=json")
+	cmd = exec.Command(buildJiraBinary(t), "--config", cfg, "mine", "--output=json")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("alias expansion error = %v\n%s", err, out)
@@ -56,7 +56,7 @@ func TestAliasSetListDeleteAndExpansion(t *testing.T) {
 		t.Fatalf("alias expansion seenJQL=%q output=%s", seenJQL, out)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "alias", "delete", "mine")
+	cmd = exec.Command(buildJiraBinary(t), "--config", cfg, "alias", "delete", "mine")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("alias delete error = %v\n%s", err, out)
@@ -88,7 +88,7 @@ func TestAliasSetSingleStringExpansionStoresVerbatimAndDispatches(t *testing.T) 
 	cfg := jiraConfig(t, srv.URL)
 	expansion := " issue list --assignee me "
 	cmd := exec.Command(
-		"go", "run", "../../cmd/jira",
+		buildJiraBinary(t),
 		"--config", cfg,
 		"alias", "set", "inbox-test", expansion,
 		"--output=json",
@@ -101,7 +101,7 @@ func TestAliasSetSingleStringExpansionStoresVerbatimAndDispatches(t *testing.T) 
 		t.Fatalf("alias set wrapped single-string expansion:\n%s", out)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "inbox-test", "--output=json")
+	cmd = exec.Command(buildJiraBinary(t), "--config", cfg, "inbox-test", "--output=json")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("alias dispatch error = %v\n%s", err, out)
@@ -119,7 +119,7 @@ func TestAliasImportFromYAML(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "alias", "import", path, "--output=json")
+	cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "alias", "import", path, "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("alias import error = %v\n%s", err, out)
@@ -128,7 +128,7 @@ func TestAliasImportFromYAML(t *testing.T) {
 		t.Fatalf("alias import output = %s", out)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "alias", "list", "--output=json")
+	cmd = exec.Command(buildJiraBinary(t), "--config", cfg, "alias", "list", "--output=json")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("alias list error = %v\n%s", err, out)
@@ -154,7 +154,7 @@ secret_backend = "keyring"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "alias", "set", "mine", "issue", "list")
+	cmd := exec.Command(buildJiraBinary(t), "--config", path, "--output=json", "alias", "set", "mine", "issue", "list")
 	cmd.Env = append(
 		os.Environ(),
 		"JIRA_PROFILE_WORK_DEFAULT_ISSUE_TYPE=OverlayType",

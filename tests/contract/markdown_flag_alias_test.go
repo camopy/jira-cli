@@ -29,7 +29,7 @@ func TestMarkdownAliasesStillWork(t *testing.T) {
 	}
 	for name, args := range tests {
 		t.Run(name, func(t *testing.T) {
-			cmd := exec.Command("go", append([]string{"run", "../../cmd/jira"}, args...)...)
+			cmd := exec.Command(buildJiraBinary(t), args...)
 			out, err := cmd.Output()
 			if err != nil {
 				t.Fatalf("deprecated alias must keep working, got error = %v\n%s", err, out)
@@ -55,7 +55,7 @@ func TestMarkdownAliasesHiddenFromHelpAndSchema(t *testing.T) {
 	}
 	for name, args := range helps {
 		t.Run(name+" help", func(t *testing.T) {
-			out, err := exec.Command("go", append([]string{"run", "../../cmd/jira"}, args...)...).CombinedOutput()
+			out, err := exec.Command(buildJiraBinary(t), args...).CombinedOutput()
 			if err != nil {
 				t.Fatalf("--help error = %v\n%s", err, out)
 			}
@@ -71,7 +71,7 @@ func TestMarkdownAliasesHiddenFromHelpAndSchema(t *testing.T) {
 		})
 	}
 
-	out, err := exec.Command("go", "run", "../../cmd/jira", "agent", "schema", "--output=compact").Output()
+	out, err := exec.Command(buildJiraBinary(t), "agent", "schema", "--output=compact").Output()
 	if err != nil {
 		t.Fatalf("agent schema error = %v", err)
 	}

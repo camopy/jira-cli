@@ -9,7 +9,7 @@ import (
 )
 
 func TestWorklogAddSchemaDryRunAndInvalidDuration(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "worklog", "add", "PROJ-1", "--time-spent", "45m", "--dry-run", "--no-input")
+	cmd := exec.Command(buildJiraBinary(t), "worklog", "add", "PROJ-1", "--time-spent", "45m", "--dry-run", "--no-input")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("worklog add error = %v\n%s", err, out)
@@ -19,7 +19,7 @@ func TestWorklogAddSchemaDryRunAndInvalidDuration(t *testing.T) {
 		t.Fatalf("worklog add output is not JSON: %v\n%s", err, out)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "worklog", "add", "PROJ-1", "--time-spent", "3w", "--no-input")
+	cmd = exec.Command(buildJiraBinary(t), "worklog", "add", "PROJ-1", "--time-spent", "3w", "--no-input")
 	if err := cmd.Run(); err == nil {
 		t.Fatal("invalid duration succeeded")
 	}
@@ -41,7 +41,7 @@ workday_seconds = 36000
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "worklog", "add", "PROJ-1", "--time-spent", "1d", "--dry-run", "--no-input")
+	cmd := exec.Command(buildJiraBinary(t), "--config", path, "--output=json", "worklog", "add", "PROJ-1", "--time-spent", "1d", "--dry-run", "--no-input")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("worklog add error = %v\n%s", err, out)
@@ -66,7 +66,7 @@ func TestWorklogAddAcceptsStartedAndJSONInput(t *testing.T) {
 	if err := os.WriteFile(input, []byte(`{"time_spent":"45m","started":"2026-05-03T09:30:00.000-0400","comment_markdown":"paired on fix"}`), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--output=json", "worklog", "add", "PROJ-1", "--dry-run", "--no-input", "--json-input", input)
+	cmd := exec.Command(buildJiraBinary(t), "--output=json", "worklog", "add", "PROJ-1", "--dry-run", "--no-input", "--json-input", input)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("worklog add json-input error = %v\n%s", err, out)

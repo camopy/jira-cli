@@ -47,7 +47,7 @@ func TestIssueTransitionResolvesStatusNameToID(t *testing.T) {
 	srv := transitionNameServer(t, &postedID)
 	cfg := jiraConfig(t, srv.URL)
 
-	out, err := exec.Command("go", "run", "../../cmd/jira", "--config", cfg,
+	out, err := exec.Command(buildJiraBinary(t), "--config", cfg,
 		"issue", "transition", "PROJ-1", "In Progress", "--output=json").CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue transition error = %v\n%s", err, out)
@@ -74,7 +74,7 @@ func TestIssueTransitionUnknownStatusNameErrorsWithAvailable(t *testing.T) {
 	srv := transitionNameServer(t, &postedID)
 	cfg := jiraConfig(t, srv.URL)
 
-	out, err := exec.Command("go", "run", "../../cmd/jira", "--config", cfg,
+	out, err := exec.Command(buildJiraBinary(t), "--config", cfg,
 		"issue", "transition", "PROJ-1", "Nope", "--output=json").CombinedOutput()
 	if err == nil {
 		t.Fatalf("expected non-zero exit for unknown status:\n%s", out)

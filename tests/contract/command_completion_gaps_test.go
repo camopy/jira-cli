@@ -57,7 +57,7 @@ func TestCommandsUseConfiguredJiraServices(t *testing.T) {
 		{[]string{"search", "jql", "project = PROJ", "--output=json"}, "key", "PROJ-2"},
 		{[]string{"worklog", "list", "PROJ-1", "--output=json"}, "timeSpentSeconds", 60},
 	} {
-		cmd := exec.Command("go", append([]string{"run", "../../cmd/jira", "--config", cfg}, tc.args...)...)
+		cmd := exec.Command(buildJiraBinary(t), append([]string{"--config", cfg}, tc.args...)...)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("jira %v error = %v\n%s", tc.args, err, out)
@@ -74,7 +74,7 @@ func TestCommandsUseConfiguredJiraServices(t *testing.T) {
 }
 
 func TestIssueCommentCommandConvertsMarkdownToADF(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "issue", "comment", "PROJ-1", "--markdown", "hello **world**", "--dry-run", "--no-input", "--output=json")
+	cmd := exec.Command(buildJiraBinary(t), "issue", "comment", "PROJ-1", "--markdown", "hello **world**", "--dry-run", "--no-input", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue comment error = %v\n%s", err, out)
@@ -126,7 +126,7 @@ func TestJSONErrorsUseStdoutEnvelopeAndExitCodes(t *testing.T) {
 }
 
 func TestSchemaIncludesFlagsAndOutputSchemas(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira", "agent", "schema")
+	cmd := exec.Command(buildJiraBinary(t), "agent", "schema")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("schema error = %v\n%s", err, out)

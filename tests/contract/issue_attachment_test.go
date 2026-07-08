@@ -55,7 +55,7 @@ func TestAttachmentListEnvelopeShape(t *testing.T) {
 	cfg := jiraConfig(t, srv.URL)
 	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json",
+	cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "--output=json",
 		"issue", "attachment", "list", "PROJ-1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -147,7 +147,7 @@ func TestAttachmentAddMultipartContract(t *testing.T) {
 	cfg := jiraConfig(t, srv.URL)
 	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json",
+	cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "--output=json",
 		"issue", "attachment", "add", "PROJ-1", "--file", tmp)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -261,7 +261,7 @@ func TestAttachmentDeleteForceGateAndWireContract(t *testing.T) {
 
 		cfg := jiraConfig(t, srv.URL)
 		t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
-		cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json", "--no-input",
+		cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "--output=json", "--no-input",
 			"issue", "attachment", "delete", "PROJ-1", "10042", "--force")
 		out, err := cmd.CombinedOutput()
 		if err != nil {

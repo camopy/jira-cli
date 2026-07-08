@@ -14,7 +14,7 @@ func TestAuthCommandsAreWired(t *testing.T) {
 		{"auth", "refresh"},
 		{"auth", "token"},
 	} {
-		cmd := exec.Command("go", append([]string{"run", "../../cmd/jira"}, args...)...)
+		cmd := exec.Command(buildJiraBinary(t), args...)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("%v error = %v\n%s", args, err, out)
@@ -25,7 +25,7 @@ func TestAuthCommandsAreWired(t *testing.T) {
 	}
 
 	cfg := jiraConfigWithProfile(t, "status-missing", "https://status-missing.invalid")
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json", "auth", "status")
+	cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "--output=json", "auth", "status")
 	cmd.Env = append(os.Environ(), "JIRA_TOKEN_STATUS_MISSING=")
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -39,7 +39,7 @@ func TestAuthCommandsAreWired(t *testing.T) {
 func TestAuthLoginSwitchAndLogoutMetadataOnly(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	cmd := exec.Command(
-		"go", "run", "../../cmd/jira",
+		buildJiraBinary(t),
 		"--config", path,
 		"auth", "login",
 		"--no-input",
@@ -69,7 +69,7 @@ func TestAuthLoginSwitchAndLogoutMetadataOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "auth", "switch", "work", "--dry-run")
+	cmd = exec.Command(buildJiraBinary(t), "--config", path, "--output=json", "auth", "switch", "work", "--dry-run")
 	if out, err = cmd.CombinedOutput(); err != nil {
 		t.Fatalf("auth switch --dry-run error = %v\n%s", err, out)
 	}
@@ -84,7 +84,7 @@ func TestAuthLoginSwitchAndLogoutMetadataOnly(t *testing.T) {
 		t.Fatalf("auth switch --dry-run wrote the config file")
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "auth", "switch", "work")
+	cmd = exec.Command(buildJiraBinary(t), "--config", path, "--output=json", "auth", "switch", "work")
 	if out, err = cmd.CombinedOutput(); err != nil {
 		t.Fatalf("auth switch error = %v\n%s", err, out)
 	}
@@ -102,7 +102,7 @@ func TestAuthLoginSwitchAndLogoutMetadataOnly(t *testing.T) {
 	}
 	// --dry-run names the credential a live logout would remove without
 	// opening the backend (no fake `op` needed on PATH for this call).
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "auth", "logout", "work", "--dry-run")
+	cmd = exec.Command(buildJiraBinary(t), "--config", path, "--output=json", "auth", "logout", "work", "--dry-run")
 	if out, err = cmd.CombinedOutput(); err != nil {
 		t.Fatalf("auth logout --dry-run error = %v\n%s", err, out)
 	}
@@ -112,13 +112,13 @@ func TestAuthLoginSwitchAndLogoutMetadataOnly(t *testing.T) {
 
 	// Headless live logout without --force must refuse: revoking a stored
 	// credential is destructive (recovery = re-entering the token).
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "auth", "logout", "work")
+	cmd = exec.Command(buildJiraBinary(t), "--config", path, "--output=json", "auth", "logout", "work")
 	out, err = cmd.CombinedOutput()
 	if err == nil || !strings.Contains(string(out), "--force") {
 		t.Fatalf("headless auth logout without --force: err=%v out=%s", err, out)
 	}
 
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "auth", "logout", "work", "--force")
+	cmd = exec.Command(buildJiraBinary(t), "--config", path, "--output=json", "auth", "logout", "work", "--force")
 	cmd.Env = append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	if out, err = cmd.CombinedOutput(); err != nil {
 		t.Fatalf("auth logout error = %v\n%s", err, out)
@@ -131,7 +131,7 @@ func TestAuthLoginSwitchAndLogoutMetadataOnly(t *testing.T) {
 func TestAuthLoginCanCollectMetadataWithoutPrompts(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	cmd := exec.Command(
-		"go", "run", "../../cmd/jira",
+		buildJiraBinary(t),
 		"--config", path,
 		"auth", "login",
 		"--no-input",
@@ -170,7 +170,7 @@ func TestAuthLoginNoInputAcceptsMetadataJSON(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", path, "auth", "login", "--no-input", "--json-input", input)
+	cmd := exec.Command(buildJiraBinary(t), "--config", path, "auth", "login", "--no-input", "--json-input", input)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("auth login json-input error = %v\n%s", err, out)
@@ -207,7 +207,7 @@ secret_backend = "keyring"
 `), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", path, "--output=json", "auth", "refresh")
+	cmd := exec.Command(buildJiraBinary(t), "--config", path, "--output=json", "auth", "refresh")
 	cmd.Env = append(os.Environ(), "JIRA_DEFAULT_PROFILE=play")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -233,7 +233,7 @@ workday_seconds = 28800
 `), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", path, "auth", "refresh")
+	cmd := exec.Command(buildJiraBinary(t), "--config", path, "auth", "refresh")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("auth refresh error = %v\n%s", err, out)

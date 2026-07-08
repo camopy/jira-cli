@@ -27,7 +27,7 @@ func TestI4WrongShapeADFRejectedByComment(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "comment", "JCT-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
@@ -68,7 +68,7 @@ func TestI4UnknownNodeStrictModeRejectedByComment(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "comment", "JCT-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
@@ -105,7 +105,7 @@ func TestI4UnknownNodeBestEffortWarnsNotErrors(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "comment", "JCT-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json",
@@ -155,7 +155,7 @@ func TestI4IllegalMarkOnBlockStrictModeErrors(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "comment", "JCT-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
@@ -186,7 +186,7 @@ func TestI4UnknownMarkRejectedByStrictMode(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "comment", "JCT-1",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
@@ -232,7 +232,7 @@ func TestI4CreatePathRejectsUnknownAdfNode(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "create",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
@@ -264,7 +264,7 @@ func TestI4CreatePathRejectsWrongShapeAdf(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "create",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
@@ -310,7 +310,7 @@ func TestI4CreatePathBestEffortPreservesUnknownNode(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "create",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json",

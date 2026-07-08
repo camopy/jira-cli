@@ -20,7 +20,7 @@ func TestADFConvertNormalizesWikiMarkup(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"adf", "convert", "--input", path, "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -79,7 +79,7 @@ func TestADFConvertLeavesCommonMarkAlone(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"adf", "convert", "--input", path, "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {

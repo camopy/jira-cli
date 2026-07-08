@@ -20,7 +20,7 @@ func TestMarkdownStrictAbort_CreateRejectsLossyHTML(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "create",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json")
@@ -46,7 +46,7 @@ func TestMarkdownStrictAbort_CreateBestEffortWarns(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "create",
 		"--json-input", path,
 		"--dry-run", "--no-input", "--output=json", "--adf-best-effort")
@@ -74,7 +74,7 @@ func TestMarkdownStrictAbort_CreateBestEffortWarns(t *testing.T) {
 // decoration drops (a non-lossy downgrade, like an image degrading to its
 // alt-text link) while the text and code mark land verbatim.
 func TestMarkdownStrictAcceptsDecorativeMarkDrop(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../cmd/jira",
+	cmd := exec.Command(buildJiraBinary(t),
 		"issue", "comment", "add", "PROJ-1", "--dry-run", "--no-input",
 		"--markdown", "see **`helm upgrade`** now", "--output=json")
 	stdout, err := cmd.Output()

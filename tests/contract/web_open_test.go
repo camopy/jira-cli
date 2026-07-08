@@ -29,8 +29,8 @@ secret_backend = "keyring"
 
 func webEnvelope(t *testing.T, cfg string, args ...string) (map[string]any, string) {
 	t.Helper()
-	full := append([]string{"run", "../../cmd/jira", "--config", cfg}, args...)
-	out, err := exec.Command("go", full...).CombinedOutput()
+	full := append([]string{"--config", cfg}, args...)
+	out, err := exec.Command(buildJiraBinary(t), full...).CombinedOutput()
 	if err != nil {
 		t.Fatalf("jira %v error = %v\n%s", args, err, out)
 	}

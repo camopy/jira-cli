@@ -35,7 +35,7 @@ func TestIssueLinkListUnifiesInwardOutwardSortedEnvelope(t *testing.T) {
 	defer srv.Close()
 
 	cfg := jiraConfig(t, srv.URL)
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "--output=json", "issue", "link", "list", "PROJ-1")
+	cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "--output=json", "issue", "link", "list", "PROJ-1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue link list error = %v\n%s", err, out)
@@ -80,7 +80,7 @@ func TestIssueLinkListUnifiesInwardOutwardSortedEnvelope(t *testing.T) {
 // data.link_id echoes the supplied id verbatim regardless of source KEY.
 func TestIssueLinkDeleteForceGateAndIDEcho(t *testing.T) {
 	cfg := jiraConfig(t, "http://127.0.0.1:1")
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "link", "delete", "PROJ-1", "9001", "--no-input", "--output=json")
+	cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "issue", "link", "delete", "PROJ-1", "9001", "--no-input", "--output=json")
 	if err := cmd.Run(); err == nil {
 		t.Fatalf("expected force-gate failure under --no-input without --force")
 	}
@@ -97,7 +97,7 @@ func TestIssueLinkDeleteForceGateAndIDEcho(t *testing.T) {
 	defer srv.Close()
 
 	cfg2 := jiraConfig(t, srv.URL)
-	cmd = exec.Command("go", "run", "../../cmd/jira", "--config", cfg2, "issue", "link", "delete", "PROJ-1", "9001", "--force", "--no-input", "--output=json")
+	cmd = exec.Command(buildJiraBinary(t), "--config", cfg2, "issue", "link", "delete", "PROJ-1", "9001", "--force", "--no-input", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue link delete error = %v\n%s", err, out)
@@ -126,7 +126,7 @@ func TestIssueLinkDeleteDryRunNoCall(t *testing.T) {
 	defer srv.Close()
 
 	cfg := jiraConfig(t, srv.URL)
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "link", "delete", "PROJ-1", "9001", "--dry-run", "--no-input", "--force", "--output=json")
+	cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "issue", "link", "delete", "PROJ-1", "9001", "--dry-run", "--no-input", "--force", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue link delete --dry-run error = %v\n%s", err, out)
@@ -214,7 +214,7 @@ func TestIssueLinkCreateBackCompat(t *testing.T) {
 	defer srv.Close()
 
 	cfg := jiraConfig(t, srv.URL)
-	cmd := exec.Command("go", "run", "../../cmd/jira", "--config", cfg, "issue", "link", "PROJ-1", "--to", "PROJ-2", "--type", "Blocks", "--output=json")
+	cmd := exec.Command(buildJiraBinary(t), "--config", cfg, "issue", "link", "PROJ-1", "--to", "PROJ-2", "--type", "Blocks", "--output=json")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("issue link create back-compat: %v\n%s", err, out)
