@@ -107,8 +107,9 @@ func issueViewCommand() *cobra.Command {
 	var parallelism int
 	var web bool
 	cmd := &cobra.Command{
-		Use:   "view KEY...",
-		Short: "View issue details",
+		Use:         "view KEY...",
+		Annotations: issueKeyArg,
+		Short:       "View issue details",
 		Long: "Fetch one or more issues with rendered fields, names, schema, transitions, " +
 			"and operations expanded. Use it when you need the full issue context before " +
 			"editing, commenting, or transitioning.\n\n" +
@@ -166,8 +167,9 @@ func openIssueWeb(cmd *cobra.Command, key, command string) error {
 // `issue view --web`.
 func NewOpenCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "open KEY",
-		Short: "Open an issue in a browser",
+		Use:         "open KEY",
+		Annotations: issueKeyArg,
+		Short:       "Open an issue in a browser",
 		Long: "Open one Jira issue in the default browser. Use it as a short top-level " +
 			"shortcut when you already know the issue key.\n\n" +
 			"The command builds the browse URL from the active profile base URL. It does " +
@@ -1302,8 +1304,9 @@ func issueEditCommand() *cobra.Command {
 	var jsonInput, summary, assignee, markdownInput, markdownFile string
 	var parallelism int
 	cmd := &cobra.Command{
-		Use:   "edit KEY...",
-		Short: "Edit an issue",
+		Use:         "edit KEY...",
+		Annotations: issueKeyArg,
+		Short:       "Edit an issue",
 		Long: "Edit one or more Jira issues. With no field flags, a single-key edit opens " +
 			"the configured external editor on the issue description. Use `--summary`, " +
 			"`--assignee`, `--markdown`, or `--json-input` for headless and " +
@@ -1786,8 +1789,9 @@ func issueTransitionCommand() *cobra.Command {
 	var transitionID, jsonInput, markdownInput, markdownFile string
 	var parallelism int
 	returnCmd := &cobra.Command{
-		Use:   "transition KEY... [STATUS]",
-		Short: "Transition an issue to a new status",
+		Use:         "transition KEY... [STATUS]",
+		Annotations: issueKeyArg,
+		Short:       "Transition an issue to a new status",
 		Long: "Move one or more issues to a workflow status. Use it when advancing work " +
 			"through Jira from a script or terminal triage session.\n\n" +
 			"Give the target status as a trailing argument, such as `In Progress`, or pass a " +
@@ -1969,7 +1973,7 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 	}
 	cmdutil.AddDryRunFlag(returnCmd.Flags(), &dryRun, "Preview mutation without submitting")
 	cmdutil.AddBoolVar(returnCmd.Flags(), &validateRemote, "validate-remote", false, "With `--dry-run`, resolve the target against the issue's live transitions (read-only fetch)", clib.FlagExtra{Group: "Validation"})
-	cmdutil.AddStringVar(returnCmd.Flags(), &transitionID, "transition", "", "Transition id or status name (or pass the status as a positional argument)", clib.FlagExtra{Group: "Transition", Placeholder: "STATUS"})
+	cmdutil.AddStringVar(returnCmd.Flags(), &transitionID, "transition", "", "Transition id or status name (or pass the status as a positional argument)", clib.FlagExtra{Group: "Transition", Placeholder: "STATUS", Complete: "predictor=cachestatus"})
 	cmdutil.AddFileFlag(returnCmd.Flags(), &jsonInput, "json-input", "", "Read transition payload from JSON file (canonical for agents)", "Input", "FILE")
 	cmdutil.AddMarkdownFlag(returnCmd, &markdownInput, &markdownFile, "Transition comment as Markdown, posted atomically with the status change", "")
 	cmdutil.AddParallelismFlag(returnCmd, &parallelism)
@@ -2676,8 +2680,9 @@ func issueWebLinkCommand() *cobra.Command {
 	var dryRun bool
 	var parallelism int
 	cmd := &cobra.Command{
-		Use:   "weblink KEY...",
-		Short: "Attach a web link to an issue",
+		Use:         "weblink KEY...",
+		Annotations: issueKeyArg,
+		Short:       "Attach a web link to an issue",
 		Long: "Attach a Jira remote web link to one or more issues. Use it to point an " +
 			"issue at a pull request, design document, incident, or other external URL.\n\n" +
 			"`--dry-run` validates local URL syntax and previews the request without " +

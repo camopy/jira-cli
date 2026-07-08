@@ -16,13 +16,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// issueKeyArg wires dynamic-args='issuekey' so the worklog commands that take
+// an issue KEY positionally participate in key completion, matching the issue
+// subcommands. The predictor is a no-op until an issue-key cache lands, but the
+// annotation keeps the surface consistent.
+var issueKeyArg = map[string]string{"clib": "dynamic-args='issuekey'"}
+
 func worklogAddCommand() *cobra.Command {
 	var timeSpent, commentMarkdown, commentMarkdownFile, started, jsonInput string
 	var dryRun bool
 	var parallelism int
 	cmd := &cobra.Command{
-		Use:   "add KEY...",
-		Short: "Add a worklog",
+		Use:         "add KEY...",
+		Annotations: issueKeyArg,
+		Short:       "Add a worklog",
 		Long: "Add a worklog to one or more issues. Use it when recording time spent from the " +
 			"terminal, with optional Markdown or ADF comments.\n\n" +
 			"Time is parsed with the active profile's workday length for day-based values. " +
@@ -248,8 +255,9 @@ func NewCommand() *cobra.Command {
 func worklogListCommand() *cobra.Command {
 	var parallelism int
 	cmd := &cobra.Command{
-		Use:   "list KEY...",
-		Short: "List worklogs",
+		Use:         "list KEY...",
+		Annotations: issueKeyArg,
+		Short:       "List worklogs",
 		Long: "List worklogs for one or more issues. Use it to inspect time entries before " +
 			"adding more work or auditing recent activity.\n\n" +
 			"Each issue fetch is capped at the command's page size. Multiple issue keys are " +

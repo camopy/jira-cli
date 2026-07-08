@@ -1,0 +1,3 @@
+kind: added
+body: 'Extend shell tab-completion: the issue transition status argument (--transition) now completes status names, and search saved completes saved-query names.'
+time: 2026-07-08T09:05:23.585556709-04:00

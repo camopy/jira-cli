@@ -134,8 +134,9 @@ $ jira search jql "project = PROJ AND status != Done" --fields key,summary,statu
 func searchSavedCommand() *cobra.Command {
 	var opts searchOptions
 	cmd := &cobra.Command{
-		Use:   "saved NAME",
-		Short: "Run a saved JQL query",
+		Use:         "saved NAME",
+		Annotations: map[string]string{"clib": "dynamic-args='savedquery'"},
+		Short:       "Run a saved JQL query",
 		Long: "Load a named query from the configured queries file and run it against Jira. " +
 			"Use it for team or personal searches that are too long to keep in shell " +
 			"history.\n\n" +

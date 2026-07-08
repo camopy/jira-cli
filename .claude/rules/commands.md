@@ -75,8 +75,43 @@ cmdutil.AddStringVar(cmd.Flags(), &opts.Query, "query", "",
 *   A `Group` not listed in `flagGroupRank` (`cmdutil/help.go`) renders near
     the bottom as "obviously unranked" — add new groups to the rank map
     deliberately.
-*   A new dynamic predictor must be wired in `internal/cli/completion.go`;
-    a guard test asserts every declared predictor is handled.
+*   Completion predictors attach through the same flag/command metadata — see
+    Completion below.
+
+## Completion
+
+Shell completion is clib-driven. Two ways to attach it:
+
+*   **Flag value** — `clib.FlagExtra{Complete: "predictor=cacheproject"}`; a
+    repeatable/comma flag adds the modifier: `"predictor=cachefield,comma"`.
+*   **Positional args** — the command's clib annotation:
+    `Annotations: map[string]string{"clib": "dynamic-args='issuekey'"}` (a
+    positional CSV — arg 1's predictor, arg 2's, …). A shared package var is the
+    idiom where many commands repeat one (`issueKeyArg`); file-path args use
+    `"clib": "complete=path"`.
+
+`internal/cli/completion/completion.go`'s `completionEmitters` map is the single
+source of truth: keys are the predictor names, values emit the candidates.
+Dispatch and the published key set are the same map, so a declared
+`predictor=` / `dynamic-args` name with no emitter ships a silently-empty
+completion — the guard test `TestDeclaredPredictorsAreHandled` fails on that.
+Adding a predictor is one emitter func plus one map entry.
+
+*   Emitters run **outside `PersistentPreRunE`** (see Gotchas) — load config
+    yourself via `config.Load`, stay **null-safe** (emit nothing on a
+    missing/broken cache, never block the shell), and **sanitize** every
+    candidate through `cli.SanitizeCompletionField` (Jira text is untrusted).
+*   **Enum flags self-complete** from `Enum`/`EnumTerse` — never wire a predictor
+    for one. `FlagExtra.Hint` (`file`/`dir`/`user`/`host`/`url`/…) gives
+    OS-level completion — `user`/`host` mean the OS's, not Jira's.
+*   `issuekey` is an intentional no-op: issue keys aren't enumerable, so it is
+    wired for consistency but emits nothing until a keys source lands.
+*   User-identifier flags (`--assignee`, `--reporter`, `--user`) complete only
+    the `me`/`none` enum values today. Completing arbitrary Jira users needs a
+    users cache resource that does not exist yet, so it is deferred — `jira user
+    search` is the discovery path meanwhile.
+*   clib is pinned in `go.mod`; `dynamic-args` / `predictor=` / `FlagExtra` are
+    stable across versions, but bumping clib is a deliberate change ([go.md](go.md)).
 
 ## Gates
 

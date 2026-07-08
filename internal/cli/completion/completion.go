@@ -5,6 +5,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"sort"
 
 	"github.com/gechr/clib/complete"
 	xslices "github.com/gechr/x/slices"
@@ -34,6 +35,7 @@ var completionEmitters = map[string]predictorEmitter{
 	"configkey":     func(g startup.Globals, _ []string) { emitConfigKeys(g) },
 	"configvalue":   func(_ startup.Globals, args []string) { emitConfigValues(args) },
 	"alias":         func(g startup.Globals, _ []string) { emitAliases(g) },
+	"savedquery":    func(g startup.Globals, _ []string) { emitSavedQueries(g) },
 	"cacheresource": func(_ startup.Globals, _ []string) { emitCacheResources() },
 	"cachefield":    func(g startup.Globals, _ []string) { emitCachedFields(completionCacheKey(g)) },
 	"cacheproject":  func(g startup.Globals, _ []string) { emitCachedProjects(completionCacheKey(g)) },
@@ -112,6 +114,36 @@ func emitAliases(globals startup.Globals) {
 	}
 	for name := range cfg.Aliases {
 		_, _ = fmt.Fprintln(os.Stdout, name)
+	}
+}
+
+// emitSavedQueries emits one candidate per saved JQL query name for the
+// `search saved NAME` positional. The name is the value; its description
+// (falling back to the JQL when there is no description) rides along as the
+// completion hint. Names are sorted for a stable order and sanitized, and the
+// emitter is null-safe so a missing queries directory never blocks the shell.
+func emitSavedQueries(globals startup.Globals) {
+	cfg, err := config.Load(config.WithPath(globals.ConfigPath))
+	if err != nil {
+		return
+	}
+	queries, err := config.LoadQueries(cfg.QueriesPath)
+	if err != nil {
+		return
+	}
+	names := make([]string, 0, len(queries))
+	for name := range queries {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		q := queries[name]
+		desc := q.Description
+		if desc == "" {
+			desc = q.JQL
+		}
+		_, _ = fmt.Fprintf(os.Stdout, "%s\t%s\n",
+			cli.SanitizeCompletionField(name), cli.SanitizeCompletionField(desc))
 	}
 }
 
