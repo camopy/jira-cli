@@ -3,7 +3,7 @@ module github.com/matcra587/jira-cli
 go 1.26.5
 
 require (
-	charm.land/bubbles/v2 v2.1.0
+	charm.land/bubbles/v2 v2.1.1
 	charm.land/bubbletea/v2 v2.0.8
 	charm.land/glamour/v2 v2.0.1
 	charm.land/huh/v2 v2.0.3
@@ -13,11 +13,11 @@ require (
 	github.com/agnivade/levenshtein v1.2.1
 	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/charmbracelet/x/exp/teatest/v2 v2.0.0-20260608090822-c3ad58c6c9e5
-	github.com/gechr/clib v0.5.9
+	github.com/gechr/clib v0.6.6
 	github.com/gechr/clive v0.4.2
-	github.com/gechr/clog v0.12.6
-	github.com/gechr/primer v0.1.1
-	github.com/gechr/x v0.2.15
+	github.com/gechr/clog v0.13.1
+	github.com/gechr/primer v0.1.2
+	github.com/gechr/x v0.2.18
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/google/uuid v1.6.0
 	github.com/knadh/koanf/parsers/toml v0.1.0

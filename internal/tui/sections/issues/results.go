@@ -17,7 +17,6 @@ import (
 	"github.com/gechr/primer/scrollbar"
 	xmaps "github.com/gechr/x/maps"
 	"github.com/gechr/x/ptr"
-	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/browser"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -76,8 +75,7 @@ func (b bulkResult) summary() string {
 	if len(b.failed) == 0 {
 		return fmt.Sprintf("%d %s", len(b.succeeded), b.verb)
 	}
-	keys := xmaps.KeysSlice(b.failed)
-	xslices.SortNatural(keys)
+	keys := xmaps.KeysNatural(b.failed)
 	return fmt.Sprintf("%d %s · failed: %s", len(b.succeeded), b.verb, strings.Join(keys, ", "))
 }
 

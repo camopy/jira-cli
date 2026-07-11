@@ -9,7 +9,6 @@ import (
 	"github.com/gechr/clog"
 	termansi "github.com/gechr/x/ansi"
 	xmaps "github.com/gechr/x/maps"
-	xslices "github.com/gechr/x/slices"
 )
 
 // WriteAliasListPlain renders the `alias.list` envelope data — the config's
@@ -35,8 +34,7 @@ func WriteAliasListPlain(w io.Writer, command string, data any, opts ...PlainOpt
 		return nil
 	}
 
-	names := xmaps.KeysSlice(aliases)
-	xslices.SortNatural(names)
+	names := xmaps.KeysNatural(aliases)
 	nameCol := 0
 	for _, name := range names {
 		if width := termansi.StringWidth(name); width > nameCol {
