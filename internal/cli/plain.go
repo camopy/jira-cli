@@ -224,7 +224,7 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 	case "release.notes":
 		return writeReleaseNotesPlain(w, data, cfg)
 	default:
-		return writeGenericPlain(logger, cfg, messageForCommand(command), data)
+		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
 	}
 }
 
@@ -348,13 +348,46 @@ var completionMessageCommands = map[string]bool{
 	"schema":           true,
 }
 
-func messageForCommand(command string) string {
+func messageForCommand(command string, data any) string {
 	if !completionMessageCommands[command] {
 		return ""
 	}
 	// The completion line is user-facing, so it is Sentence-cased; the verb
-	// registry stays lower case for the structured debug lifecycle.
+	// registry stays lower case for the structured debug lifecycle. A
+	// dry-run preview takes the conditional form — past tense would claim a
+	// mutation that never left the machine.
+	if dataDryRun(data) {
+		return SentenceCase(VerbFor(command).Conditionalf())
+	}
 	return SentenceCase(VerbFor(command).Pastf())
+}
+
+// dataDryRun reports whether the rendered payload is a dry-run preview: a
+// top-level dry_run=true, or — for the shared multi-key envelope — one on
+// a per-key result's data. Dry-run is all-or-nothing for an invocation, so
+// the first entry that carries the field speaks for the batch.
+func dataDryRun(data any) bool {
+	// mapFromAny is the same conversion boundary keyedResultRows uses: the
+	// production multi-key envelope arrives as a typed struct, and a bare
+	// map assertion would miss it, leaving the batch header past-tense
+	// above conditional children.
+	m := mapFromAny(data)
+	if m == nil {
+		return false
+	}
+	if v, ok := m["dry_run"].(bool); ok {
+		return v
+	}
+	for _, result := range keyedResultRows(m) {
+		child, ok := result["data"].(map[string]any)
+		if !ok {
+			continue
+		}
+		if v, ok := child["dry_run"].(bool); ok {
+			return v
+		}
+	}
+	return false
 }
 
 type plainField struct {
@@ -458,7 +491,7 @@ func writePlainLine(fields *[]plainField, key string, value any) {
 }
 
 func writeIssueListPlain(logger *clog.Logger, data any, cfg plainConfig) error {
-	msg := messageForCommand("issue.list")
+	msg := messageForCommand("issue.list", data)
 	m, ok := data.(map[string]any)
 	if !ok {
 		return writeGenericPlain(logger, cfg, msg, data)
@@ -1393,7 +1426,7 @@ func normalizeMapList(v any) []map[string]any {
 // block: identity, credential, and live permission grid. Replaces the
 // generic key=value dump that mashed everything onto one line.
 func writeAuthStatusPlain(logger *clog.Logger, data any, cfg plainConfig) error {
-	authMsg := messageForCommand("auth.status")
+	authMsg := messageForCommand("auth.status", data)
 	m, ok := data.(map[string]any)
 	if !ok {
 		return writeGenericPlain(logger, cfg, authMsg, data)

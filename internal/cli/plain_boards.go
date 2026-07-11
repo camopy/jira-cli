@@ -34,7 +34,7 @@ func WriteBoardListPlain(w io.Writer, command string, data any, opts ...PlainOpt
 
 	m, ok := data.(map[string]any)
 	if !ok {
-		return writeGenericPlain(logger, cfg, messageForCommand(command), data)
+		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
 	}
 	rows := normalizeMapList(m["boards"])
 	style := authPlainStyle{tty: cfg.tty, theme: cfg.theme}

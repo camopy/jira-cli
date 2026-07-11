@@ -25,7 +25,7 @@ func WriteAliasListPlain(w io.Writer, command string, data any, opts ...PlainOpt
 
 	aliases, ok := data.(map[string]string)
 	if !ok {
-		return writeGenericPlain(logger, cfg, messageForCommand(command), data)
+		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
 	}
 	style := authPlainStyle{tty: cfg.tty, theme: cfg.theme}
 

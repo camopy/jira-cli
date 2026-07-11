@@ -1926,7 +1926,11 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 					}
 					service := cmdutil.ServicesForClient(client).Issue()
 					var id string
-					if err := cmdutil.Spin(cmd, "issue.transition", func(ctx context.Context) error {
+					// The op is issue.transitions (the read-only fetch this
+					// preview performs), not issue.transition: a dry-run
+					// spinner saying "Transitioning issue" would overstate a
+					// validation that transitions nothing.
+					if err := cmdutil.Spin(cmd, "issue.transitions", func(ctx context.Context) error {
 						var e error
 						id, e = resolveTransitionValidated(ctx, service, key, target, !payload.empty())
 						return e

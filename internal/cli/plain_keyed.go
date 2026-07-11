@@ -18,7 +18,7 @@ func WriteKeyedResultsPlain(w io.Writer, command string, data any, opts ...Plain
 	logger := newPlainLogger(w)
 	results := keyedResultRows(data)
 	if len(results) == 0 {
-		return writeGenericPlain(logger, cfg, messageForCommand(command), data)
+		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
 	}
 	total, succeeded, failed := keyedResultCounts(data, len(keyedFailureKeys(data)))
 	event := logger.Info().
@@ -28,7 +28,7 @@ func WriteKeyedResultsPlain(w io.Writer, command string, data any, opts ...Plain
 	if cfg.threads > 0 {
 		event = event.Int("threads", cfg.threads)
 	}
-	event.Msg(messageForCommand(command))
+	event.Msg(messageForCommand(command, data))
 
 	// No per-entry heading: identification is the child renderer's job.
 	// The entry key rides down as render context — block renderers fold

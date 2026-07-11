@@ -55,6 +55,11 @@ func (v OperationVerb) Pastf() string { return phrase(v.Past, v.Noun) }
 // Failuref returns the failure phrase, "failed to create issue".
 func (v OperationVerb) Failuref() string { return phrase("failed to "+v.Infinitive, v.Noun) }
 
+// Conditionalf returns the dry-run preview phrase, "would create issue" —
+// the past-tense confirmation would overstate a preview that submitted
+// nothing.
+func (v OperationVerb) Conditionalf() string { return phrase("would "+v.Infinitive, v.Noun) }
+
 // NounPlural returns the object noun in plural form for batch phrases — naive
 // pluralisation (append s unless already plural) that covers the operations'
 // nouns: issue -> issues, transition -> transitions, web link -> web links.

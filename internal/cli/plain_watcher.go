@@ -27,7 +27,7 @@ func WriteWatcherListPlain(w io.Writer, command string, data any, opts ...PlainO
 
 	m, ok := data.(map[string]any)
 	if !ok {
-		return writeGenericPlain(logger, cfg, messageForCommand(command), data)
+		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
 	}
 	watchers := normalizeMapList(m["watchers"])
 	style := authPlainStyle{tty: cfg.tty, theme: cfg.theme}

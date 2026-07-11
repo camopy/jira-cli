@@ -28,7 +28,7 @@ func WriteAttachmentListPlain(w io.Writer, command string, data any, opts ...Pla
 
 	m, ok := data.(map[string]any)
 	if !ok {
-		return writeGenericPlain(logger, cfg, messageForCommand(command), data)
+		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
 	}
 	rows := normalizeMapList(m["attachments"])
 	style := authPlainStyle{tty: cfg.tty, theme: cfg.theme}
