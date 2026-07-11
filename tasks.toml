@@ -113,11 +113,11 @@ run = "go tool gofumpt -w"
 
 [lint]
 description = "Run golangci-lint"
-run = "go tool golangci-lint run ./..."
+run = "golangci-lint run ./..."
 
 ["lint:fix"]
 description = "Run golangci-lint with auto-fix"
-run = "go tool golangci-lint run --fix"
+run = "golangci-lint run --fix"
 
 [rumdl]
 description = "Lint markdown files with rumdl"

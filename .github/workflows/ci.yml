@@ -44,7 +44,16 @@ jobs:
       # Caching lives here rather than in the release workflow so release
       # artifacts are never built from cached state: this job only validates.
       # Covers the Go module cache, the Go build cache, and golangci-lint's
-      # analysis cache, keyed on the dependency graph and toolchain pins.
+      # analysis cache. The key carries a UTC date on top of the dependency
+      # and toolchain pins: GHA caches are immutable, so without a churn
+      # component the saved build cache never refreshes as our own source
+      # changes, and hit rates decay until go.sum next moves. This job runs
+      # only on pushes to main, so saves are main-only by construction;
+      # subsequent runs restore the latest save via the prefix fallbacks.
+      - name: Compute cache date
+        id: cache-date
+        run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
       - name: Restore Go caches
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -52,15 +61,18 @@ jobs:
             ~/go/pkg/mod
             ~/.cache/go-build
             ~/.cache/golangci-lint
-          key: go-${{ runner.os }}-${{ hashFiles('go.sum', 'mise.lock') }}
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum', 'mise.lock') }}-${{ steps.cache-date.outputs.date }}
           restore-keys: |
+            go-${{ runner.os }}-${{ hashFiles('go.sum', 'mise.lock') }}-
             go-${{ runner.os }}-
 
       # -count=1 disables Go's test-result caching (build caching is
       # unaffected). Several contract tests exec a binary built from the
       # tree; the test cache hashes only the test package's source, so a
       # restored cache could replay a stale pass after the binary's
-      # behavior changed.
+      # behavior changed. Independently, fixture-reading suites (ADF
+      # goldens and friends) would rarely hit anyway: Go hashes opened
+      # files by mtime (golang/go#58571), which a fresh checkout resets.
       - name: Run CI gate
         env:
           GOFLAGS: -count=1

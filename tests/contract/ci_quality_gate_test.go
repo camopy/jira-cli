@@ -47,7 +47,8 @@ func TestCIQualityGateRunsRequiredGoChecks(t *testing.T) {
 	for _, want := range []string{
 		"-race",
 		"go vet ./...",
-		"go tool golangci-lint run",
+		"run = \"golangci-lint run ./...\"",
+		"&& golangci-lint run",
 		"go tool govulncheck ./...",
 		"go mod tidy",
 		"git diff --exit-code",
@@ -68,6 +69,11 @@ func TestCIQualityGateRunsRequiredGoChecks(t *testing.T) {
 		"zizmor-annotations: true",
 		"lockfile = true",
 		"actionlint = \"latest\"",
+		// The binary linter must stay version-pinned: .golangci.yml is
+		// written against a specific release, and the go.mod tool
+		// directive (kept for the shared go-lint workflow) must carry the
+		// same version — asserted against go.mod below.
+		"golangci-lint = \"2.12.2\"",
 		"cosign = \"latest\"",
 		"hk = \"latest\"",
 		"pkl = \"latest\"",
@@ -87,6 +93,17 @@ func TestCIQualityGateRunsRequiredGoChecks(t *testing.T) {
 		if strings.Contains(string(mise), unwanted) {
 			t.Fatalf("mise config should not include node-related tool %q:\n%s", unwanted, mise)
 		}
+	}
+	// The mise binary pin and the go.mod tool pin must move in lockstep:
+	// the shared go-lint workflow still lints PRs via `go tool`, so a bump
+	// of one without the other lints PRs and main with different linter
+	// versions.
+	gomod, err := os.ReadFile("../../go.mod")
+	if err != nil {
+		t.Fatalf("ReadFile(go.mod) error = %v", err)
+	}
+	if !strings.Contains(string(gomod), "github.com/golangci/golangci-lint/v2 v2.12.2") {
+		t.Fatalf("go.mod golangci-lint pin drifted from .mise.toml's 2.12.2 — bump both together")
 	}
 	if strings.Contains(combined, "8b104684e72bef79fca78b294accb5f789d3f202") {
 		t.Fatalf("shared workflow refs should use the Slack-aligned pinned SHA, not old 8b104684 refs")
