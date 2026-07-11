@@ -6,9 +6,7 @@
 package theme
 
 import (
-	"fmt"
 	"hash/fnv"
-	"image/color"
 	"os"
 	"strings"
 	"sync"
@@ -113,13 +111,6 @@ var TableHeader = lipgloss.NewStyle().
 	BorderStyle(lipgloss.NormalBorder()).
 	BorderBottom(true)
 
-// CursorBg / SelectedBg are raw ANSI background escapes used by the
-// list view to highlight the cursor row and multi-selected rows.
-var (
-	CursorBg   = tintBg(Theme.Blue.GetForeground(), 0.18)
-	SelectedBg = tintBg(Theme.Green.GetForeground(), 0.12)
-)
-
 // Title for section/panel titles.
 var Title = lipgloss.NewStyle().Foreground(ColorTitleFg).Bold(true).Padding(0, 1)
 
@@ -176,8 +167,6 @@ func applyTheme(t *clibtheme.Theme) {
 	ColorStatusBarFg = t.MarkdownText.GetForeground()
 	ColorTitleFg = t.MarkdownText.GetForeground()
 	ColorHeaderFg = t.Blue.GetForeground()
-	CursorBg = tintBg(t.Blue.GetForeground(), 0.18)
-	SelectedBg = tintBg(t.Green.GetForeground(), 0.12)
 
 	TableHeader = lipgloss.NewStyle().
 		Foreground(ColorHeaderFg).
@@ -200,19 +189,6 @@ func applyTheme(t *clibtheme.Theme) {
 
 	Paused = lipgloss.NewStyle().Foreground(t.Red.GetForeground()).Bold(true)
 	Active = lipgloss.NewStyle().Foreground(t.Green.GetForeground()).Bold(true)
-}
-
-// tintBg mixes a color with black at the given intensity (0–1) and
-// returns a 24-bit ANSI bg escape. Low intensities produce barely-visible
-// tints that don't fight foreground text.
-func tintBg(c color.Color, intensity float64) string {
-	r, g, b, _ := c.RGBA()
-	return fmt.Sprintf(
-		"\x1b[48;2;%d;%d;%dm",
-		int(float64(r>>8)*intensity),
-		int(float64(g>>8)*intensity),
-		int(float64(b>>8)*intensity),
-	)
 }
 
 // EntityColor returns a deterministic style for a named entity (assignee,
