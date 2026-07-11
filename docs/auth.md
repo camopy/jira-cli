@@ -90,8 +90,25 @@ headless machines and scripts. Both end with the same stored profile.
           --secret-stdin
         ```
 
+    === "Nothing stored (env backend)"
+
+        For hosts with no OS keyring — WSL, headless Linux, containers — or a
+        per-process secret injector like `op run`. The profile's credential is
+        the `JIRA_TOKEN_<PROFILE>` variable itself; login stores nothing and
+        verifies the variable's token when it's set:
+
+        ```sh
+        export JIRA_TOKEN_DEFAULT="$(your-secret-source)"
+        jira auth login --no-input \
+          --profile-name default \
+          --base-url https://example.atlassian.net \
+          --email you@example.com \
+          --backend env
+        ```
+
     `--secret-stdin` and `--credential-env` both supply the credential, so
-    they're mutually exclusive; pick whichever suits your shell.
+    they're mutually exclusive; pick whichever suits your shell. The env
+    backend takes neither — the variable is the credential.
 
 !!! warning "Never put the token in argv"
     There's no `--token` flag, on purpose: process listings (`ps`, `/proc`) leak
@@ -119,10 +136,19 @@ the secret sits in the backend you chose.
 |---|---|
 | `keyring` | Default. The OS keyring: Keychain on macOS, Credential Manager on Windows, libsecret on Linux. |
 | `1password` | A 1Password item, read through the desktop app. |
-| `JIRA_TOKEN_<PROFILE>` | An environment override, checked before the stored backend on every command. |
+| `env` | Nothing is stored — the profile's `JIRA_TOKEN_<PROFILE>` variable is the credential, read every run. For WSL, headless Linux, containers, and `op run`-style injectors. |
+| `JIRA_TOKEN_<PROFILE>` | An environment override, checked before the stored backend on every command — whatever the backend. |
 
 When jira resolves a token it checks `JIRA_TOKEN_<PROFILE>` first (profile `work`
 becomes `JIRA_TOKEN_WORK`), then the backend recorded on the profile.
+
+!!! note "No keyring on WSL and headless Linux"
+    Linux keyring support needs a Secret Service on the session D-Bus
+    (gnome-keyring, KWallet). WSL and most headless hosts don't have one, so
+    `keyring` operations fail with `keyring_unavailable` — interactive
+    `auth login` won't even offer the keyring there. Use the `env` backend:
+    export `JIRA_TOKEN_<PROFILE>` (for example from `op run`) and run
+    `jira auth login --backend env`.
 
 !!! note "1Password on macOS and Linux needs a CGO build"
     The Windows release binary includes the `1password` backend. The macOS and

@@ -173,7 +173,12 @@ func authLoginCommand() *cobra.Command {
 		Long: "Configure a Jira profile and store its credential. The token type — classic " +
 			"or scoped (granular) — is detected automatically: verification tries the site " +
 			"first, and on rejection re-checks the Atlassian gateway, persisting the " +
-			"discovered cloudId when the token turns out to be scoped. Nothing extra to pass.",
+			"discovered cloudId when the token turns out to be scoped. Nothing extra to pass.\n\n" +
+			"With `--backend env` nothing is stored: the profile reads its token from the " +
+			"`JIRA_TOKEN_<PROFILE>` environment variable at run time (for example " +
+			"`JIRA_TOKEN_DEFAULT`), which suits hosts without an OS keyring — WSL, headless " +
+			"Linux, containers — and per-process secret injectors such as `op run`. The " +
+			"login verifies the variable's token when it is set and only warns when it is not.",
 		Example: `# Configure a profile interactively (prompts for token)
 $ jira auth login --profile-name work --base-url https://acme.atlassian.net --email me@example.com
 
@@ -222,6 +227,15 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 							&baseURL, &email, &backend, &onePasswordAccount, &vault, &item,
 						)
 					}
+				}
+				// The form offers only backends that can work here; when the
+				// default (keyring) is unavailable — WSL and headless Linux
+				// often have no Secret Service — steer the initial selection
+				// to the env backend so the select doesn't open on a choice
+				// the option list no longer contains. An explicit --backend
+				// or a preseeded non-keyring backend is left alone.
+				if !cmd.Flags().Changed("backend") && config.SecretBackend(backend) == config.SecretBackendKeyring && !config.KeyringAvailable() {
+					backend = string(config.SecretBackendEnv)
 				}
 				if err := promptAuthLogin(cmd, skipVerify, &profileName, &baseURL, &email, &backend, &onePasswordAccount, &vault, &item, &credential); err != nil {
 					return err
@@ -366,19 +380,26 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 			if email != "" {
 				profile.Email = email
 			}
-			if cmd.Flags().Changed("backend") {
-				profile.SecretBackend = flagBackend
-			} else if profile.SecretBackend == "" {
+			// The interactive form's confirmed selection is as explicit as a
+			// flag — the user reviewed it — so both re-point the profile;
+			// otherwise the persisted backend is kept and the flag default
+			// only seeds a brand-new profile.
+			backendSelected := cmd.Flags().Changed("backend") || !noInput
+			if backendSelected || profile.SecretBackend == "" {
 				profile.SecretBackend = flagBackend
 			}
-			// An explicit --backend that differs from the profile's stored
+			// A selected backend that differs from the profile's stored
 			// backend would silently relocate a live credential to a different
-			// store. Moving a secret between backends is `auth migrate`'s job —
-			// it stages the new write and cleans up the old one transactionally
-			// — so login refuses it rather than switching as a side-effect.
+			// store. Moving a secret between storing backends is `auth
+			// migrate`'s job — it stages the new write and cleans up the old
+			// one transactionally — so login refuses it rather than switching
+			// as a side-effect. A switch to or from the env backend is exempt:
+			// the env side stores nothing, so there is no secret to relocate —
+			// login revokes a stale stored credential after commit instead.
 			// Typed as a flag-value failure: this is bad command-line input
 			// (validation, exit 3), not an authentication failure.
-			if cmd.Flags().Changed("backend") && previousProfile.SecretBackend != "" && flagBackend != previousProfile.SecretBackend {
+			if backendSelected && previousProfile.SecretBackend != "" && flagBackend != previousProfile.SecretBackend &&
+				flagBackend != config.SecretBackendEnv && previousProfile.SecretBackend != config.SecretBackendEnv {
 				mismatch := cli.NewCLIInputError(cli.InputFlagValueInvalid, fmt.Sprintf("profile %q stores its credential in %s; run `jira auth migrate --backend %s` to move it", profile.Name, previousProfile.SecretBackend, flagBackend))
 				mismatch.Flag = "backend"
 				return mismatch
@@ -401,19 +422,53 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 			if profile.WorkdaySeconds == 0 {
 				profile.WorkdaySeconds = config.DefaultWorkdaySeconds
 			}
+			// The env backend stores nothing — the profile's JIRA_TOKEN_*
+			// variable is the credential's single source. A supplied secret
+			// has nowhere to go, so reject it rather than silently dropping
+			// it; verification (below) reads the variable instead. The
+			// interactive form hides the token prompt for this backend.
+			usingEnvBackend := profile.SecretBackend == config.SecretBackendEnv
+			envTokenKey := ""
+			if usingEnvBackend {
+				if credential != "" || secretStdin || credentialEnv != "" {
+					return fmt.Errorf("validation: the env backend reads the credential from the profile's JIRA_TOKEN_* environment variable at run time; do not supply a token to store")
+				}
+				envRef, refErr := cmdutil.SecretRefFor(profile, profile.SecretBackend)
+				if refErr != nil {
+					return refErr
+				}
+				envTokenKey = envRef.EnvTokenKey()
+			}
+			// verifyCredential is the token verification runs with: the
+			// supplied secret for storing backends, the JIRA_TOKEN_* value
+			// (when set) for the env backend. Empty means nothing to verify.
+			verifyCredential := credential
+			if usingEnvBackend {
+				verifyCredential = os.Getenv(envTokenKey)
+			}
 			// A Jira Cloud API token is the basic-auth password, paired with
 			// the account email as the username. Storing a token without an
 			// email yields a credential that can never authenticate, so refuse
 			// it before any network call or storage — even under --skip-verify.
-			if credential != "" && xstrings.IsBlank(profile.Email) {
+			if verifyCredential != "" && xstrings.IsBlank(profile.Email) {
 				return fmt.Errorf("validation: an account email is required to store a Jira Cloud API token; pass --email")
+			}
+			// A backend that cannot store in this build or environment fails
+			// the login now — before the token is sent to Jira for
+			// verification — instead of erroring at store time with the whole
+			// flow already completed. This is where a WSL or headless-Linux
+			// host with no Secret Service learns to use the env backend.
+			if credential != "" {
+				if err := ensureBackendStorable(profile.SecretBackend); err != nil {
+					return err
+				}
 			}
 			// The token is about to be sent over the network (verification) and
 			// stored. Reject an unsafe base URL now — cfg.Validate runs only
 			// after verification, so without this check the headless path would
 			// dial a cleartext non-loopback host and leak the credential before
 			// the URL is rejected. The interactive form already validates this.
-			if credential != "" {
+			if verifyCredential != "" {
 				if err := config.ValidateBaseURL(profile.BaseURL); err != nil {
 					return fmt.Errorf("validation: jira base URL: %w", err)
 				}
@@ -434,14 +489,14 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 			// with no probe the type cannot be detected, so it stays whatever the
 			// profile already carried (classic for a brand-new profile).
 			var verifiedUser *jira.CurrentUser
-			if credential != "" && !skipVerify {
+			if verifyCredential != "" && !skipVerify {
 				// .Silent() runs the task and returns its error without logging
 				// a completion line — the failure is surfaced through the normal
 				// command error path instead of a duplicate spinner line.
 				verifyErr := clog.Spinner("Verifying Jira credentials").
 					NonTTYSilent(true).
 					Wait(cmd.Context(), func(ctx context.Context) error {
-						user, cloudID, err := verifyAndDetectCredential(ctx, profile, credential, time.Duration(profile.TimeoutSeconds)*time.Second, cmdutil.MaxRetryWaitFor(cmd), config.GatewayBaseURL)
+						user, cloudID, err := verifyAndDetectCredential(ctx, profile, verifyCredential, time.Duration(profile.TimeoutSeconds)*time.Second, cmdutil.MaxRetryWaitFor(cmd), config.GatewayBaseURL)
 						if err != nil {
 							return err
 						}
@@ -514,6 +569,14 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 			} else if err := saveConfig(); err != nil {
 				return err
 			}
+			// An env-backed profile with the variable unset saved fine — the
+			// metadata is valid — but no command can authenticate until the
+			// variable exists, so say so now rather than at first use.
+			if usingEnvBackend && verifyCredential == "" {
+				cmdutil.RecordCredentialWarnings(cmd, []string{
+					envTokenKey + " is not set — export it (or inject it via your secret manager, e.g. `op run`) so commands can authenticate",
+				})
+			}
 			// When this login re-pointed an existing profile at a different
 			// credential identity (a new site, a backend switch, a different
 			// 1Password account/vault/item), the credential under the OLD
@@ -569,6 +632,9 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 				"verified":            verifiedUser != nil,
 				"skip_verify":         skipVerify,
 			}
+			if usingEnvBackend {
+				data["credential_env"] = envTokenKey
+			}
 			if profile.CloudID != "" {
 				data["cloud_id"] = profile.CloudID
 			}
@@ -585,7 +651,7 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 	cmdutil.AddStringVar(cmd.Flags(), &profileName, "profile-name", "default", "Profile name to configure", clib.FlagExtra{Group: "Configuration", Placeholder: "NAME", Complete: "predictor=profile"})
 	cmdutil.AddStringVar(cmd.Flags(), &baseURL, "base-url", "", "Jira base URL", clib.FlagExtra{Group: "Configuration", Placeholder: "URL", Terse: "site URL"})
 	cmdutil.AddStringVar(cmd.Flags(), &email, "email", "", "Jira Cloud account email", clib.FlagExtra{Group: "Configuration", Placeholder: "EMAIL", Terse: "account email"})
-	cmdutil.AddStringVar(cmd.Flags(), &backend, "backend", string(config.SecretBackendKeyring), "Secret backend for the credential", clib.FlagExtra{Placeholder: "BACKEND", Terse: "secret backend", Enum: []string{"keyring", "1password"}, EnumTerse: []string{"OS keychain", "1Password CLI"}, EnumDefault: "keyring"})
+	cmdutil.AddStringVar(cmd.Flags(), &backend, "backend", string(config.SecretBackendKeyring), "Secret backend for the credential", clib.FlagExtra{Placeholder: "BACKEND", Terse: "secret backend", Enum: []string{"keyring", "1password", "env"}, EnumTerse: []string{"OS keychain", "1Password CLI", "JIRA_TOKEN_* env var"}, EnumDefault: "keyring"})
 	cmdutil.AddStringVar(cmd.Flags(), &onePasswordAccount, "onepassword-account", "", "1Password desktop app account name", clib.FlagExtra{Group: "1Password", Placeholder: "ACCOUNT"})
 	cmdutil.AddStringVar(cmd.Flags(), &vault, "vault", "", "1Password vault name", clib.FlagExtra{Group: "1Password", Placeholder: "VAULT"})
 	cmdutil.AddStringVar(cmd.Flags(), &item, "item", "", "1Password item name", clib.FlagExtra{Group: "1Password", Placeholder: "NAME"})
@@ -686,6 +752,7 @@ func authLoginQuestions() []authLoginQuestion {
 			Options: []authLoginOption{
 				{Label: "System keychain", Value: string(config.SecretBackendKeyring), Description: "macOS Keychain, Windows Credential Manager, or Linux Secret Service."},
 				{Label: "1Password", Value: string(config.SecretBackendOnePassword), Description: "Store the credential in a 1Password vault using the Go SDK when configured."},
+				{Label: "Environment variable", Value: string(config.SecretBackendEnv), Description: "Read the token from the profile's JIRA_TOKEN_* variable at run time; nothing is stored."},
 			},
 		},
 		{
@@ -822,16 +889,23 @@ func authLoginForm(skipVerify bool, nameField *string, profileNameHint string, b
 			huh.NewSelect[string]().
 				Title("Secret backend").
 				Description("Choose where jira stores the credential. Config TOML only stores metadata.").
-				Options(authLoginHuhOptions(authLoginQuestionByID(authLoginQuestions(), "secret_backend").Options)...).
+				Options(authLoginHuhOptions(availableAuthLoginBackendOptions(authLoginQuestionByID(authLoginQuestions(), "secret_backend").Options))...).
 				Value(backend).
 				Validate(validateSecretBackend),
+		).Title("Credential storage").Description("Secrets are written to the selected backend, not to config.toml."),
+		// The token prompt is its own group so it can disappear for the env
+		// backend, which stores nothing — the profile's JIRA_TOKEN_* variable
+		// is the credential's source and is read at verification time instead.
+		huh.NewGroup(
 			huh.NewInput().
 				Title("API token").
 				Description("Atlassian API token to store in the selected secret backend.").
 				EchoMode(huh.EchoModePassword).
 				Value(credential).
 				Validate(requiredString("API token is required")),
-		).Title("Credential storage").Description("Secrets are written to the selected backend, not to config.toml."),
+		).Title("API token").Description("Entered once, verified against Jira, then stored in the selected backend.").WithHideFunc(func() bool {
+			return config.SecretBackend(*backend) == config.SecretBackendEnv
+		}),
 		huh.NewGroup(
 			huh.NewInput().
 				Title("1Password account").
@@ -915,11 +989,55 @@ func validateEmailField(value string) error {
 
 func validateSecretBackend(value string) error {
 	switch config.SecretBackend(value) {
-	case config.SecretBackendKeyring, config.SecretBackendOnePassword:
+	case config.SecretBackendKeyring, config.SecretBackendOnePassword, config.SecretBackendEnv:
 		return nil
 	default:
 		return fmt.Errorf("unsupported secret backend %q", value)
 	}
+}
+
+// ensureBackendStorable fails when the selected backend cannot store a
+// credential in this build or environment: 1Password in a no-CGO release
+// build, the keyring on a host with no Secret Service (WSL, headless Linux).
+// Login and migrate call it before a token is verified or any secret is
+// read, so the failure is early, typed, and names the way out (the env
+// backend) instead of surfacing as a raw D-Bus or SDK error at store time.
+// The env backend always passes — it stores nothing.
+func ensureBackendStorable(backend config.SecretBackend) error {
+	switch backend {
+	case config.SecretBackendOnePassword:
+		if !config.OnePasswordSupported() {
+			return config.OnePasswordUnsupportedBuildError()
+		}
+	case config.SecretBackendKeyring:
+		if !config.KeyringAvailable() {
+			return config.KeyringUnavailableError(nil)
+		}
+	}
+	return nil
+}
+
+// availableAuthLoginBackendOptions filters the backend choices down to the
+// ones that can actually work here: the keyring is dropped when no OS secret
+// service answers (WSL, headless Linux), 1Password when this build compiled
+// the SDK out. Offering a backend the login would refuse at store time wastes
+// a fully filled form. The env backend always remains — it reads a variable.
+func availableAuthLoginBackendOptions(options []authLoginOption) []authLoginOption {
+	out := make([]authLoginOption, 0, len(options))
+	for _, option := range options {
+		switch config.SecretBackend(option.Value) {
+		case config.SecretBackendKeyring:
+			if !config.KeyringAvailable() {
+				continue
+			}
+		case config.SecretBackendOnePassword:
+			if !config.OnePasswordSupported() {
+				continue
+			}
+		}
+		out = append(out, option)
+	}
+	return out
 }
 
 // validateOnePasswordVault and validateOnePasswordItem require their locator
@@ -990,6 +1108,11 @@ func loginReviewSummary(profileName, baseURL, email, backend, onePasswordAccount
 	fmt.Fprintf(&b, "Site:     %s\n", baseURL)
 	fmt.Fprintf(&b, "Email:    %s\n", email)
 	fmt.Fprintf(&b, "Backend:  %s", backend)
+	if config.SecretBackend(backend) == config.SecretBackendEnv {
+		// Name the exact variable so the user leaves the form knowing what
+		// to export; the token itself is never shown here.
+		fmt.Fprintf(&b, "\nToken:    read from %s at run time (not stored)", config.SecretRef{Profile: profileName}.EnvTokenKey())
+	}
 	if config.SecretBackend(backend) == config.SecretBackendOnePassword {
 		// Only render coordinates that are filled: mid-form the user may have
 		// selected 1Password before entering them, and blank "Vault:" / "Item:"
@@ -1474,8 +1597,24 @@ $ jira auth migrate --profile work --backend keyring`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			target := config.SecretBackend(backend)
+			// The env backend cannot be a migration destination: a migration
+			// copies the secret into the target store, and env only reads its
+			// JIRA_TOKEN_* variable. Re-pointing a profile at env is a login
+			// operation (metadata only, old credential revoked), so say so.
+			if target == config.SecretBackendEnv {
+				return fmt.Errorf("validation: cannot migrate credentials into the env backend — it reads the profile's JIRA_TOKEN_* variable at run time; export the variable and run `jira auth login --backend env` to re-point the profile")
+			}
 			if target != config.SecretBackendKeyring && target != config.SecretBackendOnePassword {
 				return fmt.Errorf("unsupported secret backend %q", backend)
+			}
+			// Fail before any secret is read when the destination cannot store
+			// in this build or environment (no-CGO 1Password, keyring with no
+			// Secret Service). Dry-run skips the probe: it is a local preview
+			// and must not depend on backend health.
+			if !dryRun {
+				if err := ensureBackendStorable(target); err != nil {
+					return err
+				}
 			}
 			cfg, err := config.LoadOrInit(config.WithPath(cmdutil.ConfigPath(cmd)))
 			if err != nil {
@@ -1674,6 +1813,11 @@ $ jira --profile prod auth token --output=json`,
 				data["onepassword_account"] = profile.OnePasswordAccount
 				data["vault"] = profile.Vault
 				data["item"] = cmdutil.FirstNonEmpty(profile.Item, "jira-cli-"+profile.Name)
+			}
+			// For the env backend the diagnostic that matters is which
+			// variable the credential is read from — name it explicitly.
+			if profile.SecretBackend == config.SecretBackendEnv {
+				data["credential_env"] = ref.EnvTokenKey()
 			}
 			return cmdutil.WriteEnvelope(cmd, "auth.token", data)
 		},

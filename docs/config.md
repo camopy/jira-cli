@@ -148,11 +148,13 @@ the TOML. The token itself is covered in [Authenticate](auth.md); the backends:
 |---|---|
 | `keyring` | Default. OS keychain — Keychain (macOS), Credential Manager (Windows), libsecret (Linux). |
 | `1password` | A 1Password item, addressed by `onepassword_account` + `vault` + `item`. |
+| `env` | Nothing stored — the token is read from `JIRA_TOKEN_<PROFILE>` every run. For hosts without a keyring (WSL, headless Linux, containers) and per-process injectors like `op run`. |
 
-Move a credential between backends with [`auth migrate`](auth.md); it never lands
-in the config file.
+Move a credential between the storing backends with [`auth migrate`](auth.md);
+it never lands in the config file. The env backend isn't a migrate target —
+it has no store; re-point a profile at it with `jira auth login --backend env`.
 
-Either backend can be overridden for one run with `JIRA_TOKEN_<PROFILE>` (see
+Any backend can be overridden for one run with `JIRA_TOKEN_<PROFILE>` (see
 the [environment variables](#environment-variables) below) — it's checked before
 the stored backend, whichever backend the profile uses.
 
@@ -213,7 +215,7 @@ process.
 | `auth_type` | `token` is the only value (covers classic and scoped API tokens) |
 | `cloud_id` | Atlassian cloudId for a scoped token; normally set by `auth login`. Present = route via the gateway; empty = classic, site-addressed |
 | `account_id` | Filled by `auth login`; enables `--assignee me` |
-| `secret_backend` | `keyring` (default) or `1password` |
+| `secret_backend` | `keyring` (default), `1password`, or `env` |
 | `onepassword_account`, `vault`, `item` | 1Password addressing when `secret_backend = "1password"` |
 | `default_project` | Used when `--project` is omitted on `issue list` / `create` |
 | `default_issue_type` | Used when `--type` is omitted on `issue create` |

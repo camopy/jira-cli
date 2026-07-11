@@ -75,7 +75,7 @@ func TestIssueCommentAndWorklogFlagsPublishClibMetadata(t *testing.T) {
 		{commandPath: "jira issue list", flagName: "--columns", group: "Output", placeholder: "COLS", enumContains: []string{"key", "summary", "status", "assignee", "priority", "updated"}, enumTerse: []string{"issue key", "title text", "workflow status", "assigned user", "priority level", "last-updated time"}},
 		{commandPath: "jira issue mine", flagName: "--columns", group: "Output", placeholder: "COLS", enumContains: []string{"key", "summary", "status", "assignee", "priority", "updated"}, enumTerse: []string{"issue key", "title text", "workflow status", "assigned user", "priority level", "last-updated time"}},
 
-		{commandPath: "jira auth login", flagName: "--backend", placeholder: "BACKEND", enumContains: []string{"keyring", "1password"}, enumTerse: []string{"OS keychain", "1Password CLI"}},
+		{commandPath: "jira auth login", flagName: "--backend", placeholder: "BACKEND", enumContains: []string{"keyring", "1password", "env"}, enumTerse: []string{"OS keychain", "1Password CLI", "JIRA_TOKEN_* env var"}},
 		{commandPath: "jira auth migrate", flagName: "--backend", placeholder: "BACKEND", enumContains: []string{"keyring", "1password"}, enumTerse: []string{"OS keychain", "1Password CLI"}},
 		// Self-describing theme names carry a short Terse and deliberately no
 		// EnumTerse; the schema-wide guard below proves that omission is safe.

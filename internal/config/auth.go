@@ -537,12 +537,16 @@ func SanitizeCredentialError(err error) string {
 	if err == nil {
 		return ""
 	}
-	if errors.Is(err, ErrCredentialNotFound) {
-		return ErrCredentialNotFound.Error()
-	}
+	// Typed errors first: a CredentialError that wraps ErrCredentialNotFound
+	// (an env-backend miss naming its JIRA_TOKEN_* variable, a keyring miss
+	// naming the profile) carries a more actionable message than the bare
+	// sentinel, so the sentinel check must not shadow it.
 	var ce *CredentialError
 	if errors.As(err, &ce) {
 		return ce.Message
+	}
+	if errors.Is(err, ErrCredentialNotFound) {
+		return ErrCredentialNotFound.Error()
 	}
 	return "credential backend failed"
 }

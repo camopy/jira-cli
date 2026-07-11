@@ -61,7 +61,40 @@ const (
 	// ErrorCodeOnePasswordUnsupportedBuild: the binary was built without
 	// CGO, so 1Password support is compiled out.
 	ErrorCodeOnePasswordUnsupportedBuild = errtax.CodeOnePasswordUnsupportedBuild
+	// ErrorCodeKeyringUnavailable: the OS keyring cannot service requests at
+	// all (no Secret Service, unsupported platform).
+	ErrorCodeKeyringUnavailable = errtax.CodeKeyringUnavailable
+	// ErrorCodeEnvCredentialUnset: a profile on the env backend has no
+	// JIRA_TOKEN_* variable set.
+	ErrorCodeEnvCredentialUnset = errtax.CodeEnvCredentialUnset
+	// ErrorCodeEnvBackendReadOnly: a write or delete was attempted against
+	// the env backend, which only ever reads its JIRA_TOKEN_* variable.
+	ErrorCodeEnvBackendReadOnly = errtax.CodeEnvBackendReadOnly
 )
+
+// OnePasswordUnsupportedBuildError reports that this binary was built without
+// CGO, so the 1Password SDK is compiled out. It lives here — outside the
+// CGO build tags — so availability checks (login, migrate) can construct the
+// same typed error the no-CGO store methods return, without linking the SDK.
+func OnePasswordUnsupportedBuildError() *CredentialError {
+	return &CredentialError{
+		Type:        ErrorTypeAuth,
+		ErrCode:     ErrorCodeOnePasswordUnsupportedBuild,
+		Message:     "1Password support is unavailable in this build",
+		HintMsg:     "use a CGO-enabled source build or choose the keyring or env credential backend",
+		IsRetryable: false,
+		Context:     ErrorContext{Backend: string(SecretBackendOnePassword)},
+		Upstream: &UpstreamProvider{
+			Provider:     "onepassword-sdk",
+			UpstreamCode: "cgo_disabled",
+		},
+		Wrapped: errOnePasswordUnsupportedBuild,
+	}
+}
+
+// errOnePasswordUnsupportedBuild is the sentinel wrapped by
+// OnePasswordUnsupportedBuildError, matchable with errors.Is.
+var errOnePasswordUnsupportedBuild = errors.New("1Password SDK unavailable in no-CGO build")
 
 // ErrorContext carries optional, fixed-shape context for a credential error.
 // Every field is optional; an empty field is simply omitted by the consumer.

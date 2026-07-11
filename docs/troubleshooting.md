@@ -53,6 +53,18 @@ Map the per-profile `error` value to the next step:
     Run [`jira auth login`](auth.md#log-in), or supply the token inline with
     `JIRA_TOKEN_<PROFILE>` (the profile name, uppercased).
 
+`the OS keyring is unavailable` (`keyring_unavailable`)
+:   No Secret Service answered — the normal state on WSL and headless Linux,
+    where there's no gnome-keyring on the session D-Bus. Switch the profile to
+    the env backend: export `JIRA_TOKEN_<PROFILE>` and run
+    `jira auth login --backend env`. (Or install and start a Secret Service.)
+
+`environment variable JIRA_TOKEN_<PROFILE> is not set` (`env_credential_unset`)
+:   The profile uses the env backend but the variable isn't exported in this
+    shell. Export it, or wrap the invocation in your injector
+    (`op run -- jira ...`). The name is derived from the profile —
+    `JIRA_TOKEN_DEFAULT` for the default profile — not `JIRA_API_TOKEN`.
+
 `auth_failed` (HTTP 401)
 :   Token is wrong or expired. Rotate it at
     [id.atlassian.com](https://id.atlassian.com/manage-profile/security/api-tokens)

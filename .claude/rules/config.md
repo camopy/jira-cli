@@ -38,13 +38,16 @@ All writes are atomic and symlink-following via `x/os.AtomicWrite`
 `[[profiles]]` entries carry metadata only: `name`, `base_url`, `auth_type`
 (`token` is the only supported value — unsupported types are rejected, never
 stored as fake-authenticated), `email`, `secret_backend`
-(`keyring` | `1password` | file), and for 1Password:
+(`keyring` | `1password` | `env`), and for 1Password:
 `onepassword_account`, `vault`, `item`. Scoped tokens add a stored
 `cloud_id` for gateway routing (see `internal/jira`).
 
 *   The 1Password backend is CGO-gated with `_nocgo` stubs (see
     [go.md](go.md)) — release archives don't ship it.
-*   `auth migrate` moves credentials between backends; never write
+*   The `env` backend stores nothing: the profile's `JIRA_TOKEN_<PROFILE>`
+    variable is the credential, read at run time. It is never a migrate
+    destination — re-point a profile with `auth login --backend env`.
+*   `auth migrate` moves credentials between storing backends; never write
     credential material into the TOML file, envelopes, or logs.
 
 ## Env vars (prefix `JIRA_`)

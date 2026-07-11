@@ -14,6 +14,12 @@ import (
 
 const onePasswordServiceAccountTokenEnv = "OP_SERVICE_ACCOUNT_TOKEN"
 
+// OnePasswordSupported reports whether this binary was built with the
+// 1Password SDK compiled in. This CGO (or Windows) build has it; the no-CGO
+// variant in onepassword_nocgo.go reports false so callers can fail early
+// and keep the backend out of interactive choices.
+func OnePasswordSupported() bool { return true }
+
 // onePasswordCredentialFieldID is the stable, jira-cli-owned identifier of the
 // managed credential field. Ownership of a field is decided by this ID, never
 // by display title: a user's own field merely titled "credential" carries a

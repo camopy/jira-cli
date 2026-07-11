@@ -229,10 +229,10 @@ func (c *Config) setProfileField(key, value string) error {
 		p.WorkdaySeconds = n
 	case "secret_backend":
 		switch SecretBackend(value) {
-		case SecretBackendKeyring, SecretBackendOnePassword:
+		case SecretBackendKeyring, SecretBackendOnePassword, SecretBackendEnv:
 			p.SecretBackend = SecretBackend(value)
 		default:
-			return fmt.Errorf("invalid secret_backend %q (valid: keyring, 1password)", value)
+			return fmt.Errorf("invalid secret_backend %q (valid: keyring, 1password, env)", value)
 		}
 	case "onepassword_account":
 		p.OnePasswordAccount = value

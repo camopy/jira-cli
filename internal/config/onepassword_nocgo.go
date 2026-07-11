@@ -4,38 +4,25 @@ package config
 
 import (
 	"context"
-	"errors"
 )
 
-var errOnePasswordNoCGO = errors.New("1Password SDK unavailable in no-CGO build")
+// OnePasswordSupported reports whether this binary was built with the
+// 1Password SDK compiled in. Release archives are no-CGO, so this build
+// cannot use the 1Password backend at all; callers use this to fail early
+// and to keep the backend out of interactive choices.
+func OnePasswordSupported() bool { return false }
 
 // OnePasswordStore reports a typed backend error in no-CGO release builds.
 type OnePasswordStore struct{}
 
 func (OnePasswordStore) Get(context.Context, SecretRef) (string, error) {
-	return "", onePasswordNoCGOError()
+	return "", OnePasswordUnsupportedBuildError()
 }
 
 func (OnePasswordStore) Put(context.Context, SecretRef, string) error {
-	return onePasswordNoCGOError()
+	return OnePasswordUnsupportedBuildError()
 }
 
 func (OnePasswordStore) Delete(context.Context, SecretRef) error {
-	return onePasswordNoCGOError()
-}
-
-func onePasswordNoCGOError() error {
-	return &CredentialError{
-		Type:        ErrorTypeAuth,
-		ErrCode:     ErrorCodeOnePasswordUnsupportedBuild,
-		Message:     "1Password support is unavailable in this build",
-		HintMsg:     "use a CGO-enabled source build or choose the keyring or env credential backend",
-		IsRetryable: false,
-		Context:     ErrorContext{Backend: string(SecretBackendOnePassword)},
-		Upstream: &UpstreamProvider{
-			Provider:     "onepassword-sdk",
-			UpstreamCode: "cgo_disabled",
-		},
-		Wrapped: errOnePasswordNoCGO,
-	}
+	return OnePasswordUnsupportedBuildError()
 }

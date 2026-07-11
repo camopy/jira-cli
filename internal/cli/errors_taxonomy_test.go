@@ -56,6 +56,9 @@ var taxonomyRegistry = map[string]struct {
 	"credential_empty":               {"validation", 3},
 	"credential_namespace_collision": {"validation", 3},
 	"onepassword_item_ambiguous":     {"validation", 3},
+	// The env backend never stores: a write/delete against it is bad input
+	// (use a different command or manage the variable), not an auth failure.
+	"env_backend_read_only": {"validation", 3},
 	// auth (exit 1)
 	"jira_unauthorized":              {"auth", 1},
 	"jira_forbidden":                 {"auth", 1},
@@ -68,7 +71,13 @@ var taxonomyRegistry = map[string]struct {
 	"credential_rejected":            {"auth", 1},
 	"credential_verify_unavailable":  {"auth", 1},
 	"onepassword_unsupported_build":  {"auth", 1},
-	"auth_failed":                    {"auth", 1},
+	// keyring_unavailable is the no-Secret-Service failure (WSL, headless
+	// Linux); env_credential_unset is an env-backend profile whose
+	// JIRA_TOKEN_* variable is absent. Both are credential-machinery
+	// failures, so they classify with the other credential_* auth codes.
+	"keyring_unavailable":  {"auth", 1},
+	"env_credential_unset": {"auth", 1},
+	"auth_failed":          {"auth", 1},
 	// not_found (exit 2)
 	"profile_not_defined": {"not_found", 2},
 	"profile_incomplete":  {"not_found", 2},
@@ -168,6 +177,12 @@ func taxonomyCases() []struct {
 		{"credential rejected at verify", &config.CredentialError{Type: config.ErrorTypeAuth, ErrCode: config.ErrorCodeCredentialRejected, Message: "invalid Atlassian account email or API token - Jira rejected the credential (HTTP 401 Unauthorized)", HintMsg: "check the email and that the API token is current at id.atlassian.com, or pass --skip-verify to store it without checking"}, "credential_rejected", "Check the email and API token at id.atlassian.com, or pass --skip-verify to store the credential without checking.", false},
 		{"credential verify unreachable", &config.CredentialError{Type: config.ErrorTypeAuth, ErrCode: config.ErrorCodeCredentialVerifyUnavailable, Message: "could not verify the credential against Jira", HintMsg: "the site may be temporarily unavailable - retry, or pass --skip-verify to store it without checking"}, "credential_verify_unavailable", "Jira couldn't be reached to verify the credential — try again, or pass --skip-verify to store it without checking.", false},
 		{"onepassword unsupported build", &config.CredentialError{Type: config.ErrorTypeAuth, ErrCode: config.ErrorCodeOnePasswordUnsupportedBuild, Message: "1Password support is unavailable in this build", HintMsg: "use a CGO-enabled source build or choose the keyring or env credential backend"}, "onepassword_unsupported_build", "This build has no 1Password support — use a source build with CGO enabled, or switch to the keyring or env backend.", false},
+		// The raw D-Bus cause stays wrapped — the envelope message is the
+		// typed one, so the WSL "org.freedesktop.secrets" noise never
+		// classifies as validation or leaks upstream wording.
+		{"keyring unavailable", config.KeyringUnavailableError(errors.New(`keyring get "default": The name org.freedesktop.secrets was not provided by any .service files`)), "keyring_unavailable", "No OS keyring is available here (common on WSL and headless Linux) — set the profile's JIRA_TOKEN_<PROFILE> variable and run `jira auth login --backend env`, or install a Secret Service such as gnome-keyring.", false},
+		{"env credential unset", &config.CredentialError{Type: config.ErrorTypeAuth, ErrCode: config.ErrorCodeEnvCredentialUnset, Message: `environment variable JIRA_TOKEN_WORK is not set for profile "work"`, HintMsg: "export JIRA_TOKEN_WORK with the profile's API token"}, "env_credential_unset", "Export the profile's JIRA_TOKEN_<PROFILE> variable with the API token (JIRA_TOKEN_DEFAULT for the default profile), then retry.", false},
+		{"env backend read only", &config.CredentialError{Type: config.ErrorTypeValidation, ErrCode: config.ErrorCodeEnvBackendReadOnly, Message: "the env backend cannot store a credential — JIRA_TOKEN_WORK is managed by the environment that launches jira", HintMsg: "set or unset JIRA_TOKEN_WORK in the shell or secret injector that runs jira"}, "env_backend_read_only", "The env backend only reads the profile's JIRA_TOKEN_<PROFILE> variable — set or unset it in the shell or secret manager that launches jira.", false},
 		{"profile not defined", config.ProfileNotDefinedError{Name: "nope"}, "profile_not_defined", "See your profiles with `jira config profile`, or create one with `jira auth login --profile <name>`.", false},
 		{"profile incomplete", config.ProfileIncompleteError{Name: "half"}, "profile_incomplete", "Finish setting up the profile — run `jira auth login --profile <name>` to give it a base URL.", false},
 		{"context deadline", context.DeadlineExceeded, "timeout", "", false},

@@ -66,6 +66,12 @@ type SecretBackend string
 const (
 	SecretBackendKeyring     SecretBackend = "keyring"
 	SecretBackendOnePassword SecretBackend = "1password"
+	// SecretBackendEnv reads the credential from the profile's JIRA_TOKEN_*
+	// environment variable at run time and stores nothing. It exists for
+	// environments with no usable OS keyring (WSL, headless Linux, containers)
+	// and for secret injectors like `op run` — the same variable every backend
+	// honors as an override becomes the profile's sole credential source.
+	SecretBackendEnv SecretBackend = "env"
 )
 
 type Config struct {
@@ -257,7 +263,7 @@ func supportedAuthType(authType AuthType) bool {
 
 func supportedSecretBackend(backend SecretBackend) bool {
 	switch backend {
-	case SecretBackendKeyring, SecretBackendOnePassword:
+	case SecretBackendKeyring, SecretBackendOnePassword, SecretBackendEnv:
 		return true
 	default:
 		return false

@@ -52,8 +52,15 @@ func ProfileForEnvelope(cmd *cobra.Command) string {
 // CredentialStoreFor returns the credential store implementation for a secret
 // backend.
 func CredentialStoreFor(backend config.SecretBackend) config.CredentialStore {
-	if backend == config.SecretBackendOnePassword {
+	switch backend {
+	case config.SecretBackendOnePassword:
 		return config.OnePasswordStore{}
+	case config.SecretBackendEnv:
+		// The env backend reads the real environment even under the test
+		// file-store override: the JIRA_TOKEN_* variable is already
+		// test-controllable per process, and routing it through the file
+		// store would silently change what the backend is.
+		return config.EnvCredentialStore{}
 	}
 	if store, ok := config.FileCredentialStoreFromEnv(); ok {
 		return store

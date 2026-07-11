@@ -8,12 +8,13 @@ When: a fresh profile, a missing keyring entry, or a rotated token blocks any ot
 
 | Backend | Pick when |
 |---------|-----------|
-| **Env var** | CI / containers / ephemeral runners. `JIRA_TOKEN_<PROFILE>` overrides stored credentials for that profile. |
-| **Configured backend lookup** | Normal profile usage. `secret_backend = "keyring"` reads the OS keyring; `secret_backend = "1password"` reads the SDK-backed 1Password store. |
 | **OS keyring** (default) | Single workstation, zero extra setup, OS provides Secret Service / Keychain / Credential Manager. |
 | **1Password (Go SDK)** | Team uses 1Password and you have `OP_SERVICE_ACCOUNT_TOKEN` or a CGO-enabled source build with desktop app integration. SDK-only — does NOT shell out to the `op` CLI. |
+| **Env var** (`secret_backend = "env"`) | No usable OS keyring (WSL, headless Linux, containers, CI) or a per-process secret injector (`op run`, direnv). The profile's credential IS `JIRA_TOKEN_<PROFILE>`, read at run time; nothing is stored. `auth login --backend env` saves metadata only and verifies the variable's token when set. |
 
-Resolution order: the environment override is checked first; if unset, the profile's configured backend (`secret_backend = "keyring"` or `"1password"`) is used.
+Resolution order: the `JIRA_TOKEN_<PROFILE>` environment override is checked first for **every** backend; if unset, the profile's configured backend (`secret_backend = "keyring"`, `"1password"`, or `"env"`) is read. For the env backend the variable is the only source.
+
+Availability guard: interactive login offers only backends that can work here — the keyring choice is dropped when no Secret Service answers (common on WSL), 1Password when the build has no CGO. Headless logins fail early with `keyring_unavailable` / `onepassword_unsupported_build` instead of erroring at store time.
 
 # auth type
 - Jira Cloud only, so `auth_type` is always `token` (set automatically — there is no `--auth-type` flag). This one type covers both classic and scoped (granular) Atlassian API tokens.
@@ -25,7 +26,7 @@ Resolution order: the environment override is checked first; if unset, the profi
 
 # command shape
 - First-time TTY: bare `jira auth login` walks profile name → base URL → email → backend → credential prompt (reads stdin without echoing). Classic vs scoped is detected automatically.
-- Headless (CI / agent): `--no-input` with explicit flags for every field. Secret feeds via `--secret-stdin` (keyring) or `--vault` + `--item` (1Password).
+- Headless (CI / agent): `--no-input` with explicit flags for every field. Secret feeds via `--secret-stdin` (keyring), `--vault` + `--item` (1Password), or the `JIRA_TOKEN_<PROFILE>` variable itself (`--backend env` — no secret flag at all).
 
 # guard
 - Partial flags **merge** into the existing profile — fields not supplied retain their current values. To replace cleanly, pass every field.
@@ -54,9 +55,18 @@ Resolution order: the environment override is checked first; if unset, the profi
     --vault Engineering \
     --item jira-cli-work
   ```
+- Headless, env backend (WSL / containers / `op run` — nothing is stored; the variable is the credential). Do NOT pass `--secret-stdin` or `--credential-env` here — the login verifies the variable's value directly, and only warns when it is unset:
+  ```sh
+  export JIRA_TOKEN_WORK="<api-token>"   # or inject per process: op run, direnv, CI secrets
+  jira auth login --no-input \
+    --profile-name work \
+    --base-url https://company.atlassian.net \
+    --email dev@example.com \
+    --backend env
+  ```
 - Switch active profile: `jira auth switch <profile>` (preview without writing config: add `--dry-run`)
 - Re-resolve credential from backend: `jira auth refresh`
-- Move credential between backends: `jira auth migrate --backend 1password`
+- Move credential between backends: `jira auth migrate --backend 1password` (the env backend is never a migrate target — it stores nothing; re-point with `jira auth login --backend env` instead)
 - Remove credential (keeps TOML metadata; agent context needs `--force`): `jira auth logout <profile> --force --output=json`
 - Preview which credential a logout would remove, without touching the backend: `jira auth logout <profile> --dry-run --output=json`
 - Purge a credential whose profile was already deleted from config: `jira auth logout <profile> --base-url <site> --force` — the keychain entry is keyed by site host + profile name, so the flag supplies the half config no longer holds; without it a deleted/unknown profile is refused (`profile_not_defined`).
@@ -96,6 +106,9 @@ Further reading:
 | Scoped token: 401/403 on `/myself` despite a valid token | Granular token missing required scopes | Add the read scopes Atlassian requires for `/myself` (`read:jira-user`, `read:user:jira`, `read:application-role:jira`, `read:group:jira`, `read:avatar:jira`) to the token at id.atlassian.com |
 | Scoped token rejected at login (site 401, gateway not reached) | `_edge/tenant_info` blocked, so scoped can't be auto-detected | Set the id manually: `jira config set profiles.<name>.cloud_id <id>` (find it at `https://<site>.atlassian.net/_edge/tenant_info`) |
 | `credential not found` | Backend has no entry for this profile | `jira auth login --profile-name <name>` |
+| `keyring_unavailable` (raw cause: `org.freedesktop.secrets` not provided) | No Secret Service on this host — WSL and headless Linux have no OS keyring by default | Use the env backend: export `JIRA_TOKEN_<PROFILE>` and run `jira auth login --backend env`; or install/start a Secret Service (gnome-keyring) |
+| `env_credential_unset` | Profile uses the env backend but `JIRA_TOKEN_<PROFILE>` is not exported | Export the variable (or wrap the command: `op run -- jira ...`) — note the name is `JIRA_TOKEN_<PROFILE>`, not `JIRA_API_TOKEN` |
+| `onepassword_unsupported_build` | Release binaries are built without CGO, so the 1Password SDK is compiled out | Build from source with CGO, or use the keyring / env backend |
 | `OP_SERVICE_ACCOUNT_TOKEN not set` | 1Password service-account env missing | Export it, or fall back to keyring backend via `jira auth migrate --backend keyring` |
 | Exit 3, `1Password backend requires a vault` / `requires an item` | `--backend 1password` headless without `--vault`/`--item` | Pass both `--vault` and `--item` — they form the secret reference and are validated up front, before any network call |
 | 401 on a previously-working profile | Token revoked / rotated | `jira auth login --profile-name <name>` to replace |

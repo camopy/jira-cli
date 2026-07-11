@@ -74,6 +74,9 @@ const (
 	CodeCredentialEmpty              Code = "credential_empty"
 	CodeCredentialNamespaceCollision Code = "credential_namespace_collision"
 	CodeOnePasswordItemAmbiguous     Code = "onepassword_item_ambiguous"
+	// CodeEnvBackendReadOnly: a write or delete was attempted against the env
+	// secret backend, which only ever reads its JIRA_TOKEN_* variable.
+	CodeEnvBackendReadOnly Code = "env_backend_read_only"
 	// CodeValidationFailed is the validation catch-all; every specific
 	// validation code above must pre-empt it.
 	CodeValidationFailed Code = "validation_failed"
@@ -106,6 +109,14 @@ const (
 	// CodeOnePasswordUnsupportedBuild: the binary was built without CGO,
 	// so 1Password support is compiled out entirely.
 	CodeOnePasswordUnsupportedBuild Code = "onepassword_unsupported_build"
+	// CodeKeyringUnavailable: the OS keyring cannot service requests at all —
+	// no Secret Service on the D-Bus (WSL, headless Linux), an unsupported
+	// platform — distinct from credential_backend_unavailable, whose hint
+	// assumes the backend exists and merely hiccuped.
+	CodeKeyringUnavailable Code = "keyring_unavailable"
+	// CodeEnvCredentialUnset: a profile using the env secret backend has no
+	// JIRA_TOKEN_* variable set — the credential's single source is absent.
+	CodeEnvCredentialUnset Code = "env_credential_unset"
 	// CodeAuthFailed is the auth catch-all for untyped credential failures.
 	CodeAuthFailed Code = "auth_failed"
 )
@@ -195,6 +206,7 @@ var registry = map[Code]Spec{
 	CodeCredentialEmpty:              {Type: TypeValidation, Exit: 3, Hint: "Provide a non-empty API token.", Retryable: false},
 	CodeCredentialNamespaceCollision: {Type: TypeValidation, Exit: 3, Hint: "Rename the profile using only lowercase letters, digits, hyphens, and underscores.", Retryable: false},
 	CodeOnePasswordItemAmbiguous:     {Type: TypeValidation, Exit: 3, Hint: "Give the profile a unique 1Password item title, or point it at a specific item ID.", Retryable: false},
+	CodeEnvBackendReadOnly:           {Type: TypeValidation, Exit: 3, Hint: "The env backend only reads the profile's JIRA_TOKEN_<PROFILE> variable — set or unset it in the shell or secret manager that launches jira.", Retryable: false},
 	CodeValidationFailed:             {Type: TypeValidation, Exit: 3, Hint: "Check the values you passed and try again.", Retryable: false},
 	CodeJiraBadRequest:               {Type: TypeValidation, Exit: 3, Hint: "Jira rejected some of the values — fix the fields it flagged and send it again.", Retryable: false},
 	CodeJiraConflict:                 {Type: TypeValidation, Exit: 3, Hint: "Someone changed this issue since you loaded it — re-fetch it and try again on the latest version.", Retryable: false},
@@ -212,6 +224,8 @@ var registry = map[Code]Spec{
 	CodeCredentialRejected:           {Type: TypeAuth, Exit: 1, Hint: "Check the email and API token at id.atlassian.com, or pass --skip-verify to store the credential without checking.", Retryable: false},
 	CodeCredentialVerifyUnavailable:  {Type: TypeAuth, Exit: 1, Hint: "Jira couldn't be reached to verify the credential — try again, or pass --skip-verify to store it without checking.", Retryable: true},
 	CodeOnePasswordUnsupportedBuild:  {Type: TypeAuth, Exit: 1, Hint: "This build has no 1Password support — use a source build with CGO enabled, or switch to the keyring or env backend.", Retryable: false},
+	CodeKeyringUnavailable:           {Type: TypeAuth, Exit: 1, Hint: "No OS keyring is available here (common on WSL and headless Linux) — set the profile's JIRA_TOKEN_<PROFILE> variable and run `jira auth login --backend env`, or install a Secret Service such as gnome-keyring.", Retryable: false},
+	CodeEnvCredentialUnset:           {Type: TypeAuth, Exit: 1, Hint: "Export the profile's JIRA_TOKEN_<PROFILE> variable with the API token (JIRA_TOKEN_DEFAULT for the default profile), then retry.", Retryable: false},
 	CodeAuthFailed:                   {Type: TypeAuth, Exit: 1, Hint: "Check the credential with `jira auth status`, then sign in again with `jira auth login`.", Retryable: false},
 	// not_found (exit 2)
 	CodeProfileNotDefined: {Type: TypeNotFound, Exit: 2, Hint: "See your profiles with `jira config profile`, or create one with `jira auth login --profile <name>`.", Retryable: false},

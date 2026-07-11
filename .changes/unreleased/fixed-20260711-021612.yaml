@@ -1,0 +1,3 @@
+kind: fixed
+body: Classify OS keyring failures as a typed keyring_unavailable error that points at the env backend, instead of surfacing raw Secret Service D-Bus text as a generic validation failure
+time: 2026-07-11T02:16:12.141290239-04:00

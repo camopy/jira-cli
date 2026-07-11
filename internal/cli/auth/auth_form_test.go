@@ -148,7 +148,7 @@ func TestAuthLoginQuestionsUseStructuredSelectionsAndDescriptions(t *testing.T) 
 	if backend.Kind != authLoginQuestionSelect {
 		t.Fatalf("secret_backend kind = %q, want select", backend.Kind)
 	}
-	for _, want := range []string{"keyring", "1password"} {
+	for _, want := range []string{"keyring", "1password", "env"} {
 		if !slices.ContainsFunc(backend.Options, func(option authLoginOption) bool {
 			return option.Value == want && option.Label != "" && option.Description != ""
 		}) {
