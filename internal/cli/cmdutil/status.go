@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gechr/clog"
+	"github.com/gechr/clog/field/duration"
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cli"
@@ -51,7 +52,9 @@ func Spin(cmd *cobra.Command, op string, fn func(context.Context) error) error {
 	elapsed := time.Since(start)
 
 	if err != nil {
-		event := logger.Debug().Duration("time", elapsed)
+		// duration.WithMinimum(0) keeps time= visible below clog's default
+		// 1s cutoff: this debug lifecycle documents sub-second timings above.
+		event := logger.Debug().Duration("time", elapsed, duration.WithMinimum(0))
 		// Surface the HTTP status as its own field rather than burying it in
 		// the reason string, so failures stay greppable (status=403).
 		var apiErr *jira.APIError
@@ -61,6 +64,6 @@ func Spin(cmd *cobra.Command, op string, fn func(context.Context) error) error {
 		event.AnErr("reason", err).Msg(verb.Failuref())
 		return err
 	}
-	logger.Debug().Duration("time", elapsed).Msg(verb.Pastf())
+	logger.Debug().Duration("time", elapsed, duration.WithMinimum(0)).Msg(verb.Pastf())
 	return nil
 }

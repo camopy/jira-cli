@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gechr/clog"
+	"github.com/gechr/clog/field/duration"
 	"github.com/gechr/clog/fx"
 	"golang.org/x/sync/errgroup"
 
@@ -57,14 +58,16 @@ func FanOutKeysProgress[T any](
 		value, err := fn(ctx, key)
 		elapsed := time.Since(start)
 		if err != nil {
-			event := logger.Debug().Str("key", key).Duration("time", elapsed)
+			// duration.WithMinimum(0) keeps time= visible below clog's default
+			// 1s cutoff: this per-key debug lifecycle documents sub-second timings above.
+			event := logger.Debug().Str("key", key).Duration("time", elapsed, duration.WithMinimum(0))
 			var apiErr *jira.APIError
 			if errors.As(err, &apiErr) {
 				event = event.Int("status", apiErr.StatusCode)
 			}
 			event.AnErr("reason", err).Msg(verb.Failuref())
 		} else {
-			logger.Debug().Str("key", key).Duration("time", elapsed).Msg(verb.Pastf())
+			logger.Debug().Str("key", key).Duration("time", elapsed, duration.WithMinimum(0)).Msg(verb.Pastf())
 		}
 		return value, err
 	}

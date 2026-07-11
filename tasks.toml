@@ -133,8 +133,8 @@ description = "Run go vet"
 run = "go vet ./..."
 
 [security]
-description = "Run govulncheck (with a reviewed advisory allowlist)"
-run = "go run ./cmd/check-vuln"
+description = "Run govulncheck"
+run = "go tool govulncheck ./..."
 
 ["workflow:lint"]
 description = "Lint GitHub Actions workflows"
