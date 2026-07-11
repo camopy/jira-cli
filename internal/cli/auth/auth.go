@@ -490,23 +490,35 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 			// profile already carried (classic for a brand-new profile).
 			var verifiedUser *jira.CurrentUser
 			if verifyCredential != "" && !skipVerify {
-				// .Silent() runs the task and returns its error without logging
-				// a completion line — the failure is surfaced through the normal
-				// command error path instead of a duplicate spinner line.
-				verifyErr := clog.Spinner("Verifying Jira credentials").
-					NonTTYSilent(true).
-					Wait(cmd.Context(), func(ctx context.Context) error {
-						user, cloudID, err := verifyAndDetectCredential(ctx, profile, verifyCredential, time.Duration(profile.TimeoutSeconds)*time.Second, cmdutil.MaxRetryWaitFor(cmd), config.GatewayBaseURL)
-						if err != nil {
-							return err
-						}
-						verifiedUser = user
-						// Authoritative: empty for a classic token (clears any
-						// stale cloud_id carried from a prior scoped login),
-						// set for a scoped one.
-						profile.CloudID = cloudID
-						return nil
-					}).Silent()
+				verifyTask := func(ctx context.Context) error {
+					user, cloudID, err := verifyAndDetectCredential(ctx, profile, verifyCredential, time.Duration(profile.TimeoutSeconds)*time.Second, cmdutil.MaxRetryWaitFor(cmd), config.GatewayBaseURL)
+					if err != nil {
+						return err
+					}
+					verifiedUser = user
+					// Authoritative: empty for a classic token (clears any
+					// stale cloud_id carried from a prior scoped login),
+					// set for a scoped one.
+					profile.CloudID = cloudID
+					return nil
+				}
+				var verifyErr error
+				if clog.IsVerbose() {
+					// Under --debug the verification narrates itself (scoped
+					// token detection, HTTP dumps); an animated spinner
+					// sharing stderr would strand redraw frames between the
+					// debug records, so the task runs bare — the same
+					// alternation every other spinner site applies.
+					verifyErr = verifyTask(cmd.Context())
+				} else {
+					// .Silent() runs the task and returns its error without
+					// logging a completion line — the failure is surfaced
+					// through the normal command error path instead of a
+					// duplicate spinner line.
+					verifyErr = clog.Spinner("Verifying Jira credentials").
+						NonTTYSilent(true).
+						Wait(cmd.Context(), verifyTask).Silent()
+				}
 				if verifyErr != nil {
 					// Distinguish a rejected credential (the email/token pair is
 					// wrong) from a verification that could not complete (site
