@@ -513,6 +513,15 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 					// down, network, 5xx). Jira's raw 401 text ("Client must be
 					// authenticated") reads cryptically, so name the real cause.
 					var apiErr *jira.APIError
+					// A tenant-not-found 404 means the base URL names no
+					// Atlassian site at all — a typo, not a credential problem
+					// and not a transient outage. Let the typed APIError
+					// propagate: it already maps to jira_site_not_found with a
+					// message naming the host, where the fallback below would
+					// mislabel it "temporarily unavailable - retry".
+					if errors.As(verifyErr, &apiErr) && apiErr.TenantNotFound {
+						return verifyErr
+					}
 					if errors.As(verifyErr, &apiErr) && apiErr.Type == jira.ErrorTypeAuth {
 						return &config.CredentialError{
 							Type:        config.ErrorTypeAuth,
@@ -1272,6 +1281,13 @@ func probeRemoteAuth(ctx context.Context, cmd *cobra.Command, profile config.Pro
 		if httpStatusOf(resp) == 401 {
 			myselfOut["hint"] = "token can't read /myself — for granular tokens, add read:user:jira, read:application-role:jira, read:group:jira, read:avatar:jira (Atlassian requires the union)"
 		}
+		// A tenant-not-found 404 (Atlassian's Atl-Missing-Tcs signal) means
+		// the base URL names no site at all — say "fix the site name" instead
+		// of leaving the generic "/myself unreachable" reading as an outage.
+		var apiErr *jira.APIError
+		if errors.As(err, &apiErr) && apiErr.TenantNotFound {
+			myselfOut["hint"] = "no Atlassian site exists at this base_url — check the site name and update it with `jira config set profiles.<name>.base_url`"
+		}
 	} else {
 		myselfOut["ok"] = true
 		myselfOut["account_id"] = me.AccountID
@@ -1872,9 +1888,12 @@ func revokeOldCredential(ctx context.Context, store config.CredentialStore, oldR
 		return ""
 	}
 	if _, _, err := config.RevokeProfileCredential(ctx, store, oldRef); err != nil {
+		// SanitizeCredentialError keeps the note to the typed display
+		// message: the full error chain would replay the hint text and the
+		// raw backend cause (a D-Bus dump on WSL) inside a one-line warning.
 		return fmt.Sprintf(
-			"the previous credential for profile %q (%s, site %s) could not be removed: %v — remove it manually",
-			oldRef.Profile, oldRef.Backend, oldRef.Host, err,
+			"the previous credential for profile %q (%s, site %s) could not be removed: %s — remove it manually if one was stored",
+			oldRef.Profile, oldRef.Backend, oldRef.Host, config.SanitizeCredentialError(err),
 		)
 	}
 	return ""

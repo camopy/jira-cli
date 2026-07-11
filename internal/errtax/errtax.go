@@ -129,6 +129,11 @@ const (
 	CodeProfileNotDefined Code = "profile_not_defined"
 	CodeProfileIncomplete Code = "profile_incomplete"
 	CodeJiraNotFound      Code = "jira_not_found"
+	// CodeJiraSiteNotFound: the base URL names no Atlassian tenant at all —
+	// a 404 carrying the edge's Atl-Missing-Tcs signal. Distinct from
+	// jira_not_found (a missing resource inside a real site) because the
+	// remediation is fixing the profile's site name, not the identifier.
+	CodeJiraSiteNotFound Code = "jira_site_not_found"
 	// CodeJiraGone (410) is a permanently deleted resource: not-found tells
 	// an agent to fix the reference, where validation would suggest
 	// correcting the request.
@@ -231,6 +236,7 @@ var registry = map[Code]Spec{
 	CodeProfileNotDefined: {Type: TypeNotFound, Exit: 2, Hint: "See your profiles with `jira config profile`, or create one with `jira auth login --profile <name>`.", Retryable: false},
 	CodeProfileIncomplete: {Type: TypeNotFound, Exit: 2, Hint: "Finish setting up the profile — run `jira auth login --profile <name>` to give it a base URL.", Retryable: false},
 	CodeJiraNotFound:      {Type: TypeNotFound, Exit: 2, Hint: "Double-check the identifier exists and that this account can see it.", Retryable: false},
+	CodeJiraSiteNotFound:  {Type: TypeNotFound, Exit: 2, Hint: "That Atlassian site doesn't exist — check the site name, then update the profile with `jira config set profiles.<name>.base_url`.", Retryable: false},
 	CodeJiraGone:          {Type: TypeNotFound, Exit: 2, Hint: "This was permanently deleted in Jira — stop referring to it.", Retryable: false},
 	CodeNotFound:          {Type: TypeNotFound, Exit: 2, Hint: "Re-check the identifier — it doesn't exist, or this account can't see it.", Retryable: false},
 	// rate_limit (exit 4)

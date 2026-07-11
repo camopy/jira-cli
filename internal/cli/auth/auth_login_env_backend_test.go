@@ -178,3 +178,40 @@ item = "jira-cli-work"
 		t.Fatalf("refusal should point at auth migrate: %v", err)
 	}
 }
+
+// A base URL that names no Atlassian tenant must fail login verification
+// with the site-not-found identity — naming the host, not pretending the
+// site is "temporarily unavailable" (Atlassian's misleading 404 body) —
+// and persist nothing.
+func TestAuthLoginReportsNonexistentSite(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Atl-Missing-Tcs", "true")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errorCode":"OTHER","errorMessage":"Site temporarily unavailable"}`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("JIRA_TEST_TOKEN", "some-token")
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+
+	_, _, err := runAuthLoginInProcess(
+		t, cli.ModeJSON, configPath,
+		"--base-url", srv.URL,
+		"--email", "ada@example.com",
+		"--backend", "keyring",
+		"--credential-env", "JIRA_TEST_TOKEN",
+	)
+	if err == nil {
+		t.Fatal("auth login succeeded against a nonexistent site")
+	}
+	if !strings.Contains(err.Error(), "no Atlassian site exists at") {
+		t.Fatalf("error should say the site does not exist: %v", err)
+	}
+	if strings.Contains(err.Error(), "temporarily unavailable") {
+		t.Fatalf("error kept Atlassian's misleading outage wording: %v", err)
+	}
+	if content, readErr := os.ReadFile(configPath); readErr == nil && strings.Contains(string(content), srv.URL) {
+		t.Fatalf("failed login persisted the profile:\n%s", content)
+	}
+}

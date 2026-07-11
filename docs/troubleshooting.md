@@ -72,6 +72,13 @@ Map the per-profile `error` value to the next step:
     `export JIRA_TOKEN_<PROFILE>="$(op read "op://...")"` instead; see
     [Authenticate](auth.md#where-the-token-is-stored).
 
+`no Atlassian site exists at <host>` (`jira_site_not_found`)
+:   The profile's `base_url` names a site that doesn't exist — usually a typo
+    in the site name. (Atlassian's raw 404 body says "Site temporarily
+    unavailable", which reads as an outage; jira detects the tenant-not-found
+    signal and says what's actually wrong.) Fix it with
+    `jira config set profiles.<name>.base_url https://<site>.atlassian.net`.
+
 `auth_failed` (HTTP 401)
 :   Token is wrong or expired. Rotate it at
     [id.atlassian.com](https://id.atlassian.com/manage-profile/security/api-tokens)

@@ -1,0 +1,3 @@
+kind: fixed
+body: Report a nonexistent Atlassian site as jira_site_not_found with the offending host named, instead of relaying Atlassian's misleading 'Site temporarily unavailable' 404 — auth login verification and auth status probes now point at the base_url site name
+time: 2026-07-11T02:48:21.004217479-04:00

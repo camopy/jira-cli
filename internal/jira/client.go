@@ -79,6 +79,13 @@ type APIError struct {
 	// against; the envelope's request_id is a local value with no
 	// server-side meaning. Empty when neither header was present.
 	UpstreamRequestID string
+	// TenantNotFound reports Atlassian's tenant-not-found signature: a 404
+	// whose Atl-Missing-Tcs response header is "true" (the edge found no
+	// tenant for the host — the body text is a misleading "Site temporarily
+	// unavailable"). It distinguishes "this site does not exist" (a base_url
+	// typo) from an ordinary resource 404 inside a real site, and routes the
+	// error to the jira_site_not_found code.
+	TenantNotFound bool
 	// Cause preserves transport/body/JSON failures for errors.Is/As while
 	// keeping the public APIError message stable.
 	Cause error
@@ -517,6 +524,16 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 			RateLimitRemaining: resp.Rate.Remaining,
 			UpstreamRequestID:  upstreamRequestID(res),
 		}
+		// Atlassian's edge answers a nonexistent tenant with a 404 whose
+		// body says "Site temporarily unavailable" — wording that sends the
+		// user off to wait out an outage that isn't one. The Atl-Missing-Tcs
+		// header is the structured signal (no tenant behind this host), so
+		// branch on it, replace the misleading display message, and keep the
+		// upstream text in ErrorMessages for diagnostics.
+		if res.StatusCode == http.StatusNotFound && strings.EqualFold(res.Header.Get("Atl-Missing-Tcs"), "true") {
+			apiErr.TenantNotFound = true
+			apiErr.Message = fmt.Sprintf("no Atlassian site exists at `%s` (check the site name)", req.URL.Host)
+		}
 		return resp, apiErr
 	}
 	if out != nil {
@@ -903,8 +920,17 @@ func CodeForStatus(status int) errtax.Code {
 	}
 }
 
-// Code classifies the API failure by its HTTP status.
-func (e *APIError) Code() errtax.Code { return CodeForStatus(e.StatusCode) }
+// Code classifies the API failure by its HTTP status, with one
+// header-driven refinement: a 404 the edge marked tenant-not-found is
+// jira_site_not_found (the base_url names no Atlassian site), not the
+// resource-level jira_not_found. Both are not_found class, so the
+// ClassifyStatus lockstep is undisturbed.
+func (e *APIError) Code() errtax.Code {
+	if e.TenantNotFound {
+		return errtax.CodeJiraSiteNotFound
+	}
+	return CodeForStatus(e.StatusCode)
+}
 
 var _ errtax.Coded = (*APIError)(nil)
 

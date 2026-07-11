@@ -177,8 +177,8 @@ func TestCodes(t *testing.T) {
 		t.Error("Codes() contains duplicates")
 	}
 	// The registered code count moves only when the taxonomy contract does.
-	if len(codes) != 53 {
-		t.Errorf("registry has %d codes, want 53 — update the contract and this count together", len(codes))
+	if len(codes) != 54 {
+		t.Errorf("registry has %d codes, want 54 — update the contract and this count together", len(codes))
 	}
 	// Codes() must be a fresh allocation each call: sorting or mutating one
 	// return value must not affect the next.

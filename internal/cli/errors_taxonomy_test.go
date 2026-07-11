@@ -82,6 +82,10 @@ var taxonomyRegistry = map[string]struct {
 	"profile_not_defined": {"not_found", 2},
 	"profile_incomplete":  {"not_found", 2},
 	"jira_not_found":      {"not_found", 2},
+	// jira_site_not_found is the tenant-not-found 404 (Atl-Missing-Tcs):
+	// the base_url names no Atlassian site at all. Same class and exit as
+	// jira_not_found — only the remediation differs (fix the site name).
+	"jira_site_not_found": {"not_found", 2},
 	"jira_gone":           {"not_found", 2},
 	"not_found":           {"not_found", 2},
 	// rate_limit (exit 4)
@@ -191,6 +195,12 @@ func taxonomyCases() []struct {
 		{"jira 401", jiraStatusError(401), "jira_unauthorized", "", true},
 		{"jira 403", jiraStatusError(403), "jira_forbidden", "", true},
 		{"jira 404", jiraStatusError(404), "jira_not_found", "", true},
+		// The tenant-not-found 404 (Atl-Missing-Tcs header) refines to its
+		// own code: the remediation is fixing the profile's site name, not
+		// re-checking a resource identifier. The message is repo-authored at
+		// the transport (Atlassian's body text misleadingly says "Site
+		// temporarily unavailable"), so the style guard applies.
+		{"jira site not found", &jira.APIError{StatusCode: 404, Type: jira.ClassifyStatus(404), Message: "no Atlassian site exists at `acmee.atlassian.net` (check the site name)", TenantNotFound: true}, "jira_site_not_found", "That Atlassian site doesn't exist — check the site name, then update the profile with `jira config set profiles.<name>.base_url`.", false},
 		{"jira 409", jiraStatusError(409), "jira_conflict", "", true},
 		{"jira 410", jiraStatusError(410), "jira_gone", "", true},
 		{"jira 429", jiraStatusError(429), "jira_rate_limited", "", true},

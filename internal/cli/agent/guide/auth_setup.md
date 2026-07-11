@@ -113,6 +113,7 @@ Further reading:
 | `OP_SERVICE_ACCOUNT_TOKEN not set` | 1Password service-account env missing | Export it, or fall back to keyring backend via `jira auth migrate --backend keyring` |
 | Exit 3, `1Password backend requires a vault` / `requires an item` | `--backend 1password` headless without `--vault`/`--item` | Pass both `--vault` and `--item` — they form the secret reference and are validated up front, before any network call |
 | 401 on a previously-working profile | Token revoked / rotated | `jira auth login --profile-name <name>` to replace |
+| `jira_site_not_found` ("no Atlassian site exists at <host>") | `base_url` names no Atlassian tenant — a site-name typo. Atlassian's raw 404 says "Site temporarily unavailable", but the Atl-Missing-Tcs signal means the site does not exist | Fix the site name: `jira config set profiles.<name>.base_url https://<site>.atlassian.net` |
 
 **Next**
 - Then: → `identity_setup` (run `jira auth whoami --save` to persist `account_id`)
