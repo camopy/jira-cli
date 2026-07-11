@@ -35,8 +35,9 @@ const (
 	// points at that directory rather than at --help.
 	InputSavedQueryUnknown
 	// InputForceRequired is a destructive or state-wiping run refused
-	// because headless / agent / --no-input context needs explicit --force
-	// consent.
+	// because it needs explicit --force consent: headless / agent /
+	// --no-input contexts for gates with an interactive confirm fallback,
+	// every context for clobber guards that never prompt.
 	InputForceRequired
 )
 

@@ -505,9 +505,9 @@ $ jira issue attachment download PROJ-123 10500 --to ./report.pdf --dry-run`,
 					return err
 				}
 				if _, err := os.Stat(target); err == nil && !force {
-					return fmt.Errorf("attachment download: validation: %s already exists; pass --force to overwrite", target)
+					return cli.NewCLIInputError(cli.InputForceRequired, fmt.Sprintf("%s already exists; pass --force to overwrite", target))
 				} else if err != nil && !os.IsNotExist(err) {
-					return fmt.Errorf("attachment download: validation: %s: %w", target, err)
+					return fmt.Errorf("attachment download: %s: %w", target, err)
 				}
 			}
 			if dryRun {
@@ -549,7 +549,7 @@ $ jira issue attachment download PROJ-123 10500 --to ./report.pdf --dry-run`,
 					return err
 				}
 				if _, err := os.Stat(target); err == nil && !force {
-					return fmt.Errorf("attachment download: validation: %s already exists; pass --force to overwrite", target)
+					return cli.NewCLIInputError(cli.InputForceRequired, fmt.Sprintf("%s already exists; pass --force to overwrite", target))
 				}
 			}
 			// Attachment binary content always writes to a file — it is
@@ -613,7 +613,12 @@ func confineDownloadTarget(target string) error {
 		return fmt.Errorf("attachment download: resolve working directory: %w", err)
 	}
 	if !xfilepath.IsWithin(cwd, target) {
-		return fmt.Errorf("attachment download: validation: --to %s resolves outside the working directory %s; use a path inside it", target, cwd)
+		sandboxErr := cli.NewCLIInputError(
+			cli.InputFlagValueInvalid,
+			fmt.Sprintf("--to %s resolves outside the working directory %s; use a path inside it", target, cwd),
+		)
+		sandboxErr.Flag = "to"
+		return sandboxErr
 	}
 	return nil
 }

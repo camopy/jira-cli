@@ -161,6 +161,14 @@ func TestCommandErrorsAreTypedNotSubstringClassified(t *testing.T) {
 		{"force-gate/link-delete", []string{"issue", "link", "delete", "PROJ-1", "10000"}, nil, "validation_failed", 3},
 		{"force-gate/cache-clear", []string{"cache", "clear"}, nil, "validation_failed", 3},
 		{"force-gate/auth-logout", []string{"auth", "logout", "default"}, nil, "validation_failed", 3},
+		// The download clobber guard refuses to overwrite an existing --to
+		// target without --force in every context (no interactive confirm
+		// fallback), before any HTTP call. This test file is its own
+		// always-present target (the suite runs with cwd here).
+		{"clobber-guard/attachment-download", []string{"issue", "attachment", "download", "PROJ-1", "99", "--to", "typed_errors_probe_test.go"}, nil, "validation_failed", 3},
+		// The download sandbox refuses a --to that escapes the working
+		// directory, also before any HTTP call: a bad flag value, typed.
+		{"sandbox/attachment-download-escape", []string{"issue", "attachment", "download", "PROJ-1", "99", "--to", "../escape.bin"}, nil, "flag_value_invalid", 3},
 		// (the update --force gate needs the package-local channel stub;
 		// it is probed in internal/cli/update's own test.)
 
