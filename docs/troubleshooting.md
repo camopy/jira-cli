@@ -65,6 +65,13 @@ Map the per-profile `error` value to the next step:
     (`op run -- jira ...`). The name is derived from the profile —
     `JIRA_TOKEN_DEFAULT` for the default profile — not `JIRA_API_TOKEN`.
 
+    WSL gotcha: if your `op` is a bridge to the Windows `op.exe` (the usual
+    setup for desktop-app auth), `op run` executes its child **on Windows**,
+    so the variable never reaches your WSL `jira` — and errors mentioning
+    `%PATH%` confirm the Windows side handled it. Use
+    `export JIRA_TOKEN_<PROFILE>="$(op read "op://...")"` instead; see
+    [Authenticate](auth.md#where-the-token-is-stored).
+
 `auth_failed` (HTTP 401)
 :   Token is wrong or expired. Rotate it at
     [id.atlassian.com](https://id.atlassian.com/manage-profile/security/api-tokens)

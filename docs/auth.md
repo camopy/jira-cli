@@ -147,8 +147,26 @@ becomes `JIRA_TOKEN_WORK`), then the backend recorded on the profile.
     (gnome-keyring, KWallet). WSL and most headless hosts don't have one, so
     `keyring` operations fail with `keyring_unavailable` — interactive
     `auth login` won't even offer the keyring there. Use the `env` backend:
-    export `JIRA_TOKEN_<PROFILE>` (for example from `op run`) and run
+    export `JIRA_TOKEN_<PROFILE>` (for example from `op read`) and run
     `jira auth login --backend env`.
+
+!!! warning "WSL + the Windows `op.exe` bridge: use `op read`, not `op run`"
+    A common WSL setup aliases `op` to the Windows `op.exe` so 1Password's
+    biometric/desktop-app auth works from Linux. Secret *reads* cross the
+    bridge fine, but `op run` spawns its child process **on Windows** — with
+    the Windows `PATH`, environment, and config — so
+    `op run -- jira auth status` runs a Windows `jira` (or fails with
+    `executable file not found in %PATH%`), never your WSL binary, and the
+    injected variable never reaches it. Pull the secret across instead:
+
+    ```sh
+    export JIRA_TOKEN_DEFAULT="$(op read "op://<vault>/<item>/<field>")"
+    jira auth status
+    ```
+
+    `op run` as a wrapper works only with a **native Linux** `op` signed in
+    inside WSL. (The `%PATH%` spelling in the error is the tell that the
+    Windows binary handled the call.)
 
 !!! note "1Password on macOS and Linux needs a CGO build"
     The Windows release binary includes the `1password` backend. The macOS and

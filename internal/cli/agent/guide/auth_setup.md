@@ -57,7 +57,7 @@ Availability guard: interactive login offers only backends that can work here �
   ```
 - Headless, env backend (WSL / containers / `op run` — nothing is stored; the variable is the credential). Do NOT pass `--secret-stdin` or `--credential-env` here — the login verifies the variable's value directly, and only warns when it is unset:
   ```sh
-  export JIRA_TOKEN_WORK="<api-token>"   # or inject per process: op run, direnv, CI secrets
+  export JIRA_TOKEN_WORK="<api-token>"   # or: export JIRA_TOKEN_WORK="$(op read "op://<vault>/<item>/<field>")"
   jira auth login --no-input \
     --profile-name work \
     --base-url https://company.atlassian.net \
@@ -108,6 +108,7 @@ Further reading:
 | `credential not found` | Backend has no entry for this profile | `jira auth login --profile-name <name>` |
 | `keyring_unavailable` (raw cause: `org.freedesktop.secrets` not provided) | No Secret Service on this host — WSL and headless Linux have no OS keyring by default | Use the env backend: export `JIRA_TOKEN_<PROFILE>` and run `jira auth login --backend env`; or install/start a Secret Service (gnome-keyring) |
 | `env_credential_unset` | Profile uses the env backend but `JIRA_TOKEN_<PROFILE>` is not exported | Export the variable (or wrap the command: `op run -- jira ...`) — note the name is `JIRA_TOKEN_<PROFILE>`, not `JIRA_API_TOKEN` |
+| `env_credential_unset` persists despite `op run`, or `op run` errors mention `%PATH%` | WSL where `op` bridges to the Windows `op.exe`: `op run` spawns its child **on Windows**, so the injected variable never reaches the WSL `jira` binary | Export via a read instead: `export JIRA_TOKEN_<PROFILE>="$(op read "op://<vault>/<item>/<field>")"` — `op run` as a wrapper needs a native Linux `op` |
 | `onepassword_unsupported_build` | Release binaries are built without CGO, so the 1Password SDK is compiled out | Build from source with CGO, or use the keyring / env backend |
 | `OP_SERVICE_ACCOUNT_TOKEN not set` | 1Password service-account env missing | Export it, or fall back to keyring backend via `jira auth migrate --backend keyring` |
 | Exit 3, `1Password backend requires a vault` / `requires an item` | `--backend 1password` headless without `--vault`/`--item` | Pass both `--vault` and `--item` — they form the secret reference and are validated up front, before any network call |
