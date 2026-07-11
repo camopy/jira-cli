@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
+	"github.com/gechr/x/human"
 	"github.com/gechr/x/ptr"
 	xstrings "github.com/gechr/x/strings"
 
@@ -133,41 +134,45 @@ func projectOf(key string) string {
 
 // jiraTimeLayout is the timestamp format Jira's REST API returns. Some
 // deployments emit a colon in the zone offset (+05:30) instead, which RFC3339
-// covers — age falls back to it.
+// covers — parseJiraTime falls back to it.
 const jiraTimeLayout = "2006-01-02T15:04:05.000-0700"
 
-// age renders a relative age for a Jira timestamp (30s, 5m, 2h, 4d, 3w, 6mo,
-// 2y). Empty or unparsable timestamps render "".
+// parseJiraTime parses a Jira REST timestamp, falling back to RFC 3339 for
+// deployments that emit a colon in the zone offset.
+func parseJiraTime(ts string) (time.Time, error) {
+	t, err := time.Parse(jiraTimeLayout, ts)
+	if err != nil {
+		return time.Parse(time.RFC3339, ts)
+	}
+	return t, nil
+}
+
+// age renders a relative age for a Jira timestamp ("now", 5m, 2h, 4d, 3w,
+// 6mo, 2y). Empty or unparsable timestamps render "". The thresholds and
+// units come from x/human.FormatTimeAgoCompactFrom so the TUI and the
+// plain renderers can never disagree on what "3d" means. The library has
+// no bare variant, so its " ago" suffix is trimmed here (the list column
+// is four cells wide), and clampFuture makes the "in ..." future form
+// unreachable rather than trimmed.
 func age(ts string, now time.Time) string {
 	if ts == "" {
 		return ""
 	}
-	t, err := time.Parse(jiraTimeLayout, ts)
+	t, err := parseJiraTime(ts)
 	if err != nil {
-		if t, err = time.Parse(time.RFC3339, ts); err != nil {
-			return ""
-		}
+		return ""
 	}
-	d := now.Sub(t)
-	if d < 0 {
-		d = 0
+	return strings.TrimSuffix(human.FormatTimeAgoCompactFrom(clampFuture(t, now), now), " ago")
+}
+
+// clampFuture pins a future timestamp to now: clock skew between Jira and
+// this machine must read as just-updated ("now"), never as an age or an
+// "in ..." forecast.
+func clampFuture(t, now time.Time) time.Time {
+	if t.After(now) {
+		return now
 	}
-	switch {
-	case d < time.Minute:
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	case d < time.Hour:
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh", int(d.Hours()))
-	case d < 7*24*time.Hour:
-		return fmt.Sprintf("%dd", int(d.Hours()/24))
-	case d < 30*24*time.Hour:
-		return fmt.Sprintf("%dw", int(d.Hours()/(24*7)))
-	case d < 365*24*time.Hour:
-		return fmt.Sprintf("%dmo", int(d.Hours()/(24*30)))
-	default:
-		return fmt.Sprintf("%dy", int(d.Hours()/(24*365)))
-	}
+	return t
 }
 
 func issueLabels(i *jira.Issue) []string {
@@ -400,8 +405,12 @@ func detailHeading(i *jira.Issue, width int, now time.Time, baseURL string) stri
 	if tn := issueTypeName(i); tn != "" {
 		meta = append(meta, typeCell(i)+" "+tn)
 	}
-	if ag := age(issueUpdated(i), now); ag != "" {
-		meta = append(meta, theme.DetailDim.Render("updated "+ag+" ago"))
+	if ts := issueUpdated(i); ts != "" {
+		if t, err := parseJiraTime(ts); err == nil {
+			// The library words the tense ("3d ago", "now"); clock skew
+			// clamps to "updated now" rather than claiming a forecast.
+			meta = append(meta, theme.DetailDim.Render("updated "+human.FormatTimeAgoCompactFrom(clampFuture(t, now), now)))
+		}
 	}
 	line := strings.Join(meta, "  ")
 	if width > 0 && lipgloss.Width(line) > width {
