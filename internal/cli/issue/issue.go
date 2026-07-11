@@ -1643,7 +1643,14 @@ func runIssueEditMany(cmd *cobra.Command, keys []string, parallelism int, in iss
 		}
 		service = cmdutil.ServicesForClient(editClient).Issue()
 	}
-	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "issue.edit", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+	// A dry-run still fans out (per-key pipeline validation, optionally the
+	// --validate-remote editmeta read), so the lifecycle must speak about
+	// the preview rather than claim edits.
+	fanOut := cmdutil.FanOutKeysProgress[map[string]any]
+	if in.DryRun {
+		fanOut = cmdutil.FanOutKeysProgressPreview[map[string]any]
+	}
+	results, err := fanOut(cmd.Context(), "issue.edit", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		editIn := pipeline.MutationInput{
 			Mode:             cmdutil.ADFModeFor(cmd, true),
 			Fields:           cmdutil.CopyAnyMap(in.Fields),
@@ -2358,7 +2365,9 @@ func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, 
 				return fmt.Errorf("jira base URL is required for issue.transition --validate-remote")
 			}
 			service := cmdutil.ServicesForClient(client).Issue()
-			results, rerr := cmdutil.FanOutKeysProgress(cmd.Context(), "issue.transition", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+			// This branch is always a dry-run; the per-key work is the
+			// read-only target resolution, so the lifecycle previews.
+			results, rerr := cmdutil.FanOutKeysProgressPreview(cmd.Context(), "issue.transition", keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 				id, resolveErr := resolveTransitionValidated(ctx, service, key, target, !payload.empty())
 				if resolveErr != nil {
 					return nil, resolveErr
@@ -2592,7 +2601,13 @@ func runDestructiveIssueMany(
 		}
 		service = cmdutil.ServicesForClient(client).Issue()
 	}
-	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "issue."+name, keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+	// A dry-run still fans out for per-key pipeline validation, so the
+	// lifecycle must speak about the preview rather than claim deletions.
+	fanOut := cmdutil.FanOutKeysProgress[map[string]any]
+	if in.DryRun {
+		fanOut = cmdutil.FanOutKeysProgressPreview[map[string]any]
+	}
+	results, err := fanOut(cmd.Context(), "issue."+name, keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
 		destructiveIn := pipeline.MutationInput{
 			Mode:   cmdutil.ADFModeFor(cmd, true),
 			Fields: cmdutil.CopyAnyMap(in.Fields),

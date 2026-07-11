@@ -33,7 +33,19 @@ import (
 // strands onto its own line between the debug records. Verbose narration and
 // the spinner are alternatives, never shown together.
 func Spin(cmd *cobra.Command, op string, fn func(context.Context) error) error {
-	verb := cli.VerbFor(op)
+	return spinVerb(cmd, cli.VerbFor(op), fn)
+}
+
+// SpinPreview is Spin for a dry-run: the spinner label and the debug
+// lifecycle speak about the preview ("Previewing issue edit", "previewed
+// issue edit") instead of claiming the mutation happened. A dry-run path
+// that performs a genuine read should keep Spin with the read op instead
+// (the transition target resolution uses issue.transitions, for example).
+func SpinPreview(cmd *cobra.Command, op string, fn func(context.Context) error) error {
+	return spinVerb(cmd, cli.VerbFor(op).Preview(), fn)
+}
+
+func spinVerb(cmd *cobra.Command, verb cli.OperationVerb, fn func(context.Context) error) error {
 	logger := clog.Ctx(cmd.Context())
 	logger.Debug().Msg(verb.Gerundf())
 

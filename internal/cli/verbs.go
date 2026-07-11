@@ -60,6 +60,24 @@ func (v OperationVerb) Failuref() string { return phrase("failed to "+v.Infiniti
 // nothing.
 func (v OperationVerb) Conditionalf() string { return phrase("would "+v.Infinitive, v.Noun) }
 
+// Preview reworks the verb for a dry-run lifecycle: the operation is not
+// performed, only previewed, so every phrase speaks about the preview
+// itself — "previewing issue edit", "previewed issue edit", "failed to
+// preview issue edit" — instead of claiming the mutation. The original
+// noun and infinitive collapse into a compound noun, which reads cleanly
+// for transitive verbs with plain nouns (edit/delete/clone/move/
+// transition + issue). Particle infinitives ("comment on") and
+// prepositional nouns ("issues to epic") would garble — rework the
+// registry entry before adopting Preview for such an op.
+func (v OperationVerb) Preview() OperationVerb {
+	return OperationVerb{
+		Gerund:     "previewing",
+		Past:       "previewed",
+		Infinitive: "preview",
+		Noun:       strings.TrimSpace(v.Noun + " " + v.Infinitive),
+	}
+}
+
 // NounPlural returns the object noun in plural form for batch phrases — naive
 // pluralisation (append s unless already plural) that covers the operations'
 // nouns: issue -> issues, transition -> transitions, web link -> web links.

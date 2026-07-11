@@ -18,6 +18,48 @@ import (
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
+// A dry-run fan-out must narrate the preview, never the mutation: the
+// per-key debug lifecycle says "previewing/previewed issue edit" (and
+// "failed to preview" on error), with no mutation-tense phrasing left.
+func TestFanOutKeysProgressPreviewNarratesPreview(t *testing.T) {
+	var buf bytes.Buffer
+	prev := clog.IsVerbose()
+	clog.SetVerbose(true)
+	clog.SetOutput(clog.NewOutput(&buf, clog.ColorNever))
+	t.Cleanup(func() {
+		clog.SetVerbose(prev)
+		clog.SetOutput(clog.NewOutput(os.Stderr, clog.ColorAuto))
+	})
+
+	_, err := FanOutKeysProgressPreview(context.Background(), "issue.edit", []string{"A-1"}, 1,
+		func(context.Context, string) (string, error) { return "ok", nil })
+	if err != nil {
+		t.Fatalf("FanOutKeysProgressPreview() error = %v", err)
+	}
+	_, err = FanOutKeysProgressPreview(context.Background(), "issue.delete", []string{"A-2"}, 1,
+		func(context.Context, string) (string, error) { return "", errors.New("boom") })
+	if err != nil {
+		t.Fatalf("FanOutKeysProgressPreview() error = %v", err)
+	}
+
+	out := buf.String()
+	for _, expected := range []string{
+		"previewing issue edit",
+		"previewed issue edit",
+		"previewing issue delete",
+		"failed to preview issue delete",
+	} {
+		if !strings.Contains(out, expected) {
+			t.Fatalf("preview lifecycle missing %q; got:\n%s", expected, out)
+		}
+	}
+	for _, banned := range []string{"editing issue", "edited issue", "deleting issue", "deleted issue", "failed to edit", "failed to delete"} {
+		if strings.Contains(out, banned) {
+			t.Fatalf("preview lifecycle used mutation tense %q; got:\n%s", banned, out)
+		}
+	}
+}
+
 // The per-key debug failure lifecycle prints the error text, which embeds
 // Jira-supplied messages — the reason field must cross the terminal
 // sanitizer so a crafted message cannot inject escapes into stderr.

@@ -44,11 +44,36 @@ func FanOutKeysProgress[T any](
 	parallelism int,
 	fn func(context.Context, string) (T, error),
 ) ([]KeyResult[T], error) {
+	return fanOutKeysProgressVerb(ctx, cli.VerbFor(op), keys, parallelism, fn)
+}
+
+// FanOutKeysProgressPreview is FanOutKeysProgress for a dry-run: every
+// lifecycle surface — spinner rows, the footer, and the per-key debug
+// lines — speaks about the preview ("previewing issue edits",
+// "previewed issue edit") instead of claiming the mutation happened.
+// Callers whose dry-run path still fans out (local pipeline validation,
+// --validate-remote reads) select it on their dry-run flag.
+func FanOutKeysProgressPreview[T any](
+	ctx context.Context,
+	op string,
+	keys []string,
+	parallelism int,
+	fn func(context.Context, string) (T, error),
+) ([]KeyResult[T], error) {
+	return fanOutKeysProgressVerb(ctx, cli.VerbFor(op).Preview(), keys, parallelism, fn)
+}
+
+func fanOutKeysProgressVerb[T any](
+	ctx context.Context,
+	verb cli.OperationVerb,
+	keys []string,
+	parallelism int,
+	fn func(context.Context, string) (T, error),
+) ([]KeyResult[T], error) {
 	if ctx == nil || fn == nil {
 		return FanOutKeys(ctx, keys, parallelism, fn)
 	}
 
-	verb := cli.VerbFor(op)
 	logger := clog.Ctx(ctx)
 	// traced wraps a per-key call with the debug lifecycle, keeping the timing
 	// and field-shaping in one place for both the single- and multi-key paths.

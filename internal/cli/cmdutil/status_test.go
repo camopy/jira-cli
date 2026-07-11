@@ -47,6 +47,31 @@ func TestSpinReturnsTaskErrorIncludingAPIError(t *testing.T) {
 	})
 }
 
+// SpinPreview must narrate the preview lifecycle, never the mutation.
+func TestSpinPreviewNarratesPreview(t *testing.T) {
+	var buf bytes.Buffer
+	prev := clog.IsVerbose()
+	clog.SetVerbose(true)
+	clog.SetOutput(clog.NewOutput(&buf, clog.ColorNever))
+	t.Cleanup(func() {
+		clog.SetVerbose(prev)
+		clog.SetOutput(clog.NewOutput(os.Stderr, clog.ColorAuto))
+	})
+
+	cmd := &cobra.Command{Use: "x"}
+	cmd.SetContext(context.Background())
+	if err := SpinPreview(cmd, "issue.edit", func(context.Context) error { return nil }); err != nil {
+		t.Fatalf("SpinPreview() error = %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "previewing issue edit") || !strings.Contains(out, "previewed issue edit") {
+		t.Fatalf("preview lifecycle missing; got %q", out)
+	}
+	if strings.Contains(out, "editing issue") || strings.Contains(out, "edited issue") {
+		t.Fatalf("preview lifecycle used mutation tense; got %q", out)
+	}
+}
+
 // The debug failure lifecycle prints the error text, which embeds
 // Jira-supplied messages — the reason field must cross the terminal
 // sanitizer so a crafted message cannot inject escapes into stderr.

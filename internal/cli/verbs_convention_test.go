@@ -58,3 +58,22 @@ func TestCompletionMessagesComeFromTheRegistry(t *testing.T) {
 		t.Errorf("messageForCommand(auth.whoami) = %q, want empty", got)
 	}
 }
+
+// TestPreviewVerbFormsStayGrammatical pins the dry-run lifecycle rework:
+// the noun and infinitive collapse into a compound noun so every phrase
+// form reads correctly for a preview.
+func TestPreviewVerbFormsStayGrammatical(t *testing.T) {
+	v := VerbFor("issue.edit").Preview()
+	cases := []struct{ name, got, want string }{
+		{"gerund", v.Gerundf(), "previewing issue edit"},
+		{"past", v.Pastf(), "previewed issue edit"},
+		{"failure", v.Failuref(), "failed to preview issue edit"},
+		{"conditional", v.Conditionalf(), "would preview issue edit"},
+		{"gerund plural", v.GerundPlural(), "previewing issue edits"},
+	}
+	for _, c := range cases {
+		if c.got != c.want {
+			t.Errorf("preview %s form = %q, want %q", c.name, c.got, c.want)
+		}
+	}
+}
