@@ -72,7 +72,10 @@ func TestAuthStatusFailsTopLevelWhenCredentialMissing(t *testing.T) {
 	bin := buildJiraBinary(t)
 	cfg := jiraConfig(t, "https://jira.example.invalid")
 	cmd := exec.Command(bin, "--config", cfg, "--output=json", "auth", "status")
-	cmd.Env = os.Environ()
+	// Neutralize any ambient developer credential for the "default" profile —
+	// the JIRA_TOKEN_* override outranks every configured backend, and an
+	// empty value reads as unset.
+	cmd.Env = append(os.Environ(), "JIRA_TOKEN_DEFAULT=")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
