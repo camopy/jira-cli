@@ -82,7 +82,14 @@ func IsStructuredAgentCommand(cmd *cobra.Command) bool {
 func PlainOptionsForCommand(cmd *cobra.Command) []cli.PlainOption {
 	det := DetectorFromContext(cmd)
 	opts := []cli.PlainOption{
-		cli.WithPlainTTY(det.IsTTY),
+		// Rich rendering — ANSI styling, OSC 8, and the Unicode glyph
+		// variants (check marks, link arrows) that ride the same cfg.tty
+		// switch — follows the resolved --color mode, not raw TTY state:
+		// --color=always renders rich into a piped stdout, --color=never
+		// leaves a real terminal plain, auto keeps TTY detection.
+		// Non-presentation TTY behaviors (grapheme width below, spinners,
+		// pagination) keep reading det.IsTTY.
+		cli.WithPlainTTY(cli.StyleEnabled(det.IsTTY)),
 		cli.WithPlainTermWidth(terminal.Width(os.Stdout)),
 		cli.WithPlainGraphemeWidth(det.IsTTY && emulator.SupportsGraphemes()),
 	}

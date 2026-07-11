@@ -64,7 +64,12 @@ func mirrorWarningsToStderr(w io.Writer, warnings []Warning) error {
 	if len(warnings) == 0 || w == nil {
 		return nil
 	}
-	logger := clog.New(clog.NewOutput(w, clog.ColorAuto))
+	// The resolved --color mode, not a hardcoded ColorAuto: this stderr surface
+	// builds its own logger, so --color=always/never would otherwise skip it.
+	// SetStyles matches every other renderer logger so a backticked Jira warning
+	// keeps its `code` span width intact instead of losing the delimiters.
+	logger := clog.New(clog.NewOutput(w, resolvedColorMode))
+	logger.SetStyles(plainLoggerStyles())
 	logger.SetLevel(clog.LevelWarn)
 	for _, warn := range warnings {
 		// Warning strings can carry Jira-controlled text — node_type/mark_type

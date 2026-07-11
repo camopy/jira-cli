@@ -110,22 +110,24 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	clog.SetEnvPrefix("JIRA")
 	clog.SetVerbose(debug)
 
-	if colorMode, _ := pf.GetString("color"); colorMode != "" {
-		switch colorMode {
-		case "auto":
-			clog.SetOutput(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAuto))
-		case "always":
-			clog.SetOutput(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAlways))
-			clog.SetColorMode(clog.ColorAlways)
-		case "never":
-			clog.SetOutput(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorNever))
-			clog.SetColorMode(clog.ColorNever)
-		default:
-			return fmt.Errorf("invalid color mode %q: must be \"auto\", \"always\" or \"never\"", colorMode)
+	// Resolve --color once and apply it to every color surface. clog.ColorMode
+	// implements TextUnmarshaler, so the flag string parses directly; an empty
+	// flag keeps the ColorAuto zero value. The mode reaches three places: the
+	// clog.Default logger (stderr human diagnostics); the package-cli stdout
+	// surfaces, which build their own loggers clog.Default does not govern; and
+	// the process-wide hyperlink switch the string-level OSC 8 helpers read, so
+	// `never` suppresses hyperlinks on every human surface — plain renderer, ADF
+	// issue view, exported link helpers — in one place. SetHyperlinkEnabled runs
+	// after SetOutput so it pushes the switch onto the new output.
+	colorMode := clog.ColorAuto
+	if raw, _ := pf.GetString("color"); raw != "" {
+		if err := colorMode.UnmarshalText([]byte(raw)); err != nil {
+			return fmt.Errorf("invalid color mode %q: must be \"auto\", \"always\" or \"never\"", raw)
 		}
-	} else {
-		clog.SetOutput(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAuto))
 	}
+	clog.SetOutput(clog.NewOutput(cmd.ErrOrStderr(), colorMode))
+	clog.SetHyperlinkEnabled(colorMode != clog.ColorNever)
+	cli.SetResolvedColorMode(colorMode)
 	logger := clog.With().Logger()
 
 	outputRaw, _ := pf.GetString("output")

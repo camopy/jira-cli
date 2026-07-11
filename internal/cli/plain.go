@@ -33,10 +33,15 @@ type plainConfig struct {
 	debug     bool
 	threads   int
 	termWidth int
-	tty       bool
-	theme     *clibtheme.Theme
-	columns   []string
-	tsv       bool
+	// tty is the resolved styling switch, not raw terminal detection: it gates
+	// every ANSI style and OSC 8 hyperlink the renderer emits. cmdutil folds the
+	// --color mode into it (WithPlainTTY(StyleEnabled(det.IsTTY))), so
+	// --color=always sets it off a pipe and --color=never clears it on a real
+	// terminal.
+	tty     bool
+	theme   *clibtheme.Theme
+	columns []string
+	tsv     bool
 	// resultKey is the multi-key entry this render belongs to. Child
 	// renderers own identification: block renderers fold it into their
 	// header, and the generic renderer emits it only when the data does
@@ -87,6 +92,9 @@ func WithPlainTermWidth(width int) PlainOption {
 	}
 }
 
+// WithPlainTTY sets the resolved styling switch — whether the renderer emits
+// ANSI styles and OSC 8 hyperlinks. Callers pass the --color decision folded
+// over TTY detection (cli.StyleEnabled), not raw terminal state.
 func WithPlainTTY(tty bool) PlainOption {
 	return func(cfg *plainConfig) {
 		cfg.tty = tty
@@ -139,8 +147,12 @@ func WithPlainTSV(tsv bool) PlainOption {
 // never prints a field irrelevant to the active backend (e.g. an empty
 // onepassword_account on a keyring profile). OmitEmpty keeps a
 // meaningful false such as valid=false; OmitZero would wrongly drop it.
+//
+// The output takes the resolved --color mode (resolvedColorMode) rather than a
+// hardcoded ColorAuto: this is a stdout surface clog.Default (stderr) does not
+// govern, so --color=always/never would otherwise be ignored here.
 func newPlainLogger(w io.Writer) *clog.Logger {
-	logger := clog.New(clog.NewOutput(w, clog.ColorAuto))
+	logger := clog.New(clog.NewOutput(w, resolvedColorMode))
 	logger.SetOmitEmpty(true)
 	logger.SetStyles(plainLoggerStyles())
 	return logger

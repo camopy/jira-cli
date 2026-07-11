@@ -1,0 +1,3 @@
+kind: fixed
+body: Apply --color=always/never to all human output on stdout (tables, pills, links, human-mode JSON, ADF views, mirrored warnings) — always styles piped output, never suppresses color and hyperlinks even on a terminal; mode values are accepted case-insensitively
+time: 2026-07-11T16:46:35.621203231-04:00

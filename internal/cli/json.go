@@ -238,8 +238,13 @@ func pruneNulls(v any) any {
 // user's resolved theme and terminal background, so highlighted JSON stays
 // readable on a light terminal just as entity colors do; nil keeps clog's
 // built-in dark palette.
+//
+// Color follows the resolved --color mode (resolvedColorMode): never strips the
+// syntax highlighting, always forces it even when stdout is piped. The machine
+// modes stay byte-clean because they encode through WriteEnvelope/WriteCompact,
+// which force ColorNever — only this human-mode JSON path is mode-aware.
 func WriteHumanJSON(w io.Writer, data any, printTheme *clogtheme.Theme) error {
-	return writeJSON(w, data, clog.JSONPretty, clog.ColorAuto, printTheme)
+	return writeJSON(w, data, clog.JSONPretty, resolvedColorMode, printTheme)
 }
 
 // writeJSON encodes data through clog's JSON printer in the given mode.
