@@ -1,3 +1,0 @@
-kind: fixed
-body: Offer only usable secret backends in interactive auth login — the keyring is dropped when no Secret Service answers (WSL, headless Linux) and 1Password in no-CGO builds — and fail headless logins early with actionable errors
-time: 2026-07-11T02:16:03.15502435-04:00

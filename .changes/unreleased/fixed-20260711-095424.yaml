@@ -1,3 +1,0 @@
-kind: fixed
-body: Strip ANSI escapes and control bytes from Jira-sourced text in comment list previews, mirrored ADF warning lines, and debug failure reasons
-time: 2026-07-11T09:54:24.250641495-04:00

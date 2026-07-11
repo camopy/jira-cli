@@ -1,3 +1,0 @@
-kind: fixed
-body: Honor the secret backend selected in the interactive auth login form instead of silently keeping the profile's stored backend
-time: 2026-07-11T02:16:04.159775296-04:00

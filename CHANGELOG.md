@@ -1,6 +1,25 @@
 # Release Notes
 
 
+## [0.10.7](https://github.com/matcra587/jira-cli/releases/tag/v0.10.7) — 2026-07-11
+
+### Added
+
+- Add an env secret backend: jira auth login --backend env reads the profile's JIRA_TOKEN_<PROFILE> variable at run time and stores nothing — for WSL, headless Linux, containers, and op run-style secret injectors
+
+### Fixed
+
+- Offer only usable secret backends in interactive auth login — the keyring is dropped when no Secret Service answers (WSL, headless Linux) and 1Password in no-CGO builds — and fail headless logins early with actionable errors
+- Honor the secret backend selected in the interactive auth login form instead of silently keeping the profile's stored backend
+- Classify OS keyring failures as a typed keyring_unavailable error that points at the env backend, instead of surfacing raw Secret Service D-Bus text as a generic validation failure
+- Report a nonexistent Atlassian site as jira_site_not_found with the offending host named, instead of relaying Atlassian's misleading 'Site temporarily unavailable' 404 — auth login verification and auth status probes now point at the base_url site name
+- Shorten the post-login warning about an old credential that could not be revoked to the typed message instead of the full error chain
+- Strip ANSI escapes and control bytes from Jira-sourced text in comment list previews, mirrored ADF warning lines, and debug failure reasons
+
+### Dependencies
+
+- Upgrade clive to v0.4.2, dropping go-selfupdate and its deprecated x/crypto/openpgp dependency (GO-2026-5932); the govulncheck advisory allowlist is retired now that no accepted advisories remain
+
 ## [0.10.6](https://github.com/matcra587/jira-cli/releases/tag/v0.10.6) — 2026-07-08
 
 ### Added
