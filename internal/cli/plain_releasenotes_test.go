@@ -46,8 +46,13 @@ func TestWriteCommandPlainReleaseNotes(t *testing.T) {
 // by the renderer while the heading text and bullet content survive.
 func TestWriteCommandPlainReleaseNotesStyled(t *testing.T) {
 	// The styled path renders only when color is enabled; go test disables it.
-	clog.SetColorMode(clog.ColorAlways)
-	t.Cleanup(func() { clog.SetColorMode(clog.ColorNever) })
+	// Replace the default logger with a fresh one rather than mutating it:
+	// SetColorMode rewrites clog.Default in place, so a captured pointer
+	// would restore nothing and the mode would leak into the package
+	// globals for whatever test runs next.
+	prev := clog.Default
+	t.Cleanup(func() { clog.Default = prev })
+	clog.Default = clog.New(clog.NewOutput(prev.Output().Writer(), clog.ColorAlways))
 
 	var buf bytes.Buffer
 	err := WriteCommandPlain(&buf, "release.notes", releaseNotesFixture(),
