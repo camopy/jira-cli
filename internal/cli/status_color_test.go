@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"image/color"
 	"strings"
 	"testing"
 
@@ -11,20 +10,30 @@ import (
 )
 
 // statusPill renders a status as a badge colored by its workflow category,
-// mapping each of the three category keys to a distinct theme color and
-// falling back to a per-name hash color for an unknown/absent category. The
-// badge always sets a background fill, so its rendered output differs from the
-// bare text and from the other categories.
+// mapping each of the three category keys to a distinct fixed truecolor fill
+// and falling back to a per-name hash fill for an unknown/absent category.
+// The badge always sets a background fill, so its rendered output differs
+// from the bare text and from the other categories.
 func TestStatusPillColorsByCategory(t *testing.T) {
 	theme := clibtheme.Dark()
 	cfg := plainConfig{tty: true, theme: theme}
 	const sample = "Some Status"
 
+	// Each category is pinned to its fixed fill (as a 24-bit SGR fragment),
+	// so an accidental palette swap fails loudly, not just distinctness.
+	fills := map[string]string{
+		"done":          "48;2;31;132;90",  // #1f845a
+		"indeterminate": "48;2;226;178;3",  // #e2b203
+		"new":           "48;2;29;122;252", // #1d7afc
+	}
 	rendered := map[string]string{}
 	for _, category := range []string{"done", "indeterminate", "new"} {
 		out := statusPill(cfg, sample, category, "").Render(sample)
 		if out == sample || !strings.Contains(out, "\x1b[") {
 			t.Errorf("category %q produced no styling: %q", category, out)
+		}
+		if !strings.Contains(out, fills[category]) {
+			t.Errorf("category %q missing its pinned fill %q: %q", category, fills[category], out)
 		}
 		rendered[category] = out
 	}
@@ -48,17 +57,17 @@ func TestStatusPillColorsByCategory(t *testing.T) {
 		t.Errorf("non-TTY pill should be unstyled, got %q", got)
 	}
 
-	// A TTY with no theme must not panic (the category branches deref the
-	// theme) and produces no styling.
+	// A TTY with no theme produces no styling: a nil theme means unstyled
+	// output was requested, even though the fill itself no longer reads it.
 	if got := statusPill(plainConfig{tty: true, theme: nil}, "Done", "done", "green").Render("Done"); got != "Done" {
 		t.Errorf("nil-theme pill should be unstyled, got %q", got)
 	}
 }
 
 // TestStatusPillPrefersAPIColorName checks that Jira's own colorName
-// designation wins over the category key, so the badge matches the Jira UI, and
-// that medium-gray resolves to the theme's dim/grey rather than a category
-// color.
+// designation wins over the category key, so the badge matches the Jira UI,
+// and that medium-gray resolves to the fixed grey fill rather than a
+// category color.
 func TestStatusPillPrefersAPIColorName(t *testing.T) {
 	theme := clibtheme.Dark()
 	cfg := plainConfig{tty: true, theme: theme}
@@ -75,7 +84,7 @@ func TestStatusPillPrefersAPIColorName(t *testing.T) {
 		t.Errorf("colorName green should not match the new-category pill")
 	}
 
-	// medium-gray maps to the dim/grey fill: a real pill, distinct from the
+	// medium-gray maps to the fixed grey fill: a real pill, distinct from the
 	// three category colors.
 	grey := statusPill(cfg, s, "", "medium-gray").Render(s)
 	if grey == s || !strings.Contains(grey, "\x1b[") {
@@ -199,22 +208,39 @@ func TestPillForegroundContrast(t *testing.T) {
 			t.Errorf("pillForeground(%s) = %s", fill, want)
 		}
 	}
+}
 
-	// Basic 16-color fills are chosen by index, not RGBA: nominal yellow reads
-	// as dark olive but a terminal renders it bright, so it must take dark text.
-	basic := map[ansi.BasicColor]color.Color{
-		ansi.Green:  lipgloss.Color(dark), // terminals render basic green bright
-		ansi.Yellow: lipgloss.Color(dark),
-		ansi.Cyan:   lipgloss.Color(dark),
-		ansi.White:  lipgloss.Color(dark),
-		ansi.Blue:   lipgloss.Color(light),
-		ansi.Red:    lipgloss.Color(light),
+// TestStatusFillNeverUsesPaletteSlots pins the remap-proofing decision: every
+// fill statusFill can produce — colorName-mapped, category-mapped, or the
+// per-name hash fallback — is a fixed truecolor value, never a basic ANSI
+// palette slot a terminal could remap out from under the contrast computation.
+func TestStatusFillNeverUsesPaletteSlots(t *testing.T) {
+	inputs := []struct{ status, category, colorName string }{
+		{"Done", "", "green"},
+		{"In Progress", "", "yellow"},
+		{"To Do", "", "blue-gray"},
+		{"Blocked", "", "medium-gray"},
+		{"Done", "done", ""},
+		{"In Progress", "indeterminate", ""},
+		{"To Do", "new", ""},
+		{"Weird Custom Status", "", ""},
+		{"Another Custom", "unrecognized", ""},
 	}
-	for fill, want := range basic {
-		wantR, wantG, wantB, _ := want.RGBA()
-		gotR, gotG, gotB, _ := pillForeground(fill).RGBA()
-		if gotR != wantR || gotG != wantG || gotB != wantB {
-			t.Errorf("pillForeground(ansi %d) wrong contrast", fill)
+	for _, in := range inputs {
+		fill := statusFill(in.status, in.category, in.colorName)
+		if fill == nil {
+			t.Errorf("statusFill(%q,%q,%q) = nil; every status must get a fill", in.status, in.category, in.colorName)
+			continue
 		}
+		if _, isBasic := fill.(ansi.BasicColor); isBasic {
+			t.Errorf("statusFill(%q,%q,%q) resolved to remappable basic ANSI slot %v", in.status, in.category, in.colorName, fill)
+		}
+	}
+
+	// The rendered pill therefore carries 24-bit SGR for both fill and text —
+	// deterministic on-screen colors regardless of the terminal palette.
+	out := statusPill(plainConfig{tty: true, theme: clibtheme.Dark()}, "To Do", "new", "blue-gray").Render("To Do")
+	if !strings.Contains(out, "48;2;") || !strings.Contains(out, "38;2;") {
+		t.Errorf("pill should render truecolor SGR fill and text, got %q", out)
 	}
 }
