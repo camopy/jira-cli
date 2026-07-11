@@ -67,6 +67,19 @@ modes nothing else may write to stdout.
     ruleguard rule); multi-key mutations use the fanout bar
     (`cmdutil/fanout.go`), suppressed off-TTY via `NonTTYSilent` and under
     `--debug`.
+*   **A dry-run speaks in preview tense on every human surface** — it must
+    never claim the mutation happened. Completion lines take the verb
+    registry's conditional form (`VerbFor(op).Conditionalf()`, selected
+    automatically when the rendered payload carries `dry_run=true`); a
+    dry-run path that still spins or fans out (local pipeline validation,
+    `--validate-remote` reads) uses the preview variants
+    (`cmdutil.SpinPreview`, `cmdutil.FanOutKeysProgressPreview`) so
+    spinner labels, the fanout footer, and the `--debug` lifecycles say
+    "previewing issue edit", never "editing issue". The one exception: a
+    dry-run step that performs a genuine read keeps `Spin` with the read
+    op (the transition preview spins `issue.transitions`), because that
+    read really happens. `OperationVerb.Preview()` documents which
+    registry entries compose cleanly before a new op adopts it.
 
 ## Errors and exit codes
 

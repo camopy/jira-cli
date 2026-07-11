@@ -127,7 +127,9 @@ Resolve gates through `cmdutil`, never by reading env/config ad hoc:
     write nothing under it, with `data.dry_run: true`. "Local-only" is literal —
     a dry run must not build a Jira client or require a credential, so resolve
     anything auth-dependent (e.g. a profile cache key) from config directly on
-    the dry-run path (see `cache refresh`).
+    the dry-run path (see `cache refresh`). Every human surface narrates a
+    dry-run in preview tense — conditional completion lines, preview
+    spinner/fanout/`--debug` lifecycles — see [output.md](output.md).
 *   **Read-only** — `cmdutil.ReadOnlyEnabled`: `JIRA_READ_ONLY` env wins on the
     OFF→ON direction only; enforcement lives at the HTTP transport (see
     [security.md](security.md)).
