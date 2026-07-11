@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gechr/clog"
+	termansi "github.com/gechr/x/ansi"
 	xmaps "github.com/gechr/x/maps"
 	xstrings "github.com/gechr/x/strings"
 
@@ -684,13 +685,35 @@ func redactHeaders(h http.Header) http.Header {
 }
 
 // oneLineSnippet flattens whitespace and truncates so debug output
-// stays readable in a terminal.
+// stays readable in a terminal. The input is server-controlled, so it is
+// stripped of ANSI escapes and control runes first: JSON re-encoding
+// upstream escapes C0 but not C1 controls, and the non-JSON redaction
+// fallback passes raw bytes through.
 func oneLineSnippet(s string, maxLen int) string {
-	flat := strings.Join(strings.Fields(s), " ")
+	flat := strings.Join(strings.Fields(stripTerminalControls(s)), " ")
 	if len(flat) > maxLen {
 		flat = flat[:maxLen] + "…(truncated)"
 	}
 	return flat
+}
+
+// stripTerminalControls removes ANSI escape sequences and C0/C1 control
+// runes from server-controlled text bound for the debug stderr stream,
+// keeping tab and newline for the caller's whitespace flattening. It
+// deliberately mirrors internal/cli's SanitizeTerminalBlock, which this
+// package cannot import without inverting the layering.
+func stripTerminalControls(s string) string {
+	s = termansi.Strip(s)
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r != '\t' && r != '\n' && (r < 0x20 || (r >= 0x7f && r <= 0x9f)) {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 func redactSensitiveBytes(body []byte) []byte {

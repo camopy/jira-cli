@@ -67,21 +67,24 @@ func mirrorWarningsToStderr(w io.Writer, warnings []Warning) error {
 	logger := clog.New(clog.NewOutput(w, clog.ColorAuto))
 	logger.SetLevel(clog.LevelWarn)
 	for _, warn := range warnings {
-		event := logger.Warn().Str("type", warn.Type)
+		// Warning strings can carry Jira-controlled text — node_type/mark_type
+		// echo whatever type string the inbound ADF document declared — so
+		// every field crosses the terminal sanitizer at this stderr boundary.
+		event := logger.Warn().Str("type", SanitizeTerminalText(warn.Type))
 		if warn.Field != "" {
-			event = event.Str("field", warn.Field)
+			event = event.Str("field", SanitizeTerminalText(warn.Field))
 		}
 		if warn.Path != "" {
-			event = event.Str("path", warn.Path)
+			event = event.Str("path", SanitizeTerminalText(warn.Path))
 		}
 		if warn.NodeType != "" {
-			event = event.Str("node_type", warn.NodeType)
+			event = event.Str("node_type", SanitizeTerminalText(warn.NodeType))
 		}
 		if warn.MarkType != "" {
-			event = event.Str("mark_type", warn.MarkType)
+			event = event.Str("mark_type", SanitizeTerminalText(warn.MarkType))
 		}
 		event = event.Bool("lossy", warn.Lossy)
-		event.Msg(warn.Message)
+		event.Msg(SanitizeTerminalText(warn.Message))
 	}
 	return nil
 }

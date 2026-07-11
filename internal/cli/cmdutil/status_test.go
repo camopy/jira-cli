@@ -47,6 +47,38 @@ func TestSpinReturnsTaskErrorIncludingAPIError(t *testing.T) {
 	})
 }
 
+// The debug failure lifecycle prints the error text, which embeds
+// Jira-supplied messages — the reason field must cross the terminal
+// sanitizer so a crafted message cannot inject escapes into stderr.
+func TestSpinDebugFailureReasonIsSanitized(t *testing.T) {
+	var buf bytes.Buffer
+	prev := clog.IsVerbose()
+	clog.SetVerbose(true)
+	clog.SetOutput(clog.NewOutput(&buf, clog.ColorNever))
+	t.Cleanup(func() {
+		clog.SetVerbose(prev)
+		clog.SetOutput(clog.NewOutput(os.Stderr, clog.ColorAuto))
+	})
+
+	cmd := &cobra.Command{Use: "x"}
+	cmd.SetContext(context.Background())
+	want := &jira.APIError{StatusCode: 403, Message: "forbidden\x1b[2Jwiped\x07"}
+	got := Spin(cmd, "cache.boards", func(context.Context) error { return want })
+	if !errors.Is(got, want) {
+		t.Fatalf("Spin() error = %v, want %v", got, want)
+	}
+
+	out := buf.String()
+	for _, banned := range []string{"\x1b", "\x07"} {
+		if strings.Contains(out, banned) {
+			t.Fatalf("debug reason leaked control byte %q:\n%q", banned, out)
+		}
+	}
+	if !strings.Contains(out, "forbiddenwiped") {
+		t.Fatalf("sanitized reason text mangled; got %q", out)
+	}
+}
+
 // TestSpinUnderVerboseRunsTaskAndNarrates pins the verbose branch: under
 // --debug the animated spinner is suppressed (it would strand its redraw frames
 // between the request/response debug lines), but the task still runs and the

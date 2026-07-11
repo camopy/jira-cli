@@ -130,8 +130,13 @@ func commentBodyText(v any) string {
 }
 
 // flattenPreview collapses whitespace and truncates `s` to at most n display
-// cells so multi-line Markdown bodies render as a one-line preview.
+// cells so multi-line Markdown bodies render as a one-line preview. The body
+// arrives as a typed ADF document, which the up-front sanitizePlainData walk
+// leaves untouched, so this is its terminal-sanitizer boundary. It uses the
+// block variant because strings.Fields needs the tabs and newlines to
+// survive — the text variant would drop them and glue adjacent words
+// together.
 func flattenPreview(s string, n int) string {
-	flat := strings.Join(strings.Fields(s), " ")
+	flat := strings.Join(strings.Fields(SanitizeTerminalBlock(s)), " ")
 	return termansi.Truncate(flat, n, "…")
 }

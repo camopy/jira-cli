@@ -5,7 +5,6 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gechr/clog"
@@ -169,7 +168,10 @@ func retryEvent(req *http.Request, resp *http.Response, attempt int) *clog.Event
 		Str("path", req.URL.EscapedPath()).
 		Int("status", resp.StatusCode).
 		Int("attempt", attempt+1).
-		Str("reason", strings.TrimSpace(resp.Header.Get("RateLimit-Reason")))
+		// The header value is server-controlled: obs-text (including a raw
+		// C1 CSI byte) survives Go's header parsing, so it crosses the same
+		// debug-sink sanitizer as response bodies.
+		Str("reason", oneLineSnippet(resp.Header.Get("RateLimit-Reason"), 256))
 }
 
 // isRetryableStatus reports whether a response should be retried: a 429

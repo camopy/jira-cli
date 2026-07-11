@@ -61,7 +61,9 @@ func Spin(cmd *cobra.Command, op string, fn func(context.Context) error) error {
 		if errors.As(err, &apiErr) {
 			event = event.Int("status", apiErr.StatusCode)
 		}
-		event.AnErr("reason", err).Msg(verb.Failuref())
+		// The error text embeds Jira-supplied messages, so the reason field
+		// crosses the terminal sanitizer before reaching stderr.
+		event.Str("reason", cli.SanitizeTerminalText(err.Error())).Msg(verb.Failuref())
 		return err
 	}
 	logger.Debug().Duration("time", elapsed, duration.WithMinimum(0)).Msg(verb.Pastf())

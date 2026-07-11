@@ -8,10 +8,51 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/gechr/clog"
+
+	"github.com/matcra587/jira-cli/internal/jira"
 )
+
+// The per-key debug failure lifecycle prints the error text, which embeds
+// Jira-supplied messages — the reason field must cross the terminal
+// sanitizer so a crafted message cannot inject escapes into stderr.
+func TestFanOutKeysProgressDebugFailureReasonIsSanitized(t *testing.T) {
+	var buf bytes.Buffer
+	prev := clog.IsVerbose()
+	clog.SetVerbose(true)
+	clog.SetOutput(clog.NewOutput(&buf, clog.ColorNever))
+	t.Cleanup(func() {
+		clog.SetVerbose(prev)
+		clog.SetOutput(clog.NewOutput(os.Stderr, clog.ColorAuto))
+	})
+
+	// clog.Ctx falls back to the default logger, which SetOutput above
+	// redirects into buf — no context seeding needed.
+	want := &jira.APIError{StatusCode: 404, Message: "missing\x1b[2Jwiped\x07"}
+	results, err := FanOutKeysProgress(context.Background(), "issue.view", []string{"A-1"}, 1,
+		func(context.Context, string) (string, error) { return "", want })
+	if err != nil {
+		t.Fatalf("FanOutKeysProgress() error = %v", err)
+	}
+	if len(results) != 1 || !errors.Is(results[0].Err, want) {
+		t.Fatalf("results = %+v, want the injected APIError per key", results)
+	}
+
+	out := buf.String()
+	for _, banned := range []string{"\x1b", "\x07"} {
+		if strings.Contains(out, banned) {
+			t.Fatalf("debug reason leaked control byte %q:\n%q", banned, out)
+		}
+	}
+	if !strings.Contains(out, "missingwiped") {
+		t.Fatalf("sanitized reason text mangled; got %q", out)
+	}
+}
 
 func TestFanOutKeysPreservesInputOrder(t *testing.T) {
 	results, err := FanOutKeys(context.Background(), []string{"A-1", "A-2", "A-3"}, 3, func(_ context.Context, key string) (string, error) {
