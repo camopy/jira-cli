@@ -37,21 +37,14 @@ func TestRenderStylesHeading(t *testing.T) {
 	}
 }
 
-func TestRenderCachesPerIssueAndWidth(t *testing.T) {
+func TestRenderIsStableAcrossRepeatCalls(t *testing.T) {
 	r := testRenderer()
 	first := r.Render("JCT-1", 40, "hello **world**")
-	if len(r.cache) != 1 {
-		t.Fatalf("cache entries = %d, want 1", len(r.cache))
+	if again := r.Render("JCT-1", 40, "hello **world**"); again != first {
+		t.Error("repeat render returned different output")
 	}
-	again := r.Render("JCT-1", 40, "hello **world**")
-	if again != first {
-		t.Error("cache hit returned different output")
-	}
-	r.Render("JCT-1", 60, "hello **world**") // same issue, new width = new entry
-	r.Render("JCT-2", 40, "hello **world**") // other issue = new entry
-	if len(r.cache) != 3 {
-		t.Errorf("cache entries = %d, want 3 (per issue+width)", len(r.cache))
-	}
+	// Cache-internal behavior (entry keying, eviction caps) is primer's
+	// tested contract; this package only asserts the observable surface.
 }
 
 func TestRenderInvalidatesOnContentChange(t *testing.T) {
@@ -61,25 +54,12 @@ func TestRenderInvalidatesOnContentChange(t *testing.T) {
 	if !strings.Contains(ansi.Strip(out), "second version") {
 		t.Errorf("stale cache served after content changed:\n%q", out)
 	}
-	if len(r.cache) != 1 {
-		t.Errorf("cache entries = %d, want 1 (replaced, not appended)", len(r.cache))
-	}
 }
 
 func TestRenderClampsWidth(t *testing.T) {
 	r := testRenderer()
 	if out := r.Render("JCT-1", -3, "tiny"); out == "" {
 		t.Error("non-positive width returned empty output")
-	}
-}
-
-func TestRenderEvictsWhenFull(t *testing.T) {
-	r := testRenderer()
-	for i := 0; i < maxCacheEntries+10; i++ {
-		r.Render("JCT-"+strings.Repeat("x", i%50)+string(rune('a'+i%26)), 40+i, "body")
-	}
-	if len(r.cache) > maxCacheEntries {
-		t.Errorf("cache grew past cap: %d > %d", len(r.cache), maxCacheEntries)
 	}
 }
 
