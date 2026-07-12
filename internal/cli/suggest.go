@@ -74,7 +74,7 @@ func Suggest(input string, candidates []string) []string {
 // command accepts never reaches flag_unknown at all.
 var foreignFlagEquivalents = map[string][]string{
 	"plain":       {"--output=human", "--output=json"},
-	"gjq":         {"--output=json"},
+	"gjq":         {"--jq"},
 	"template":    {"--output=json"},
 	"no-headers":  {"--output=json"},
 	"no-truncate": {"--output=json"},

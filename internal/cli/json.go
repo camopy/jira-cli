@@ -161,6 +161,11 @@ func WarningFrom(src WarningSource) Warning {
 // WriteEnvelope serializes a full JSON envelope to w. A clog encode or
 // write failure is surfaced to the caller rather than silently dropped.
 func WriteEnvelope(w io.Writer, env Envelope) error {
+	// An active --jq filter replaces the envelope bytes with the filter's
+	// results (see WriteEnvelopeDocument).
+	if JQEnabled() {
+		return writeJQ(w, env)
+	}
 	return writeJSON(w, env, clog.JSONFlat, clog.ColorNever, nil)
 }
 
@@ -172,6 +177,13 @@ func WriteEnvelope(w io.Writer, env Envelope) error {
 // fields the typed Warning struct does not model, so the document cannot be
 // funneled through the typed Envelope without dropping data.
 func WriteEnvelopeDocument(w io.Writer, doc any) error {
+	// An active --jq filter replaces the envelope bytes with the filter's
+	// results — success and failure envelopes alike, so an agent's error
+	// branch can filter too (the exit code is unaffected; it rides the
+	// returned command error, not the printed bytes).
+	if JQEnabled() {
+		return writeJQ(w, doc)
+	}
 	return writeJSON(w, doc, clog.JSONFlat, clog.ColorNever, nil)
 }
 
@@ -183,6 +195,11 @@ func WriteEnvelopeDocument(w io.Writer, doc any) error {
 // encode or write failure is surfaced to the caller rather than silently
 // dropped.
 func WriteCompact(w io.Writer, data any) error {
+	// Under --jq the filter runs over what compact mode emits: the
+	// null-stripped data document, not the envelope.
+	if JQEnabled() {
+		return writeJQ(w, stripNulls(data))
+	}
 	return writeJSON(w, stripNulls(data), clog.JSONFlat, clog.ColorNever, nil)
 }
 

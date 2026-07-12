@@ -58,6 +58,31 @@ Agents parse one stream regardless of outcome: `cmd … | jq` reads `errors[]`,
 diagnostic line is emitted to break the parse. Human mode keeps its diagnostic
 on stderr.
 
+## Built-in jq
+
+`--jq EXPR` runs a [jq](https://jqlang.org) expression over the emitted JSON
+in-process (gojq engine — no external `jq` required). String results print
+raw, `jq -r` style; every other value prints as jq-flavored JSON, one result
+per line.
+
+```sh
+jira issue list --project PROJ --jq '.data.issues[].key'
+jira issue view PROJ-1 --jq '{key: .data.issue.key, status: .data.issue.fields.status.name}'
+```
+
+With the mode unset, `--jq` implies `--output=json` (even where an agent
+would otherwise get compact). With `--output=compact` it filters the compact
+data document. The human surfaces — `--output=human`, `--interactive`,
+`--tsv` — conflict with it and fail validation (`jq_output_conflict`).
+
+Failure envelopes are filtered too, with the command's exit code preserved,
+so error branches script the same way: `--jq '.errors[0].code'` works whether
+the command succeeded or not. A bad expression fails fast
+(`jq_expression_invalid`) before any network work; an expression that fails
+against the document's shape reports `jq_eval_failed` as an unfiltered
+envelope. `--timeout` and Ctrl-C bound a runaway expression, and the filter
+runs sandboxed: no OS environment access, no module loading.
+
 ## Envelope
 
 ```json

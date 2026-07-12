@@ -157,6 +157,44 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	if interactive {
 		det.Mode = cli.ModeTUI
 	}
+	// --jq runs over the machine output. With the mode unset (or auto) it
+	// implies --output=json; an explicit --output=human contradicts it and
+	// fails validation; an explicit compact keeps compact (the filter then
+	// runs over the data document compact emits). The program compiles here
+	// so a bad expression fails fast, before any network work.
+	jqExpr, _ := pf.GetString("jq")
+	cli.ClearJQProgram()
+	if jqExpr != "" {
+		// Every human surface conflicts the same way: the filter runs over
+		// JSON output, so an explicit human mode, the TUI, and the TSV table
+		// all contradict it and fail validation rather than being silently
+		// overridden.
+		conflict := ""
+		switch {
+		case outputMode == cli.OutputHuman:
+			conflict = "--output=human"
+		case interactive:
+			conflict = "--interactive"
+		}
+		if conflict == "" && cmd.Flags().Lookup("tsv") != nil {
+			if tsv, _ := cmd.Flags().GetBool("tsv"); tsv {
+				conflict = "--tsv"
+			}
+		}
+		if conflict != "" {
+			ie := cli.NewCLIInputError(cli.InputJQOutputConflict, "--jq filters JSON output and cannot combine with "+conflict)
+			ie.Flag = "jq"
+			return ie
+		}
+		prog, err := cli.CompileJQ(jqExpr)
+		if err != nil {
+			return err
+		}
+		if outputMode == cli.OutputAuto {
+			det.Mode = cli.ModeJSON
+		}
+		cli.SetJQProgram(cmd.Context(), prog)
+	}
 	// cmd.Context() is always populated: Execute drives the tree through
 	// ExecuteContextC, which seeds every command's context from main's
 	// signal-aware root context.
@@ -329,6 +367,13 @@ func configureRootFlags(root *cobra.Command) {
 			EnumTerse:   []string{"detect terminal", "rich text", "JSON envelope", "JSON data only"},
 			EnumDefault: "auto",
 			Terse:       "output mode",
+		})
+	cmdutil.AddString(pf, "jq", "",
+		"Filter the JSON output with a jq expression; string results print raw, other values print as JSON per line",
+		clib.FlagExtra{
+			Group:       "Output",
+			Placeholder: "EXPR",
+			Terse:       "jq filter",
 		})
 	cmdutil.AddBoolP(pf, "interactive", "i", false, "Launch persistent dashboard from root command",
 		clib.FlagExtra{Group: "Dashboard", Terse: "launch dashboard"})
@@ -545,7 +590,7 @@ func writeCommandError(ctx context.Context, cmd *cobra.Command, err error) {
 		// EnvelopeWritten wrapper; don't write a second one over it.
 		var ew cmdutil.EnvelopeWrittenError
 		if !errors.As(err, &ew) {
-			_ = writeErrorEnvelopeToStdout(cmd, err)
+			_ = writeErrorEnvelopeToStdout(cmd, err) //nolint:contextcheck // the jq filter runs under the command context captured at resolve time
 		}
 		return
 	}

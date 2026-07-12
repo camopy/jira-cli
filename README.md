@@ -167,7 +167,9 @@ INF ℹ️ Listed issues count=0
 ```
 
 Use `--output=compact` for jq-friendly data-only JSON and
-`--output=human` to force `clog` rich text.
+`--output=human` to force `clog` rich text. A built-in `--jq EXPR`
+filters the JSON in-process (no external jq needed) — strings print
+raw, other results print as JSON per line.
 
 ## Commands
 

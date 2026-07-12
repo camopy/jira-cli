@@ -39,6 +39,12 @@ const (
 	// --no-input contexts for gates with an interactive confirm fallback,
 	// every context for clobber guards that never prompt.
 	InputForceRequired
+	// InputJQExpressionInvalid is a --jq expression gojq could not parse or
+	// compile.
+	InputJQExpressionInvalid
+	// InputJQOutputConflict is --jq combined with an explicit
+	// --output=human — the filter runs over JSON output.
+	InputJQOutputConflict
 )
 
 // CLIInputError is the typed error every command-line input failure is
@@ -101,6 +107,10 @@ func (e *CLIInputError) Code() errtax.Code {
 		// always emitted: typing hardens classification without bumping
 		// the agent-visible code contract.
 		return errtax.CodeValidationFailed
+	case InputJQExpressionInvalid:
+		return errtax.CodeJQExpressionInvalid
+	case InputJQOutputConflict:
+		return errtax.CodeJQOutputConflict
 	default:
 		return errtax.CodeValidationFailed
 	}

@@ -53,7 +53,17 @@ const (
 	// CodeSavedQueryUnknown is a `search saved NAME` value that matches no
 	// saved query. The names live in the user's queries directory, not in
 	// --help, so this gets its own hint rather than reusing arg_value_invalid.
-	CodeSavedQueryUnknown       Code = "saved_query_unknown"
+	CodeSavedQueryUnknown Code = "saved_query_unknown"
+	// CodeJQExpressionInvalid is a --jq expression gojq could not parse or
+	// compile — a bad program, not bad data, so the hint points at the
+	// expression.
+	CodeJQExpressionInvalid Code = "jq_expression_invalid"
+	// CodeJQOutputConflict is --jq combined with an explicit --output=human:
+	// the filter runs over JSON output, so the two requests contradict.
+	CodeJQOutputConflict Code = "jq_output_conflict"
+	// CodeJQEvalFailed is a --jq expression that compiled but failed while
+	// running against the emitted document (a type error, a halt_error).
+	CodeJQEvalFailed            Code = "jq_eval_failed"
 	CodeCommandUnknown          Code = "command_unknown"
 	CodePromptAborted           Code = "prompt_aborted"
 	CodePromptCanceled          Code = "prompt_canceled"
@@ -195,6 +205,9 @@ var registry = map[Code]Spec{
 	CodeArgValueInvalid:         {Type: TypeValidation, Exit: 3, Hint: "That isn't one of the accepted values — run the command with --help to see the choices.", Retryable: false},
 	CodeIssueTypeUnknown:        {Type: TypeValidation, Exit: 3, Hint: "Pass one of the project's issue types.", Retryable: false},
 	CodeSavedQueryUnknown:       {Type: TypeValidation, Exit: 3, Hint: "Pass one of your saved query names — they live in the queries_path directory.", Retryable: false},
+	CodeJQExpressionInvalid:     {Type: TypeValidation, Exit: 3, Hint: "Fix the jq expression — the message carries the parser's position and token.", Retryable: false},
+	CodeJQOutputConflict:        {Type: TypeValidation, Exit: 3, Hint: "Remove --jq or the conflicting human-output flag; the filter runs over the JSON output.", Retryable: false},
+	CodeJQEvalFailed:            {Type: TypeValidation, Exit: 3, Hint: "The expression failed against this output's shape — inspect it first with --output=json and no filter.", Retryable: false},
 	CodeCommandUnknown:          {Type: TypeValidation, Exit: 3, Hint: "Run `jira --help` to see the available commands.", Retryable: false},
 	CodePromptAborted:           {Type: TypeValidation, Exit: 3, Hint: "Run it again and finish the prompt, or pass the value as a flag so it doesn't need to ask.", Retryable: false},
 	CodePromptCanceled:          {Type: TypeValidation, Exit: 3, Hint: "Run it again when you're ready to answer.", Retryable: false},

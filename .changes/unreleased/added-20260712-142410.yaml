@@ -1,0 +1,3 @@
+kind: added
+body: 'Built-in --jq filter runs a jq expression over the JSON output in-process (gojq, gh CLI style): strings print raw, other results print as JSON per line, --output=json is implied, and failure envelopes are filtered with the exit code preserved'
+time: 2026-07-12T14:24:10.998360635-04:00
