@@ -173,8 +173,9 @@ process.
 
 ??? note "How `auto` detects the terminal"
     `auto` reads the terminal background and picks the matching light or dark
-    theme, so hash-coloured fields (status, priority, assignee) stay readable on
-    either surface. Detection needs a real terminal: when output is piped, or
+theme, so themed text (priority levels, help, markdown) stays readable on
+either surface. Status pills and assignee names carry fixed colours chosen
+to read on both light and dark, so they stay legible regardless of detection. Detection needs a real terminal: when output is piped, or
     `--color=never` / `NO_COLOR` is set, `auto` falls back to the dark theme and
     runs no detection. If your terminal is misdetected, pin `light` or `dark`.
 
