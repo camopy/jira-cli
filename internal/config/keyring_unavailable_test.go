@@ -16,6 +16,9 @@ import (
 // no way out.
 func TestKeyringStoreClassifiesBackendFailures(t *testing.T) {
 	keyring.MockInitWithError(errors.New("The name org.freedesktop.secrets was not provided by any .service files"))
+	// Redirect the keyring index to a throwaway dir: the mock covers the
+	// keyring library, not the filesystem the index writes to.
+	t.Setenv(TestCredentialStoreDirEnv, t.TempDir())
 	t.Cleanup(keyring.MockInit)
 
 	ref := SecretRef{Profile: "default", Backend: SecretBackendKeyring, Host: "acme.atlassian.net"}
@@ -46,6 +49,9 @@ func TestKeyringStoreClassifiesBackendFailures(t *testing.T) {
 // transactional reads rely on.
 func TestKeyringStoreMissStaysNotFound(t *testing.T) {
 	keyring.MockInit()
+	// Redirect the keyring index to a throwaway dir: the mock covers the
+	// keyring library, not the filesystem the index writes to.
+	t.Setenv(TestCredentialStoreDirEnv, t.TempDir())
 	ref := SecretRef{Profile: "default", Backend: SecretBackendKeyring, Host: "acme.atlassian.net"}
 	if _, err := (KeyringStore{}).Get(context.Background(), ref); !errors.Is(err, ErrCredentialNotFound) {
 		t.Fatalf("Get() on an empty keyring = %v, want ErrCredentialNotFound", err)

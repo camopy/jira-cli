@@ -27,6 +27,9 @@ func keyringRef(t *testing.T, profile, baseURL string) SecretRef {
 // under the readable site+profile key.
 func TestKeyringPutGetRoundTrip(t *testing.T) {
 	keyring.MockInit()
+	// Redirect the keyring index to a throwaway dir: MockInit mocks the
+	// keyring library, not the filesystem the index writes to.
+	t.Setenv(TestCredentialStoreDirEnv, t.TempDir())
 	ref := keyringRef(t, "work", "https://company.atlassian.net")
 
 	if err := (KeyringStore{}).Put(context.Background(), ref, "the-token"); err != nil {
@@ -50,6 +53,9 @@ func TestKeyringPutGetRoundTrip(t *testing.T) {
 // wrapping ErrCredentialNotFound so callers can still match it with errors.Is.
 func TestKeyringGetMissingIsTypedError(t *testing.T) {
 	keyring.MockInit()
+	// Redirect the keyring index to a throwaway dir: MockInit mocks the
+	// keyring library, not the filesystem the index writes to.
+	t.Setenv(TestCredentialStoreDirEnv, t.TempDir())
 	ref := keyringRef(t, "work", "https://company.atlassian.net")
 
 	_, err := (KeyringStore{}).Get(context.Background(), ref)
@@ -78,6 +84,9 @@ func TestKeyringGetMissingIsTypedError(t *testing.T) {
 // release under the bare profile name is NOT auto-resolved.
 func TestKeyringGetHasNoLegacyFallback(t *testing.T) {
 	keyring.MockInit()
+	// Redirect the keyring index to a throwaway dir: MockInit mocks the
+	// keyring library, not the filesystem the index writes to.
+	t.Setenv(TestCredentialStoreDirEnv, t.TempDir())
 	ref := keyringRef(t, "work", "https://company.atlassian.net")
 	// Seed a bare-profile-name entry, the old pre-namespacing layout.
 	if err := keyring.Set(defaultKeyringService, "work", "stale-legacy-token"); err != nil {
@@ -94,6 +103,9 @@ func TestKeyringGetHasNoLegacyFallback(t *testing.T) {
 // idempotent. Delete never touches any other key.
 func TestKeyringDeleteRemovesOwnKeyOnly(t *testing.T) {
 	keyring.MockInit()
+	// Redirect the keyring index to a throwaway dir: MockInit mocks the
+	// keyring library, not the filesystem the index writes to.
+	t.Setenv(TestCredentialStoreDirEnv, t.TempDir())
 	ref := keyringRef(t, "work", "https://company.atlassian.net")
 	other := keyringRef(t, "work", "https://other.atlassian.net")
 	if err := (KeyringStore{}).Put(context.Background(), ref, "ours"); err != nil {
@@ -123,6 +135,9 @@ func TestKeyringDeleteRemovesOwnKeyOnly(t *testing.T) {
 // removed=true with no informational note.
 func TestRevokeProfileCredentialRemovesCredential(t *testing.T) {
 	keyring.MockInit()
+	// Redirect the keyring index to a throwaway dir: MockInit mocks the
+	// keyring library, not the filesystem the index writes to.
+	t.Setenv(TestCredentialStoreDirEnv, t.TempDir())
 	ref := keyringRef(t, "work", "https://company.atlassian.net")
 	if err := (KeyringStore{}).Put(context.Background(), ref, "the-token"); err != nil {
 		t.Fatalf("seed Put error = %v", err)
@@ -147,6 +162,9 @@ func TestRevokeProfileCredentialRemovesCredential(t *testing.T) {
 // removed=false and no error: revocation is idempotent.
 func TestRevokeProfileCredentialAbsentIsIdempotent(t *testing.T) {
 	keyring.MockInit()
+	// Redirect the keyring index to a throwaway dir: MockInit mocks the
+	// keyring library, not the filesystem the index writes to.
+	t.Setenv(TestCredentialStoreDirEnv, t.TempDir())
 	ref := keyringRef(t, "work", "https://company.atlassian.net")
 
 	removed, _, err := RevokeProfileCredential(context.Background(), KeyringStore{}, ref)

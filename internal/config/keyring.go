@@ -56,11 +56,15 @@ func (KeyringStore) Get(_ context.Context, ref SecretRef) (string, error) {
 	return "", KeyringUnavailableError(fmt.Errorf("keyring get %q: %w", ref.Profile, err))
 }
 
-// Put writes the credential under the "<host>/<profile>" keyring entry.
+// Put writes the credential under the "<host>/<profile>" keyring entry and
+// records the identity in the keyring index so it stays enumerable. The
+// index write is best-effort: the credential is already stored, and an
+// unindexed entry is exactly as discoverable as every pre-index entry.
 func (KeyringStore) Put(_ context.Context, ref SecretRef, secret string) error {
 	if err := keyring.Set(keyringServiceName(), ref.KeyringName(), secret); err != nil {
 		return KeyringUnavailableError(fmt.Errorf("keyring set %q: %w", ref.Profile, err))
 	}
+	_ = keyringIndexAdd(ref)
 	return nil
 }
 
@@ -70,6 +74,12 @@ func (KeyringStore) Put(_ context.Context, ref SecretRef, secret string) error {
 // is idempotent.
 func (KeyringStore) Delete(_ context.Context, ref SecretRef) error {
 	err := keyring.Delete(keyringServiceName(), ref.KeyringName())
+	if err == nil || errors.Is(err, keyring.ErrNotFound) {
+		// The index self-heals on every delete outcome, including
+		// not-found: a stale index row for an entry the user removed by
+		// hand disappears the next time logout touches it.
+		_ = keyringIndexRemove(ref)
+	}
 	if err == nil {
 		return nil
 	}

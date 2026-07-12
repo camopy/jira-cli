@@ -16,6 +16,9 @@ func TestRealKeyringStoreRoundTrip(t *testing.T) {
 		t.Skip("real OS keyring smoke is disabled when CI is set")
 	}
 	t.Setenv(keyringServiceEnv, "jira-cli-real-keyring-test")
+	// Redirect the keyring index to a throwaway dir so this opt-in smoke
+	// never drops a namespaced index file in the real config dir.
+	t.Setenv(TestCredentialStoreDirEnv, t.TempDir())
 	ref := keyringRef(t, "work", "https://company.atlassian.net")
 	store := KeyringStore{}
 	t.Cleanup(func() { _ = store.Delete(context.Background(), ref) })
