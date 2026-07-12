@@ -169,6 +169,10 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	// And a fresh rate-limit-warning sink, scoped the same way, so a
 	// near-limit notice belongs to the command that triggered it.
 	ctx = cmdutil.WithRateWarnSink(ctx)
+	// And the elapsed-time sink the completion line reads: blocking helpers
+	// (Spin, the fanout executor) record their wall time here so API-backed
+	// commands can show how long the slow part took.
+	ctx = cmdutil.WithAPIElapsedSink(ctx)
 	ctx = logger.WithContext(ctx)
 	cmd.SetContext(ctx)
 	event := logger.Debug().Str("mode", string(det.Mode))

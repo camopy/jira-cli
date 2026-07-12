@@ -33,7 +33,7 @@ import (
 // strands onto its own line between the debug records. Verbose narration and
 // the spinner are alternatives, never shown together.
 func Spin(cmd *cobra.Command, op string, fn func(context.Context) error) error {
-	return spinVerb(cmd, cli.VerbFor(op), fn)
+	return spinVerb(cmd, cli.VerbFor(op), fn, true)
 }
 
 // SpinPreview is Spin for a dry-run: the spinner label and the debug
@@ -41,11 +41,14 @@ func Spin(cmd *cobra.Command, op string, fn func(context.Context) error) error {
 // issue edit") instead of claiming the mutation happened. A dry-run path
 // that performs a genuine read should keep Spin with the read op instead
 // (the transition target resolution uses issue.transitions, for example).
+// Preview work is purely local by that convention, so it does not feed the
+// elapsed sink — the completion line's elapsed field reports round-trip
+// time, never local CPU.
 func SpinPreview(cmd *cobra.Command, op string, fn func(context.Context) error) error {
-	return spinVerb(cmd, cli.VerbFor(op).Preview(), fn)
+	return spinVerb(cmd, cli.VerbFor(op).Preview(), fn, false)
 }
 
-func spinVerb(cmd *cobra.Command, verb cli.OperationVerb, fn func(context.Context) error) error {
+func spinVerb(cmd *cobra.Command, verb cli.OperationVerb, fn func(context.Context) error, recordElapsed bool) error {
 	logger := clog.Ctx(cmd.Context())
 	logger.Debug().Msg(verb.Gerundf())
 
@@ -68,11 +71,16 @@ func spinVerb(cmd *cobra.Command, verb cli.OperationVerb, fn func(context.Contex
 		err = spinner.Wait(cmd.Context(), fn).Silent()
 	}
 	elapsed := time.Since(start)
+	if recordElapsed {
+		recordAPIElapsed(cmd.Context(), elapsed)
+	}
 
 	if err != nil {
 		// duration.WithMinimum(0) keeps time= visible below clog's default
 		// 1s cutoff: this debug lifecycle documents sub-second timings above.
-		event := logger.Debug().Duration("time", elapsed, duration.WithMinimum(0))
+		// The gradient tops out at 10s — a round trip that slow reads fully
+		// red, matching the timeout-scale pain a user actually feels.
+		event := logger.Debug().Duration("time", elapsed, duration.WithMinimum(0), duration.WithGradientMax(debugTimeGradientMax))
 		// Surface the HTTP status as its own field rather than burying it in
 		// the reason string, so failures stay greppable (status=403).
 		var apiErr *jira.APIError
@@ -84,6 +92,11 @@ func spinVerb(cmd *cobra.Command, verb cli.OperationVerb, fn func(context.Contex
 		event.Str("reason", cli.SanitizeTerminalText(err.Error())).Msg(verb.Failuref())
 		return err
 	}
-	logger.Debug().Duration("time", elapsed, duration.WithMinimum(0)).Msg(verb.Pastf())
+	logger.Debug().Duration("time", elapsed, duration.WithMinimum(0), duration.WithGradientMax(debugTimeGradientMax)).Msg(verb.Pastf())
 	return nil
 }
+
+// debugTimeGradientMax anchors the debug lifecycle's time= gradient: green
+// for fast round trips, fully red by 10 seconds — the point where a single
+// HTTP call reads as timeout-scale pain rather than ordinary latency.
+const debugTimeGradientMax = 10 * time.Second

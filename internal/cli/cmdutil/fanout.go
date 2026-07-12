@@ -44,7 +44,7 @@ func FanOutKeysProgress[T any](
 	parallelism int,
 	fn func(context.Context, string) (T, error),
 ) ([]KeyResult[T], error) {
-	return fanOutKeysProgressVerb(ctx, cli.VerbFor(op), keys, parallelism, fn)
+	return fanOutKeysProgressVerb(ctx, cli.VerbFor(op), keys, parallelism, fn, true)
 }
 
 // FanOutKeysProgressPreview is FanOutKeysProgress for a dry-run: every
@@ -60,7 +60,7 @@ func FanOutKeysProgressPreview[T any](
 	parallelism int,
 	fn func(context.Context, string) (T, error),
 ) ([]KeyResult[T], error) {
-	return fanOutKeysProgressVerb(ctx, cli.VerbFor(op).Preview(), keys, parallelism, fn)
+	return fanOutKeysProgressVerb(ctx, cli.VerbFor(op).Preview(), keys, parallelism, fn, false)
 }
 
 func fanOutKeysProgressVerb[T any](
@@ -69,9 +69,20 @@ func fanOutKeysProgressVerb[T any](
 	keys []string,
 	parallelism int,
 	fn func(context.Context, string) (T, error),
+	recordElapsed bool,
 ) ([]KeyResult[T], error) {
 	if ctx == nil || fn == nil {
 		return FanOutKeys(ctx, keys, parallelism, fn)
+	}
+
+	// The completion line reports the fan-out's wall time, not the sum of
+	// per-key durations — under -p those overlap and a sum would overstate
+	// what the user actually waited. Preview fan-outs (recordElapsed=false)
+	// run local pipeline validation, not round trips, so they stay out of
+	// the sink.
+	if recordElapsed {
+		start := time.Now()
+		defer func() { recordAPIElapsed(ctx, time.Since(start)) }()
 	}
 
 	logger := clog.Ctx(ctx)
@@ -85,7 +96,7 @@ func fanOutKeysProgressVerb[T any](
 		if err != nil {
 			// duration.WithMinimum(0) keeps time= visible below clog's default
 			// 1s cutoff: this per-key debug lifecycle documents sub-second timings above.
-			event := logger.Debug().Str("key", key).Duration("time", elapsed, duration.WithMinimum(0))
+			event := logger.Debug().Str("key", key).Duration("time", elapsed, duration.WithMinimum(0), duration.WithGradientMax(debugTimeGradientMax))
 			var apiErr *jira.APIError
 			if errors.As(err, &apiErr) {
 				event = event.Int("status", apiErr.StatusCode)
@@ -94,7 +105,7 @@ func fanOutKeysProgressVerb[T any](
 			// crosses the terminal sanitizer before reaching stderr.
 			event.Str("reason", cli.SanitizeTerminalText(err.Error())).Msg(verb.Failuref())
 		} else {
-			logger.Debug().Str("key", key).Duration("time", elapsed, duration.WithMinimum(0)).Msg(verb.Pastf())
+			logger.Debug().Str("key", key).Duration("time", elapsed, duration.WithMinimum(0), duration.WithGradientMax(debugTimeGradientMax)).Msg(verb.Pastf())
 		}
 		return value, err
 	}

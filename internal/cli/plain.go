@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	ansi "github.com/charmbracelet/x/ansi"
@@ -43,6 +44,10 @@ type plainConfig struct {
 	theme   *clibtheme.Theme
 	columns []string
 	tsv     bool
+	// elapsed is the command's measured blocking time (Spin, fanout),
+	// attached to the completion line; clog's default 1s DurationMinimum
+	// hides it for fast calls. Zero means nothing blocking ran.
+	elapsed time.Duration
 	// resultKey is the multi-key entry this render belongs to. Child
 	// renderers own identification: block renderers fold it into their
 	// header, and the generic renderer emits it only when the data does
@@ -105,6 +110,16 @@ func WithPlainTTY(tty bool) PlainOption {
 func WithPlainTheme(theme *clibtheme.Theme) PlainOption {
 	return func(cfg *plainConfig) {
 		cfg.theme = theme
+	}
+}
+
+// WithPlainElapsed carries the command's measured blocking time (Spin, the
+// fanout executor) into the completion line. Renderers attach it without a
+// minimum override, so clog's default 1s DurationMinimum keeps fast calls
+// clean and only genuinely slow round-trips grow an elapsed field.
+func WithPlainElapsed(elapsed time.Duration) PlainOption {
+	return func(cfg *plainConfig) {
+		cfg.elapsed = elapsed
 	}
 }
 
@@ -327,6 +342,14 @@ func writeGenericPlain(logger *clog.Logger, cfg plainConfig, message string, dat
 		}
 		event = event.Any(field.key, field.value)
 	}
+	if cfg.elapsed > 0 && cfg.resultKey == "" {
+		// The command's blocking time trails the completion line — a
+		// multi-key child row (resultKey set) already reports per-key timing
+		// in the debug lifecycle, and the keyed summary line carries the
+		// whole fan-out's elapsed. clog's default 1s minimum hides it for
+		// fast calls, so only genuinely slow round-trips grow the field.
+		event = event.Duration("elapsed", cfg.elapsed)
+	}
 	// An empty message means the command's data fields already carry the
 	// result; emitting a message line that just echoes the command name
 	// adds no information, so the renderer drops it.
@@ -542,6 +565,10 @@ func writeIssueListPlain(logger *clog.Logger, data any, cfg plainConfig) error {
 	}
 	if jql != "" && cfg.debug {
 		event = event.Str("jql", jql)
+	}
+	if cfg.elapsed > 0 && cfg.resultKey == "" {
+		// Trailing blocking time; clog's default 1s minimum hides fast lists.
+		event = event.Duration("elapsed", cfg.elapsed)
 	}
 	event.Msg(msg)
 	if len(issues) == 0 {

@@ -99,6 +99,9 @@ func PlainOptionsForCommand(cmd *cobra.Command) []cli.PlainOption {
 	if parallelism := commandParallelism(cmd); parallelism != defaultParallelism {
 		opts = append(opts, cli.WithPlainThreads(parallelism))
 	}
+	if elapsed := APIElapsedFor(cmd); elapsed > 0 {
+		opts = append(opts, cli.WithPlainElapsed(elapsed))
+	}
 	// Load the active config once and derive both the base URL (for link
 	// rendering) and the theme from it. On a load error both are simply
 	// omitted, leaving the renderer's defaults.

@@ -116,6 +116,11 @@ func writeIssueViewManyPlain(logger *clog.Logger, command string, results []map[
 	if cfg.threads > 0 {
 		event = event.Int("threads", cfg.threads)
 	}
+	if cfg.elapsed > 0 {
+		// The whole fan-out's wall time; clog's default 1s DurationMinimum
+		// hides fast batches.
+		event = event.Duration("elapsed", cfg.elapsed)
+	}
 	event.Msg(SentenceCase(VerbFor(command).PastPlural()))
 	rows, err := issueRows(successes, cfg)
 	if err != nil {

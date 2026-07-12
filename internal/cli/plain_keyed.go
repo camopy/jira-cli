@@ -28,6 +28,11 @@ func WriteKeyedResultsPlain(w io.Writer, command string, data any, opts ...Plain
 	if cfg.threads > 0 {
 		event = event.Int("threads", cfg.threads)
 	}
+	if cfg.elapsed > 0 {
+		// The whole fan-out's wall time; clog's default 1s minimum hides
+		// fast batches. Child rows never repeat it (resultKey guard).
+		event = event.Duration("elapsed", cfg.elapsed)
+	}
 	event.Msg(messageForCommand(command, data))
 
 	// No per-entry heading: identification is the child renderer's job.
