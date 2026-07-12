@@ -216,6 +216,10 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 		return WriteKeyedResultsPlain(w, command, data, opts...)
 	}
 	switch command {
+	case "config.get":
+		return writeConfigGetPlain(w, data, cfg)
+	case "config.profile":
+		return writeConfigProfilePlain(w, data, cfg)
 	case "issue.attachment.list":
 		return WriteAttachmentListPlain(w, command, data, opts...)
 	case "issue.list":

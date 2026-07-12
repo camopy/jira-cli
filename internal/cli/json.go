@@ -257,6 +257,27 @@ func WriteHumanJSON(w io.Writer, data any, printTheme *clogtheme.Theme) error {
 // the two: enabling key flattening would silently reshape the machine envelope
 // that agents and the slack-cli sibling depend on.
 func writeJSON(w io.Writer, data any, mode clog.JSONPrintMode, color clog.ColorMode, printTheme *clogtheme.Theme) error {
+	logger, ew := newPrintLogger(w, color, printTheme)
+	logger.Print().Mode(mode).JSON(data)
+	return ew.err
+}
+
+// WriteHumanTOML renders data as syntax-highlighted TOML through clog's
+// printer — the TOML counterpart of WriteHumanJSON, for endpoints whose
+// human mode shows config-file-shaped content. The same retinting and
+// color-mode rules apply: printTheme (when non-nil) matches the highlight
+// palette to the user's resolved theme, and color follows the resolved
+// --color mode while machine modes stay byte-clean via WriteEnvelope.
+func WriteHumanTOML(w io.Writer, data any, printTheme *clogtheme.Theme) error {
+	logger, ew := newPrintLogger(w, resolvedColorMode, printTheme)
+	logger.Print().TOML(data)
+	return ew.err
+}
+
+// newPrintLogger builds the throwaway clog logger the printer paths share,
+// wrapping w so a Print() call that ignores its own write result still
+// surfaces a broken-pipe or quota failure to the caller.
+func newPrintLogger(w io.Writer, color clog.ColorMode, printTheme *clogtheme.Theme) (*clog.Logger, *errWriter) {
 	ew := &errWriter{w: w}
 	out := io.Writer(ew)
 	if _, ok := w.(interface{ Fd() uintptr }); ok {
@@ -266,8 +287,7 @@ func writeJSON(w io.Writer, data any, mode clog.JSONPrintMode, color clog.ColorM
 	if printTheme != nil {
 		logger.SetTheme(clogtheme.Single(printTheme))
 	}
-	logger.Print().Mode(mode).JSON(data)
-	return ew.err
+	return logger, ew
 }
 
 // errWriter wraps an io.Writer and captures the first write error so a
