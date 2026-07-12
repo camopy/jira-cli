@@ -1,6 +1,17 @@
 # Release Notes
 
 
+## [0.11.0](https://github.com/matcra587/jira-cli/releases/tag/v0.11.0) — 2026-07-12
+
+### Added
+
+- Built-in --jq filter runs a jq expression over the JSON output in-process (gojq, gh CLI style): strings print raw, other results print as JSON per line, --output=json is implied, and failure envelopes are filtered with the exit code preserved
+- New issue rank command reorders backlog issues headlessly: place keys before or after an anchor issue in LexoRank order, with ranges chunked transparently at the API's 50-issue limit and order preserved end-to-end
+
+### Changed
+
+- The foreign-flag hint no longer competes with its own suggestion: it says to use this CLI's equivalent, and the suggestion names it
+
 ## [0.10.15](https://github.com/matcra587/jira-cli/releases/tag/v0.10.15) — 2026-07-12
 
 ### Added
