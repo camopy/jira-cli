@@ -179,6 +179,21 @@ cache):
 jira config set profiles.default.default_board "Example board"
 ```
 
+## issuekeys
+
+`cache issuekeys` prints the profile's recently used issue keys, newest
+first — the list shell completion offers wherever a command takes an issue
+`KEY`. Unlike the primers it never contacts Jira: commands record keys as a
+side effect of touching them (`issue view`, `issue list`, `search`,
+mutations), capped and deduplicated most-recent-first.
+
+```sh
+jira cache issuekeys --output=json
+jira cache clear issuekeys   # reset the list
+```
+
+`cache refresh` leaves it alone — it is local state, not fetched metadata.
+
 ## refresh
 
 `cache refresh` primes several resources in one pass. With no argument it covers

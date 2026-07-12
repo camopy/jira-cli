@@ -34,6 +34,12 @@ jira release-notes --latest
 A leading `v` is accepted — `0.7.7` and `v0.7.7` both resolve. An unknown version
 fails and lists the versions that are available.
 
+On an interactive terminal, a full history taller than the screen pages like
+`git log`: a built-in pager by default (`q` quits), or your own via
+`JIRA_PAGER`/`PAGER`. Pass `--no-pager` to print directly. Piped output,
+machine modes, and agent sessions always stream straight through and never
+wait on a pager.
+
 ## Output
 
 Human output is Markdown. On an interactive terminal it is rendered through

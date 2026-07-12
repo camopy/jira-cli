@@ -94,6 +94,7 @@ nav = [
                 { "clear" = "reference/jira/cache/clear.md" },
                 { "epics" = "reference/jira/cache/epics.md" },
                 { "fields" = "reference/jira/cache/fields.md" },
+                { "issuekeys" = "reference/jira/cache/issuekeys.md" },
                 { "issuetypes" = "reference/jira/cache/issuetypes.md" },
                 { "labels" = "reference/jira/cache/labels.md" },
                 { "linktypes" = "reference/jira/cache/linktypes.md" },
