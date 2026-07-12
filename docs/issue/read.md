@@ -111,7 +111,7 @@ jira issue list --project PROJ --status Done --as-jql --output=json
 The default projection is a summary table, one row per issue:
 
 ```text
-INF ℹ️ Listed issues count=2 detail=false
+INF ℹ️ Listed issues count=2
 KEY       SUMMARY                             STATUS       ASSIGNEE    PRIORITY
 PROJ-123  Checkout returns 500 on empty cart  In Progress  John Doe    High
 PROJ-118  Flaky login redirect                To Do        unassigned  Medium

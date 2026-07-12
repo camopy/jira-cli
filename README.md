@@ -163,7 +163,7 @@ jira agent fieldtypes --output=json
 TTY commands render successful results through `clog` rich output:
 
 ```text
-INF ℹ️ listed issues count=0 detail=false
+INF ℹ️ Listed issues count=0
 ```
 
 Use `--output=compact` for jq-friendly data-only JSON and

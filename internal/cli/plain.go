@@ -146,8 +146,20 @@ func WithPlainTSV(tsv bool) PlainOption {
 // newPlainLogger builds the per-command clog logger for human output.
 // OmitEmpty drops nil/empty-string/empty-collection fields so a renderer
 // never prints a field irrelevant to the active backend (e.g. an empty
-// onepassword_account on a keyring profile). OmitEmpty keeps a
-// meaningful false such as valid=false; OmitZero would wrongly drop it.
+// onepassword_account on a keyring profile). Omission policy, decided once:
+// global OmitZero stays rejected even now that clog supports per-line
+// overrides — most fields here render through the generic map path, where a
+// meaningful false (valid=false) or zero (count=0) would be silently
+// dropped. Per-line OmitZero is entry-scoped, so it fits only lines whose
+// every field is noise at zero (the --debug error line in root.go uses it);
+// a mixed line gates its noisy field conditionally instead (detail on the
+// issue-list line).
+//
+// SetSmartQuotes picks the first delimiter pair not present in the value
+// (", then ', then `), so a summary containing double quotes renders
+// single-quoted instead of backslash-escaped. NumberGrouped renders counts
+// and totals at or above 1000 with digit grouping; compact (1.2K) is
+// declined — this is a data surface and exact values matter.
 //
 // The output takes the resolved --color mode (resolvedColorMode) rather than a
 // hardcoded ColorAuto: this is a stdout surface clog.Default (stderr) does not
@@ -155,6 +167,8 @@ func WithPlainTSV(tsv bool) PlainOption {
 func newPlainLogger(w io.Writer) *clog.Logger {
 	logger := clog.New(clog.NewOutput(w, resolvedColorMode))
 	logger.SetOmitEmpty(true)
+	logger.SetSmartQuotes(true)
+	logger.SetNumberFormat(clog.NumberGrouped)
 	logger.SetStyles(plainLoggerStyles())
 	return logger
 }
@@ -511,9 +525,14 @@ func writeIssueListPlain(logger *clog.Logger, data any, cfg plainConfig) error {
 	if cfg.tsv {
 		return writeIssueTSV(logger, issues, cfg)
 	}
-	event := logger.Info().
-		Int("count", len(issues)).
-		Bool("detail", detail)
+	event := logger.Info().Int("count", len(issues))
+	// detail=false only restates the default list mode, so the field appears
+	// only when true — gated like threads/jql below rather than via a
+	// per-line OmitZero, which is entry-scoped and would drop the meaningful
+	// count=0 from the same line.
+	if detail {
+		event = event.Bool("detail", true)
+	}
 	if cfg.threads > 0 {
 		event = event.Int("threads", cfg.threads)
 	}

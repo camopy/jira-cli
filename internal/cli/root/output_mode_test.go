@@ -151,7 +151,7 @@ func TestIssueListPlainOutputHidesJQLUnlessDebug(t *testing.T) {
 	if strings.Contains(stdout.String(), "jql=") {
 		t.Fatalf("issue list plain output leaked JQL without debug:\n%s", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "Listed issues") || !strings.Contains(stdout.String(), "count=0") || !strings.Contains(stdout.String(), "detail=false") || strings.Contains(stdout.String(), "No issues") || strings.Contains(stdout.String(), "issues=") {
+	if !strings.Contains(stdout.String(), "Listed issues") || !strings.Contains(stdout.String(), "count=0") || strings.Contains(stdout.String(), "detail=") || strings.Contains(stdout.String(), "No issues") || strings.Contains(stdout.String(), "issues=") {
 		t.Fatalf("issue list plain output did not render a clog issue-list result:\n%s", stdout.String())
 	}
 
@@ -169,11 +169,25 @@ func TestIssueListPlainOutputHidesJQLUnlessDebug(t *testing.T) {
 	if !strings.Contains(stdout.String(), "jql=") {
 		t.Fatalf("issue list debug output omitted JQL:\n%s", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "detail=false") || strings.Contains(stdout.String(), "issues=") || strings.Contains(stdout.String(), "No issues") {
+	if strings.Contains(stdout.String(), "detail=") || strings.Contains(stdout.String(), "issues=") || strings.Contains(stdout.String(), "No issues") {
 		t.Fatalf("issue list debug output leaked internal fields:\n%s", stdout.String())
 	}
 	if !strings.Contains(stdout.String(), "INF") {
 		t.Fatalf("--plain stdout is not clog event output:\n%s", stdout.String())
+	}
+}
+
+func TestIssueListPlainOutputShowsDetailWhenEnabled(t *testing.T) {
+	cmd, stdout, _ := outputModeTestCommand(cli.ModePlain)
+	if err := cmd.Root().PersistentFlags().Set("output", "human"); err != nil {
+		t.Fatalf("Set(output) error = %v", err)
+	}
+	data := issue.IssueListOutputData(cmd, []map[string]any{}, true, "")
+	if err := cmdutil.WriteEnvelope(cmd, "issue.list", data); err != nil {
+		t.Fatalf("cmdutil.WriteEnvelope() error = %v", err)
+	}
+	if !strings.Contains(stdout.String(), "detail=true") {
+		t.Fatalf("issue list detail mode did not surface detail=true:\n%s", stdout.String())
 	}
 }
 

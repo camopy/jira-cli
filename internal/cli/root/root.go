@@ -128,6 +128,12 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	}
 	clog.SetOutput(clog.NewOutput(cmd.ErrOrStderr(), colorMode))
 	clog.SetHyperlinkEnabled(colorMode != clog.ColorNever)
+	// Presentation policy for stderr diagnostics, mirroring the stdout plain
+	// renderer (newPlainLogger): content-adaptive quote delimiters and digit
+	// grouping on large numbers. See the newPlainLogger comment for why
+	// omit-zero is NOT part of this policy.
+	clog.SetSmartQuotes(true)
+	clog.SetNumberFormat(clog.NumberGrouped)
 	cli.SetResolvedColorMode(colorMode)
 	logger := clog.With().Logger()
 

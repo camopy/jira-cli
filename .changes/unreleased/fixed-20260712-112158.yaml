@@ -1,0 +1,3 @@
+kind: fixed
+body: Issue list completion line no longer prints detail=false noise; the detail field appears only when detail mode is on
+time: 2026-07-12T11:21:58.019820747-04:00
