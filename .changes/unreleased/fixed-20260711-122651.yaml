@@ -1,3 +1,0 @@
-kind: fixed
-body: 'Align TUI relative ages with the CLI compact format: sub-minute and future-skewed updates show "now", and 30-34 day ages show "4w"'
-time: 2026-07-11T12:26:51.056219793-04:00

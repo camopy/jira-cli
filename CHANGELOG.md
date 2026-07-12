@@ -1,6 +1,12 @@
 # Release Notes
 
 
+## [0.10.10](https://github.com/matcra587/jira-cli/releases/tag/v0.10.10) — 2026-07-11
+
+### Fixed
+
+- Align TUI relative ages with the CLI compact format: sub-minute and future-skewed updates show "now", and 30-34 day ages show "4w"
+
 ## [0.10.9](https://github.com/matcra587/jira-cli/releases/tag/v0.10.9) — 2026-07-11
 
 ### Fixed
