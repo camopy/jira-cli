@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/matcra587/jira-cli/internal/jira"
 )
 
 func TestGenericPlainShowsElapsedAtOrAboveThreshold(t *testing.T) {
@@ -76,5 +78,24 @@ func TestMutationCompletionUsesSuccessLevelOnlyWhenReal(t *testing.T) {
 	}
 	if strings.Contains(buf.String(), "SCS") {
 		t.Fatalf("informational read claimed success level:\n%s", buf.String())
+	}
+}
+
+func TestDetailRowsCarryStatusCategoryLikeCompactRows(t *testing.T) {
+	key, summary, status := "PROJ-1", "s", "In Progress"
+	catKey, catColor := "indeterminate", "yellow"
+	issue := &jira.Issue{
+		Key: &key,
+		Fields: &jira.IssueFields{
+			Summary: &summary,
+			Status: &jira.Status{
+				Name:           &status,
+				StatusCategory: &jira.StatusCategory{Key: &catKey, ColorName: &catColor},
+			},
+		},
+	}
+	row := issueMapFromJiraIssue(issue)
+	if row["status_category"] != catKey || row["status_color"] != catColor {
+		t.Fatalf("detail row dropped status category inputs, pill color would drift from the compact shape: %#v", row)
 	}
 }

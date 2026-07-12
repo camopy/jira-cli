@@ -225,12 +225,19 @@ func issueViewShownFailureKeys(keys []string) ([]string, int) {
 
 func issueViewSummaryRow(issue map[string]any) map[string]any {
 	fields := mapFromAny(issue["fields"])
+	// statusCategory rides along so the summary table's status pill colors
+	// by category exactly like the issue-list shapes; without it the pill
+	// falls back to statusFill's per-name hash and the hue drifts between
+	// surfaces.
+	statusCategory := mapFromAny(mapFromAny(fields["status"])["statusCategory"])
 	return map[string]any{
-		"key":      stringFromMap(issue, "key"),
-		"summary":  stringFromMap(fields, "summary"),
-		"status":   nestedString(fields, "status", "name"),
-		"assignee": mapFromAny(fields["assignee"]),
-		"priority": nestedString(fields, "priority", "name"),
+		"key":             stringFromMap(issue, "key"),
+		"summary":         stringFromMap(fields, "summary"),
+		"status":          nestedString(fields, "status", "name"),
+		"status_category": stringFromMap(statusCategory, "key"),
+		"status_color":    stringFromMap(statusCategory, "colorName"),
+		"assignee":        mapFromAny(fields["assignee"]),
+		"priority":        nestedString(fields, "priority", "name"),
 	}
 }
 

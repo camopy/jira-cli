@@ -1391,8 +1391,19 @@ func issueMapFromJiraIssue(issue *jira.Issue) map[string]any {
 	if issue.Fields.Summary != nil {
 		row["summary"] = *issue.Fields.Summary
 	}
-	if issue.Fields.Status != nil && issue.Fields.Status.Name != nil {
-		row["status"] = *issue.Fields.Status.Name
+	if status := issue.Fields.Status; status != nil {
+		if status.Name != nil {
+			row["status"] = *status.Name
+		}
+		// The status pill colors by category, not name: without these two
+		// fields statusFill falls through to its per-name hash and the same
+		// status renders a different hue than the compact list shape.
+		if status.StatusCategory != nil && status.StatusCategory.Key != nil {
+			row["status_category"] = *status.StatusCategory.Key
+		}
+		if status.StatusCategory != nil && status.StatusCategory.ColorName != nil {
+			row["status_color"] = *status.StatusCategory.ColorName
+		}
 	}
 	if issue.Fields.Assignee != nil {
 		row["assignee"] = issue.Fields.Assignee

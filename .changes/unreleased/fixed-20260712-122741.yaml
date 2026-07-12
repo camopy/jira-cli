@@ -1,0 +1,3 @@
+kind: fixed
+body: Status pills color by category consistently across issue list --detail and multi-key issue view, instead of drifting to arbitrary hues
+time: 2026-07-12T12:27:41.380686036-04:00
