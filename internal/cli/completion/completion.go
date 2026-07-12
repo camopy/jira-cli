@@ -5,9 +5,9 @@ import (
 	"maps"
 	"os"
 	"slices"
-	"sort"
 
 	"github.com/gechr/clib/complete"
+	xmaps "github.com/gechr/x/maps"
 	xslices "github.com/gechr/x/slices"
 
 	"github.com/matcra587/jira-cli/internal/cache"
@@ -132,13 +132,7 @@ func emitSavedQueries(globals startup.Globals) {
 	if err != nil {
 		return
 	}
-	names := make([]string, 0, len(queries))
-	for name := range queries {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		q := queries[name]
+	for name, q := range xmaps.Sorted(queries) {
 		desc := q.Description
 		if desc == "" {
 			desc = q.JQL

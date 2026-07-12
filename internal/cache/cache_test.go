@@ -128,3 +128,34 @@ func TestReadCachedOrEmptyDistinguishesBrokenFromAbsent(t *testing.T) {
 		t.Fatalf("broken entry: want ok=false err!=nil, got ok=%v err=%v", ok, err)
 	}
 }
+
+func TestExistsProbeSemantics(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	const profile, resource = "p-test", "labels"
+
+	ok, err := Exists(profile, resource)
+	if err != nil || ok {
+		t.Fatalf("missing entry: got ok=%v err=%v, want absent without error", ok, err)
+	}
+
+	if _, err := Write(profile, resource, json.RawMessage(`["a"]`)); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	ok, err = Exists(profile, resource)
+	if err != nil || !ok {
+		t.Fatalf("written entry: got ok=%v err=%v, want present", ok, err)
+	}
+
+	// A regular file where the cache root directory belongs makes every
+	// component below it unreachable; the probe reads that as absent rather
+	// than an error (see the Exists doc comment).
+	root := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", root)
+	if err := os.WriteFile(filepath.Join(root, "jira-cli"), []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("write blocker: %v", err)
+	}
+	ok, err = Exists(profile, resource)
+	if err != nil || ok {
+		t.Fatalf("file mid-path: got ok=%v err=%v, want absent without error", ok, err)
+	}
+}

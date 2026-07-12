@@ -14,6 +14,7 @@ import (
 	"time"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	"github.com/gechr/x/ptr"
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cache"
@@ -87,11 +88,11 @@ $ jira boards list --refresh --unbounded --output=json`,
 				return err
 			}
 
-			// Stable ordering by id ascending. The primer already
-			// sorts; cached payloads written by older callers may
+			// Stable ordering by id ascending (nil id sorts as 0). The primer
+			// already sorts; cached payloads written by older callers may
 			// not, so we re-sort defensively.
 			sort.SliceStable(file.Items, func(i, j int) bool {
-				return safeIntPtr(file.Items[i].ID) < safeIntPtr(file.Items[j].ID)
+				return ptr.Deref(file.Items[i].ID) < ptr.Deref(file.Items[j].ID)
 			})
 			// The cached set is served whole and the window is cut
 			// client-side, mirroring attachment list: total always
@@ -271,14 +272,4 @@ func boardsListEnvelope(items []jira.Board) []map[string]any {
 		out = append(out, row)
 	}
 	return out
-}
-
-// safeIntPtr dereferences a *int with a 0 fallback for nil so
-// SliceStable comparisons don't panic on a server response missing
-// the id field.
-func safeIntPtr(p *int) int {
-	if p == nil {
-		return 0
-	}
-	return *p
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	xhttp "github.com/gechr/x/http"
+	xstrings "github.com/gechr/x/strings"
 )
 
 // tenantInfoPath is Atlassian's cloudId probe. It is not part of the
@@ -64,7 +65,7 @@ func discoverCloudID(ctx context.Context, siteBaseURL string, timeout time.Durat
 	if err := json.Unmarshal(data, &body); err != nil {
 		return "", fmt.Errorf("could not parse %s response: %w", tenantInfoPath, err)
 	}
-	if strings.TrimSpace(body.CloudID) == "" {
+	if xstrings.IsBlank(body.CloudID) {
 		return "", fmt.Errorf("%s response did not include a cloudId", tenantInfoPath)
 	}
 	return strings.TrimSpace(body.CloudID), nil

@@ -3,7 +3,8 @@ package search
 import (
 	"context"
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/matcra587/jira-cli/internal/browser"
@@ -18,12 +19,7 @@ import (
 // sortedQueryNames returns the saved-query names in stable alphabetical order,
 // for the "did you mean" suggestions on an unknown `search saved NAME`.
 func sortedQueryNames(queries map[string]config.Query) []string {
-	names := make([]string, 0, len(queries))
-	for name := range queries {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
+	return slices.Sorted(maps.Keys(queries))
 }
 
 // NewCommand returns the `search` command group for running Jira searches.

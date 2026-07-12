@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	xstrings "github.com/gechr/x/strings"
 )
 
 // KeyDesc describes a single configuration key visible to `jira config get/set`.
@@ -191,7 +193,7 @@ func (c *Config) setProfileField(key, value string) error {
 	case "cloud_id":
 		// An empty value clears scoped routing (reverts to a classic token
 		// addressed at the site); a non-empty value must be a valid cloudId.
-		if strings.TrimSpace(value) == "" {
+		if xstrings.IsBlank(value) {
 			p.CloudID = ""
 		} else {
 			if err := ValidateCloudID(value); err != nil {

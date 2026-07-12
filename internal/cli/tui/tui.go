@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	xstrings "github.com/gechr/x/strings"
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cli"
@@ -162,7 +163,7 @@ func registerQuerySections(registry *core.Registry, cfg *config.Config) []queryS
 	}
 	var out []querySection
 	for i, sec := range cfg.TUI.Sections {
-		if strings.TrimSpace(sec.JQL) == "" {
+		if xstrings.IsBlank(sec.JQL) {
 			continue
 		}
 		title := strings.TrimSpace(sec.Title)

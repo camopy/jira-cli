@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/gechr/x/ptr"
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
@@ -67,13 +68,13 @@ $ jira user search "Sam" --output=json`,
 			}
 			matches := make([]map[string]any, 0, len(users))
 			for _, u := range users {
-				if u == nil || !boolValue(u.Active) || boolValue(u.Deleted) {
+				if u == nil || !ptr.Deref(u.Active) || ptr.Deref(u.Deleted) {
 					continue
 				}
 				matches = append(matches, map[string]any{
-					"account_id":    stringValue(u.AccountID),
-					"display_name":  stringValue(u.DisplayName),
-					"email_address": stringValue(u.EmailAddress),
+					"account_id":    ptr.Deref(u.AccountID),
+					"display_name":  ptr.Deref(u.DisplayName),
+					"email_address": ptr.Deref(u.EmailAddress),
 				})
 			}
 			return cmdutil.WriteEnvelope(cmd, "user.search", map[string]any{
@@ -83,15 +84,4 @@ $ jira user search "Sam" --output=json`,
 			})
 		},
 	}
-}
-
-func stringValue(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
-
-func boolValue(b *bool) bool {
-	return b != nil && *b
 }

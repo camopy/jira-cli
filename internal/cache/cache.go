@@ -151,19 +151,16 @@ func Write(profile, resource string, data json.RawMessage) (Entry, error) {
 
 // Exists reports whether a cache file is present for (profile, resource) —
 // what a Clear would remove — without touching it. The dry-run half of
-// `cache clear <resource>`.
+// `cache clear <resource>`. Like every xos boolean probe it treats a regular
+// file where a directory should be (ENOTDIR mid-path) as absent, so on a
+// hand-corrupted cache tree the preview says "nothing to remove" where the
+// live Clear surfaces the error.
 func Exists(profile, resource string) (bool, error) {
 	path, err := Path(profile, resource)
 	if err != nil {
 		return false, err
 	}
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
+	return xos.Exists(path)
 }
 
 // CountProfile reports how many cache files a ClearProfile would remove,

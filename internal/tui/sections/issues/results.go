@@ -1250,7 +1250,7 @@ func (r *results) handleEditor(msg input.EditorFinishedMsg) tea.Cmd {
 	if !ok || kind != "comment" {
 		return nil
 	}
-	if strings.TrimSpace(msg.Text) == "" {
+	if xstrings.IsBlank(msg.Text) {
 		return r.flashNotice("empty comment discarded", false)
 	}
 	body, _, err := adf.FromMarkdownLossy(msg.Text)

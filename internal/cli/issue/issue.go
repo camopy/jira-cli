@@ -2115,7 +2115,7 @@ func transitionTargetFromPayload(raw any) (string, error) {
 		case float64:
 			return strconv.FormatInt(int64(id), 10), nil
 		}
-		if name, ok := v["name"].(string); ok && strings.TrimSpace(name) != "" {
+		if name, ok := v["name"].(string); ok && !xstrings.IsBlank(name) {
 			return strings.TrimSpace(name), nil
 		}
 	}
@@ -2149,7 +2149,7 @@ func validatePriorityAgainstCache(cmd *cobra.Command, profile config.Profile, fi
 		return nil
 	}
 	name, isString := priority["name"].(string)
-	if !isString || strings.TrimSpace(name) == "" {
+	if !isString || xstrings.IsBlank(name) {
 		return nil
 	}
 	var cached []struct {

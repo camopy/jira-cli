@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	xmaps "github.com/gechr/x/maps"
 	xstrings "github.com/gechr/x/strings"
 )
 
@@ -275,10 +276,7 @@ var wikiEmojiShortNames = map[string][2]string{
 // wikiEmojiPattern matches every shortcut in wikiEmojiShortNames. Longer
 // alternatives sort first so </3 wins over <3.
 var wikiEmojiPattern = func() *regexp.Regexp {
-	shortcuts := make([]string, 0, len(wikiEmojiShortNames))
-	for s := range wikiEmojiShortNames {
-		shortcuts = append(shortcuts, s)
-	}
+	shortcuts := xmaps.Keys(wikiEmojiShortNames)
 	sort.Slice(shortcuts, func(i, j int) bool {
 		if len(shortcuts[i]) != len(shortcuts[j]) {
 			return len(shortcuts[i]) > len(shortcuts[j])

@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	xstrings "github.com/gechr/x/strings"
 
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/tui/keys"
@@ -298,7 +299,7 @@ func (c *ProgramContext) SetLenses(cfg *config.Config) {
 		return
 	}
 	for _, l := range cfg.TUI.Lenses {
-		if strings.TrimSpace(l.Title) == "" || strings.TrimSpace(l.JQL) == "" {
+		if xstrings.IsBlank(l.Title) || xstrings.IsBlank(l.JQL) {
 			continue
 		}
 		c.Lenses = append(c.Lenses, Lens{Name: l.Title, JQL: l.JQL})

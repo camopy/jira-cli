@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	xmaps "github.com/gechr/x/maps"
 	"github.com/gechr/x/ptr"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui/components/picker"
@@ -48,10 +49,7 @@ func collectFacets(all []*jira.Issue) facetChoices {
 			count[facet{"label", l}]++
 		}
 	}
-	facets := make([]facet, 0, len(count))
-	for f := range count {
-		facets = append(facets, f)
-	}
+	facets := xmaps.Keys(count)
 	groupRank := map[string]int{"status": 0, "assignee": 1, "label": 2}
 	sort.Slice(facets, func(i, j int) bool {
 		if a, b := groupRank[facets[i].field], groupRank[facets[j].field]; a != b {
