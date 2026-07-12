@@ -57,20 +57,13 @@ func RouteWarnings(opts RouteOptions) error {
 	}
 }
 
-// mirrorWarningsToStderr emits one clog WRN line per warning. Forces the
-// logger level to LevelWarn so non-TTY destinations (test buffers, piped
-// stderr) still see the lines.
+// mirrorWarningsToStderr emits one clog WRN line per warning, on a boundary
+// logger pinned to LevelWarn — this surface is warnings-only by design.
 func mirrorWarningsToStderr(w io.Writer, warnings []Warning) error {
 	if len(warnings) == 0 || w == nil {
 		return nil
 	}
-	// The resolved --color mode, not a hardcoded ColorAuto: this stderr surface
-	// builds its own logger, so --color=always/never would otherwise skip it.
-	// SetStyles matches every other renderer logger so a backticked Jira warning
-	// keeps its `code` span width intact instead of losing the delimiters.
-	logger := clog.New(clog.NewOutput(w, resolvedColorMode))
-	logger.SetStyles(plainLoggerStyles())
-	logger.SetLevel(clog.LevelWarn)
+	logger := newPlainLoggerAt(w, clog.LevelWarn)
 	for _, warn := range warnings {
 		// Warning strings can carry Jira-controlled text — node_type/mark_type
 		// echo whatever type string the inbound ADF document declared — so

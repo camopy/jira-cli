@@ -146,9 +146,7 @@ func WriteIssueViewFailureDiagnostics(w io.Writer, data any, errorsOut []Error) 
 	if len(failures) == 0 || w == nil {
 		return nil
 	}
-	logger := clog.New(clog.NewOutput(w, clog.ColorAuto))
-	logger.SetStyles(plainLoggerStyles())
-	logger.SetLevel(clog.LevelError)
+	logger := newPlainLoggerAt(w, clog.LevelError)
 	shown, omitted := issueViewShownFailureKeys(failures)
 	total, succeeded, failed := issueViewFailureCounts(data, len(failures))
 	event := logger.Error().
@@ -246,8 +244,7 @@ func WriteIssueTransitionsPlain(w io.Writer, command string, data any, opts ...P
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	logger := clog.New(clog.NewOutput(w, clog.ColorAuto))
-	logger.SetStyles(plainLoggerStyles())
+	logger := newPlainLogger(w)
 
 	m, ok := data.(map[string]any)
 	if !ok {

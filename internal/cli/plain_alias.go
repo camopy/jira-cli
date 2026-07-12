@@ -19,8 +19,7 @@ func WriteAliasListPlain(w io.Writer, command string, data any, opts ...PlainOpt
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	logger := clog.New(clog.NewOutput(w, clog.ColorAuto))
-	logger.SetStyles(plainLoggerStyles())
+	logger := newPlainLogger(w)
 
 	aliases, ok := data.(map[string]string)
 	if !ok {

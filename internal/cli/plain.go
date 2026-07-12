@@ -206,6 +206,17 @@ func newPlainLogger(w io.Writer) *clog.Logger {
 	return logger
 }
 
+// newPlainLoggerAt returns the boundary logger with its minimum level
+// pinned to level, for renderers whose whole surface is a single severity
+// (the warning mirror, the failure-diagnostics summaries): the pin makes
+// the surface's severity explicit and keeps anything below it from ever
+// leaking through this logger.
+func newPlainLoggerAt(w io.Writer, level clog.Level) *clog.Logger {
+	logger := newPlainLogger(w)
+	logger.SetLevel(level)
+	return logger
+}
+
 // plainLoggerStyles keeps backtick delimiters in styled output
 // (BacktickKeep): plain renderers emit grid-aligned table rows and padded
 // columns, and clog's default backtick rendering drops the two delimiter

@@ -15,8 +15,7 @@ func WriteLinkListPlain(w io.Writer, command string, data any, opts ...PlainOpti
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	logger := clog.New(clog.NewOutput(w, clog.ColorAuto))
-	logger.SetStyles(plainLoggerStyles())
+	logger := newPlainLogger(w)
 
 	m, ok := data.(map[string]any)
 	if !ok {
@@ -103,8 +102,7 @@ func WriteLinkTypesPlain(w io.Writer, command string, data any, opts ...PlainOpt
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	logger := clog.New(clog.NewOutput(w, clog.ColorAuto))
-	logger.SetStyles(plainLoggerStyles())
+	logger := newPlainLogger(w)
 
 	m, ok := data.(map[string]any)
 	if !ok {
