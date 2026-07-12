@@ -56,10 +56,16 @@ func spinVerb(cmd *cobra.Command, verb cli.OperationVerb, fn func(context.Contex
 	} else {
 		// The spinner label is user-facing UI, so it is Sentence-cased; the
 		// debug lifecycle above/below stays lower case as a structured log.
-		err = clog.Spinner(cli.SentenceCase(verb.Gerundf())).
-			NonTTYSilent(true).
-			Wait(cmd.Context(), fn).
-			Silent()
+		spinner := clog.Spinner(cli.SentenceCase(verb.Gerundf())).
+			NonTTYSilent(true)
+		// A live countdown to the --timeout context deadline: invisible on
+		// machine outputs (the spinner never renders there) and gone from
+		// the done row, it only earns attention when a request hangs long
+		// enough for "how long until the CLI gives up" to matter.
+		if dl, ok := cmd.Context().Deadline(); ok {
+			spinner = spinner.Deadline("timeout", time.Until(dl))
+		}
+		err = spinner.Wait(cmd.Context(), fn).Silent()
 	}
 	elapsed := time.Since(start)
 

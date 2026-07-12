@@ -1,0 +1,3 @@
+kind: added
+body: Spinners and the multi-key progress footer show a live countdown of the remaining --timeout budget while a request is in flight
+time: 2026-07-12T11:01:06.799060095-04:00

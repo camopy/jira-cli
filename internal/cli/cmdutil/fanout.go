@@ -117,11 +117,17 @@ func fanOutKeysProgressVerb[T any](
 	// log. Every row is NonTTYSilent so a piped or captured stderr sees
 	// nothing, exactly like the aggregate bar this block replaces.
 	label := cli.SentenceCase(verb.GerundPlural())
+	// The footer carries the fan-out's timeout countdown; per-key rows stay
+	// label-only so the block reads as one deadline, not one per key.
+	footer := clog.Spinner(label)
+	if dl, ok := ctx.Deadline(); ok {
+		footer = footer.Deadline("timeout", time.Until(dl))
+	}
 	group := clog.Group(
 		ctx,
 		fx.WithHideDone(),
 		fx.WithFooter(
-			clog.Spinner(label),
+			footer,
 			func(done, total int, u *fx.Update) {
 				u.Msg(label).Str("progress", fmt.Sprintf("%d/%d", done, total)).Send()
 			},
