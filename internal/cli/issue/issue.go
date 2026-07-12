@@ -14,6 +14,7 @@ import (
 	"charm.land/huh/v2"
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/gechr/x/ptr"
+	xslices "github.com/gechr/x/slices"
 	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/browser"
@@ -2381,10 +2382,9 @@ func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, 
 			}
 			return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.transition", results, cmdutil.KeyedDataWithWarnings(pipeOut.Warnings))
 		}
-		results := make([]cmdutil.KeyResult[map[string]any], len(keys))
-		for i, key := range keys {
-			results[i] = cmdutil.KeyResult[map[string]any]{Key: key, Value: transitionDryRunData(key, target, submitFields, comment, payload.update)}
-		}
+		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[map[string]any] {
+			return cmdutil.KeyResult[map[string]any]{Key: key, Value: transitionDryRunData(key, target, submitFields, comment, payload.update)}
+		})
 		return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.transition", results, cmdutil.KeyedDataWithWarnings(pipeOut.Warnings))
 	}
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
@@ -2794,10 +2794,9 @@ type issueWebLinkInput struct {
 
 func runIssueWebLinkMany(cmd *cobra.Command, keys []string, parallelism int, in issueWebLinkInput) error {
 	if in.DryRun {
-		results := make([]cmdutil.KeyResult[map[string]any], len(keys))
-		for i, key := range keys {
-			results[i] = cmdutil.KeyResult[map[string]any]{Key: key, Value: issueWebLinkData(key, in, true)}
-		}
+		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[map[string]any] {
+			return cmdutil.KeyResult[map[string]any]{Key: key, Value: issueWebLinkData(key, in, true)}
+		})
 		return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.weblink", results, func(_ string, data map[string]any) any { return data })
 	}
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)

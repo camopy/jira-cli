@@ -132,10 +132,7 @@ func missingRequiredFlags(cmd *cobra.Command) []string {
 // requiredFlagError builds the typed error for a set of unset required
 // flags, scoping Error.Flag to the first missing flag.
 func requiredFlagError(missing []string) error {
-	quoted := make([]string, len(missing))
-	for i, name := range missing {
-		quoted[i] = "--" + name
-	}
+	quoted := xslices.Map(missing, func(name string) string { return "--" + name })
 	fe := cli.NewCLIInputError(
 		cli.InputRequiredFlagMissing,
 		fmt.Sprintf("required flag(s) %s not set", strings.Join(quoted, ", ")),

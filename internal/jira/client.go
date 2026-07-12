@@ -16,6 +16,7 @@ import (
 	"github.com/gechr/clog"
 	termansi "github.com/gechr/x/ansi"
 	xmaps "github.com/gechr/x/maps"
+	xslices "github.com/gechr/x/slices"
 	xstrings "github.com/gechr/x/strings"
 
 	"github.com/matcra587/jira-cli/internal/errtax"
@@ -269,7 +270,7 @@ func parseClientBaseURL(raw string) (*url.URL, error) {
 	if u.Host == "" {
 		return nil, fmt.Errorf("jira client: base URL must include a host")
 	}
-	if u.RawQuery != "" || u.Fragment != "" {
+	if xstrings.AnyNonEmpty(u.RawQuery, u.Fragment) {
 		return nil, fmt.Errorf("jira client: base URL must not include query or fragment")
 	}
 	if !strings.HasSuffix(u.Path, "/") {
@@ -431,7 +432,7 @@ func (c *Client) SignRequest(req *http.Request) {
 	// pair (account email + API token). Sending a half-pair produces a
 	// malformed header that Jira rejects with a confusing 401; skipping it
 	// surfaces a cleaner "no credential" failure instead.
-	if c.basicEmail != "" && c.basicToken != "" {
+	if xstrings.AllNonEmpty(c.basicEmail, c.basicToken) {
 		req.SetBasicAuth(c.basicEmail, c.basicToken)
 	}
 }
@@ -745,11 +746,9 @@ func redactJSONValue(key string, value any) any {
 		}
 		return out
 	case []any:
-		out := make([]any, len(v))
-		for i, item := range v {
-			out[i] = redactJSONValue("", item)
-		}
-		return out
+		return xslices.Map(v, func(item any) any {
+			return redactJSONValue("", item)
+		})
 	default:
 		return value
 	}

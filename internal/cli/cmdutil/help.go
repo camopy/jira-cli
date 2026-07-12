@@ -8,6 +8,7 @@ import (
 	"github.com/gechr/clib/complete"
 	"github.com/gechr/clib/help"
 	"github.com/gechr/clib/theme"
+	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -108,10 +109,7 @@ func orderFlagGroups(sections []help.Section) []help.Section {
 	if len(slots) < 2 {
 		return sections
 	}
-	picked := make([]help.Section, len(slots))
-	for j, i := range slots {
-		picked[j] = sections[i]
-	}
+	picked := xslices.Map(slots, func(i int) help.Section { return sections[i] })
 	sort.SliceStable(picked, func(a, b int) bool {
 		return groupRank(picked[a].Title) < groupRank(picked[b].Title)
 	})

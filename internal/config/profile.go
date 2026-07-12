@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 
+	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/errtax"
 )
 
@@ -316,7 +317,7 @@ func ValidateBaseURL(raw string) error {
 	if err != nil {
 		return err
 	}
-	if u.Scheme == "" || u.Host == "" {
+	if xstrings.AnyEmpty(u.Scheme, u.Host) {
 		return fmt.Errorf("must include scheme and host")
 	}
 	if u.Scheme == "https" {

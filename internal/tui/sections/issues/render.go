@@ -390,7 +390,7 @@ func detailHeading(i *jira.Issue, width int, now time.Time, baseURL string) stri
 		b.WriteString(theme.DetailDim.Render(proj + " · "))
 	}
 	linked := key
-	if baseURL != "" && key != "" {
+	if xstrings.AllNonEmpty(baseURL, key) {
 		// Link the bare key and style outside: the hyperlink sanitizer strips
 		// ESC bytes, so styling first would shred the SGR sequences.
 		linked = adf.Hyperlink(strings.TrimRight(baseURL, "/")+"/browse/"+key, key)

@@ -101,7 +101,7 @@ func commentPlainLine(c map[string]any, style authPlainStyle) string {
 	if vis, ok := c["visibility"].(map[string]any); ok && vis != nil {
 		visType, _ := vis["type"].(string)
 		visValue, _ := vis["value"].(string)
-		if visType != "" || visValue != "" {
+		if xstrings.AnyNonEmpty(visType, visValue) {
 			parts = append(parts, style.warn("["+visType+":"+visValue+"]"))
 		}
 	}

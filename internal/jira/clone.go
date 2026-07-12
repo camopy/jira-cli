@@ -1,6 +1,10 @@
 package jira
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	xslices "github.com/gechr/x/slices"
+)
 
 func cloneJSONMap(in map[string]any) map[string]any {
 	if in == nil {
@@ -24,31 +28,19 @@ func cloneJSONValue(value any) any {
 		}
 		return out
 	case []any:
-		out := make([]any, len(v))
-		for i, value := range v {
-			out[i] = cloneJSONValue(value)
-		}
-		return out
+		return xslices.Map(v, cloneJSONValue)
 	case []map[string]any:
-		out := make([]map[string]any, len(v))
-		for i, value := range v {
-			out[i] = cloneJSONMap(value)
-		}
-		return out
+		return xslices.Map(v, cloneJSONMap)
 	case []map[string]string:
-		out := make([]map[string]string, len(v))
-		for i, value := range v {
-			out[i] = cloneJSONValue(value).(map[string]string)
-		}
-		return out
+		return xslices.Map(v, func(value map[string]string) map[string]string {
+			return cloneJSONValue(value).(map[string]string)
+		})
 	case []string:
 		return append([]string(nil), v...)
 	case []json.RawMessage:
-		out := make([]json.RawMessage, len(v))
-		for i, value := range v {
-			out[i] = append(json.RawMessage(nil), value...)
-		}
-		return out
+		return xslices.Map(v, func(value json.RawMessage) json.RawMessage {
+			return append(json.RawMessage(nil), value...)
+		})
 	case map[string][]any:
 		out := make(map[string][]any, len(v))
 		for key, value := range v {

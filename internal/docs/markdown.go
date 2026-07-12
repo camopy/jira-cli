@@ -25,6 +25,7 @@ import (
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/gechr/clib/complete"
 	"github.com/gechr/clib/help"
+	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/cli/schema"
 	"github.com/spf13/cobra"
@@ -113,10 +114,7 @@ func GenMarkdownCustom(cmd *cobra.Command, w io.Writer, _, linkHandler func(stri
 	fmt.Fprintf(&b, "# `%s`\n\n", name)
 	fmt.Fprintf(&b, "- **Usage**: `%s`\n", cmd.UseLine())
 	if len(cmd.Aliases) > 0 {
-		quoted := make([]string, len(cmd.Aliases))
-		for i, a := range cmd.Aliases {
-			quoted[i] = "`" + a + "`"
-		}
+		quoted := xslices.Map(cmd.Aliases, func(a string) string { return "`" + a + "`" })
 		fmt.Fprintf(&b, "- **Aliases**: %s\n", strings.Join(quoted, ", "))
 	}
 	b.WriteString("\n")
@@ -210,10 +208,7 @@ func writeFlag(b *bytes.Buffer, m complete.FlagMeta, defaults map[string]string)
 	fmt.Fprintf(b, "### `%s`\n\n", flagHeading(m))
 
 	if len(m.Aliases) > 0 {
-		quoted := make([]string, len(m.Aliases))
-		for i, a := range m.Aliases {
-			quoted[i] = "`--" + a + "`"
-		}
+		quoted := xslices.Map(m.Aliases, func(a string) string { return "`--" + a + "`" })
 		fmt.Fprintf(b, "Aliases: %s\n\n", strings.Join(quoted, ", "))
 	}
 

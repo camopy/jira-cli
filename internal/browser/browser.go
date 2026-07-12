@@ -20,7 +20,7 @@ import (
 func IssueURL(baseURL, key string) string {
 	baseURL = trimBase(baseURL)
 	key = strings.TrimSpace(key)
-	if baseURL == "" || key == "" {
+	if xstrings.AnyEmpty(baseURL, key) {
 		return ""
 	}
 	return baseURL + "/browse/" + url.PathEscape(key)
@@ -31,7 +31,7 @@ func IssueURL(baseURL, key string) string {
 func SearchURL(baseURL, jqlQuery string) string {
 	baseURL = trimBase(baseURL)
 	jqlQuery = strings.TrimSpace(jqlQuery)
-	if baseURL == "" || jqlQuery == "" {
+	if xstrings.AnyEmpty(baseURL, jqlQuery) {
 		return ""
 	}
 	return baseURL + "/issues/?jql=" + url.QueryEscape(jqlQuery)

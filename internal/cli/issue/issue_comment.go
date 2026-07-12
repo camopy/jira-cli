@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	xslices "github.com/gechr/x/slices"
 	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli"
@@ -460,9 +461,8 @@ func runCommentAddMany(
 	dryRun bool,
 ) error {
 	if dryRun {
-		results := make([]cmdutil.KeyResult[map[string]any], len(keys))
-		for i, key := range keys {
-			results[i] = cmdutil.KeyResult[map[string]any]{
+		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[map[string]any] {
+			return cmdutil.KeyResult[map[string]any]{
 				Key: key,
 				Value: map[string]any{
 					"issue":   key,
@@ -470,7 +470,7 @@ func runCommentAddMany(
 					"dry_run": true,
 				},
 			}
-		}
+		})
 		return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.comment.add", results, cmdutil.KeyedDataWithWarnings(warnings))
 	}
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)

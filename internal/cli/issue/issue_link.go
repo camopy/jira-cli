@@ -17,6 +17,8 @@ import (
 	"time"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	xslices "github.com/gechr/x/slices"
+	xstrings "github.com/gechr/x/strings"
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/adf"
@@ -74,7 +76,7 @@ $ jira issue link PROJ-123 --to PROJ-456 --type Blocks --dry-run`,
 				in, keys, err = issueLinkInputFromJSON(jsonInput, args)
 			} else {
 				keys, err = issuekey.ParseExpressions(args, issuekey.Options{MaxExpansion: issuekey.DefaultMaxExpansion})
-				if err == nil && (to == "" || linkType == "") {
+				if err == nil && xstrings.AnyEmpty(to, linkType) {
 					err = fmt.Errorf("validation: --to and --type are required (or supply the native body via --json-input)")
 				}
 				in = issueLinkCreateInput{To: to, Type: linkType}
@@ -185,7 +187,7 @@ func issueLinkInputFromJSON(jsonInput string, args []string) (issueLinkCreateInp
 			in.TypeID = strings.TrimSpace(id)
 		}
 	}
-	if in.Type == "" && in.TypeID == "" {
+	if xstrings.AllEmpty(in.Type, in.TypeID) {
 		return in, nil, fmt.Errorf("validation: issue link --json-input needs a type name or id, matching the Jira REST issueLink body")
 	}
 	in.To = issueLinkEndpointKey(payload["outwardIssue"])
@@ -242,10 +244,9 @@ func issueLinkEndpointKey(raw any) string {
 
 func runIssueLinkCreateMany(cmd *cobra.Command, keys []string, parallelism int, in issueLinkCreateInput) error {
 	if in.DryRun {
-		results := make([]cmdutil.KeyResult[map[string]any], len(keys))
-		for i, key := range keys {
-			results[i] = cmdutil.KeyResult[map[string]any]{Key: key, Value: issueLinkCreateData(key, in, true)}
-		}
+		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[map[string]any] {
+			return cmdutil.KeyResult[map[string]any]{Key: key, Value: issueLinkCreateData(key, in, true)}
+		})
 		return cmdutil.WriteKeyedResultsEnvelope(cmd, in.Command, results, func(_ string, data map[string]any) any { return data })
 	}
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)

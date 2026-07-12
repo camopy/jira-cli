@@ -14,6 +14,8 @@ import (
 	"regexp"
 	"strconv"
 	"time"
+
+	xslices "github.com/gechr/x/slices"
 )
 
 // Status tags the support tier a row sits in.
@@ -140,15 +142,12 @@ func liftScalarSlice(key string) Encoder {
 		if !ok {
 			return v, nil
 		}
-		out := make([]any, len(s))
-		for i, el := range s {
+		return xslices.Map(s, func(el any) any {
 			if str, isStr := el.(string); isStr {
-				out[i] = map[string]any{key: str}
-				continue
+				return map[string]any{key: str}
 			}
-			out[i] = el
-		}
-		return out, nil
+			return el
+		}), nil
 	}
 }
 

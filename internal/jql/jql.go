@@ -171,7 +171,7 @@ func dateFilterClauses(field, value string) ([]string, error) {
 	if left, right, ok := strings.Cut(value, ".."); ok {
 		left = strings.TrimSpace(left)
 		right = strings.TrimSpace(right)
-		if left == "" && right == "" {
+		if xstrings.AllEmpty(left, right) {
 			return nil, fmt.Errorf("%s date range %q needs at least one bound", field, value)
 		}
 		clauses := make([]string, 0, 2)

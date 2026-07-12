@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/pipeline"
 )
@@ -78,7 +79,7 @@ func classifySchemaError(err error) error {
 // scoped to one profile and is never shared across Jira sites.
 func newScreenSchemaFetcher(ctx context.Context, lookup screenSchemaLookup, profile, projectKey, issueType string) pipeline.SchemaFetcher {
 	return func() (pipeline.ScreenSchema, error) {
-		if projectKey == "" || issueType == "" {
+		if xstrings.AnyEmpty(projectKey, issueType) {
 			return pipeline.ScreenSchema{}, pipeline.ErrSchemaUnknown
 		}
 		schema, _, err := lookup.GetFieldSchemaForProfile(ctx, profile, projectKey, issueType)

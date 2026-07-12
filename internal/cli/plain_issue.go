@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gechr/clog"
+	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
 )
 
@@ -82,7 +83,7 @@ func issueTransitionsPlain(issue map[string]any) string {
 		name := stringFromMap(transition, "name")
 		id := stringFromMap(transition, "id")
 		switch {
-		case name != "" && id != "":
+		case xstrings.AllNonEmpty(name, id):
 			parts = append(parts, name+" ("+id+")")
 		case name != "":
 			parts = append(parts, name)

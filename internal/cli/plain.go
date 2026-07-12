@@ -19,6 +19,7 @@ import (
 	termansi "github.com/gechr/x/ansi"
 	"github.com/gechr/x/human"
 	xmaps "github.com/gechr/x/maps"
+	xslices "github.com/gechr/x/slices"
 	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/browser"
@@ -259,23 +260,14 @@ func sanitizePlainData(value any) any {
 		}
 		return out
 	case []any:
-		out := make([]any, len(v))
-		for i, child := range v {
-			out[i] = sanitizePlainData(child)
-		}
-		return out
+		return xslices.Map(v, sanitizePlainData)
 	case []map[string]any:
-		out := make([]map[string]any, len(v))
-		for i, child := range v {
-			out[i], _ = sanitizePlainData(child).(map[string]any)
-		}
-		return out
+		return xslices.Map(v, func(child map[string]any) map[string]any {
+			m, _ := sanitizePlainData(child).(map[string]any)
+			return m
+		})
 	case []string:
-		out := make([]string, len(v))
-		for i, s := range v {
-			out[i] = SanitizeTerminalBlock(s)
-		}
-		return out
+		return xslices.Map(v, SanitizeTerminalBlock)
 	default:
 		return value
 	}
@@ -647,7 +639,7 @@ func writeUserSearchPlain(logger *clog.Logger, data any, cfg plainConfig) error 
 		email, _ := u["email_address"].(string)
 		id, _ := u["account_id"].(string)
 		display := name
-		if cfg.baseURL != "" && id != "" {
+		if xstrings.AllNonEmpty(cfg.baseURL, id) {
 			display = hyperlink(cfg, cfg.baseURL+"/jira/people/"+id, name)
 		}
 		line := display
@@ -838,11 +830,7 @@ var issueColumnDefs = []issueColumn{
 var defaultIssueColumns = []string{"key", "summary", "status", "assignee", "priority"}
 
 func issueColumnNames() []string {
-	names := make([]string, len(issueColumnDefs))
-	for i, c := range issueColumnDefs {
-		names[i] = c.name
-	}
-	return names
+	return xslices.Map(issueColumnDefs, func(c issueColumn) string { return c.name })
 }
 
 // resolveIssueColumns maps the requested column names (or the default set when
@@ -918,16 +906,10 @@ func issueTSVLines(issues []map[string]any, cfg plainConfig) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	headers := make([]string, len(cols))
-	for i, c := range cols {
-		headers[i] = c.header
-	}
+	headers := xslices.Map(cols, func(c issueColumn) string { return c.header })
 	lines := []string{strings.Join(headers, "\t")}
 	for _, row := range buildIssueRows(issues) {
-		fields := make([]string, len(cols))
-		for i, c := range cols {
-			fields[i] = sanitizeTSVField(c.text(row))
-		}
+		fields := xslices.Map(cols, func(c issueColumn) string { return sanitizeTSVField(c.text(row)) })
 		lines = append(lines, strings.Join(fields, "\t"))
 	}
 	return lines, nil

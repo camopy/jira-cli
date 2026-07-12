@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"time"
 
+	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/spf13/cobra"
@@ -119,7 +120,7 @@ func JiraClientForCommand(cmd *cobra.Command) (*jira.Client, config.Profile, boo
 		if err != nil {
 			return nil, config.Profile{}, false, err
 		}
-		if profile.BaseURL == "" && profile.CloudID == "" {
+		if xstrings.AllEmpty(profile.BaseURL, profile.CloudID) {
 			return nil, config.Profile{}, false, config.ProfileIncompleteError{Name: profile.Name}
 		}
 		return JiraClientForProfile(cmd, profile)

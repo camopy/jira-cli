@@ -7,6 +7,7 @@ import (
 	"time"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
@@ -202,9 +203,8 @@ type worklogAddInputs struct {
 
 func runWorklogAddMany(cmd *cobra.Command, keys []string, parallelism int, in worklogAddInputs) error {
 	if in.DryRun {
-		results := make([]cmdutil.KeyResult[map[string]any], len(keys))
-		for i, key := range keys {
-			results[i] = cmdutil.KeyResult[map[string]any]{
+		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[map[string]any] {
+			return cmdutil.KeyResult[map[string]any]{
 				Key: key,
 				Value: map[string]any{
 					"issue": key,
@@ -216,7 +216,7 @@ func runWorklogAddMany(cmd *cobra.Command, keys []string, parallelism int, in wo
 					"dry_run": true,
 				},
 			}
-		}
+		})
 		return cmdutil.WriteKeyedResultsEnvelope(cmd, "worklog.add", results, cmdutil.KeyedDataWithWarnings(in.Warnings))
 	}
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)

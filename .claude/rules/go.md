@@ -25,6 +25,25 @@ below, `clog`/`clib` for output and flags (see [output.md](output.md)),
 | Path resolution | `x/filepath` |
 | Retryable HTTP status classification | `x/http` |
 
+### Adoption policy (decided once — do not re-litigate per PR)
+
+*   **`xstrings.{Any,All}{Empty,NonEmpty}`** — adopt for predicates over
+    **two or more** strings of the same polarity (`a == "" || b == ""` →
+    `xstrings.AnyEmpty(a, b)`). Keep plain `== ""` for a single value, and
+    keep explicit conditions when polarities mix (`a == "" && b != ""`).
+*   **`xslices.Map`** — adopt when the loop's only job is constructing each
+    output element from the corresponding input element: length-preserving,
+    no filtering, no side effects, no index use beyond the element, no
+    partial initialization. Loops that `append` conditionally, mutate in
+    place, or pre-seed structs for later mutation stay loops — as do loops
+    whose element type cannot be named cleanly (an anonymous wire struct
+    would put a struct literal in the closure signature).
+*   **`xos.Exists` stays out of sites that inspect the error** — decided
+    against: where the caller distinguishes `os.ErrNotExist` from real
+    failures or propagates the original error (config loader, attachment
+    writes, auth store), `os.Stat` is the correct API per the x guide's own
+    probe rule. Audits should not re-report these.
+
 Check the module's docs (pkg.go.dev or its source) before concluding a
 primitive is missing — a gap is an upstream candidate, not a license to
 hand-roll. A

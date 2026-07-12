@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	xslices "github.com/gechr/x/slices"
 	changelog "github.com/matcra587/jira-cli"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
@@ -98,9 +99,5 @@ func single(r changelog.Release) cli.ReleaseNotesResult {
 // versionList is the available versions, newest first, for error messages.
 func versionList() []string {
 	releases := changelog.Releases()
-	out := make([]string, len(releases))
-	for i, r := range releases {
-		out[i] = r.Version
-	}
-	return out
+	return xslices.Map(releases, func(r changelog.Release) string { return r.Version })
 }

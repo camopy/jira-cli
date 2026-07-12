@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -218,10 +219,9 @@ $ jira epic add PROJ-123 PROJ-100 --dry-run`,
 
 func runEpicAddMany(cmd *cobra.Command, keys []string, epicKey string, parallelism int, dryRun bool) error {
 	if dryRun {
-		results := make([]cmdutil.KeyResult[map[string]any], len(keys))
-		for i, key := range keys {
-			results[i] = cmdutil.KeyResult[map[string]any]{Key: key, Value: epicAddData(key, epicKey, true)}
-		}
+		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[map[string]any] {
+			return cmdutil.KeyResult[map[string]any]{Key: key, Value: epicAddData(key, epicKey, true)}
+		})
 		return cmdutil.WriteKeyedResultsEnvelope(cmd, "epic.add", results, func(_ string, data map[string]any) any { return data })
 	}
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
@@ -309,10 +309,9 @@ $ jira epic remove PROJ-123 --dry-run`,
 
 func runEpicRemoveMany(cmd *cobra.Command, keys []string, parallelism int, dryRun bool) error {
 	if dryRun {
-		results := make([]cmdutil.KeyResult[map[string]any], len(keys))
-		for i, key := range keys {
-			results[i] = cmdutil.KeyResult[map[string]any]{Key: key, Value: epicRemoveData(key, true)}
-		}
+		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[map[string]any] {
+			return cmdutil.KeyResult[map[string]any]{Key: key, Value: epicRemoveData(key, true)}
+		})
 		return cmdutil.WriteKeyedResultsEnvelope(cmd, "epic.remove", results, func(_ string, data map[string]any) any { return data })
 	}
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)

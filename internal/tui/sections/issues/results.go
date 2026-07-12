@@ -17,6 +17,7 @@ import (
 	"github.com/gechr/primer/scrollbar"
 	xmaps "github.com/gechr/x/maps"
 	"github.com/gechr/x/ptr"
+	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/browser"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -1452,7 +1453,7 @@ func (r *results) openInBrowser(key string) tea.Cmd {
 // issueURL builds the browse URL for an issue via the browser helper (which
 // trims the base and path-escapes the key), or "" if no base URL is known.
 func (r *results) issueURL(key string) string {
-	if r.ctx.BaseURL == "" || key == "" {
+	if xstrings.AnyEmpty(r.ctx.BaseURL, key) {
 		return ""
 	}
 	return browser.IssueURL(r.ctx.BaseURL, key)

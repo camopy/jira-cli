@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 
+	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
@@ -78,11 +79,7 @@ var Registry = []Resource{
 
 // ResourceNames returns the resource names in registry order.
 func ResourceNames() []string {
-	names := make([]string, len(Registry))
-	for i, r := range Registry {
-		names[i] = r.Name
-	}
-	return names
+	return xslices.Map(Registry, func(r Resource) string { return r.Name })
 }
 
 // TTLMinutesFor returns the default freshness window in minutes for a

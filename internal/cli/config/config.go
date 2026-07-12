@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	xslices "github.com/gechr/x/slices"
 	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
@@ -191,10 +192,7 @@ func missingConfigInitRequiredFlags(baseURL, email string) []string {
 }
 
 func configInitRequiredFlagError(missing []string) error {
-	quoted := make([]string, len(missing))
-	for i, name := range missing {
-		quoted[i] = "--" + name
-	}
+	quoted := xslices.Map(missing, func(name string) string { return "--" + name })
 	err := cli.NewCLIInputError(
 		cli.InputRequiredFlagMissing,
 		fmt.Sprintf("required flag(s) %s not set", strings.Join(quoted, ", ")),
@@ -324,10 +322,7 @@ $ jira config set theme.name dracula --dry-run --output=json`,
 func completeConfigKeys(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 	cfg, _ := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 	keys := config.Keys(cfg)
-	out := make([]string, len(keys))
-	for i, k := range keys {
-		out[i] = k.Name + "\t" + k.Description
-	}
+	out := xslices.Map(keys, func(k config.KeyDesc) string { return k.Name + "\t" + k.Description })
 	return out, cobra.ShellCompDirectiveNoFileComp
 }
 

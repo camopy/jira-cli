@@ -137,7 +137,7 @@ func (m *Model) View() string {
 		prof += dim.Render("  " + m.ctx.BaseURL)
 	}
 	row("Profile", prof)
-	if m.ctx.Project != "" || m.ctx.Board != "" {
+	if xstrings.AnyNonEmpty(m.ctx.Project, m.ctx.Board) {
 		row("Project", strings.TrimSpace(m.ctx.Project+"  "+m.ctx.Board))
 	}
 

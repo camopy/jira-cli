@@ -8,6 +8,7 @@ import (
 
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/gechr/x/ptr"
+	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/issuekey"
@@ -429,8 +430,7 @@ func watcherDryRunPreviewMany(cmd *cobra.Command, command string, keys []string,
 		accountID = id
 		userResolved = true
 	}
-	results := make([]cmdutil.KeyResult[map[string]any], len(keys))
-	for i, key := range keys {
+	results := xslices.Map(keys, func(key string) cmdutil.KeyResult[map[string]any] {
 		data := map[string]any{
 			"key":           key,
 			"user":          args.UserIdent,
@@ -440,8 +440,8 @@ func watcherDryRunPreviewMany(cmd *cobra.Command, command string, keys []string,
 		if accountID != "" {
 			data["account_id_resolved"] = accountID
 		}
-		results[i] = cmdutil.KeyResult[map[string]any]{Key: key, Value: data}
-	}
+		return cmdutil.KeyResult[map[string]any]{Key: key, Value: data}
+	})
 	return cmdutil.WriteKeyedResultsEnvelope(cmd, command, results, func(_ string, data map[string]any) any {
 		return data
 	})

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/browser"
 	"github.com/matcra587/jira-cli/internal/cache"
 	"github.com/matcra587/jira-cli/internal/cli/boardscope"
@@ -121,18 +122,16 @@ $ jira jql reference --output=json`,
 			}); err != nil {
 				return err
 			}
-			fields := make([]map[string]any, len(ref.Fields))
-			for i, f := range ref.Fields {
+			fields := xslices.Map(ref.Fields, func(f jira.JQLField) map[string]any {
 				entry := map[string]any{"value": f.Value, "display_name": f.DisplayName}
 				if f.CustomFieldID != "" {
 					entry["custom_field_id"] = f.CustomFieldID
 				}
-				fields[i] = entry
-			}
-			functions := make([]map[string]any, len(ref.Functions))
-			for i, fn := range ref.Functions {
-				functions[i] = map[string]any{"value": fn.Value, "display_name": fn.DisplayName}
-			}
+				return entry
+			})
+			functions := xslices.Map(ref.Functions, func(fn jira.JQLFunction) map[string]any {
+				return map[string]any{"value": fn.Value, "display_name": fn.DisplayName}
+			})
 			reserved := ref.ReservedWords
 			if reserved == nil {
 				reserved = []string{}
@@ -193,8 +192,7 @@ $ jira jql validate "project = PROJ AND status = Done" --output=json`,
 			if err != nil {
 				return err
 			}
-			out := make([]map[string]any, len(results))
-			for i, r := range results {
+			out := xslices.Map(results, func(r jira.ParsedQuery) map[string]any {
 				entry := map[string]any{"query": r.Query, "valid": len(r.Errors) == 0}
 				if len(r.Errors) > 0 {
 					entry["errors"] = r.Errors
@@ -202,8 +200,8 @@ $ jira jql validate "project = PROJ AND status = Done" --output=json`,
 				if len(r.Warnings) > 0 {
 					entry["warnings"] = r.Warnings
 				}
-				out[i] = entry
-			}
+				return entry
+			})
 			return cmdutil.WriteEnvelopeWithResponse(cmd, "jql.validate", map[string]any{"queries": out}, resp)
 		},
 	}

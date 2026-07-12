@@ -1,5 +1,7 @@
 package pipeline
 
+import xslices "github.com/gechr/x/slices"
+
 // systemFieldLifts maps each object-valued system field onto the single
 // canonical identity key a bare string value is lifted into. One fixed key
 // per field, mirroring the custom-field registry's scalar lifting — never a
@@ -53,13 +55,10 @@ func liftSystemFieldValue(field string, value any) any {
 	if !isSlice {
 		return value
 	}
-	out := make([]any, len(elements))
-	for i, element := range elements {
+	return xslices.Map(elements, func(element any) any {
 		if s, isString := element.(string); isString && s != "" {
-			out[i] = map[string]any{identityKey: s}
-			continue
+			return map[string]any{identityKey: s}
 		}
-		out[i] = element
-	}
-	return out
+		return element
+	})
 }

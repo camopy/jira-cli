@@ -340,7 +340,7 @@ func (s *issueService) Delete(ctx context.Context, key string, opts *IssueDelete
 // bulk-edit endpoint refuses `issuelinks` updates; this is the
 // canonical path.
 func (s *issueService) Link(ctx context.Context, reqBody *IssueLinkRequest) (*Response, error) {
-	if reqBody == nil || (reqBody.Type == "" && reqBody.TypeID == "") || reqBody.InwardIssue == "" || reqBody.OutwardIssue == "" {
+	if reqBody == nil || xstrings.AllEmpty(reqBody.Type, reqBody.TypeID) || xstrings.AnyEmpty(reqBody.InwardIssue, reqBody.OutwardIssue) {
 		return nil, errors.New("Link: type, inwardIssue, and outwardIssue are required")
 	}
 	req, err := s.client.NewRequest(ctx, http.MethodPost, RESTPath("issueLink"), reqBody.payload())

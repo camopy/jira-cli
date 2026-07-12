@@ -13,6 +13,7 @@ import (
 	"github.com/gechr/clib/complete"
 	"github.com/gechr/clive/notify"
 	"github.com/gechr/clog"
+	xstrings "github.com/gechr/x/strings"
 	"github.com/gechr/x/terminal"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/alias"
@@ -480,7 +481,7 @@ func handleCompletionPreflight(root *cobra.Command) (bool, error) {
 	}
 	gen := completionGenerator(root)
 	globals := startup.GlobalsFromArgs(os.Args[1:])
-	if forwarded := startup.GlobalsFromArgs(positional); forwarded.ConfigPath != "" || forwarded.Profile != "" {
+	if forwarded := startup.GlobalsFromArgs(positional); xstrings.AnyNonEmpty(forwarded.ConfigPath, forwarded.Profile) {
 		if forwarded.ConfigPath != "" {
 			globals.ConfigPath = forwarded.ConfigPath
 		}
