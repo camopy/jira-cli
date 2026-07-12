@@ -1,0 +1,3 @@
+kind: added
+body: 'New issue rank command reorders backlog issues headlessly: place keys before or after an anchor issue in LexoRank order, with ranges chunked transparently at the API''s 50-issue limit and order preserved end-to-end'
+time: 2026-07-12T15:19:51.971572149-04:00

@@ -63,7 +63,14 @@ const (
 	CodeJQOutputConflict Code = "jq_output_conflict"
 	// CodeJQEvalFailed is a --jq expression that compiled but failed while
 	// running against the emitted document (a type error, a halt_error).
-	CodeJQEvalFailed            Code = "jq_eval_failed"
+	CodeJQEvalFailed Code = "jq_eval_failed"
+	// CodeRankRejected is the agile rank endpoint's 400: Jira refused the
+	// rank itself — typically a project with no Jira Software board (no
+	// LexoRank field) or an unusable anchor.
+	CodeRankRejected Code = "rank_rejected"
+	// CodeRankPartial is the rank endpoint's 207: some issues ranked, the
+	// entries named in the envelope did not.
+	CodeRankPartial             Code = "rank_partial"
 	CodeCommandUnknown          Code = "command_unknown"
 	CodePromptAborted           Code = "prompt_aborted"
 	CodePromptCanceled          Code = "prompt_canceled"
@@ -208,6 +215,8 @@ var registry = map[Code]Spec{
 	CodeJQExpressionInvalid:     {Type: TypeValidation, Exit: 3, Hint: "Fix the jq expression — the message carries the parser's position and token.", Retryable: false},
 	CodeJQOutputConflict:        {Type: TypeValidation, Exit: 3, Hint: "Remove --jq or the conflicting human-output flag; the filter runs over the JSON output.", Retryable: false},
 	CodeJQEvalFailed:            {Type: TypeValidation, Exit: 3, Hint: "The expression failed against this output's shape — inspect it first with --output=json and no filter.", Retryable: false},
+	CodeRankRejected:            {Type: TypeValidation, Exit: 3, Hint: "Ranking needs a Jira Software board with backlog ordering — check the project has one and that the anchor issue exists on it.", Retryable: false},
+	CodeRankPartial:             {Type: TypeValidation, Exit: 3, Hint: "Re-run the command with just the issues named in the error once the cause is fixed; the others already ranked.", Retryable: false},
 	CodeCommandUnknown:          {Type: TypeValidation, Exit: 3, Hint: "Run `jira --help` to see the available commands.", Retryable: false},
 	CodePromptAborted:           {Type: TypeValidation, Exit: 3, Hint: "Run it again and finish the prompt, or pass the value as a flag so it doesn't need to ask.", Retryable: false},
 	CodePromptCanceled:          {Type: TypeValidation, Exit: 3, Hint: "Run it again when you're ready to answer.", Retryable: false},

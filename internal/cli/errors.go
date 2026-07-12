@@ -85,6 +85,9 @@ func MapError(err error) Error {
 	if out, ok := mapContextError(err); ok {
 		return out
 	}
+	if out, ok := mapRankErrors(err); ok {
+		return out
+	}
 	if out, ok := mapIssueTypeUnknown(err); ok {
 		return out
 	}
@@ -102,6 +105,35 @@ func MapError(err error) Error {
 // field. It runs before the generic Coded/untyped paths so the flag and
 // suggestions are attached instead of collapsing to the bare validation
 // fallback.
+// mapRankErrors adapts the agile rank endpoint's typed failures: a 400
+// (RankRejectedError) means Jira refused the rank itself — no Software
+// board, unusable anchor — and a 207 (RankPartialError) means some issues
+// ranked while the named entries did not. Both are validation-class with
+// stable codes; the per-issue details ride the message, never the hint.
+func mapRankErrors(err error) (Error, bool) {
+	var rejected *jira.RankRejectedError
+	if errors.As(err, &rejected) {
+		return assemble(err, &rankCodedError{err: rejected, code: errtax.CodeRankRejected}), true
+	}
+	var partial *jira.RankPartialError
+	if errors.As(err, &partial) {
+		return assemble(err, &rankCodedError{err: partial, code: errtax.CodeRankPartial}), true
+	}
+	return Error{}, false
+}
+
+// rankCodedError attaches a stable taxonomy code to a typed rank failure.
+// The jira package deliberately stays free of the errtax dependency, so the
+// pairing happens here at the mapping boundary.
+type rankCodedError struct {
+	err  error
+	code errtax.Code
+}
+
+func (e *rankCodedError) Error() string     { return e.err.Error() }
+func (e *rankCodedError) Unwrap() error     { return e.err }
+func (e *rankCodedError) Code() errtax.Code { return e.code }
+
 func mapIssueTypeUnknown(err error) (Error, bool) {
 	var typeErr *jira.IssueTypeUnknownError
 	if !errors.As(err, &typeErr) {

@@ -56,6 +56,7 @@ var workflowOrder = []string{
 	"log_work",
 	"clone_issue",
 	"move_issue",
+	"rank_issues",
 	"delete_issue",
 	"self_update",
 	"author_adf",

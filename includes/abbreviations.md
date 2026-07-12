@@ -11,6 +11,7 @@
 *[ID]: Identifier
 *[JQL]: Jira Query Language
 *[JSON]: JavaScript Object Notation
+*[LexoRank]: Jira's backlog ordering scheme — each issue carries an opaque, lexicographically sortable rank string, so any issue can slot between two others without renumbering the rest.
 *[MFA]: Multi-Factor Authentication
 *[OAuth]: Open Authorization
 *[OSC 8]: The terminal escape sequence that turns text into a clickable hyperlink.

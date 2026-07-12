@@ -66,6 +66,7 @@ $ jira issue transition PROJ-12 "In Progress"`
 	add("write", issueCreateCommand())
 	add("write", issueEditCommand())
 	add("write", issueTransitionCommand())
+	add("write", issueRankCommand())
 	add("write", destructiveIssueCommand("clone", "Clone an issue"))
 	add("write", destructiveIssueCommand("move", "Move an issue"))
 	add("write", destructiveIssueCommand("delete", "Delete an issue"))

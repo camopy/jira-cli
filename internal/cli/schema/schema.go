@@ -644,6 +644,18 @@ func outputSchemas() map[string]any {
 				"truncated_reason": map[string]any{"type": "string"},
 			}, cacheStateProperties),
 		},
+		"issue.rank": map[string]any{
+			"type":     "object",
+			"required": []string{"anchor", "position", "order", "chunks"},
+			"properties": map[string]any{
+				"anchor":   map[string]any{"type": "string", "description": "The issue the ranked set was placed relative to."},
+				"position": map[string]any{"type": "string", "enum": []string{"before", "after"}},
+				"order":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "The submitted issue order, preserved end-to-end across chunks."},
+				"chunks":   map[string]any{"type": "integer", "description": "How many 50-issue requests the set was split into."},
+				"dry_run":  map[string]any{"type": "boolean"},
+				"ranked":   map[string]any{"type": "boolean", "description": "false only on the no-profile degraded path."},
+			},
+		},
 		"cache.issuekeys": map[string]any{
 			"type":     "object",
 			"required": []string{"profile", "issue_keys", "count"},

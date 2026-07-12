@@ -6,7 +6,7 @@ repo_url = "https://github.com/matcra587/jira-cli"
 repo_name = "matcra587/jira-cli"
 edit_uri = "edit/main/docs/"
 copyright = """
-<small>Copyright &copy; 2026 Matt Craven &middot; MIT licence.<br>
+<small>Copyright &copy; 2026 Matt Craven &middot; MIT licence.<!-- betterleaks:allow --><br>
 A command-line tool for use with Jira&reg;. Not affiliated with or endorsed by Atlassian. Jira&reg; is a registered trademark of Atlassian Pty Ltd.</small>
 """
 
@@ -27,6 +27,7 @@ nav = [
             { "Reading issues" = "issue/read.md" },
             { "Creating & editing" = "issue/create-edit.md" },
             { Transitions = "issue/transition.md" },
+            { Rank = "issue/rank.md" },
             { Comments = "issue/comments.md" },
             { Links = "issue/links.md" },
             { Attachments = "issue/attachments.md" },
@@ -146,6 +147,7 @@ nav = [
                 { "list" = "reference/jira/issue/list.md" },
                 { "mine" = "reference/jira/issue/mine.md" },
                 { "move" = "reference/jira/issue/move.md" },
+                { "rank" = "reference/jira/issue/rank.md" },
                 { "transition" = "reference/jira/issue/transition.md" },
                 { "unwatch" = "reference/jira/issue/unwatch.md" },
                 { "view" = "reference/jira/issue/view.md" },

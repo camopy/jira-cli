@@ -60,6 +60,10 @@ func (f *ServiceFactory) Board() jira.BoardService {
 	return jira.NewBoardService(f.client)
 }
 
+func (f *ServiceFactory) Rank() jira.RankService {
+	return jira.NewRankService(f.client)
+}
+
 func (f *ServiceFactory) Label() jira.LabelService {
 	return jira.NewLabelService(f.client)
 }
