@@ -1,0 +1,3 @@
+kind: changed
+body: 'The foreign-flag hint no longer competes with its own suggestion: it says to use this CLI''s equivalent, and the suggestion names it'
+time: 2026-07-12T15:42:23.791541355-04:00

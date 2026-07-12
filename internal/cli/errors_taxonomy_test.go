@@ -153,7 +153,7 @@ func taxonomyCases() []struct {
 		upstreamMessage bool
 	}{
 		{"flag unknown", NewCLIInputError(InputFlagUnknown, "unknown flag: --nope"), "flag_unknown", "Check the flag's spelling, or run the command with --help to see the ones it accepts.", true},
-		{"flag foreign", &CLIInputError{Kind: InputFlagUnknown, Message: "unknown flag: --plain", Flag: "plain"}, "flag_foreign", "That flag is from a different Jira CLI — run the command with --help to see this one's flags.", true},
+		{"flag foreign", &CLIInputError{Kind: InputFlagUnknown, Message: "unknown flag: --plain", Flag: "plain"}, "flag_foreign", "That flag belongs to a different Jira CLI — use this CLI's equivalent instead.", true},
 		{"flag value missing", NewCLIInputError(InputFlagValueMissing, "flag needs an argument: --project"), "flag_value_missing", "Give the flag a value, like --flag=value.", true},
 		{"flag value invalid", NewCLIInputError(InputFlagValueInvalid, `invalid argument "x" for "--limit"`), "flag_value_invalid", "That value isn't the type the flag expects — run the command with --help to see its format.", true},
 		{"flag syntax invalid", NewCLIInputError(InputFlagSyntaxInvalid, "bad flag syntax: ---x"), "flag_syntax_invalid", "Write it as --flag=value or --flag value, with nothing stray around the flag.", true},

@@ -32,7 +32,7 @@ func TestUnknownForeignFlagProducesOrientationAndSuggestions(t *testing.T) {
 	if env.Errors[0].Code != "flag_foreign" {
 		t.Fatalf("code = %q, want flag_foreign", env.Errors[0].Code)
 	}
-	wantHint := "That flag is from a different Jira CLI — run the command with --help to see this one's flags."
+	wantHint := "That flag belongs to a different Jira CLI — use this CLI's equivalent instead."
 	if env.Errors[0].Hint != wantHint {
 		t.Fatalf("hint = %q, want the flag_foreign registry hint", env.Errors[0].Hint)
 	}

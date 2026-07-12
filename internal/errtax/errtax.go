@@ -203,7 +203,7 @@ const genericHint = "Rerun with --debug and report the failure if it persists."
 var registry = map[Code]Spec{
 	// validation (exit 3)
 	CodeFlagUnknown:             {Type: TypeValidation, Exit: 3, Hint: "Check the flag's spelling, or run the command with --help to see the ones it accepts.", Retryable: false},
-	CodeFlagForeign:             {Type: TypeValidation, Exit: 3, Hint: "That flag is from a different Jira CLI — run the command with --help to see this one's flags.", Retryable: false},
+	CodeFlagForeign:             {Type: TypeValidation, Exit: 3, Hint: "That flag belongs to a different Jira CLI — use this CLI's equivalent instead.", Retryable: false},
 	CodeFlagValueMissing:        {Type: TypeValidation, Exit: 3, Hint: "Give the flag a value, like --flag=value.", Retryable: false},
 	CodeFlagValueInvalid:        {Type: TypeValidation, Exit: 3, Hint: "That value isn't the type the flag expects — run the command with --help to see its format.", Retryable: false},
 	CodeFlagSyntaxInvalid:       {Type: TypeValidation, Exit: 3, Hint: "Write it as --flag=value or --flag value, with nothing stray around the flag.", Retryable: false},
