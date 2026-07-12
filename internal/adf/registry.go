@@ -24,7 +24,9 @@ func markRuleNames() []string { return slices.Sorted(maps.Keys(markRules)) }
 type Kind int
 
 const (
+	// KindNode marks a row that describes an ADF node.
 	KindNode Kind = iota
+	// KindMark marks a row that describes an ADF mark.
 	KindMark
 )
 
@@ -58,7 +60,10 @@ type Capabilities struct {
 type Status string
 
 const (
-	StatusMVP          Status = "mvp"
+	// StatusMVP tags a node/mark jira-cli fully authors.
+	StatusMVP Status = "mvp"
+	// StatusPreserveOnly tags the entry tier: parsed and preserved on
+	// round-trip, but not yet authored.
 	StatusPreserveOnly Status = "preserve-only"
 )
 
@@ -83,12 +88,15 @@ type RegistryView struct {
 	index   map[string]Entry // key = "kind:name"
 }
 
+// All returns a copy of every registry entry in stable order, so a caller may
+// retain or mutate the result without disturbing the shared registry.
 func (r RegistryView) All() []Entry {
 	out := make([]Entry, len(r.entries))
 	copy(out, r.entries)
 	return out
 }
 
+// Lookup returns the entry for a kind+name pair, and whether one exists.
 func (r RegistryView) Lookup(kind Kind, name string) (Entry, bool) {
 	e, ok := r.index[kindKey(kind, name)]
 	return e, ok

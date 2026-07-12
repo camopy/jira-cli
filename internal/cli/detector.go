@@ -9,12 +9,18 @@ import (
 	"github.com/gechr/x/terminal"
 )
 
+// Mode is the concrete rendering the output machinery resolves to, after the
+// --output flag and auto-detection are folded together (ResolveOutputMode).
 type Mode string
 
 const (
-	ModePlain   Mode = "plain"
-	ModeTUI     Mode = "tui"
-	ModeJSON    Mode = "json"
+	// ModePlain is the human-facing renderer: styled tables and status lines.
+	ModePlain Mode = "plain"
+	// ModeTUI is the full-screen dashboard; only the tui command produces it.
+	ModeTUI Mode = "tui"
+	// ModeJSON is the full JSON envelope (ok/meta/data/warnings/errors).
+	ModeJSON Mode = "json"
+	// ModeCompact is the JSON data payload without the envelope wrapper.
 	ModeCompact Mode = "compact"
 )
 
@@ -81,6 +87,9 @@ func ResolveOutputMode(out OutputMode, det Detection) Mode {
 	}
 }
 
+// Detection is the resolved output environment for one invocation: the mode
+// auto-detection chose plus the signals it derived it from, seeded into the
+// command context by root's PersistentPreRunE.
 type Detection struct {
 	Mode      Mode
 	IsTTY     bool
@@ -93,6 +102,9 @@ type Detection struct {
 	StdinPiped bool
 }
 
+// AgentName is the canonical slug for a recognized AI coding agent, reported in
+// Detection.AgentName and used to gate compact output. detectAgent maps each
+// vendor's environment signal to one of these.
 type AgentName string
 
 const (
@@ -112,6 +124,8 @@ const (
 
 var validAgentName = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
+// Detect resolves the output environment from stdout: a detected agent yields
+// compact, a non-TTY yields json, and an interactive terminal yields plain.
 func Detect(stdout *os.File) Detection {
 	isTTY := terminal.Is(stdout)
 	agent, name := detectAgent()
@@ -131,6 +145,9 @@ func Detect(stdout *os.File) Detection {
 	return d
 }
 
+// RequireTTY is Detect with the added precondition that stdout is interactive,
+// for commands (the dashboard) that cannot run otherwise. It returns the
+// Detection alongside the error so a caller can still inspect the environment.
 func RequireTTY(stdout *os.File) (Detection, error) {
 	d := Detect(stdout)
 	if !d.IsTTY {

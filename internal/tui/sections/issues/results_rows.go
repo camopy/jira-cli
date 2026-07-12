@@ -1,5 +1,6 @@
-// Package issues — row materialization for the results list: rebuilding the
+// Row materialization for the results list: rebuilding the
 // visible rows from the filtered set and maintaining the multi-select marks.
+
 package issues
 
 import (

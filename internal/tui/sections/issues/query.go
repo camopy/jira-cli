@@ -1,6 +1,3 @@
-// Package issues is the triage-home section: the personal queue a reviewer
-// works down. It lands on "my open issues", renders them as a list with an
-// issue-detail sidebar, and offers quick-filter lenses and a local text filter.
 package issues
 
 import (
@@ -84,8 +81,11 @@ func NewQuery(id core.SectionID, title, jql string) func(*core.ProgramContext) c
 	}
 }
 
+// ID returns the section's configured identifier.
 func (m *QueryModel) ID() core.SectionID { return m.id }
-func (m *QueryModel) Title() string      { return m.title }
+
+// Title returns the tab-bar label.
+func (m *QueryModel) Title() string { return m.title }
 
 // Init sizes the list (one row reserved for the JQL header) and runs the query.
 func (m *QueryModel) Init(ctx *core.ProgramContext) tea.Cmd {

@@ -18,12 +18,21 @@ const (
 	// DefaultTUIRefreshSeconds is the dashboard's auto-refresh cadence; the
 	// TUI refetches every section this often unless the user is mid-action.
 	DefaultTUIRefreshSeconds = 60
-	DefaultTimeoutSeconds    = 30
-	DefaultWorkdaySeconds    = 28800
+	// DefaultTimeoutSeconds is the per-request HTTP timeout applied to a
+	// profile that does not set its own.
+	DefaultTimeoutSeconds = 30
+	// DefaultWorkdaySeconds is the working day used to convert worklog
+	// durations (8h), so "1d" logged means one workday, not 24 hours.
+	DefaultWorkdaySeconds = 28800
 )
 
+// AuthType is a profile's authentication mechanism. Only AuthTypeToken is
+// supported; an unsupported value is rejected at load, never stored as a
+// fake-authenticated profile.
 type AuthType string
 
+// AuthTypeToken authenticates with an Atlassian API token over HTTP Basic. It
+// is the only supported AuthType.
 const AuthTypeToken AuthType = "token"
 
 // AtlassianGatewayBaseURL is the Atlassian API gateway root. Scoped (granular)
@@ -62,10 +71,17 @@ func ValidateCloudID(id string) error {
 	return nil
 }
 
+// SecretBackend names where a profile's credential is stored. It is metadata
+// only: the profile records which backend to consult, and the matching store
+// type (KeyringStore, OnePasswordStore, EnvCredentialStore) holds the secret.
 type SecretBackend string
 
 const (
-	SecretBackendKeyring     SecretBackend = "keyring"
+	// SecretBackendKeyring stores the credential in the OS keyring under a
+	// "<host>/<profile>" entry. It is the default.
+	SecretBackendKeyring SecretBackend = "keyring"
+	// SecretBackendOnePassword stores the credential in a 1Password item. It
+	// is CGO-gated and absent from no-CGO release archives.
 	SecretBackendOnePassword SecretBackend = "1password"
 	// SecretBackendEnv reads the credential from the profile's JIRA_TOKEN_*
 	// environment variable at run time and stores nothing. It exists for
@@ -75,6 +91,9 @@ const (
 	SecretBackendEnv SecretBackend = "env"
 )
 
+// Config is the fully decoded configuration: the selected default profile, the
+// defined profiles, and the global theme, TUI, alias, and editor settings. It
+// is the in-memory shape both the koanf loader and the TOML file map onto.
 type Config struct {
 	DefaultProfile string            `koanf:"default_profile" toml:"default_profile"`
 	Profiles       []Profile         `koanf:"profiles" toml:"profiles"`
@@ -89,11 +108,16 @@ type Config struct {
 	Editor string `koanf:"editor" toml:"editor"`
 }
 
+// Theme selects the color palette: Name is a clib preset (or "auto"), Path is
+// an optional custom theme file. Load never validates Name — an unrecognized
+// name degrades to the dark fallback at render rather than blocking commands.
 type Theme struct {
 	Name string `koanf:"name" toml:"name"`
 	Path string `koanf:"path" toml:"path"`
 }
 
+// TUI holds the alpha dashboard's settings — refresh cadence, tabs, preview
+// layout, key rebindings, and lenses. These affect only `jira tui`.
 type TUI struct {
 	RefreshInterval int      `koanf:"refresh_interval" toml:"refresh_interval"`
 	DefaultTab      string   `koanf:"default_tab" toml:"default_tab"`
@@ -127,6 +151,10 @@ type TUISection struct {
 	JQL   string `koanf:"jql" toml:"jql"`
 }
 
+// Profile is one Jira site's connection metadata: its base URL, account email,
+// auth type, and which secret backend holds the token. It carries no credential
+// — the secret lives in the backend named by SecretBackend. A scoped
+// (granular) token profile also stores a CloudID for gateway routing.
 type Profile struct {
 	Name             string   `koanf:"name" toml:"name"`
 	BaseURL          string   `koanf:"base_url" toml:"base_url"`
@@ -177,6 +205,10 @@ type Profile struct {
 	Editor string `koanf:"editor" toml:"editor"`
 }
 
+// Defaults is the canonical zero-config Config: one keyring-backed "default"
+// profile and the built-in TUI layout. It is the single source of truth for
+// defaults, feeding both the koanf default layer and the file seeded by
+// LoadOrInit, so the two can never drift.
 func Defaults() Config {
 	return Config{
 		DefaultProfile: "default",
@@ -198,6 +230,12 @@ func Defaults() Config {
 	}
 }
 
+// Validate normalizes and checks a decoded Config, mutating it in place: it
+// fills blank per-profile fields with their defaults, rejects duplicate or
+// unnamed profiles, unsupported auth types and secret backends, malformed base
+// URLs and cloud IDs, and a default profile that names nothing. theme.name is
+// deliberately not validated here — it is cosmetic and must not make config
+// load (and thus every command) fail on an upstream rename.
 func (c *Config) Validate() error {
 	if c.DefaultProfile == "" {
 		c.DefaultProfile = "default"
@@ -309,6 +347,10 @@ func NormalizeBaseURL(raw string) string {
 	return u.String()
 }
 
+// ValidateBaseURL accepts an empty URL (an unconfigured profile), any https
+// URL, and http only for loopback hosts (localhost/127.0.0.1/::1, for tests).
+// It rejects a plaintext http URL to a real host, since a token would travel
+// unencrypted. Run NormalizeBaseURL first to expand shorthand.
 func ValidateBaseURL(raw string) error {
 	if raw == "" {
 		return nil
@@ -447,6 +489,9 @@ func (p Profile) Scoped() bool {
 	return p.CloudID != ""
 }
 
+// Redacted is a space-joined, secret-free summary of the profile — name, auth
+// type, backend, base URL, and (when set) email and 1Password account — safe to
+// log or print. It carries no credential because a Profile never holds one.
 func (p Profile) Redacted() string {
 	parts := []string{p.Name, string(p.AuthType), string(p.SecretBackend), p.BaseURL}
 	if p.Email != "" {

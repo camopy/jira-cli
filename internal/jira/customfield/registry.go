@@ -1,11 +1,3 @@
-// Package customfield is the Jira custom-field type registry.
-//
-// Symmetric with pkg/adf — same envelope, same single-source-of-truth
-// pattern. Each entry knows how to validate user-supplied input for
-// its type and encode it into the JSON Jira's REST API expects.
-//
-// Registry consumers (CLI command code) MUST go through this package
-// instead of branching on field type names directly.
 package customfield
 
 import (
@@ -22,6 +14,9 @@ import (
 type Status string
 
 const (
+	// StatusMVP marks a field type shipped in the minimum-viable set — the
+	// only tier currently populated. It exists so the registry envelope can
+	// report a support tier per row without the value being a bare literal.
 	StatusMVP Status = "mvp"
 )
 
@@ -68,12 +63,19 @@ type RegistryView struct {
 	index   map[string]Entry
 }
 
+// All returns a copy of every registry row, in table order, for the schema and
+// fieldtypes agent commands. The slice is copied so a consumer cannot mutate the
+// package's table of truth.
 func (r RegistryView) All() []Entry {
 	out := make([]Entry, len(r.entries))
 	copy(out, r.entries)
 	return out
 }
 
+// Lookup returns the entry for a field-type name and whether it exists. The
+// mutation pipeline uses it to find the validator/encoder for a field's type;
+// an absent name (a marketplace or unmodeled type) reports false so the caller
+// can forward the value opaquely rather than branching on type strings.
 func (r RegistryView) Lookup(name string) (Entry, bool) {
 	e, ok := r.index[name]
 	return e, ok

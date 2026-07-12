@@ -11,6 +11,9 @@ import (
 	"github.com/matcra587/jira-cli/internal/adf"
 )
 
+// WriteIssueViewPlain renders the `issue.view` envelope data as a human issue
+// card — header, the key summary fields, and the rendered description — and
+// fans out to the multi-issue layout when the payload carries keyed results.
 func WriteIssueViewPlain(w io.Writer, command string, data any, opts ...PlainOption) error {
 	cfg := defaultPlainConfig()
 	for _, opt := range opts {
@@ -239,6 +242,9 @@ func issueViewSummaryRow(issue map[string]any) map[string]any {
 	}
 }
 
+// WriteIssueTransitionsPlain renders the `issue.transitions` envelope data as a
+// header plus one "id  name" line per available transition, or an explicit "no
+// transitions available" line when the workflow offers none.
 func WriteIssueTransitionsPlain(w io.Writer, command string, data any, opts ...PlainOption) error {
 	cfg := defaultPlainConfig()
 	for _, opt := range opts {

@@ -1,6 +1,7 @@
 // Plain-text renderer for `jira boards list`. See in
 // the boards research notes for the column /
 // truncation contract this file implements.
+
 package cli
 
 import (

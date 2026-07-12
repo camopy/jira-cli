@@ -8,12 +8,21 @@ import (
 	"time"
 )
 
+// ListOptions carries the paging inputs shared by the list endpoints. It spans
+// both paging models Jira Cloud uses: StartAt/MaxResults for classic offset
+// paging and NextPageToken for the token-cursor endpoints (enhanced search).
+// A caller supplies whichever the target endpoint honors; the unused fields
+// stay zero.
 type ListOptions struct {
 	StartAt       int
 	MaxResults    int
 	NextPageToken string
 }
 
+// QueryValues renders the offset-paging fields as URL query parameters,
+// omitting each when non-positive so a zero-value ListOptions adds nothing to
+// the query. NextPageToken is deliberately not emitted here — token endpoints
+// place the cursor differently per endpoint.
 func (o ListOptions) QueryValues() url.Values {
 	q := url.Values{}
 	if o.StartAt > 0 {
@@ -25,11 +34,17 @@ func (o ListOptions) QueryValues() url.Values {
 	return q
 }
 
+// QueryOptions is ListOptions plus a JQL string, for the read endpoints that
+// take both paging and a query.
 type QueryOptions struct {
 	ListOptions
 	JQL string
 }
 
+// Rate is the rate-limit state parsed from a response's headers. It is
+// observability, not control flow: the retry logic keys off the HTTP status and
+// Retry-After, while Reason and NearLimit only feed a caller's near-limit
+// warning.
 type Rate struct {
 	Remaining         int
 	RetryAfterSeconds int
@@ -45,6 +60,11 @@ type Rate struct {
 	NearLimit bool
 }
 
+// Response wraps the raw *http.Response with the paging and rate metadata the
+// services and envelope layer need. It is returned even alongside an error so a
+// caller can still read RawBody and the rate state. The two paging models are
+// distinguished by TokenPage: token-cursor endpoints set it and report no
+// meaningful Total (see TotalKnown), classic offset endpoints leave it false.
 type Response struct {
 	Response   *http.Response
 	StartAt    int
@@ -70,6 +90,11 @@ func (r Response) UpstreamRequestID() string {
 	return upstreamRequestID(r.Response)
 }
 
+// NextCursor returns the opaque cursor a caller passes to fetch the next page,
+// or "" when the current page is the last. It papers over the two paging
+// models: for a token endpoint it hands back the server's NextPageToken, for
+// offset paging it computes the next StartAt and stops once IsLast or a known
+// Total says the run is exhausted.
 func (r Response) NextCursor() string {
 	if r.TokenPage {
 		return r.NextPageToken

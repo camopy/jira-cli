@@ -1,9 +1,3 @@
-// Package core defines the contracts every TUI view is built on: the Section
-// interface, the shared ProgramContext, the async task manager, the section
-// registry and the typed message set. The root App orchestrates Sections
-// without knowing what data any of them holds, so adding a view (boards,
-// epics, worklogs) is a matter of implementing Section and registering a
-// factory — no change to the orchestration.
 package core
 
 import (
@@ -21,11 +15,6 @@ type Counter interface {
 	Count() (n int, ok bool)
 }
 
-// Section is one top-level view. It is a real Bubble Tea component: it owns its
-// state, reacts to messages, and renders into the body region the App lays out.
-// The App passes the shared *ProgramContext into Init and the Section keeps the
-// pointer, so layout and theme changes are observed on the next View without
-// any prop-drilling.
 // SectionMsg is a message addressed to a specific section. The App
 // broadcasts these to every section instead of routing them to the active
 // one; the addressee matches the ID itself.
@@ -33,6 +22,11 @@ type SectionMsg interface {
 	Section() SectionID
 }
 
+// Section is one top-level view. It is a real Bubble Tea component: it owns its
+// state, reacts to messages, and renders into the body region the App lays out.
+// The App passes the shared *ProgramContext into Init and the Section keeps the
+// pointer, so layout and theme changes are observed on the next View without
+// any prop-drilling.
 type Section interface {
 	// ID is the stable identifier used for tab routing and the registry.
 	ID() SectionID

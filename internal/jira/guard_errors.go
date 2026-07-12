@@ -4,6 +4,7 @@
 // *APIError values) so the error mapper can recognize them with errors.As
 // and emit their own stable codes instead of the validation_failed
 // catch-all.
+
 package jira
 
 import "github.com/matcra587/jira-cli/internal/errtax"
@@ -15,6 +16,8 @@ type ReadOnlyError struct {
 	Path   string
 }
 
+// Error names both the active source of read-only mode and the refused
+// request, so the operator can see which mutation was blocked and why.
 func (e *ReadOnlyError) Error() string {
 	return "read-only mode is active (JIRA_READ_ONLY env or profile read_only=true); refusing " + e.Method + " " + e.Path
 }
@@ -27,6 +30,8 @@ type DryRunBlockedError struct {
 	Path   string
 }
 
+// Error names the refused request. Reaching this error means a dry-run command
+// tried to submit, so the message frames it as the transport backstop firing.
 func (e *DryRunBlockedError) Error() string {
 	return "dry-run is active; refusing to send " + e.Method + " " + e.Path
 }

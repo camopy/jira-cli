@@ -1,6 +1,7 @@
-// Package issues — writes from the results list: comments, transitions,
+// Writes from the results list: comments, transitions,
 // edits, assignments, and worklogs, plus the optimistic row updates and
 // rollbacks that cover a write until the server confirms it.
+
 package issues
 
 import (

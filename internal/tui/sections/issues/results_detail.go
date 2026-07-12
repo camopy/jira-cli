@@ -1,5 +1,6 @@
-// Package issues — the results list's detail surfaces: the always-visible
+// The results list's detail surfaces: the always-visible
 // preview pane and the scrollable full-issue detail view with its sub-tabs.
+
 package issues
 
 import (

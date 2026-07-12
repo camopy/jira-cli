@@ -1,5 +1,6 @@
-// Package jira — Rank service for PUT /rest/agile/1.0/issue/rank, the
+// Rank service for PUT /rest/agile/1.0/issue/rank, the
 // LexoRank reorder behind the web UI's backlog drag.
+
 package jira
 
 import (
@@ -54,6 +55,8 @@ type RankPartialError struct {
 	Failed []RankEntry
 }
 
+// Error lists the failed groups with Jira's per-group messages so the operator
+// sees exactly which issues were rejected and why.
 func (e *RankPartialError) Error() string {
 	parts := make([]string, 0, len(e.Failed))
 	for _, entry := range e.Failed {
@@ -75,9 +78,20 @@ type RankRejectedError struct {
 	Wrapped *APIError
 }
 
+// Error surfaces the wrapped Jira message unadorned — the 400's own text is the
+// most useful thing to show.
 func (e *RankRejectedError) Error() string { return e.Wrapped.Message }
+
+// Unwrap exposes the underlying *APIError so errors.As can still reach the HTTP
+// status and code.
 func (e *RankRejectedError) Unwrap() error { return e.Wrapped }
 
+// Rank issues the reorder. It validates the local preconditions the endpoint
+// cannot (non-empty keys, at most RankChunkLimit, exactly one anchor), then
+// distinguishes the two failure shapes callers must handle separately: a 400
+// becomes *RankRejectedError (Jira refused the whole rank), while a 207 whose
+// entries include rejections becomes *RankPartialError (some issues moved,
+// others did not).
 func (s *rankService) Rank(ctx context.Context, keys []string, before, after string) (*Response, error) {
 	if len(keys) == 0 {
 		return nil, errors.New("rank: at least one issue key is required")

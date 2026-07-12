@@ -9,11 +9,17 @@ import (
 type Stage int
 
 const (
+	// StageNone is the zero value: no stage has run.
 	StageNone Stage = iota
+	// StageParse is payload parsing and shape validation.
 	StageParse
+	// StageADF is ADF and Markdown compatibility validation.
 	StageADF
+	// StageFieldSchema is field-schema and screen validation.
 	StageFieldSchema
+	// StageCustomField is custom-field encoding and validation.
 	StageCustomField
+	// StageSubmit is the terminal stage: the mutation is ready to send.
 	StageSubmit
 )
 

@@ -28,6 +28,8 @@ import (
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
+// PlainOption configures one aspect of a plain-text render; the WithPlain*
+// constructors below build them, and WriteCommandPlain applies them in order.
 type PlainOption func(*plainConfig)
 
 type plainConfig struct {
@@ -75,18 +77,24 @@ type plainConfig struct {
 	graphemeWidth bool
 }
 
+// WithPlainBaseURL sets the profile base URL the renderer needs to turn issue
+// keys into browse hyperlinks; an empty value leaves keys as plain text.
 func WithPlainBaseURL(baseURL string) PlainOption {
 	return func(cfg *plainConfig) {
 		cfg.baseURL = strings.TrimSpace(baseURL)
 	}
 }
 
+// WithPlainDebug restores the operational diagnostics (raw JQL, timing) that
+// the preview and count renderers otherwise suppress.
 func WithPlainDebug(debug bool) PlainOption {
 	return func(cfg *plainConfig) {
 		cfg.debug = debug
 	}
 }
 
+// WithPlainParallel marks the render as running under the fan-out executor,
+// defaulting the reported thread count when the caller set none.
 func WithPlainParallel(parallel bool) PlainOption {
 	return func(cfg *plainConfig) {
 		if parallel && cfg.threads == 0 {
@@ -95,12 +103,15 @@ func WithPlainParallel(parallel bool) PlainOption {
 	}
 }
 
+// WithPlainThreads sets the fan-out thread count surfaced on the completion
+// line.
 func WithPlainThreads(threads int) PlainOption {
 	return func(cfg *plainConfig) {
 		cfg.threads = threads
 	}
 }
 
+// WithPlainTermWidth sets the terminal width the issue-list table wraps to.
 func WithPlainTermWidth(width int) PlainOption {
 	return func(cfg *plainConfig) {
 		cfg.termWidth = width
@@ -116,6 +127,8 @@ func WithPlainTTY(tty bool) PlainOption {
 	}
 }
 
+// WithPlainTheme sets the color theme for styled output; a nil theme renders
+// bare.
 func WithPlainTheme(theme *clibtheme.Theme) PlainOption {
 	return func(cfg *plainConfig) {
 		cfg.theme = theme
@@ -227,6 +240,9 @@ func plainLoggerStyles() *clogstyle.Config {
 	return &clogstyle.Config{BacktickMode: clogstyle.BacktickKeep}
 }
 
+// WritePlain renders arbitrary data through the generic field renderer, the
+// fallback for internal payloads with no command-specific renderer in
+// WriteCommandPlain.
 func WritePlain(w io.Writer, data any) error {
 	return writeGenericPlain(newPlainLogger(w), defaultPlainConfig(), "result", data)
 }

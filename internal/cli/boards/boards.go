@@ -1,9 +1,3 @@
-// `jira boards` command tree.
-//
-// Exposes a single read-only sub-command today: `jira boards list`.
-// The cache primer lives in cache.go (`jira cache boards`); this file
-// renders the cached list and primes transparently when the cache is
-// empty so first-run UX requires no extra step.
 package boards
 
 import (

@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+// ProjectService resolves the field schemas the mutation pipeline validates
+// against and lists projects for discovery. Schemas come from two Jira
+// sources — createmeta for create/clone and editmeta for edit/move — and are
+// memoized per profile in a ProjectSchemaCache so a multi-field mutation does
+// not refetch the same screen.
 type ProjectService interface {
 	GetFieldSchema(context.Context, string, string) (*ProjectFieldSchema, *Response, error)
 	GetFieldSchemaForProfile(context.Context, string, string, string) (*ProjectFieldSchema, *Response, error)
@@ -53,6 +58,9 @@ type projectService struct {
 	cache  *ProjectSchemaCache
 }
 
+// NewProjectService constructs a ProjectService with its own schema cache. ttl
+// bounds how long a resolved schema is trusted before a refetch; a non-positive
+// ttl falls back to the cache's default.
 func NewProjectService(client *Client, ttl time.Duration) ProjectService {
 	return &projectService{
 		client: client,
@@ -60,6 +68,9 @@ func NewProjectService(client *Client, ttl time.Duration) ProjectService {
 	}
 }
 
+// GetFieldSchema resolves the create schema under the "default" profile. It is
+// the profile-less shorthand for GetFieldSchemaForProfile; callers that manage
+// multiple profiles pass the profile explicitly so cache entries stay separated.
 func (s *projectService) GetFieldSchema(ctx context.Context, projectKey, issueType string) (*ProjectFieldSchema, *Response, error) {
 	return s.GetFieldSchemaForProfile(ctx, "default", projectKey, issueType)
 }
@@ -150,6 +161,12 @@ type createMetaIssueTypePage struct {
 	} `json:"issueTypes"`
 }
 
+// GetFieldSchemaForProfile resolves the create-screen field schema for a
+// project + issue-type pair, serving from the per-profile cache on a hit. The
+// createmeta field endpoint is keyed by issue-type id while this repo addresses
+// types by name, so the name is resolved to an id first; an unresolvable name
+// surfaces as *IssueTypeUnknownError (a validation miss, not a 404). The result
+// is paginated in and cached before return.
 func (s *projectService) GetFieldSchemaForProfile(ctx context.Context, profile, projectKey, issueType string) (*ProjectFieldSchema, *Response, error) {
 	if schema, ok := s.cache.Get(profile, projectKey, issueType); ok {
 		return schema, &Response{IsLast: true}, nil
@@ -217,6 +234,9 @@ type IssueTypeUnknownError struct {
 	Available  []string // creatable issue-type names, for suggestions
 }
 
+// Error names the unmatched type and project; the valid alternatives ride on
+// Available for the envelope's suggestions rather than being crammed into the
+// string.
 func (e *IssueTypeUnknownError) Error() string {
 	return "issue type " + e.IssueType + " not found on the create screen for project " + e.ProjectKey
 }
@@ -347,6 +367,11 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+// ProjectSchemaCache is a TTL cache of resolved field schemas, keyed by
+// profile + project + issue-type (or a synthetic edit scope). It is safe for
+// concurrent use; Get and Set copy the schema in and out so a cached entry
+// cannot be mutated by a caller holding a returned pointer. The edit and create
+// schemas coexist here — edit entries use a synthetic issue-type key.
 type ProjectSchemaCache struct {
 	mu      sync.Mutex
 	ttl     time.Duration
@@ -358,6 +383,8 @@ type schemaEntry struct {
 	expiresAt time.Time
 }
 
+// NewProjectSchemaCache builds a schema cache with the given entry TTL, falling
+// back to 30 minutes when ttl is non-positive.
 func NewProjectSchemaCache(ttl time.Duration) *ProjectSchemaCache {
 	if ttl <= 0 {
 		ttl = 30 * time.Minute
@@ -365,6 +392,9 @@ func NewProjectSchemaCache(ttl time.Duration) *ProjectSchemaCache {
 	return &ProjectSchemaCache{ttl: ttl, entries: make(map[string]schemaEntry)}
 }
 
+// Get returns a cached schema and true when a fresh entry exists. An expired
+// entry reports a miss without being evicted (Set overwrites it on the next
+// resolve). The returned schema is a copy the caller may freely mutate.
 func (c *ProjectSchemaCache) Get(profile, projectKey, issueType string) (*ProjectFieldSchema, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -375,6 +405,9 @@ func (c *ProjectSchemaCache) Get(profile, projectKey, issueType string) (*Projec
 	return cloneProjectFieldSchema(entry.schema), true
 }
 
+// Set stores a copy of schema under the profile/project/issue-type key with a
+// fresh TTL. Copying on store means a later caller mutation of the passed schema
+// does not reach the cached entry.
 func (c *ProjectSchemaCache) Set(profile, projectKey, issueType string, schema *ProjectFieldSchema) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -384,6 +417,9 @@ func (c *ProjectSchemaCache) Set(profile, projectKey, issueType string, schema *
 	}
 }
 
+// InvalidateProfile drops every cached schema for one profile, leaving other
+// profiles' entries intact. Used when a profile's config changes in a way that
+// could alter its screens.
 func (c *ProjectSchemaCache) InvalidateProfile(profile string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -395,6 +431,7 @@ func (c *ProjectSchemaCache) InvalidateProfile(profile string) {
 	}
 }
 
+// InvalidateAll clears every cached schema across all profiles.
 func (c *ProjectSchemaCache) InvalidateAll() {
 	c.mu.Lock()
 	defer c.mu.Unlock()

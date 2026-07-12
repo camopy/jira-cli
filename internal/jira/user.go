@@ -25,6 +25,8 @@ type AmbiguousUserError struct {
 	Candidates []*User
 }
 
+// Error states the query and match count; the candidates themselves travel on
+// the struct for the disambiguation envelope (see CandidateRows).
 func (e *AmbiguousUserError) Error() string {
 	return fmt.Sprintf("ambiguous user %q — %d candidates", e.Query, len(e.Candidates))
 }
@@ -63,8 +65,9 @@ var (
 	_ errtax.Candidated = (*AmbiguousUserError)(nil)
 )
 
-// User identity returned by /rest/api/3/myself. Subset of the full response —
-// only the fields we use for assign-to-me, profile bootstrap and `whoami`.
+// CurrentUser is the authenticated account's identity from
+// /rest/api/3/myself. It is a subset of the full response — only the fields the
+// CLI uses for assign-to-me, profile bootstrap, and `whoami`.
 type CurrentUser struct {
 	Self         string     `json:"self,omitempty"`
 	AccountID    string     `json:"accountId,omitempty"`

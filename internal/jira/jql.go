@@ -19,6 +19,7 @@ type jqlService struct {
 	client *Client
 }
 
+// NewJQLService constructs a JQLService bound to the given client.
 func NewJQLService(client *Client) JQLService {
 	return &jqlService{client: client}
 }

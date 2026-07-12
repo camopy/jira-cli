@@ -105,6 +105,11 @@ func splitEditorCommand(editorCommand string) ([]string, error) {
 	return shell.Split(editorCommand)
 }
 
+// Run resolves editorCommand (see Resolve), then spawns it on path with the
+// user's terminal wired through so an interactive editor can read keystrokes.
+// It refuses a known non-blocking editor invoked without a wait flag, since
+// that would race the caller's cleanup. exec.Command is used directly — no
+// shell — so path and args are never re-interpreted.
 func Run(ctx context.Context, editorCommand, path string) error {
 	editorCommand = Resolve(editorCommand)
 	if editorCommand == "" {

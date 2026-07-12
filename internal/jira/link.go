@@ -9,12 +9,20 @@ import (
 	xstrings "github.com/gechr/x/strings"
 )
 
+// IssueLinkService reads and writes the links between issues. List flattens
+// Jira's nested issuelinks into a directional view; Create and Delete manage
+// individual links.
 type IssueLinkService interface {
 	List(context.Context, string) ([]IssueLinkView, *Response, error)
 	Create(context.Context, *IssueLinkRequest) (*Response, error)
 	Delete(context.Context, string) (*Response, error)
 }
 
+// IssueLinkView is one link flattened for display: the CLI's own shape, not a
+// Jira wire body. Jira returns each link once with the far end in an inward or
+// outward slot; flattening turns that into one row per link with Direction
+// ("inward"/"outward") naming which relationship phrase (Type.Inward vs
+// Type.Outward) applies and OtherIssue naming the far end.
 type IssueLinkView struct {
 	ID         string        `json:"id"`
 	Self       string        `json:"self,omitempty"`
@@ -23,6 +31,8 @@ type IssueLinkView struct {
 	OtherIssue IssueRef      `json:"other_issue"`
 }
 
+// IssueRef is the minimal reference to the issue at the far end of a link: key,
+// summary, and status name, enough to render a link without a second fetch.
 type IssueRef struct {
 	Key     string `json:"key"`
 	Summary string `json:"summary,omitempty"`
@@ -33,10 +43,15 @@ type issueLinkService struct {
 	client *Client
 }
 
+// NewIssueLinkService constructs an IssueLinkService bound to the given client.
 func NewIssueLinkService(client *Client) IssueLinkService {
 	return &issueLinkService{client: client}
 }
 
+// List returns the issue's links, flattened to one row per direction and sorted
+// for stable output. Links come back embedded in the issue body under the
+// issuelinks field — there is no standalone list endpoint — so this reads the
+// issue with a fields=issuelinks selector.
 func (s *issueLinkService) List(ctx context.Context, key string) ([]IssueLinkView, *Response, error) {
 	if xstrings.IsBlank(key) {
 		return nil, nil, errors.New("issue link list: key is required")
@@ -59,6 +74,10 @@ func (s *issueLinkService) List(ctx context.Context, key string) ([]IssueLinkVie
 	return views, resp, nil
 }
 
+// Create links two issues. The link type may be named (Type) or given by id
+// (TypeID); one of them plus both issue keys are required. Which issue is inward
+// versus outward determines how the link reads, so callers assign them
+// deliberately.
 func (s *issueLinkService) Create(ctx context.Context, reqBody *IssueLinkRequest) (*Response, error) {
 	if reqBody == nil || xstrings.AllEmpty(reqBody.Type, reqBody.TypeID) || xstrings.AnyEmpty(reqBody.InwardIssue, reqBody.OutwardIssue) {
 		return nil, errors.New("issue link create: type, inwardIssue, and outwardIssue are required")
@@ -70,6 +89,8 @@ func (s *issueLinkService) Create(ctx context.Context, reqBody *IssueLinkRequest
 	return s.client.Do(req, nil)
 }
 
+// Delete removes a single link by its link id (not an issue key) — the id from
+// an IssueLinkView.
 func (s *issueLinkService) Delete(ctx context.Context, linkID string) (*Response, error) {
 	if xstrings.IsBlank(linkID) {
 		return nil, errors.New("issue link delete: linkID is required")
@@ -142,6 +163,9 @@ func flattenIssueLinks(wires []issueLinkWire) []IssueLinkView {
 	return out
 }
 
+// SortIssueLinks orders links deterministically by direction, then link-type
+// name, then far-end key, so repeated reads render in a stable order. It sorts
+// in place.
 func SortIssueLinks(links []IssueLinkView) {
 	sort.SliceStable(links, func(i, j int) bool {
 		if links[i].Direction != links[j].Direction {

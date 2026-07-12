@@ -93,10 +93,15 @@ type APIError struct {
 	Cause error
 }
 
+// Error renders the type, HTTP status, and display message. The structured
+// fields (FieldErrors, upstream ids, retry hints) stay on the struct for
+// callers that need them — the string form is for humans and stays stable.
 func (e *APIError) Error() string {
 	return fmt.Sprintf("jira: %s (%d): %s", e.Type, e.StatusCode, e.Message)
 }
 
+// Unwrap exposes the preserved transport/decode failure so errors.Is/As can
+// reach it without the public message changing.
 func (e *APIError) Unwrap() error {
 	return e.Cause
 }
@@ -143,6 +148,11 @@ func displayMessage(ec errorCollection, rawBody string) string {
 	return strings.TrimSpace(rawBody)
 }
 
+// Client is the Jira Cloud REST client shared by every typed service in this
+// package. It is safe for concurrent use and is configured once at command
+// startup through the Option functions; the read-only and dry-run flags it
+// carries are enforced at Do, so no command path can route a mutation around
+// them. The zero value is not usable — construct it with NewClient/NewClientE.
 type Client struct {
 	client     *http.Client
 	baseURL    *url.URL
@@ -169,13 +179,23 @@ type Client struct {
 // an implementation must be safe for concurrent calls.
 type RateObserver func(context.Context, Rate)
 
+// Option configures a Client at construction. Options that receive invalid
+// input record a deferred init error rather than failing eagerly, so a bad
+// base URL or nil HTTP client surfaces from NewClientE (or the first request)
+// instead of panicking inside the option.
 type Option func(*Client)
 
+// NewClient builds a Client from opts, discarding any construction error. Use
+// it where the options are known-good (tests, internal wiring); prefer
+// NewClientE on any path fed by user config, where a bad base URL must surface.
 func NewClient(opts ...Option) *Client {
 	c, _ := newClient(opts...)
 	return c
 }
 
+// NewClientE builds a Client from opts and returns the first option error
+// (malformed base URL, nil HTTP client). This is the constructor command paths
+// use so a misconfigured profile fails loudly at startup.
 func NewClientE(opts ...Option) (*Client, error) {
 	c, err := newClient(opts...)
 	if err != nil {
@@ -220,6 +240,10 @@ func (c *Client) setInitErr(err error) {
 	}
 }
 
+// WithHTTPClient replaces the default HTTP client. A nil client is rejected as
+// an init error rather than silently ignored, since a request against a nil
+// client would fail far from the misconfiguration. Supplying a custom client
+// opts out of the tuned connection pool the default installs.
 func WithHTTPClient(h *http.Client) Option {
 	return func(c *Client) {
 		if h == nil {
@@ -230,6 +254,9 @@ func WithHTTPClient(h *http.Client) Option {
 	}
 }
 
+// WithHTTPTimeout sets the per-request timeout, copying the existing client so
+// a shared http.Client is never mutated in place. A non-positive timeout is
+// ignored, leaving the default in force.
 func WithHTTPTimeout(timeout time.Duration) Option {
 	return func(c *Client) {
 		if timeout <= 0 {
@@ -245,6 +272,11 @@ func WithHTTPTimeout(timeout time.Duration) Option {
 	}
 }
 
+// WithBaseURL sets the API root. The raw value is validated (scheme, host, no
+// query/fragment, trailing slash) and a failure is recorded as an init error
+// so a typo'd site surfaces from NewClientE rather than as a confusing request
+// error later. The base URL also bounds every request: Do rejects any target
+// outside it.
 func WithBaseURL(raw string) Option {
 	return func(c *Client) {
 		u, err := parseClientBaseURL(raw)
@@ -279,6 +311,10 @@ func parseClientBaseURL(raw string) (*url.URL, error) {
 	return u, nil
 }
 
+// WithBasicAuth sets the Jira Cloud credential pair (account email + API
+// token) used to sign requests. A half-pair is tolerated here but suppressed
+// at signing time — see SignRequest — so an incomplete credential fails as
+// "no credential" rather than with a malformed header.
 func WithBasicAuth(email, token string) Option {
 	return func(c *Client) {
 		c.basicEmail = email
@@ -286,6 +322,9 @@ func WithBasicAuth(email, token string) Option {
 	}
 }
 
+// WithDebug enables request/response logging through the context logger, with
+// auth headers and secret-looking JSON values redacted. It is wired from the
+// --debug flag.
 func WithDebug(debug bool) Option {
 	return func(c *Client) {
 		c.debug = debug
@@ -324,6 +363,10 @@ func WithDryRun(dryRun bool) Option {
 	}
 }
 
+// NewRequest builds a JSON request: body is marshaled and the Content-Type set
+// when non-nil. path is relative to the client base URL and validated there.
+// Use NewRawRequest for multipart or streaming bodies that must not be
+// JSON-encoded.
 func (c *Client) NewRequest(ctx context.Context, method, path string, body any) (*http.Request, error) {
 	var r io.Reader
 	if body != nil {
@@ -343,6 +386,11 @@ func (c *Client) NewRequest(ctx context.Context, method, path string, body any) 
 	return req, nil
 }
 
+// NewRawRequest builds a request with the body reader passed through
+// unmodified and no Content-Type set, for callers that encode their own body
+// (multipart upload, streaming download). It still resolves and validates path
+// against the base URL and signs the request, so raw-body callers do not
+// re-implement auth or path handling.
 func (c *Client) NewRawRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
 	u, err := c.requestURL(path)
 	if err != nil {
@@ -449,6 +497,15 @@ func (c *Client) BaseURL() *url.URL {
 	return &u
 }
 
+// Do sends req, enforces the read-only and dry-run gates, and decodes a 2xx
+// body into out (when non-nil). It is the single choke point where every
+// safety and normalization rule applies: mutations are refused in read-only or
+// dry-run mode, the target is checked against the base URL, bodies are read
+// under a size cap, and any non-2xx status — or a 2xx with an unparseable body
+// — becomes a typed *APIError carrying the classified type, Jira's structured
+// error fields, and the upstream trace id. The returned *Response is non-nil
+// whenever a response was received, even alongside an error, so callers can
+// still inspect RawBody and rate state.
 func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 	if err := c.validate(); err != nil {
 		return nil, err

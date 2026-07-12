@@ -80,8 +80,11 @@ func NewSearch(ctx *core.ProgramContext) core.Section {
 // refreshes the ctrl+p dropdown, ] cycling, and the editor's completions.
 func (s *SearchModel) saved() []Lens { return lensesFor(s.ctx) }
 
+// ID returns the search section's identifier.
 func (s *SearchModel) ID() core.SectionID { return SearchID }
-func (s *SearchModel) Title() string      { return "Search" }
+
+// Title returns the tab-bar label.
+func (s *SearchModel) Title() string { return "Search" }
 
 // Init sizes the list and lands in browse mode (not editing), so the section
 // can be tabbed away from immediately. The user presses enter (or the search

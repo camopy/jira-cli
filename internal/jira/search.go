@@ -9,6 +9,10 @@ import (
 	xstrings "github.com/gechr/x/strings"
 )
 
+// SearchService runs JQL against Jira Cloud's enhanced search
+// (/search/jql), the token-paged endpoint that replaced the deprecated
+// offset-based /search. JQL fetches issues a page at a time; ApproximateCount
+// estimates a match total without paging.
 type SearchService interface {
 	JQL(context.Context, *SearchRequest) ([]*Issue, *Response, error)
 	ApproximateCount(context.Context, string) (int, *Response, error)
@@ -18,6 +22,12 @@ type searchService struct {
 	client *Client
 }
 
+// SearchRequest is the input to SearchService.JQL. Fields selects which issue
+// fields to return and Expand which expansions to include; both are sent as the
+// endpoint expects (a JSON array and a comma-joined string respectively) by
+// payload(). The embedded ListOptions is a fallback source for MaxResults /
+// NextPageToken so a caller can pass paging either directly or via ListOptions
+// — it carries `json:"-"` because the wire body uses the explicit fields.
 type SearchRequest struct {
 	JQL           string `json:"jql,omitempty"`
 	MaxResults    int    `json:"maxResults,omitempty"`
@@ -35,10 +45,16 @@ type searchRequestPayload struct {
 	Expand        string   `json:"expand,omitempty"`
 }
 
+// NewSearchService constructs a SearchService bound to the given client.
 func NewSearchService(client *Client) SearchService {
 	return &searchService{client: client}
 }
 
+// JQL fetches one page of issues matching the request's query. It POSTs to
+// /search/jql — a read that uses POST so a large JQL body fits (the client's
+// mutation guard whitelists this path). The returned Response is stamped with
+// the token-paging state (TokenPage, NextPageToken, IsLast) so DrainSearch and
+// the envelope layer can page without knowing the endpoint's shape.
 func (s *searchService) JQL(ctx context.Context, reqBody *SearchRequest) ([]*Issue, *Response, error) {
 	if reqBody == nil || reqBody.JQL == "" {
 		return nil, nil, errors.New("jql is required")

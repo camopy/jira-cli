@@ -6,10 +6,24 @@ import (
 	"github.com/matcra587/jira-cli/internal/adf"
 )
 
+// String, Int, and Bool return pointers to their argument. The wire types in
+// this package use pointer fields to distinguish an absent field from a
+// zero-valued one (see the omitempty tags), so building a request payload needs
+// a way to take the address of a literal — these are that helper.
 func String(v string) *string { return &v }
-func Int(v int) *int          { return &v }
-func Bool(v bool) *bool       { return &v }
 
+// Int returns a pointer to v. See String for why these helpers exist.
+func Int(v int) *int { return &v }
+
+// Bool returns a pointer to v. See String for why these helpers exist.
+func Bool(v bool) *bool { return &v }
+
+// Issue is the core issue resource returned by the issue and search endpoints.
+// Jira nests most data under fields, but this struct also hoists the commonly
+// needed collections (comments, worklogs, linked issues, subtasks) to the top
+// level: UnmarshalJSON copies them out of Fields so callers reach them without
+// knowing Jira's expand nesting. Nearly every field is a pointer or slice so an
+// absent field stays distinguishable from an empty one.
 type Issue struct {
 	ID           *string      `json:"id,omitempty"`
 	Key          *string      `json:"key,omitempty"`
@@ -31,6 +45,11 @@ type Issue struct {
 	EditMeta *EditMeta `json:"editmeta,omitempty"`
 }
 
+// IssueFields is the fields object of an issue. System fields are modeled
+// explicitly; every customfield_* key Jira returns is captured into
+// CustomFields by the custom UnmarshalJSON (the `json:"-"` tag keeps the
+// standard decoder from touching it), and MarshalJSON splices them back so a
+// round-trip preserves custom-field values the struct has no named field for.
 type IssueFields struct {
 	Summary      *string                    `json:"summary,omitempty"`
 	IssueType    *IssueType                 `json:"issuetype,omitempty"`
@@ -52,19 +71,29 @@ type IssueFields struct {
 	CustomFields map[string]json.RawMessage `json:"-"`
 }
 
+// CommentPage is the paged comment container Jira nests under fields.comment on
+// a GET issue. Issue.UnmarshalJSON lifts its Comments to the top level.
 type CommentPage struct {
 	Comments []*Comment `json:"comments,omitempty"`
 }
 
+// WorklogPage is the paged worklog container Jira nests under fields.worklog on
+// a GET issue. Issue.UnmarshalJSON lifts its Worklogs to the top level.
 type WorklogPage struct {
 	Worklogs []*Worklog `json:"worklogs,omitempty"`
 }
 
+// IssueLink is one entry of an issue's issuelinks array. Exactly one of
+// InwardIssue / OutwardIssue is set per entry, naming the other end of the link
+// and encoding the direction by which slot it occupies.
 type IssueLink struct {
 	InwardIssue  *Issue `json:"inwardIssue,omitempty"`
 	OutwardIssue *Issue `json:"outwardIssue,omitempty"`
 }
 
+// Status is an issue's workflow status. Name is the project-local label;
+// StatusCategory is the cross-project bucket used for coloring (see
+// StatusCategory).
 type Status struct {
 	Name           *string         `json:"name,omitempty"`
 	StatusCategory *StatusCategory `json:"statusCategory,omitempty"`
@@ -81,6 +110,8 @@ type StatusCategory struct {
 	ColorName *string `json:"colorName,omitempty"`
 }
 
+// Priority is an issue's priority. Only the name is modeled — it is the value
+// the CLI displays and submits by.
 type Priority struct {
 	Name *string `json:"name,omitempty"`
 }
@@ -92,6 +123,11 @@ type IssueType struct {
 	Subtask *bool   `json:"subtask,omitempty"`
 }
 
+// User is a Jira Cloud account as it appears embedded in an issue (assignee,
+// reporter, comment author). AccountID is the only stable identifier — display
+// name and email are subject to the account's privacy settings and are often
+// absent, so callers must tolerate nil rather than key off them. AccountType
+// distinguishes atlassian, app, and customer accounts.
 type User struct {
 	AccountID    *string `json:"accountId,omitempty"`
 	AccountType  *string `json:"accountType,omitempty"`
@@ -101,6 +137,8 @@ type User struct {
 	Deleted      *bool   `json:"deleted,omitempty"`
 }
 
+// Component is a project component reference on an issue. Only the name is
+// modeled — the identity the CLI displays and diffs by.
 type Component struct {
 	Name *string `json:"name,omitempty"`
 }
@@ -112,18 +150,27 @@ type Version struct {
 	Name *string `json:"name,omitempty"`
 }
 
+// Epic is the flattened epic projection used by epic-list rendering: just the
+// key, summary, and status name. It is not a wire type — an epic on the wire is
+// an ordinary Issue — but the trimmed shape callers build for display.
 type Epic struct {
 	Key     *string `json:"key,omitempty"`
 	Summary *string `json:"summary,omitempty"`
 	Status  *string `json:"status,omitempty"`
 }
 
+// SearchResult is the enhanced-search (/search/jql) response body. Paging is by
+// opaque cursor: NextPageToken carries the next page and IsLast marks
+// exhaustion — there is no total count, by design of that endpoint.
 type SearchResult struct {
 	Issues        []*Issue `json:"issues,omitempty"`
 	IsLast        bool     `json:"isLast,omitempty"`
 	NextPageToken string   `json:"nextPageToken,omitempty"`
 }
 
+// Worklog is a single work-log entry on an issue. TimeSpentSeconds is the
+// canonical duration; the CLI's human duration strings are parsed to and
+// rendered from it.
 type Worklog struct {
 	ID               *string       `json:"id,omitempty"`
 	TimeSpentSeconds *int          `json:"timeSpentSeconds,omitempty"`
@@ -131,6 +178,8 @@ type Worklog struct {
 	Comment          *adf.Document `json:"comment,omitempty"`
 }
 
+// Comment is a single issue comment. Body is an ADF document, and Visibility
+// (when set) restricts the comment to a Jira role or group.
 type Comment struct {
 	ID           *string       `json:"id,omitempty"`
 	Self         *string       `json:"self,omitempty"`
@@ -151,6 +200,10 @@ type Visibility struct {
 	Value string `json:"value"`
 }
 
+// Transition is one workflow transition available from an issue's current
+// status, as returned under expand=transitions. ID is what a transition request
+// submits; Name is the human label; HasScreen governs whether a payload sent
+// with the transition is honored (see the field comment).
 type Transition struct {
 	ID   *string `json:"id,omitempty"`
 	Name *string `json:"name,omitempty"`
@@ -203,12 +256,19 @@ type EditMetaAllowedValue struct {
 	Value string `json:"value,omitempty"`
 }
 
+// ProjectFieldSchema is the create/edit field schema for one project +
+// issue-type pair, distilled from Jira's createmeta into the shape the CLI
+// caches and the mutation pipeline consults. The json tags are snake_case
+// because this is the CLI's own envelope shape, not a Jira wire body.
 type ProjectFieldSchema struct {
 	ProjectKey string        `json:"project_key"`
 	IssueType  string        `json:"issue_type"`
 	Fields     []FieldSchema `json:"fields,omitempty"`
 }
 
+// FieldSchema describes one field on a project's create/edit screen: its id,
+// display name, whether it is required, and its type. It is the per-field row of
+// ProjectFieldSchema.
 type FieldSchema struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
@@ -223,6 +283,10 @@ type FieldSchema struct {
 	Custom string `json:"custom,omitempty"`
 }
 
+// UnmarshalJSON decodes the named system fields normally and, in a second
+// pass over the raw object, captures every customfield_* key into CustomFields
+// — the dynamic keys the struct cannot name. The `type known` alias sheds the
+// method set to avoid infinite recursion.
 func (f *IssueFields) UnmarshalJSON(data []byte) error {
 	type known IssueFields
 	var raw map[string]json.RawMessage
@@ -243,6 +307,10 @@ func (f *IssueFields) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalJSON encodes the named fields, then splices the captured CustomFields
+// back in under their original customfield_* keys so a decode/encode round-trip
+// preserves custom-field values. The synthetic "CustomFields" key the alias
+// encode produces is dropped before the merge.
 func (f IssueFields) MarshalJSON() ([]byte, error) {
 	type known IssueFields
 	data, err := json.Marshal(known(f))
@@ -260,6 +328,11 @@ func (f IssueFields) MarshalJSON() ([]byte, error) {
 	return json.Marshal(raw)
 }
 
+// UnmarshalJSON decodes the issue, then hoists the collections Jira nests under
+// fields (comments, worklogs, subtasks) and flattens issuelinks into
+// LinkedIssues, so callers reach them at the top level without walking the
+// expand nesting. Each hoist is skipped when the top-level slice is already
+// populated, letting an explicit value win over the nested copy.
 func (i *Issue) UnmarshalJSON(data []byte) error {
 	type known Issue
 	var k known

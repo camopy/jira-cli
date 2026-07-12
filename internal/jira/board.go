@@ -1,9 +1,10 @@
-// Package jira — Board service for /rest/agile/1.0.
+// Board service for /rest/agile/1.0.
 //
 // Wire shapes and field semantics live in
 // the boards HTTP contract and
 // data-model.md. This file holds the Board struct, BoardScope helper,
 // BoardService interface, and the drain/resolve implementations.
+
 package jira
 
 import (
@@ -110,6 +111,8 @@ type AmbiguousBoardError struct {
 	Candidates []Board
 }
 
+// Error states the query and how many boards matched; the candidates
+// themselves travel on the struct for the disambiguation envelope.
 func (e *AmbiguousBoardError) Error() string {
 	return fmt.Sprintf("ambiguous board name %q — %d candidates", e.Query, len(e.Candidates))
 }

@@ -1,5 +1,6 @@
-// Package core — the App's chrome: tab bar, brand label, footer rule and
+// The App's chrome: tab bar, brand label, footer rule and
 // hint line, and the modal help sheet.
+
 package core
 
 import (

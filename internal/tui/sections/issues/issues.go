@@ -25,8 +25,11 @@ func New(ctx *core.ProgramContext) core.Section {
 	return m
 }
 
+// ID returns the issues section's identifier.
 func (m *Model) ID() core.SectionID { return ID }
-func (m *Model) Title() string      { return "Issues" }
+
+// Title returns the tab-bar label.
+func (m *Model) Title() string { return "Issues" }
 
 // Init sizes the list (reserving one row for the chips header) and fetches the
 // configured default lens (tui.default_lens, first lens otherwise).

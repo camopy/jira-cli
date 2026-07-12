@@ -1,5 +1,6 @@
-// Package issues — input routing for the results list: key, wheel, click,
+// Input routing for the results list: key, wheel, click,
 // and paste handling, plus the hit-tests that map screen positions to rows.
+
 package issues
 
 import (

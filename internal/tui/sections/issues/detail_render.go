@@ -1,5 +1,6 @@
-// Package issues — detail rendering shared by the preview sidebar and the
+// Detail rendering shared by the preview sidebar and the
 // full-screen detail view: heading, metadata, description, and comments.
+
 package issues
 
 import (

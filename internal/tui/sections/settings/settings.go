@@ -1,8 +1,3 @@
-// Package settings is the dashboard's configuration view: it shows where the
-// active config came from and what it resolved to, offers a manual reload, and
-// watches the file (on the shared refresh heartbeat) so edits hot-apply
-// without restarting the TUI. Theme and credentials still need a restart —
-// the theme applies once per process and auth requires a new client.
 package settings
 
 import (
@@ -40,8 +35,11 @@ type Model struct {
 // New builds the settings section.
 func New(ctx *core.ProgramContext) core.Section { return &Model{ctx: ctx} }
 
+// ID returns the settings section's identifier.
 func (m *Model) ID() core.SectionID { return ID }
-func (m *Model) Title() string      { return "Settings" }
+
+// Title returns the tab-bar label.
+func (m *Model) Title() string { return "Settings" }
 
 // Init records the config file's current mtime as the auto-reload baseline.
 func (m *Model) Init(ctx *core.ProgramContext) tea.Cmd {

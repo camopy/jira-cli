@@ -25,6 +25,8 @@ func WrapCoded(code errtax.Code, msg string, cause error) *CodedError {
 
 func (e *CodedError) Error() string { return e.msg }
 
+// Code is the classification the constructing site attached directly, used by
+// MapError instead of guessing one from the message.
 func (e *CodedError) Code() errtax.Code { return e.code }
 
 func (e *CodedError) Unwrap() error { return e.err }

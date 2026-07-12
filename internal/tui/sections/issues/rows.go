@@ -1,5 +1,6 @@
-// Package issues — list-row rendering: the fixed-column layout plan, the
+// List-row rendering: the fixed-column layout plan, the
 // per-cell renderers, and the local filter and lens chips above the list.
+
 package issues
 
 import (

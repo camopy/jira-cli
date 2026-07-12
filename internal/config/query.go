@@ -11,6 +11,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Query is a saved JQL search loaded from a .jql file: the JQL body plus
+// optional frontmatter metadata (display name, description, default project).
 type Query struct {
 	Name        string
 	Description string
@@ -24,6 +26,10 @@ type queryFrontmatter struct {
 	Project     string `toml:"project" yaml:"project"`
 }
 
+// LoadQueries reads every .jql file in dir into a map keyed by file basename
+// (sans extension). Each file is JQL with optional YAML (---) or TOML (+++)
+// frontmatter. A tilde-prefixed dir is expanded. A malformed file's path is
+// named in the error; a missing directory returns the os.ReadDir error.
 func LoadQueries(dir string) (map[string]Query, error) {
 	out := map[string]Query{}
 	dir = expandHome(dir)

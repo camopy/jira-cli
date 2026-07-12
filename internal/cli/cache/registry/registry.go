@@ -1,9 +1,3 @@
-// Package registry is the single source of truth for the cacheable Jira
-// metadata resources: their identity, default freshness window, and fetch.
-// It is deliberately free of cobra command wiring so any consumer — the cache
-// command group, `jira boards list`, `jira issue link types`, the refresh-all
-// runner — can depend on the resource metadata without pulling in the command
-// builders.
 package registry
 
 import (
@@ -45,6 +39,11 @@ func (r Resource) Key() string {
 	return r.Name
 }
 
+const (
+	ttlHour = 60
+	ttlDay  = 24 * ttlHour
+)
+
 // Registry is the canonical, ordered list of cacheable resources — the order
 // the subcommands are registered on the `cache` group. `cache clear`, the
 // primer factory, and the refresh-all runner all derive from it, so a new
@@ -59,11 +58,6 @@ func (r Resource) Key() string {
 // so age never risks a mis-parse. boards has a nil Fetch: its bespoke command
 // carries truncation + per-board project metadata the generic factory cannot
 // express.
-const (
-	ttlHour = 60
-	ttlDay  = 24 * ttlHour
-)
-
 var Registry = []Resource{
 	{Name: "labels", Short: "Cache and print the global Jira label list", TTLMinutes: ttlHour, Fetch: fetchLabelsForCache},
 	{Name: "projects", Short: "Cache and print the visible Jira project list", TTLMinutes: 7 * ttlDay, Fetch: fetchProjectsForCache},

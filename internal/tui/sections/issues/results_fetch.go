@@ -1,6 +1,7 @@
-// Package issues — the results list's fetch lifecycle: first-page and
+// The results list's fetch lifecycle: first-page and
 // follow-up loads, task-result application, background refresh, and the
 // changed-row diffing that marks what a refresh touched.
+
 package issues
 
 import (

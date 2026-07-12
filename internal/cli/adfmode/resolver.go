@@ -1,10 +1,3 @@
-// Package adfmode resolves the strict vs best-effort ADF mode for a given
-// CLI invocation, applying both the precedence ladder and per-path defaults.
-//
-// Precedence (highest first): command flag > JIRA_ADF_STRICT env > profile
-// adf_strict > per-path default (read/render → best-effort, mutation submit →
-// strict). The resolver is the only place mode selection happens; commands
-// pass their resolved Mode into pkg/adf entry points.
 package adfmode
 
 import (
@@ -16,7 +9,11 @@ import (
 type Mode int
 
 const (
+	// ModeBestEffort tolerates ADF that cannot be fully represented, degrading
+	// with warnings; the default for reads and rendering.
 	ModeBestEffort Mode = iota
+	// ModeStrict rejects ADF that cannot be fully represented; the default for
+	// mutation submission.
 	ModeStrict
 )
 
@@ -37,8 +34,11 @@ func (m Mode) String() string {
 type FlagChoice uint8
 
 const (
-	FlagUnset      FlagChoice = 0
-	FlagStrict     FlagChoice = 1 << 0
+	// FlagUnset means neither --adf-strict nor --adf-best-effort was passed.
+	FlagUnset FlagChoice = 0
+	// FlagStrict is the bit set by --adf-strict.
+	FlagStrict FlagChoice = 1 << 0
+	// FlagBestEffort is the bit set by --adf-best-effort.
 	FlagBestEffort FlagChoice = 1 << 1
 )
 
@@ -47,11 +47,17 @@ const (
 type Path int
 
 const (
+	// PathRead reads an issue's ADF back from Jira (best-effort default).
 	PathRead Path = iota
+	// PathRender renders ADF to the terminal (best-effort default).
 	PathRender
+	// PathPlainExtract extracts plain text from ADF (best-effort default).
 	PathPlainExtract
+	// PathRawEmit emits the raw ADF document unchanged (best-effort default).
 	PathRawEmit
+	// PathMutationSubmit encodes ADF for a write to Jira (strict default).
 	PathMutationSubmit
+	// PathDryRun previews a mutation's ADF encoding (strict default).
 	PathDryRun
 )
 

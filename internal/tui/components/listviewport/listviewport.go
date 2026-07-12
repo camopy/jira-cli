@@ -1,10 +1,3 @@
-// Package listviewport is a scrollable, single-selection list of pre-rendered
-// rows. Its defining property is that the selected item (cursor) is tracked
-// independently of the scroll offset: moving the cursor adjusts the offset only
-// enough to keep the selection visible, and a resize never loses the selection.
-// Rows are opaque strings, so the component is decoupled from how a caller
-// styles them — it owns only the selection/scroll math and an optional
-// scrollbar.
 package listviewport
 
 import (
@@ -89,9 +82,11 @@ func (m *Model) Top() { m.SetCursor(0) }
 // Bottom selects the last row.
 func (m *Model) Bottom() { m.SetCursor(len(m.rows) - 1) }
 
-// PageDown / PageUp move by a viewport height.
+// PageDown moves the cursor down by a viewport height.
 func (m *Model) PageDown() { m.MoveDown(m.pageStride()) }
-func (m *Model) PageUp()   { m.MoveUp(m.pageStride()) }
+
+// PageUp moves the cursor up by a viewport height.
+func (m *Model) PageUp() { m.MoveUp(m.pageStride()) }
 
 func (m *Model) pageStride() int {
 	if m.height > 1 {

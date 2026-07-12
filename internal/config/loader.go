@@ -25,8 +25,11 @@ type loadOptions struct {
 	path string
 }
 
+// Option configures a Load or LoadOrInit call.
 type Option func(*loadOptions)
 
+// WithPath overrides the config file path, for an explicit --config flag or a
+// test fixture. An empty path leaves the OS-native DefaultPath in effect.
 func WithPath(path string) Option {
 	return func(o *loadOptions) {
 		o.path = path
@@ -286,6 +289,9 @@ func (c *Config) Set(key, value string) error {
 	return fmt.Errorf("unknown config key %q", key)
 }
 
+// DefaultPath is the OS-native config file location
+// (~/.config/jira-cli/config.toml on Unix, %AppData%\jira-cli\config.toml on
+// Windows), resolved through the same config root as DefaultQueriesPath.
 func DefaultPath() string {
 	return filepath.Join(configRoot(), "jira-cli", "config.toml")
 }

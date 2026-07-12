@@ -1,5 +1,6 @@
-// Package issues — nil-safe accessors over the Jira issue model, plus the
+// Nil-safe accessors over the Jira issue model, plus the
 // timestamp parsing behind the relative-age rendering.
+
 package issues
 
 import (

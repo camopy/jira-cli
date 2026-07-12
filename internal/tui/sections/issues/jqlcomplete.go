@@ -4,6 +4,7 @@
 // reference data, so the textinput's whole-line ghost suggestion completes
 // just the token being typed. Pure functions — the async parts (fetching the
 // reference data and live field values) live in the search section.
+
 package issues
 
 import (

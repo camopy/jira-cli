@@ -10,6 +10,9 @@ import (
 	"github.com/gechr/x/human"
 )
 
+// WriteLinkListPlain renders the `issue.link.list` envelope data: a header
+// counting the links on the issue, then one direction-arrowed line per link
+// (verb, other key, truncated summary, status). An empty set says "no links".
 func WriteLinkListPlain(w io.Writer, command string, data any, opts ...PlainOption) error {
 	cfg := defaultPlainConfig()
 	for _, opt := range opts {
@@ -97,6 +100,9 @@ func linkPlainLine(r linkPlainRow, style authPlainStyle, cfg plainConfig) string
 	return strings.Join(parts, "  ")
 }
 
+// WriteLinkTypesPlain renders the `issue.link.types` envelope data: a header
+// noting the cache source and fetch time, then one name-sorted line per
+// configured link type with its outward and inward verbs.
 func WriteLinkTypesPlain(w io.Writer, command string, data any, opts ...PlainOption) error {
 	cfg := defaultPlainConfig()
 	for _, opt := range opts {

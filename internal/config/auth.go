@@ -12,6 +12,9 @@ import (
 	xstrings "github.com/gechr/x/strings"
 )
 
+// ErrCredentialNotFound is the sentinel every backend returns for a missing
+// credential. Callers test it with errors.Is; logout and transactional prior
+// reads treat it as benign so an absent credential is not an error.
 var ErrCredentialNotFound = errors.New("credential not found")
 
 // SecretRef identifies a credential in a backend. A credential belongs to a
@@ -178,12 +181,20 @@ func encodeEnvSegment(name string) string {
 	return b.String()
 }
 
+// CredentialStore is the backend-agnostic secret store: Get, Put, and Delete a
+// credential addressed by a SecretRef. KeyringStore, OnePasswordStore,
+// EnvCredentialStore, FileCredentialStore, and MemoryCredentialStore implement
+// it. A missing credential is reported with ErrCredentialNotFound.
 type CredentialStore interface {
 	Get(context.Context, SecretRef) (string, error)
 	Put(context.Context, SecretRef, string) error
 	Delete(context.Context, SecretRef) error
 }
 
+// AuthStatus is the resolved credential state for a profile: whether a usable
+// credential was found, which source supplied it (the backend, or "env" for a
+// JIRA_TOKEN_* override), a redacted last-four preview, and any sanitized
+// error. It is the shape `auth status` serializes and never carries the secret.
 type AuthStatus struct {
 	Profile  string `json:"profile"`
 	Valid    bool   `json:"valid"`
@@ -192,15 +203,20 @@ type AuthStatus struct {
 	Error    string `json:"error,omitempty"`
 }
 
+// MemoryCredentialStore is an in-memory CredentialStore for tests. It holds
+// secrets in a map keyed by the full SecretRef identity, so two profiles that
+// differ only by site never collide.
 type MemoryCredentialStore struct {
 	mu      sync.Mutex
 	secrets map[string]string
 }
 
+// NewMemoryCredentialStore returns an empty in-memory credential store.
 func NewMemoryCredentialStore() *MemoryCredentialStore {
 	return &MemoryCredentialStore{secrets: make(map[string]string)}
 }
 
+// Get returns the stored secret for ref, or ErrCredentialNotFound.
 func (s *MemoryCredentialStore) Get(_ context.Context, ref SecretRef) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -211,6 +227,7 @@ func (s *MemoryCredentialStore) Get(_ context.Context, ref SecretRef) (string, e
 	return v, nil
 }
 
+// Put stores secret under ref, overwriting any existing value.
 func (s *MemoryCredentialStore) Put(_ context.Context, ref SecretRef, secret string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -218,6 +235,7 @@ func (s *MemoryCredentialStore) Put(_ context.Context, ref SecretRef, secret str
 	return nil
 }
 
+// Delete removes ref's secret; deleting an absent entry is a no-op.
 func (s *MemoryCredentialStore) Delete(_ context.Context, ref SecretRef) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -514,6 +532,11 @@ func MigrateCredentials(ctx context.Context, migrations []CredentialMigration, s
 	return report, nil
 }
 
+// CredentialStatus resolves a profile's credential and reports it as an
+// AuthStatus: valid with a redacted preview when found, or a sanitized,
+// secret-free error when not. Source is reported as "env" when a JIRA_TOKEN_*
+// override supplied the value. It resolves through ResolveCredential, so it
+// reflects the effective runtime credential, env override included.
 func CredentialStatus(ctx context.Context, store CredentialStore, ref SecretRef) AuthStatus {
 	secret, err := ResolveCredential(ctx, store, ref)
 	status := AuthStatus{Profile: ref.Profile, Source: string(ref.Backend)}
@@ -551,6 +574,10 @@ func SanitizeCredentialError(err error) string {
 	return "credential backend failed"
 }
 
+// RedactSecret returns a display-safe preview of a credential: the empty string
+// for none, "****" for a value too short to partially reveal, otherwise "****"
+// plus the last four bytes. It is the only sanctioned way to surface any part
+// of a token — never print the raw value.
 func RedactSecret(secret string) string {
 	if secret == "" {
 		return ""

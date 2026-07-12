@@ -7,11 +7,16 @@ import (
 	"unicode/utf8"
 )
 
+// Segment is a run of rendered text tagged with the ADF node or mark type it
+// came from, so a style-aware renderer can color each run. See ToFormatted.
 type Segment struct {
 	Text string
 	Kind string
 }
 
+// ToPlain renders an ADF document to plain text: block content joined by
+// spaces, with attr-only inline nodes (mentions, emoji, media, tasks) flattened
+// to a readable stand-in so nothing renderable is silently dropped.
 func ToPlain(doc Document) string {
 	var parts []string
 	for _, node := range doc.Content {
@@ -20,6 +25,10 @@ func ToPlain(doc Document) string {
 	return strings.TrimSpace(strings.Join(parts, " "))
 }
 
+// ToMarkdown renders an ADF document to GitHub-flavored Markdown — blocks
+// separated by blank lines, one trailing newline. A node with no Markdown
+// equivalent (panel, media) degrades to a labeled placeholder rather than
+// vanishing, so the reader stays aware the content existed.
 func ToMarkdown(doc Document) string {
 	var lines []string
 	for _, node := range doc.Content {
@@ -30,6 +39,10 @@ func ToMarkdown(doc Document) string {
 	return strings.TrimSpace(strings.Join(lines, "\n\n")) + "\n"
 }
 
+// ToFormatted renders an ADF document to a flat sequence of Segments, each text
+// run tagged with its node or mark type, for a terminal renderer that styles by
+// kind. A marked run is emitted once per mark, so a bold link yields a segment
+// for each applicable style.
 func ToFormatted(doc Document) []Segment {
 	var segments []Segment
 	for _, node := range doc.Content {

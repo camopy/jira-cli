@@ -14,6 +14,10 @@ import (
 
 const maxAttachmentUploadBytes = 100 << 20
 
+// MaxAttachmentUploadBytes is the client-side upload ceiling AttachmentService.Add
+// enforces per file and across a batch. It is exposed so the command layer can
+// reject an oversized file before opening it, rather than streaming bytes only
+// to have the service abort mid-upload.
 func MaxAttachmentUploadBytes() int64 {
 	return maxAttachmentUploadBytes
 }

@@ -52,6 +52,12 @@ type retryTransport struct {
 	debug bool
 }
 
+// RoundTrip implements http.RoundTripper. It falls straight through to the base
+// transport unless retry is enabled and the request is both safe to replay and
+// carries a rewindable body; otherwise it runs the resend loop, returning the
+// first non-retryable response (success or the final retryable failure) for
+// Client.Do to interpret. It never mutates the caller's request — each attempt
+// rides a shallow clone with a freshly rewound body.
 func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if t.maxWait <= 0 || t.safeToRetry == nil || !t.safeToRetry(req) || !replayableBody(req) {
 		return t.base.RoundTrip(req)

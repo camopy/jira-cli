@@ -20,6 +20,11 @@ and [commands.md](commands.md) for the command pattern.
     without it, which library function a local implementation deliberately
     is not — never what the next line does. This repo's comment density is
     high and deliberate; match the surrounding file.
+*   Every package carries its `// Package <name> …` comment in a dedicated
+    `doc.go` (package comment + package clause only) — a new package starts
+    with one. Never put the package comment atop a code file; keeping it in
+    `doc.go` keeps package-doc diffs isolated and the doc easy to find.
+    Precedents: `internal/errtax/doc.go`, `internal/tui/doc.go`.
 *   Handle errors and edge cases first (early return); drop `else` when the
     `if` body returns; keep the happy path at minimal indentation.
 *   Composite literals use field names, never positional fields.

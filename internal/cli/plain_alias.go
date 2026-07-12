@@ -1,6 +1,7 @@
 // Plain-text renderer for `jira alias list`: one aligned `name → expansion`
 // line per alias, natural-ordered by name, so the human output shows the
 // same map the JSON envelope carries.
+
 package cli
 
 import (

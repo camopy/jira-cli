@@ -5,6 +5,11 @@ import (
 	"strings"
 )
 
+// RESTPath builds a Jira Cloud REST v3 path by prefixing parts with the
+// rest/api/3 base and percent-escaping each segment. Escaping is why callers
+// pass raw values (issue keys, ids) as separate parts rather than pre-joining:
+// a segment containing a slash or reserved character stays a single path
+// element and cannot break out of the intended resource.
 func RESTPath(parts ...string) string {
 	segments := make([]string, 0, len(parts)+3)
 	segments = append(segments, "rest", "api", "3")

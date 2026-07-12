@@ -10,10 +10,14 @@ import (
 	"github.com/matcra587/jira-cli/internal/errtax"
 )
 
+// DefaultMaxExpansion caps how many keys one ParseExpressions call may yield
+// when Options.MaxExpansion is unset, bounding range expansion.
 const DefaultMaxExpansion = 1000
 
 var keyPattern = regexp.MustCompile(`^([A-Z][A-Z0-9_]+)-([0-9]+)$`)
 
+// Options tunes ParseExpressions. A zero or negative MaxExpansion falls back to
+// DefaultMaxExpansion.
 type Options struct {
 	MaxExpansion int
 }

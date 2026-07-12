@@ -782,6 +782,10 @@ func issueListBuilderWithProfileDefaults(builder jql.BuildOptions, profile confi
 	return builder
 }
 
+// IssueListOutputData builds the base `issue.list` envelope data — the issues
+// payload plus the detail flag, and the resolved JQL only under --debug.
+// Exported so the shapes that extend it (boardScopedListData) and the output
+// tests produce identical list output.
 func IssueListOutputData(cmd *cobra.Command, issues any, detail bool, query string) map[string]any {
 	data := map[string]any{"issues": issues, "detail": detail}
 	if debug, _ := cmd.Root().PersistentFlags().GetBool("debug"); debug {
