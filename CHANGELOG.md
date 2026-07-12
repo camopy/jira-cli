@@ -1,6 +1,12 @@
 # Release Notes
 
 
+## [0.10.9](https://github.com/matcra587/jira-cli/releases/tag/v0.10.9) — 2026-07-11
+
+### Fixed
+
+- Phrase dry-run previews in the conditional mood ("Would transition issue") instead of past-tense completion
+
 ## [0.10.8](https://github.com/matcra587/jira-cli/releases/tag/v0.10.8) — 2026-07-11
 
 ### Fixed
