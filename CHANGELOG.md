@@ -1,6 +1,14 @@
 # Release Notes
 
 
+## [0.10.8](https://github.com/matcra587/jira-cli/releases/tag/v0.10.8) — 2026-07-11
+
+### Fixed
+
+- Drop the redundant 'attachment download: validation:' prefix from the download overwrite refusal; it keeps its validation classification (exit 3) like the other --force gates
+- Report the attachment download path-escape refusal as flag_value_invalid naming --to, instead of a generic validation failure
+- Render status pills with fixed truecolor fills and luma-based text so contrast survives terminals that remap the 16-color ANSI palette
+
 ## [0.10.7](https://github.com/matcra587/jira-cli/releases/tag/v0.10.7) — 2026-07-11
 
 ### Added

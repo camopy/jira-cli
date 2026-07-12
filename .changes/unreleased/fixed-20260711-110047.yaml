@@ -1,3 +1,0 @@
-kind: fixed
-body: Render status pills with fixed truecolor fills and luma-based text so contrast survives terminals that remap the 16-color ANSI palette
-time: 2026-07-11T11:00:47.929242017-04:00
