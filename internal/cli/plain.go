@@ -1173,6 +1173,28 @@ func dimStyle(cfg plainConfig) lipgloss.Style {
 	return *cfg.theme.Dim
 }
 
+// entityHues are the fixed mid-tone foregrounds hashStyle picks from,
+// NOT the theme's EntityColors: entity colors are pure identity hints,
+// and theme palettes are designed for one background — the default dark
+// palette rendered assignee names near-invisible on white terminals.
+// Mid-tone hues (the same luma band the pill fills sit in) stay legible
+// on both black and white, remap-proof for the same reason the pills are.
+var entityHues = []color.Color{
+	lipgloss.Color("#8f7ee7"), // purple
+	lipgloss.Color("#e56910"), // orange
+	lipgloss.Color("#227d9b"), // teal
+	lipgloss.Color("#da62ac"), // magenta
+	lipgloss.Color("#82b536"), // lime
+	lipgloss.Color("#1d7afc"), // blue
+	lipgloss.Color("#1f845a"), // green
+	lipgloss.Color("#b3822e"), // bronze
+}
+
+// hashStyle picks a stable per-name foreground from the fixed mid-tone
+// entityHues. The theme no longer supplies the colors — see entityHues —
+// but it still carries two signals: nil means "no styling requested", and
+// an empty EntityColors slice is the monochrome/plain presets' deliberate
+// opt-out of entity coloring, honored by rendering bare.
 func hashStyle(theme *clibtheme.Theme, key string) lipgloss.Style {
 	if theme == nil || len(theme.EntityColors) == 0 || xstrings.IsBlank(key) {
 		return lipgloss.NewStyle()
@@ -1180,7 +1202,7 @@ func hashStyle(theme *clibtheme.Theme, key string) lipgloss.Style {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(strings.ToLower(strings.TrimSpace(key))))
 
-	return lipgloss.NewStyle().Foreground(theme.EntityColors[h.Sum32()%uint32(len(theme.EntityColors))])
+	return lipgloss.NewStyle().Foreground(entityHues[h.Sum32()%uint32(len(entityHues))])
 }
 
 func foregroundStyle(style *lipgloss.Style) lipgloss.Style {

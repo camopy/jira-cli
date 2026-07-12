@@ -7,6 +7,7 @@ package theme
 
 import (
 	"hash/fnv"
+	"image/color"
 	"os"
 	"strings"
 	"sync"
@@ -191,20 +192,30 @@ func applyTheme(t *clibtheme.Theme) {
 	Active = lipgloss.NewStyle().Foreground(t.Green.GetForeground()).Bold(true)
 }
 
+// entityHues mirrors the CLI plain renderer's fixed mid-tone entity
+// palette (internal/cli/plain.go entityHues): theme palettes are designed
+// for one background, and identity hints must stay legible on both black
+// and white terminals.
+var entityHues = []color.Color{
+	lipgloss.Color("#8f7ee7"), lipgloss.Color("#e56910"),
+	lipgloss.Color("#227d9b"), lipgloss.Color("#da62ac"),
+	lipgloss.Color("#82b536"), lipgloss.Color("#1d7afc"),
+	lipgloss.Color("#1f845a"), lipgloss.Color("#b3822e"),
+}
+
 // EntityColor returns a deterministic style for a named entity (assignee,
-// project, etc) by hashing into the clib theme's EntityColors palette.
+// project, etc) by hashing into the fixed mid-tone entity palette.
 func EntityColor(name string) lipgloss.Style {
-	if name == "" {
-		return lipgloss.NewStyle()
-	}
-	colors := Theme.EntityColors
-	if len(colors) == 0 {
+	// An empty EntityColors slice is the monochrome/plain presets'
+	// deliberate opt-out of entity coloring; the hues themselves come
+	// from the fixed palette above.
+	if name == "" || len(Theme.EntityColors) == 0 {
 		return lipgloss.NewStyle()
 	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(name))
 
-	c := colors[h.Sum32()%uint32(len(colors))]
+	c := entityHues[h.Sum32()%uint32(len(entityHues))]
 	return lipgloss.NewStyle().Foreground(c)
 }
 

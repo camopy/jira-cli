@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"image/color"
 	"strings"
 	"testing"
 
@@ -242,5 +243,44 @@ func TestStatusFillNeverUsesPaletteSlots(t *testing.T) {
 	out := statusPill(plainConfig{tty: true, theme: clibtheme.Dark()}, "To Do", "new", "blue-gray").Render("To Do")
 	if !strings.Contains(out, "48;2;") || !strings.Contains(out, "38;2;") {
 		t.Errorf("pill should render truecolor SGR fill and text, got %q", out)
+	}
+}
+
+// TestEntityHuesAreFixedAndMidTone pins the entity-color decision: identity
+// hints hash into fixed mid-tone hues, not the theme's background-specific
+// EntityColors — a dark theme's palette rendered assignee names
+// near-invisible on white terminals. Mid-tone means the Rec. 601 luma sits
+// in a band readable on both black and white backgrounds.
+func TestEntityHuesAreFixedAndMidTone(t *testing.T) {
+	for _, c := range entityHues {
+		r, g, b, _ := c.RGBA()
+		luma := (299*(r>>8) + 587*(g>>8) + 114*(b>>8)) / 1000
+		if luma < 80 || luma > 180 {
+			t.Errorf("entity hue %v luma %d outside the both-backgrounds band [80,180]", c, luma)
+		}
+	}
+
+	// The theme no longer supplies the colors: two themes with different
+	// EntityColors render the same assignee identically.
+	dark := clibtheme.Dark()
+	altered := clibtheme.Dark().With(clibtheme.WithEntityColors([]color.Color{lipgloss.Color("#010101")}))
+	a := hashStyle(dark, "assignee:Alice").Render("Alice")
+	b := hashStyle(altered, "assignee:Alice").Render("Alice")
+	if a != b {
+		t.Errorf("entity color followed the theme palette: %q vs %q", a, b)
+	}
+	// Monochrome presets ship an empty EntityColors slice as a deliberate
+	// opt-out of entity coloring — they must keep rendering bare.
+	mono := clibtheme.Dark().With(clibtheme.WithEntityColors(nil))
+	if got := hashStyle(mono, "assignee:Alice").Render("Alice"); got != "Alice" {
+		t.Errorf("monochrome theme should render entities bare, got %q", got)
+	}
+
+	// Stability and distinctness still hold.
+	if again := hashStyle(dark, "assignee:Alice").Render("Alice"); again != a {
+		t.Errorf("entity color not stable: %q vs %q", again, a)
+	}
+	if bob := hashStyle(dark, "assignee:Bob").Render("Bob"); bob == a {
+		t.Errorf("distinct assignees collapsed to one color")
 	}
 }
