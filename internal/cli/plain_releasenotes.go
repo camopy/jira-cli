@@ -7,7 +7,6 @@ import (
 
 	"charm.land/glamour/v2/ansi"
 	clibtheme "github.com/gechr/clib/theme"
-	"github.com/gechr/clog"
 	changelog "github.com/matcra587/jira-cli"
 	"github.com/matcra587/jira-cli/internal/pager"
 	"github.com/matcra587/jira-cli/internal/tui/components/markdown"
@@ -35,15 +34,16 @@ var mdLinkRe = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
 // writeReleaseNotesPlain renders the notes as Markdown. On a color terminal with
 // a resolved theme it is styled through glamour — using a clib-derived style that
 // gives each heading level its own hue, so it honors the user's theme and reads
-// like a release page. Otherwise (piped, redirected, no theme, or NO_COLOR) it
-// stays raw Markdown, dropping straight into a file or a GitHub release body.
+// like a release page. Otherwise (piped, redirected, --color=never, NO_COLOR,
+// or no theme — cfg.tty folds the resolved color verdict) it stays raw
+// Markdown, dropping straight into a file or a GitHub release body.
 func writeReleaseNotesPlain(w io.Writer, data any, cfg plainConfig) error {
 	res, ok := data.(ReleaseNotesResult)
 	if !ok {
 		return writeGenericPlain(newPlainLogger(w), cfg, "release notes", data)
 	}
 
-	if cfg.tty && cfg.theme != nil && !clog.ColorsDisabled() {
+	if cfg.tty && cfg.theme != nil {
 		width := cfg.termWidth
 		if width <= 0 {
 			width = 100

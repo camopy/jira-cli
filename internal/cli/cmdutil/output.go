@@ -21,7 +21,7 @@ import (
 func HumanJSONPrintTheme(cmd *cobra.Command) *clogtheme.Theme {
 	th := config.DefaultTheme()
 	if cfg, err := config.Load(config.WithPath(ConfigPath(cmd))); err == nil {
-		if config.IsAutoTheme(cfg.Theme.Name) && !clog.ColorsDisabled() {
+		if config.IsAutoTheme(cfg.Theme.Name) && !stdoutColorsDisabled() {
 			th = config.AutoTheme(os.Stdout)
 		}
 	}
@@ -29,6 +29,16 @@ func HumanJSONPrintTheme(cmd *cobra.Command) *clogtheme.Theme {
 		return clogtheme.Light()
 	}
 	return clogtheme.Dark()
+}
+
+// stdoutColorsDisabled reports whether stdout should suppress color under
+// the resolved --color mode, from stdout's own capability state (TTY,
+// NO_COLOR) rather than the stderr default logger clog.ColorsDisabled
+// follows — in a split-stream invocation (stdout piped, stderr on a TTY,
+// or vice versa) the theme must resolve from the stream it actually
+// styles. ColorAlways deliberately reports enabled even past NO_COLOR.
+func stdoutColorsDisabled() bool {
+	return clog.Stdout(cli.ResolvedColorMode()).ColorsDisabled()
 }
 
 // resolvedOutputMode returns the output mode resolved by PersistentPreRunE
@@ -129,7 +139,7 @@ func PlainOptionsForCommand(cmd *cobra.Command) []cli.PlainOption {
 		// to resolve and is always passed.
 		switch {
 		case config.IsAutoTheme(cfg.Theme.Name):
-			if !clog.ColorsDisabled() {
+			if !stdoutColorsDisabled() {
 				opts = append(opts, cli.WithPlainTheme(config.AutoTheme(os.Stdout)))
 			}
 		default:

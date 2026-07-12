@@ -247,7 +247,7 @@ to read on both light and dark, so they stay legible regardless of detection. De
 | `JIRA_ADF_STRICT` | `1`/`true` forces strict ADF validation; `0` enables best-effort fallback |
 | `JIRA_EDITOR` | Override the editor for `issue edit` |
 | `JIRA_MAX_RETRY_WAIT` | Rate-limit retry budget (Go duration); `0` disables. `--max-retry-wait` wins |
-| `JIRA_NO_COLOR` | Disable ANSI colour in Human output |
+| `NO_COLOR` | Presence (any value) disables ANSI colour and hyperlinks in Human output; `--color=always` overrides it |
 | `JIRA_NO_UPDATE_CHECK` | Any non-empty value disables the passive new-release check and its hint |
 | `JIRA_READ_ONLY` | `1`/`true` refuses every mutation regardless of profile |
 | `JIRA_THEME` | Override `[theme].name` for the current process |
@@ -317,5 +317,6 @@ editor          = "nvim --wait"
 
 *   [Authenticate](auth.md) — API tokens, keyring vs 1Password vs env, `auth login` and `auth migrate`.
 *   [TUI](tui.md) — everything under `[tui]`: tabs, lenses, sections, preview, keybindings.
-*   [Output and scripting](output.md) — `--output` and `JIRA_NO_COLOR` shape what every command emits.
+*   [Output and scripting](output.md) — `--output` shapes what every command
+    emits; the `NO_COLOR` / `--color` precedence lives in the table above.
 *   [Cache](cache.md) — cached metadata lives under `~/.cache/jira-cli/<profile>-<hash>/`, scoped by profile, base URL, and config path.

@@ -387,7 +387,7 @@ func configureRootFlags(root *cobra.Command) {
 	cmdutil.AddDuration(pf, "max-retry-wait", cmdutil.DefaultMaxRetryWait,
 		"Longest a request will sleep out Jira rate limits (429/503) before giving up; 0 disables auto-retry. Always capped by --timeout",
 		clib.FlagExtra{Group: "Runtime", Placeholder: "DURATION", Terse: "rate-limit retry budget"})
-	cmdutil.AddString(pf, "color", "auto", "Color mode; `auto` emits color only to a terminal", clib.FlagExtra{
+	cmdutil.AddString(pf, "color", "auto", "Color mode; `auto` emits color only to a terminal and honors NO_COLOR, `always` overrides both", clib.FlagExtra{
 		Group:       "Output",
 		Placeholder: "MODE",
 		Enum:        []string{"auto", "always", "never"},

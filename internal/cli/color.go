@@ -1,6 +1,10 @@
 package cli
 
-import "github.com/gechr/clog"
+import (
+	"os"
+
+	"github.com/gechr/clog"
+)
 
 // resolvedColorMode is the process-wide --color decision, published by root
 // before any command renders. Package cli owns human output on stdout through
@@ -23,10 +27,12 @@ func ResolvedColorMode() clog.ColorMode { return resolvedColorMode }
 // StyleEnabled reports whether ANSI styling and OSC 8 hyperlinks should be
 // emitted on a human stdout surface whose raw TTY state is tty. It folds the
 // resolved --color mode over TTY detection: ColorAlways forces styling even off
-// a TTY, ColorNever suppresses it even on one, and ColorAuto defers to tty —
-// exactly the pre-flag behavior. The decision governs styling and hyperlinks
-// only; TTY-only behaviors that are not color (spinner silence, pagination)
-// keep reading raw terminal detection.
+// a TTY (and past NO_COLOR), ColorNever suppresses it even on one, and
+// ColorAuto styles only a TTY the environment does not suppress (NO_COLOR
+// per its spec, TERM=dumb) — the signals clog's own auto detection kills
+// color for. The decision governs styling and hyperlinks only; TTY-only
+// behaviors that are not color (spinner silence, pagination) keep reading
+// raw terminal detection.
 func StyleEnabled(tty bool) bool {
 	switch resolvedColorMode {
 	case clog.ColorAlways:
@@ -34,6 +40,18 @@ func StyleEnabled(tty bool) bool {
 	case clog.ColorNever:
 		return false
 	default:
-		return tty
+		return tty && !envSuppressesColor()
 	}
+}
+
+// envSuppressesColor mirrors the environment signals clog's auto profile
+// detection treats as color-off for a TTY writer: NO_COLOR presence (any
+// value including empty, per https://no-color.org/) and TERM=dumb. clog
+// keeps that state private, hence the mirrored lookups; finer capability
+// probing (color depth downgrades) stays clog's per-writer concern.
+func envSuppressesColor() bool {
+	if _, set := os.LookupEnv("NO_COLOR"); set {
+		return true
+	}
+	return os.Getenv("TERM") == "dumb"
 }

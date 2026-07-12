@@ -23,8 +23,9 @@ import (
 const helpMaxWidth = 100
 
 // NewHelpRenderer builds the themed clib help renderer used by every command
-// in jira-cli. The JIRA env-prefix is set so that JIRA_NO_COLOR and related
-// variables are honored. config.DefaultTheme resolves the JIRA_THEME override
+// in jira-cli. The JIRA env-prefix is set so that JIRA_THEME, JIRA_LOG_LEVEL,
+// and related clog/clib variables are honored (NO_COLOR itself is unprefixed
+// per its spec). config.DefaultTheme resolves the JIRA_THEME override
 // (or the dark built-in), which clib v0.5 no longer does for us after dropping
 // the old theme.Default().
 func NewHelpRenderer() *help.Renderer {

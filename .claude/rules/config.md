@@ -62,7 +62,7 @@ stored as fake-authenticated), `email`, `secret_backend`
 | `JIRA_MAX_RETRY_WAIT` | rate-limit retry budget (Go duration); unparseable → default, never silently disabled |
 | `JIRA_LIVETEST_PROJECT` | live-suite target project (a dedicated probe project) |
 | `JIRA_NO_UPDATE_CHECK` | non-empty disables the passive update check (handled inside clive/notify; the name derives from the binary name) |
-| `NO_COLOR` / `JIRA_NO_COLOR` family | color suppression (clog/clib) |
+| `NO_COLOR` | presence disables color and hyperlinks (per no-color.org, unprefixed); `--color=always` overrides. There is no JIRA_NO_COLOR — the JIRA env prefix covers clog/clib theme/level/hyperlink vars, not this |
 
 Agent detection (`CLAUDECODE`, `AI_AGENT`, …) lives in
 `internal/cli/detector.go` and selects compact output — it is not config.

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
 
@@ -36,6 +37,11 @@ func TestStyleEnabledFoldsColorModeOverTTY(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			withResolvedColorMode(t, tc.mode)
+			// The auto rows read the environment; pin it so an ambient
+			// NO_COLOR or TERM=dumb cannot flip the expectations.
+			t.Setenv("TERM", "xterm-256color")
+			t.Setenv("NO_COLOR", "sentinel") // registers restore of the caller value
+			_ = os.Unsetenv("NO_COLOR")
 			if got := StyleEnabled(tc.tty); got != tc.want {
 				t.Fatalf("StyleEnabled(%v) with mode %v = %v, want %v", tc.tty, tc.mode, got, tc.want)
 			}
@@ -120,4 +126,33 @@ func TestMirrorWarningsKeepsBacktickDelimiters(t *testing.T) {
 	if !strings.Contains(buf.String(), "`panel`") {
 		t.Fatalf("backtick delimiters must survive, got %q", buf.String())
 	}
+}
+
+// The environment can veto ColorAuto styling the way clog's own auto
+// detection does: NO_COLOR presence (any value, even empty) and TERM=dumb
+// suppress it, and --color=always overrides both.
+func TestStyleEnabledHonorsColorSuppressingEnv(t *testing.T) {
+	t.Run("NO_COLOR suppresses auto on a tty", func(t *testing.T) {
+		withResolvedColorMode(t, clog.ColorAuto)
+		t.Setenv("NO_COLOR", "")
+		if StyleEnabled(true) {
+			t.Fatal("auto with NO_COLOR set must not style, even on a TTY")
+		}
+	})
+	t.Run("TERM=dumb suppresses auto on a tty", func(t *testing.T) {
+		withResolvedColorMode(t, clog.ColorAuto)
+		t.Setenv("NO_COLOR", "sentinel")
+		_ = os.Unsetenv("NO_COLOR")
+		t.Setenv("TERM", "dumb")
+		if StyleEnabled(true) {
+			t.Fatal("auto with TERM=dumb must not style")
+		}
+	})
+	t.Run("always overrides NO_COLOR and non-tty state", func(t *testing.T) {
+		withResolvedColorMode(t, clog.ColorAlways)
+		t.Setenv("NO_COLOR", "")
+		if !StyleEnabled(false) {
+			t.Fatal("always must override NO_COLOR and non-TTY state")
+		}
+	})
 }
