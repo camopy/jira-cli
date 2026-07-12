@@ -1,3 +1,0 @@
-kind: fixed
-body: Stop the auth login verification spinner from corrupting --debug output; verification narrates bare under debug like every other lifecycle
-time: 2026-07-11T16:34:16.922969376-04:00
