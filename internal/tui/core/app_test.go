@@ -448,3 +448,44 @@ func TestZoomAndResizeKeysRelayout(t *testing.T) {
 		t.Errorf("+ did not grow the preview back: %d, want 50", ctx.PreviewWidth)
 	}
 }
+
+// TestPauseGatesRefresh pins the R toggle: ticks while paused keep the timer
+// alive but refetch nothing, pause survives focus loss and regain, and
+// resuming refreshes immediately rather than waiting out the interval.
+func TestPauseGatesRefresh(t *testing.T) {
+	cfg := &config.Config{TUI: config.TUI{RefreshInterval: 1}}
+	ctx := NewProgramContext(nil, cfg)
+	reg := NewRegistry()
+	a := &countingSection{id: "a"}
+	reg.Register("a", func(*ProgramContext) Section { return a })
+	app := NewApp(ctx, reg, []SectionID{"a"})
+	app.Init()
+
+	pauseKey := tea.KeyPressMsg{Code: 'R', Text: "R", Mod: tea.ModShift}
+	m, _ := app.Update(pauseKey)
+	app = m.(App)
+	before := a.updates
+	m, cmd := app.Update(RefreshTickMsg{})
+	app = m.(App)
+	if a.updates != before {
+		t.Error("a tick while paused must not reach sections")
+	}
+	if cmd == nil {
+		t.Error("a paused tick must still re-arm the timer")
+	}
+
+	// Pause must survive a blur/focus round-trip — the user chose it.
+	m, _ = app.Update(tea.BlurMsg{})
+	app = m.(App)
+	m, _ = app.Update(tea.FocusMsg{})
+	app = m.(App)
+	if a.updates != before {
+		t.Error("regaining focus while paused must not refetch")
+	}
+
+	m, _ = app.Update(pauseKey)
+	_ = m.(App)
+	if a.updates == before {
+		t.Error("resuming should refresh sections immediately")
+	}
+}

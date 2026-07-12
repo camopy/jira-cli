@@ -471,7 +471,7 @@ func (s *SearchModel) CapturesInput() bool { return s.editing || s.capturing() }
 func (s *SearchModel) HelpBindings() []key.Binding {
 	k := s.ctx.Keys
 	return []key.Binding{
-		k.Search, k.Presets, k.Open, k.Transition, k.AssignMe, k.Comment, k.OpenBrowse,
+		k.Search, k.Presets, k.Open, k.Create, k.Transition, k.AssignMe, k.Comment, k.Labels, k.OpenBrowse,
 		k.Filter, k.Facet, k.Jumplist, k.TogglePreview,
 	}
 }

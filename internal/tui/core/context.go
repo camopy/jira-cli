@@ -105,6 +105,9 @@ type ProgramContext struct {
 	// BaseURL is the Jira site root (e.g. https://acme.atlassian.net), used to
 	// build issue links for "open in browser" and "copy url".
 	BaseURL string
+	// DefaultIssueType is the profile's issue type for creates ("" means the
+	// caller picks a fallback).
+	DefaultIssueType string
 	// WorkdaySeconds is the active profile's working-day length, used to parse
 	// relative worklog durations like "1d". Zero falls back to 8 hours.
 	WorkdaySeconds int

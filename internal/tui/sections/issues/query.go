@@ -151,7 +151,7 @@ func (m *QueryModel) CapturesInput() bool { return m.capturing() }
 func (m *QueryModel) HelpBindings() []key.Binding {
 	k := m.ctx.Keys
 	return []key.Binding{
-		k.Open, k.Transition, k.AssignMe, k.Comment, k.Edit, k.OpenBrowse,
+		k.Open, k.Create, k.Transition, k.AssignMe, k.Comment, k.Edit, k.Labels, k.OpenBrowse,
 		k.Select, k.SelectAll, k.SelectInvert, k.SelectRange,
 		k.Filter, k.Facet, k.Jumplist, k.TogglePreview, k.Refresh,
 	}

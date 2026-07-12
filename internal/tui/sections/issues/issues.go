@@ -136,7 +136,7 @@ func (m *Model) CapturesInput() bool { return m.capturing() }
 func (m *Model) HelpBindings() []key.Binding {
 	k := m.ctx.Keys
 	return []key.Binding{
-		k.Open, k.Transition, k.AssignMe, k.Comment, k.Edit, k.OpenBrowse,
+		k.Open, k.Create, k.Transition, k.AssignMe, k.Comment, k.Edit, k.Labels, k.OpenBrowse,
 		k.Select, k.SelectAll, k.SelectInvert, k.SelectRange,
 		k.Filter, k.Facet, k.Jumplist, k.NextLens, k.TogglePreview, k.Refresh,
 	}

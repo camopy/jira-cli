@@ -23,7 +23,7 @@ func (a App) helpSheet() string {
 	bindings := []key.Binding{
 		k.Up, k.Down, k.Top, k.Bottom, k.PageUp, k.PageDown,
 		k.NextSection, k.PrevSection,
-		k.GrowPreview, k.ShrinkPreview, k.Zoom,
+		k.GrowPreview, k.ShrinkPreview, k.Zoom, k.TogglePause,
 	}
 	if s := a.build(a.activeID()); s != nil {
 		bindings = append(bindings, s.HelpBindings()...)
@@ -202,6 +202,11 @@ func (a App) hintLine(width int) string {
 // contextLine joins the non-empty profile/project/board labels for the footer.
 func (a App) contextLine() string {
 	var parts []string
+	if a.paused {
+		// The paused heartbeat is invisible otherwise — surface it where the
+		// user's eye already rests between refreshes.
+		parts = append(parts, "⏸ paused")
+	}
 	for _, p := range []string{a.ctx.ProfileName, a.ctx.Project, a.ctx.Board} {
 		if p != "" {
 			parts = append(parts, p)

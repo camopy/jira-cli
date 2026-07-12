@@ -171,11 +171,13 @@ failure rolls the row back with an error toast.
 
 | Key | Action | Notes |
 |-----|--------|-------|
+| `n` | New issue | Two-field overlay: summary line + Markdown description (`tab` switches fields, `ctrl+s` submits). Lands in `default_project` (or the selected issue's project) with `default_issue_type` (Task when unset) |
 | `t` | Transition | Type-to-filter picker over the workflow transitions Jira allows for this issue |
 | `a` | Assign | Type a name or email — resolved against Jira; `none`/`unassigned` (or empty) clears |
 | `A` | Assign to me | One keypress, no prompt |
 | `c` | Comment | Opens `$JIRA_EDITOR`/`$EDITOR` when set; otherwise an in-modal textarea (`ctrl+s` submits, `enter` is a newline). Markdown converts to ADF |
 | `e` | Edit summary | Prefilled with the current summary |
+| `l` | Labels | Prefilled with the current labels, comma-separated — what you submit replaces the whole list, so an emptied field clears them |
 | `w` | Log work | Accepts `2h`, `30m`, `1d` etc. (`workday_seconds` scales `d`) |
 | `o` | Open in browser | |
 | `y` / `Y` | Copy issue key / URL | Via OSC 52, so it works over SSH |

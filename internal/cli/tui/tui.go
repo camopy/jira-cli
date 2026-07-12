@@ -110,6 +110,7 @@ func newApp(svc core.Services, cfg *config.Config, profile config.Profile, base 
 	ctx.Project = profile.DefaultProject
 	ctx.Board = profile.DefaultBoard
 	ctx.BaseURL = profile.BaseURL
+	ctx.DefaultIssueType = profile.DefaultIssueType
 	ctx.WorkdaySeconds = profile.WorkdaySeconds
 	ctx.Version = version.Version()
 	ctx.ConfigPath = cfgPath

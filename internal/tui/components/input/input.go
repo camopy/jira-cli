@@ -23,6 +23,13 @@ func NewLine(prompt, placeholder string) Line {
 	return Line{ti: ti}
 }
 
+// Focus and Blur hand keyboard ownership to or away from the field, for
+// forms where two inputs share one modal.
+func (l *Line) Focus() { l.ti.Focus() }
+
+// Blur removes focus (the cursor stops rendering).
+func (l *Line) Blur() { l.ti.Blur() }
+
 // SetValue replaces the content and moves the cursor to the end (the natural
 // spot when prefilling, e.g. the current summary for an edit).
 func (l *Line) SetValue(s string) {
@@ -79,6 +86,13 @@ func NewArea(placeholder string, width, height int) Area {
 	ta.Focus()
 	return Area{ta: ta}
 }
+
+// Focus and Blur hand keyboard ownership to or away from the area, for
+// forms where two inputs share one modal.
+func (a *Area) Focus() { a.ta.Focus() }
+
+// Blur removes focus (the cursor stops rendering).
+func (a *Area) Blur() { a.ta.Blur() }
 
 // SetValue replaces the content (e.g. reopening a draft).
 func (a *Area) SetValue(s string) { a.ta.SetValue(s) }

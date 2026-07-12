@@ -1,6 +1,8 @@
 package action
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/gechr/x/ptr"
@@ -24,6 +26,10 @@ const (
 	ModeAssign
 	// ModeLabels captures a comma-separated label list.
 	ModeLabels
+	// ModeCreate collects a new issue in a two-field overlay — summary line
+	// plus Markdown description area; IssueKey carries the target project
+	// key rather than an issue.
+	ModeCreate
 	// ModeWorklog captures a time string.
 	ModeWorklog
 	// ModeEdit captures a new summary.
@@ -54,6 +60,8 @@ func (m Mode) String() string {
 		return "assign"
 	case ModeLabels:
 		return "labels"
+	case ModeCreate:
+		return "create"
 	case ModeWorklog:
 		return "worklog"
 	case ModeEdit:
@@ -83,7 +91,7 @@ func (m Mode) isPick() bool {
 }
 
 // multiline reports whether a mode collects comment-style multiline text.
-func (m Mode) multiline() bool { return m == ModeComment || m == ModeBulkComment }
+func (m Mode) multiline() bool { return m == ModeComment || m == ModeBulkComment || m == ModeCreate }
 
 // Bulk reports whether the mode applies to a multi-selection.
 func (m Mode) Bulk() bool {
@@ -102,6 +110,9 @@ type Request struct {
 
 	// Text is the free-text payload for the text modes.
 	Text string
+
+	// Summary is ModeCreate's first field; Text carries its description.
+	Summary string
 }
 
 // Controller collects input for one action against one issue. Text entry
@@ -118,6 +129,11 @@ type Controller struct {
 	// line collects the single-line text modes; area collects ModeComment.
 	line input.Line
 	area input.Area
+
+	// summary is ModeCreate's first field (the area carries the description);
+	// descFocused tracks which of the two owns the keyboard.
+	summary     input.Line
+	descFocused bool
 }
 
 // modalTextWidth is the inner width text inputs render at inside the action
@@ -183,6 +199,34 @@ func (c *Controller) reset() {
 	c.pick = picker.Model{}
 	c.line = input.Line{}
 	c.area = input.Area{}
+	c.summary = input.Line{}
+	c.descFocused = false
+}
+
+// OpenCreate opens the two-field new-issue overlay targeting project. The
+// summary line starts focused; tab (or enter on the summary) moves to the
+// description area, and ctrl+s submits from either field.
+func (c *Controller) OpenCreate(project string) {
+	c.reset()
+	c.mode = ModeCreate
+	c.issueKey = project
+	c.summary = input.NewLine("", "one-line summary")
+	c.summary.SetWidth(modalTextWidth)
+	c.area = input.NewArea("description (optional, Markdown)…", modalTextWidth, 5)
+	c.area.Blur()
+}
+
+// toggleCreateFocus moves keyboard ownership between the create form's two
+// fields, keeping exactly one cursor visible.
+func (c *Controller) toggleCreateFocus() {
+	c.descFocused = !c.descFocused
+	if c.descFocused {
+		c.summary.Blur()
+		c.area.Focus()
+		return
+	}
+	c.area.Blur()
+	c.summary.Focus()
 }
 
 // Active reports whether an action is open.
@@ -199,6 +243,26 @@ func (c *Controller) Cancel() { c.reset() }
 // editing, paste).
 func (c *Controller) Update(msg tea.Msg) tea.Cmd {
 	switch {
+	case c.mode == ModeCreate:
+		if key, ok := msg.(tea.KeyPressMsg); ok {
+			switch key.String() {
+			case "tab", "shift+tab":
+				c.toggleCreateFocus()
+				return nil
+			case "enter":
+				// Enter on the one-line summary advances to the description
+				// (a newline is meaningless there); in the area it stays a
+				// newline via the textarea below.
+				if !c.descFocused {
+					c.toggleCreateFocus()
+					return nil
+				}
+			}
+		}
+		if c.descFocused {
+			return c.area.Update(msg)
+		}
+		return c.summary.Update(msg)
 	case c.mode.isPick():
 		return c.pick.Update(msg)
 	case c.mode.multiline():
@@ -222,10 +286,18 @@ func (c *Controller) Text() string {
 func (c *Controller) Multiline() bool { return c.mode.multiline() }
 
 // Submit produces the Request and closes the controller. It reports false when
-// the action is incomplete (no transitions, or empty required text), leaving
-// the controller open so the user can finish.
+// the action is incomplete (no transitions, empty required text, or a create
+// without a summary), leaving the controller open so the user can finish.
 func (c *Controller) Submit() (Request, bool) {
 	switch {
+	case c.mode == ModeCreate:
+		summary := strings.TrimSpace(c.summary.Value())
+		if summary == "" {
+			return Request{}, false
+		}
+		req := Request{Mode: ModeCreate, IssueKey: c.issueKey, Summary: summary, Text: c.area.Value()}
+		c.reset()
+		return req, true
 	case c.mode.isPick():
 		sel, ok := c.pick.Selected()
 		if !ok {
@@ -271,6 +343,9 @@ func (c *Controller) View() string {
 	switch {
 	case c.mode.isPick():
 		return c.pick.View()
+	case c.mode == ModeCreate:
+		return "create in " + c.issueKey + " (tab switches, ctrl+s submits):\n" +
+			c.summary.View() + "\n" + c.area.View()
 	case c.mode.multiline():
 		return c.mode.String() + " (ctrl+s to submit):\n" + c.area.View()
 	case c.mode.isText():

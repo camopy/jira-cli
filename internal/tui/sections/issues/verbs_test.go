@@ -154,3 +154,64 @@ func TestIssueURLUsesBaseURL(t *testing.T) {
 }
 
 var _ core.Services = fakeServices{}
+
+func TestLabelsReplaceWholeList(t *testing.T) {
+	w := &callRecorder{}
+	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{writes: w}})
+	m.ctrl.OpenText(action.ModeLabels, "JCT-1", "")
+	m.ctrl.Update(tea.KeyPressMsg{Text: "bug, ux,, triage "})
+	runVerb(t, m)
+	if got := w.get("labels:JCT-1"); got != "bug,ux,triage" {
+		t.Fatalf("Update(labels) = %q, want bug,ux,triage", got)
+	}
+}
+
+func TestLabelsEmptyInputClearsAll(t *testing.T) {
+	w := &callRecorder{}
+	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{writes: w}})
+	m.ctrl.OpenText(action.ModeLabels, "JCT-1", "stale")
+	// Wipe the pre-filled value: the empty submission means "remove every label".
+	for range len("stale") {
+		m.ctrl.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	}
+	runVerb(t, m)
+	if got, ok := w.posted["labels:JCT-1"]; !ok || got != "" {
+		t.Fatalf("Update(labels) = %q (recorded=%v), want recorded empty list", got, ok)
+	}
+}
+
+func TestCreateOverlayCollectsSummaryAndDescription(t *testing.T) {
+	w := &callRecorder{}
+	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{writes: w}})
+	m.ctrl.OpenCreate("JCT")
+	m.ctrl.Update(tea.KeyPressMsg{Text: "Fix the flux"})
+	m.ctrl.Update(tea.KeyPressMsg{Code: tea.KeyTab}) // move to the description
+	m.ctrl.Update(tea.KeyPressMsg{Text: "It sparks when engaged."})
+	runVerb(t, m)
+	if got := w.get("create:JCT"); got != "Fix the flux|Task|It sparks when engaged." {
+		t.Fatalf("Create = %q, want summary|Task|description", got)
+	}
+}
+
+func TestCreateWithoutSummaryStaysOpen(t *testing.T) {
+	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{}})
+	m.ctrl.OpenCreate("JCT")
+	if cmd := m.submitAction(); cmd != nil {
+		t.Fatal("submit with an empty summary must not produce a command")
+	}
+	if !m.ctrl.Active() {
+		t.Fatal("the create overlay must stay open for the user to finish")
+	}
+}
+
+func TestCreateUsesProfileIssueType(t *testing.T) {
+	w := &callRecorder{}
+	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{writes: w}})
+	m.ctx.DefaultIssueType = "Bug"
+	m.ctrl.OpenCreate("JCT")
+	m.ctrl.Update(tea.KeyPressMsg{Text: "Only a summary"})
+	runVerb(t, m)
+	if got := w.get("create:JCT"); got != "Only a summary|Bug|" {
+		t.Fatalf("Create = %q, want summary-only with profile type", got)
+	}
+}

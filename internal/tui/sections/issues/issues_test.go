@@ -68,6 +68,9 @@ func (f fakeIssueSvc) Update(_ context.Context, key string, req *jira.IssueUpdat
 		if v, ok := req.Fields["summary"]; ok {
 			f.writes.record("summary:"+key, v.(string))
 		}
+		if v, ok := req.Fields["labels"]; ok {
+			f.writes.record("labels:"+key, strings.Join(v.([]string), ","))
+		}
 		if a, ok := req.Fields["assignee"]; ok {
 			id := "unassigned"
 			if m, ok := a.(map[string]any); ok {
@@ -77,6 +80,14 @@ func (f fakeIssueSvc) Update(_ context.Context, key string, req *jira.IssueUpdat
 		}
 	}
 	return nil, nil, f.updateErr
+}
+
+func (f fakeIssueSvc) Create(_ context.Context, req *jira.IssueCreateRequest) (*jira.Issue, *jira.Response, error) {
+	if f.writes != nil && req != nil {
+		desc, _ := req.Fields["description_markdown"].(string)
+		f.writes.record("create:"+req.Project, req.Summary+"|"+req.IssueType+"|"+desc)
+	}
+	return nil, nil, nil
 }
 
 func (f fakeIssueSvc) AddComment(_ context.Context, key string, _ *jira.CommentAddRequest) (*jira.Comment, *jira.Response, error) {

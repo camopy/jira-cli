@@ -43,6 +43,9 @@ type App struct {
 	// blurred tracks terminal focus (ReportFocus): refresh ticks are skipped
 	// while true and a refresh fires immediately on regaining focus.
 	blurred bool
+	// paused stops the auto-refresh heartbeat from refetching while the user
+	// inspects volatile state; unlike blurred it only clears on the R key.
+	paused bool
 	// sections caches built instances so a section is constructed once and
 	// keeps its state across tab switches; started records which have run
 	// Init so the first-activation fetch fires exactly once per section.
@@ -224,6 +227,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, a.ctx.Keys.ShrinkPreview):
 			a.ctx.AdjustPreviewRatio(-0.05)
 			return a.broadcast(tea.WindowSizeMsg{Width: a.ctx.ScreenWidth, Height: a.ctx.ScreenHeight})
+		case key.Matches(msg, a.ctx.Keys.TogglePause):
+			a.paused = !a.paused
+			if a.paused || !a.refreshEnabled() {
+				return a, nil
+			}
+			// Resuming refetches immediately rather than waiting out the
+			// remainder of the interval, mirroring the focus-return path.
+			model, cmd := a.broadcast(RefreshTickMsg{})
+			return model, tea.Batch(cmd, a.refreshTick())
 		case key.Matches(msg, a.ctx.Keys.Zoom):
 			a.ctx.ToggleZoom()
 			return a.broadcast(tea.WindowSizeMsg{Width: a.ctx.ScreenWidth, Height: a.ctx.ScreenHeight})
@@ -259,7 +271,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// While the terminal is unfocused only the timer is kept alive — no
 		// refetching for a dashboard nobody is looking at. Focus triggers an
 		// immediate round instead.
-		if a.blurred {
+		if a.blurred || a.paused {
 			return a, a.refreshTick()
 		}
 		// Every idle section refetches; the timer is re-armed for the next round.
@@ -273,7 +285,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// re-arm the timer so the cycle survives even if no tick was in flight.
 		wasBlurred := a.blurred
 		a.blurred = false
-		if wasBlurred && a.refreshEnabled() {
+		if wasBlurred && a.refreshEnabled() && !a.paused {
 			model, cmd := a.broadcast(RefreshTickMsg{})
 			return model, tea.Batch(cmd, a.refreshTick())
 		}

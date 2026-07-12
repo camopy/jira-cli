@@ -16,6 +16,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/browser"
 	"github.com/matcra587/jira-cli/internal/jira"
+	"github.com/matcra587/jira-cli/internal/jql"
 	"github.com/matcra587/jira-cli/internal/tui/components/action"
 	"github.com/matcra587/jira-cli/internal/tui/components/input"
 	"github.com/matcra587/jira-cli/internal/tui/core"
@@ -48,8 +49,11 @@ func (r *results) handleEditor(msg input.EditorFinishedMsg) tea.Cmd {
 		r.err = msg.Err
 		return nil
 	}
-	kind, issKey, ok := strings.Cut(msg.ID, ":")
-	if !ok || kind != "comment" {
+	kind, ident, ok := strings.Cut(msg.ID, ":")
+	if !ok {
+		return nil
+	}
+	if kind != "comment" {
 		return nil
 	}
 	if xstrings.IsBlank(msg.Text) {
@@ -61,8 +65,49 @@ func (r *results) handleEditor(msg input.EditorFinishedMsg) tea.Cmd {
 		return nil
 	}
 	return r.mutate(func(svc core.Services, base context.Context) error {
-		_, _, e := svc.Issues().AddComment(base, issKey, &jira.CommentAddRequest{Body: body})
+		_, _, e := svc.Issues().AddComment(base, ident, &jira.CommentAddRequest{Body: body})
 		return e
+	})
+}
+
+// openCreate opens the two-field new-issue overlay. The target project is the
+// profile default, falling back to the selected issue's project so a scoped
+// list "just works" without config.
+func (r *results) openCreate() tea.Cmd {
+	if !r.canMutate() {
+		return nil
+	}
+	proj := r.ctx.Project
+	if proj == "" {
+		if iss := r.selected(); iss != nil {
+			proj = projectOf(issueKey(iss))
+		}
+	}
+	if proj == "" {
+		return r.flashNotice("no target project: set default_project or select an issue", true)
+	}
+	r.ctrl.OpenCreate(proj)
+	return nil
+}
+
+// createIssue submits a create against project proj with the profile's issue
+// type (Task when unset). The description travels as Markdown — the service
+// converts to ADF — and the refetch after the mutation surfaces the new issue.
+func (r *results) createIssue(proj, summary, desc string) tea.Cmd {
+	if summary == "" {
+		return r.flashNotice("issue needs a summary on the first line", true)
+	}
+	issueType := r.ctx.DefaultIssueType
+	if issueType == "" {
+		issueType = "Task"
+	}
+	req := &jira.IssueCreateRequest{Project: proj, IssueType: issueType, Summary: summary}
+	if desc != "" {
+		req.Fields = map[string]any{"description_markdown": desc}
+	}
+	return r.mutate(func(svc core.Services, base context.Context) error {
+		_, _, err := svc.Issues().Create(base, req)
+		return err
 	})
 }
 
@@ -160,6 +205,20 @@ func (r *results) submitAction() tea.Cmd {
 		}
 		r.rollback = r.applyOptimisticAssignee(req.IssueKey, display)
 		return r.assignTo(req.IssueKey, display)
+	case action.ModeLabels:
+		// Full-replacement semantics: the field opened pre-filled, so what
+		// comes back is the complete list — empty input clears every label.
+		labels := jql.CompactStrings(strings.Split(req.Text, ","))
+		issKey := req.IssueKey
+		return r.mutate(func(svc core.Services, base context.Context) error {
+			_, _, e := svc.Issues().Update(base, issKey, &jira.IssueUpdateRequest{
+				Fields: map[string]any{"labels": labels},
+			})
+			return e
+		})
+	case action.ModeCreate:
+		// IssueKey carries the project for this mode (see openCreate).
+		return r.createIssue(req.IssueKey, req.Summary, strings.TrimSpace(req.Text))
 	case action.ModeWorklog:
 		wd := r.ctx.WorkdaySeconds
 		if wd <= 0 {

@@ -4,6 +4,8 @@
 package issues
 
 import (
+	"strings"
+
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -131,6 +133,14 @@ func (r *results) handleKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		r.openTextVerb(action.ModeAssign, "")
 	case key.Matches(msg, k.Worklog):
 		r.openTextVerb(action.ModeWorklog, "")
+	case key.Matches(msg, k.Labels):
+		// Pre-filled with the current labels so the edit is a round-trip:
+		// submitting the emptied field deliberately clears them all.
+		if iss := r.selected(); iss != nil {
+			r.openTextVerb(action.ModeLabels, strings.Join(issueLabels(iss), ", "))
+		}
+	case key.Matches(msg, k.Create):
+		return r.openCreate(), true
 	case key.Matches(msg, k.AssignMe):
 		if iss := r.selected(); iss != nil && r.canMutate() {
 			// "me" is a placeholder; the reconcile swaps in the real name.
