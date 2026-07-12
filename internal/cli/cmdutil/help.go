@@ -1,6 +1,7 @@
 package cmdutil
 
 import (
+	"os"
 	"slices"
 	"sort"
 
@@ -9,10 +10,17 @@ import (
 	"github.com/gechr/clib/help"
 	"github.com/gechr/clib/theme"
 	xslices "github.com/gechr/x/slices"
+	"github.com/gechr/x/terminal"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
+
+// helpMaxWidth caps rendered help on wide terminals. 100 matches the upper
+// bound of clib's default 70-100 description measure, so flag descriptions
+// and long-form prose share one readable right edge instead of flag lines
+// running the full width of a wide terminal.
+const helpMaxWidth = 100
 
 // NewHelpRenderer builds the themed clib help renderer used by every command
 // in jira-cli. The JIRA env-prefix is set so that JIRA_NO_COLOR and related
@@ -25,7 +33,20 @@ func NewHelpRenderer() *help.Renderer {
 		theme.WithEnumStyle(theme.EnumStyleHighlightBoth),
 		theme.WithHelpRepeatEllipsisEnabled(true),
 	)
-	return help.NewRenderer(th)
+	opts := []help.RendererOption{
+		// Smart backtick styling is clib's default; pinned explicitly because
+		// the contextual token coloring is load-bearing for this help text
+		// (evaluated and adopted, not merely inherited).
+		help.WithBacktickStyle(help.BacktickStyleSmart),
+	}
+	// WithMaxWidth replaces the renderer's writer-width detection rather than
+	// capping it, so it is only set when stdout is a terminal wider than the
+	// cap. Narrower terminals and non-TTY writers (docs generation, piped
+	// help) keep the auto-detected width they have today.
+	if terminal.Width(os.Stdout) > helpMaxWidth {
+		opts = append(opts, help.WithMaxWidth(helpMaxWidth))
+	}
+	return help.NewRenderer(th, opts...)
 }
 
 // StandardHelpSections returns the standard clib help sections for cmd,
