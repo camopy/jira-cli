@@ -1,6 +1,13 @@
 # Release Notes
 
 
+## [0.11.1](https://github.com/matcra587/jira-cli/releases/tag/v0.11.1) — 2026-07-12
+
+### Fixed
+
+- Apply the resolved --color mode and the standard human-output formatting (omit-empty fields, smart quotes, grouped numbers) to failure-diagnostics summaries, the warning mirror, and per-command list renderers, which previously auto-detected color and skipped those conventions
+- Honor NO_COLOR on manually styled output — entity colors, status pills, hyperlinks, themed markdown — and resolve the auto theme from stdout's own state in split-stream invocations; --color=always still overrides both
+
 ## [0.11.0](https://github.com/matcra587/jira-cli/releases/tag/v0.11.0) — 2026-07-12
 
 ### Added
