@@ -36,6 +36,14 @@ func WriteKeyedResultsEnvelope[T any](
 	results []KeyResult[T],
 	dataFor func(string, T) any,
 ) error {
+	// Every key the user addressed — including dry-run previews and keys
+	// whose call failed — was deliberately typed, so all of them feed the
+	// recently-used completion cache.
+	requested := make([]string, 0, len(results))
+	for _, result := range results {
+		requested = append(requested, result.Key)
+	}
+	RecordIssueKeys(cmd, requested...)
 	data, errorsOut, topErr := keyedResultsEnvelopeData(command, results, dataFor)
 	if len(errorsOut) == 0 {
 		return WriteEnvelope(cmd, command, data)

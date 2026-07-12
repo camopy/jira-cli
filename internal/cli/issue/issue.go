@@ -166,6 +166,7 @@ $ jira issue view PROJ-123 --web`,
 // way. It needs no Jira call — only the configured base URL. Shared by
 // `issue view --web` and the top-level `jira open`.
 func openIssueWeb(cmd *cobra.Command, key, command string) error {
+	cmdutil.RecordIssueKeys(cmd, key)
 	profile, err := cmdutil.ProfileForCommand(cmd)
 	if err != nil {
 		return err
@@ -209,6 +210,7 @@ $ jira open PROJ-123 --output=json`,
 }
 
 func runIssueViewSingle(cmd *cobra.Command, key string) error {
+	cmdutil.RecordIssueKeys(cmd, key)
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
 		return err
@@ -594,6 +596,7 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 			IsLast:     !info.Truncated,
 			NextCursor: info.NextPageToken, // pagination-exempt: opaque resume token from the drain
 		}
+		cmdutil.RecordIssuesSeen(cmd, issues)
 		issueData := cmdutil.IssueOutput(issues, opts.detail)
 		data := boardScopedListData(cmd, issueData, opts.detail, query, scope, precedence)
 		return cmdutil.WriteEnvelopeWithPaginationAndRawWarnings(cmd, "issue.list", data, pagination, cmdutil.DrainTruncationWarnings(info))
@@ -685,6 +688,7 @@ func runIssueListKeyChunks(cmd *cobra.Command, in issueListKeyChunkInputs) error
 		IsLast:     true,
 		TokenPage:  true,
 	}
+	cmdutil.RecordIssuesSeen(cmd, issues)
 	issueData := cmdutil.IssueOutput(issues, in.opts.detail)
 	data := boardScopedListData(cmd, issueData, in.opts.detail, in.fullQuery, in.scope, in.precedence)
 	if len(failures) > 0 {

@@ -18,7 +18,10 @@ func TestRegistryCoversEveryPrimerSubcommand(t *testing.T) {
 	subs := map[string]bool{}
 	for _, c := range NewCommand().Commands() {
 		name := strings.Fields(c.Use)[0]
-		if name == "clear" || name == "refresh" {
+		// clear and refresh are housekeeping; issuekeys is a local
+		// write-through list, never primed from Jira, so it deliberately
+		// lives outside the registry.
+		if name == "clear" || name == "refresh" || name == "issuekeys" {
 			continue
 		}
 		subs[name] = true
@@ -37,7 +40,9 @@ func TestRegistryCoversEveryPrimerSubcommand(t *testing.T) {
 func TestRegistryTTLMatchesFlagDefaults(t *testing.T) {
 	for _, c := range NewCommand().Commands() {
 		name := strings.Fields(c.Use)[0]
-		if name == "clear" || name == "refresh" {
+		// issuekeys has no freshness window: the newest entry is current by
+		// definition, so no --ttl-minutes.
+		if name == "clear" || name == "refresh" || name == "issuekeys" {
 			continue
 		}
 		f := c.Flags().Lookup("ttl-minutes")

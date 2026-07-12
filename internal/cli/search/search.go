@@ -111,6 +111,7 @@ $ jira search jql "project = PROJ AND status != Done" --fields key,summary,statu
 					if err != nil {
 						return err
 					}
+					cmdutil.RecordIssuesSeen(cmd, issues)
 					data := map[string]any{"source": "inline", "jql": args[0], "issues": searchIssueOutput(issues, fields, detail)}
 					// The drain knows its terminal state: the result set is
 					// complete unless a bound truncated it. /search/jql has no
@@ -137,6 +138,7 @@ $ jira search jql "project = PROJ AND status != Done" --fields key,summary,statu
 				if err != nil {
 					return err
 				}
+				cmdutil.RecordIssuesSeen(cmd, found2)
 				return cmdutil.WriteEnvelopeWithResponse(cmd, "search.jql", map[string]any{"source": "inline", "jql": args[0], "issues": searchIssueOutput(found2, fields, detail)}, resp)
 			}
 			return cmdutil.WriteEnvelope(cmd, "search.jql", map[string]any{
@@ -214,6 +216,7 @@ $ jira search saved my-open-bugs --output=json`,
 				if err != nil {
 					return err
 				}
+				cmdutil.RecordIssuesSeen(cmd, found)
 				issues = searchIssueOutput(found, fields, detail)
 			}
 			data := map[string]any{

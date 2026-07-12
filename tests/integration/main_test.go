@@ -22,7 +22,19 @@ func TestMain(m *testing.M) {
 	if err := os.Setenv("JIRA_KEYRING_SERVICE", "jira-cli-integration-test"); err != nil {
 		panic(err)
 	}
+	// Isolate the on-disk metadata cache too: commands record recently used
+	// issue keys as a side effect, and the exec'd binary inherits this
+	// process's environment — without the override every test run would
+	// write into the developer's real cache root.
+	cacheDir, err := os.MkdirTemp("", "jira-cli-test-cache-*")
+	if err != nil {
+		panic(err)
+	}
+	if err := os.Setenv("XDG_CACHE_HOME", cacheDir); err != nil {
+		panic(err)
+	}
 	code := m.Run()
 	_ = os.RemoveAll(dir)
+	_ = os.RemoveAll(cacheDir)
 	os.Exit(code)
 }

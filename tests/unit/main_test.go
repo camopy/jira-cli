@@ -21,5 +21,17 @@ func TestMain(m *testing.M) {
 			panic(err)
 		}
 	}
-	os.Exit(m.Run())
+	// Isolate the on-disk metadata cache: commands record recently used
+	// issue keys as a side effect, and in-process command tests would
+	// otherwise write into the developer's real cache root.
+	cacheDir, err := os.MkdirTemp("", "jira-cli-test-cache-*")
+	if err != nil {
+		panic(err)
+	}
+	if err := os.Setenv("XDG_CACHE_HOME", cacheDir); err != nil {
+		panic(err)
+	}
+	code := m.Run()
+	_ = os.RemoveAll(cacheDir)
+	os.Exit(code)
 }

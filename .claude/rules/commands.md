@@ -104,8 +104,10 @@ Adding a predictor is one emitter func plus one map entry.
 *   **Enum flags self-complete** from `Enum`/`EnumTerse` — never wire a predictor
     for one. `FlagExtra.Hint` (`file`/`dir`/`user`/`host`/`url`/…) gives
     OS-level completion — `user`/`host` mean the OS's, not Jira's.
-*   `issuekey` is an intentional no-op: issue keys aren't enumerable, so it is
-    wired for consistency but emits nothing until a keys source lands.
+*   `issuekey` completes from the per-profile recently-used key cache
+    (`internal/cache` `IssueKeysResource`), written as a side effect of
+    commands that touch keys (`cmdutil.RecordIssueKeys`/`RecordIssuesSeen`);
+    a profile with no recorded keys emits nothing.
 *   User-identifier flags (`--assignee`, `--reporter`, `--user`) complete only
     the `me`/`none` enum values today. Completing arbitrary Jira users needs a
     users cache resource that does not exist yet, so it is deferred — `jira user

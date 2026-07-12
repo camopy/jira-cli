@@ -112,6 +112,7 @@ var operationVerbs = map[string]OperationVerb{
 	"cache.boards":              {"caching", "cached", "cache", "boards"},
 	"cache.epics":               {"caching", "cached", "cache", "epics"},
 	"cache.fields":              {"caching", "cached", "cache", "fields"},
+	"cache.issuekeys":           {"listing", "listed", "list", "recent issue keys"},
 	"cache.issuetypes":          {"caching", "cached", "cache", "issue types"},
 	"cache.labels":              {"caching", "cached", "cache", "labels"},
 	"cache.linktypes":           {"caching", "cached", "cache", "link types"},

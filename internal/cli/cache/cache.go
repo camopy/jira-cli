@@ -20,8 +20,10 @@ import (
 )
 
 // cacheClearResources is the set `cache clear` accepts. It derives from the
-// resource registry so the list cannot drift from the primer subcommands.
-var cacheClearResources = registry.ResourceNames()
+// resource registry so the list cannot drift from the primer subcommands,
+// plus the recently-used issue-key list — a local write-through cache that
+// is never primed from Jira, so it lives outside the registry.
+var cacheClearResources = append(registry.ResourceNames(), cache.IssueKeysResource)
 
 // NewCommand groups per-resource cache primers + housekeeping. Every primer
 // fetches its resource, writes the JSON-encoded list under a
@@ -55,9 +57,52 @@ $ jira cache clear`
 		}
 		cmd.AddCommand(newCachePrimerCommand(r))
 	}
+	cmd.AddCommand(cacheIssueKeysCommand())
 	cmd.AddCommand(cacheRefreshCommand())
 	cmd.AddCommand(cacheClearCommand())
 	return cmd
+}
+
+// cacheIssueKeysCommand prints the profile's recently used issue keys — the
+// list shell completion offers for KEY arguments. Unlike the registry
+// primers it never contacts Jira: commands write the list as a side effect
+// of touching keys, so this is a pure local read and `cache refresh` leaves
+// it alone. `cache clear issuekeys` resets it.
+func cacheIssueKeysCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "issuekeys",
+		Short: "Print the recently used issue keys",
+		Long: "Print the active profile's recently used issue keys, newest first. This is " +
+			"the list shell completion offers when a command takes an issue KEY: commands " +
+			"record keys as a side effect of using them (`jira issue view`, `jira issue list`, " +
+			"mutations), capped and deduplicated most-recent-first.\n\n" +
+			"The list is local state, never fetched from Jira — `jira cache refresh` does not " +
+			"touch it, and `jira cache clear issuekeys` resets it.",
+		Example: `$ jira cache issuekeys
+
+# Machine-readable, newest first
+$ jira cache issuekeys --output=json`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
+			if err != nil {
+				return err
+			}
+			profile, err := cfg.ResolveProfile(cmdutil.RequestedProfile(cmd))
+			if err != nil {
+				return err
+			}
+			keys := cache.IssueKeys(cmdutil.CacheKeyForProfile(cmd, profile))
+			if keys == nil {
+				keys = []string{}
+			}
+			return cmdutil.WriteEnvelope(cmd, "cache.issuekeys", map[string]any{
+				"profile":    profile.Name,
+				"issue_keys": keys,
+				"count":      len(keys),
+			})
+		},
+	}
 }
 
 // newCachePrimerCommand builds the `cache <name>` primer for a registry

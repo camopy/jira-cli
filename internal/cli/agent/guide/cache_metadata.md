@@ -26,6 +26,7 @@ When: a `--project` / `--type` / `--board` / `--label` filter resolves to an une
 - A CLI upgrade that changes a cached shape invalidates the old entry automatically: a schema-version mismatch is treated as absent, so the next freshness-sensitive read (any primer or `jira cache refresh`) refetches it and you never parse a stale shape. Completion reads return empty on a mismatch rather than refetching.
 
 **Run**
+- Issue keys are different: `jira cache issuekeys --output=json` prints the recently used keys (newest first) that shell completion offers for KEY arguments. The list is local state written as a side effect of commands touching keys — never fetched from Jira, never refreshed, reset with `jira cache clear issuekeys`.
 - Per-resource prime: `jira cache labels --output=json`, `jira cache projects --output=json`, `jira cache epics --output=json`, `jira cache fields --output=json`, `jira cache issuetypes --output=json`, `jira cache linktypes --output=json`, `jira cache boards --output=json`, `jira cache statuses --output=json`, `jira cache priorities --output=json`, `jira cache resolutions --output=json`.
 - Force refresh: `jira cache fields --refresh --output=json`
 - TTL gate (refetch if older than N minutes): `jira cache fields --ttl-minutes 5 --output=json`

@@ -644,6 +644,15 @@ func outputSchemas() map[string]any {
 				"truncated_reason": map[string]any{"type": "string"},
 			}, cacheStateProperties),
 		},
+		"cache.issuekeys": map[string]any{
+			"type":     "object",
+			"required": []string{"profile", "issue_keys", "count"},
+			"properties": map[string]any{
+				"profile":    map[string]any{"type": "string"},
+				"issue_keys": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Recently used issue keys, newest first — local state written as a side effect of commands touching keys, never fetched from Jira."},
+				"count":      map[string]any{"type": "integer"},
+			},
+		},
 		"cache.refresh": keyedResults,
 		"cache.clear": map[string]any{
 			"type":     "object",

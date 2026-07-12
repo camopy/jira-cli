@@ -48,10 +48,11 @@ var completionEmitters = map[string]predictorEmitter{
 	"cacheboard":    func(g startup.Globals, _ []string) { emitCachedBoards(completionCacheKey(g)) },
 	"cachestatus":   func(g startup.Globals, _ []string) { emitCachedNames(completionCacheKey(g), "statuses") },
 	"cachepriority": func(g startup.Globals, _ []string) { emitCachedNames(completionCacheKey(g), "priorities") },
-	// issuekey has no cache yet: every command taking a KEY positionally carries
-	// dynamic-args='issuekey' so the predictor is wired, but until an issue-key
-	// cache lands it emits nothing and the shell falls back to free-form input.
-	"issuekey": func(startup.Globals, []string) {},
+	// issuekey completes from the per-profile recently-used key cache,
+	// written as a side effect of commands that touch keys. A profile with
+	// no recorded keys emits nothing and the shell falls back to free-form
+	// input.
+	"issuekey": func(g startup.Globals, _ []string) { emitCachedIssueKeys(completionCacheKey(g)) },
 }
 
 // HandledPredictors is the sorted set of predictor names completionEmitters
@@ -345,5 +346,15 @@ func emitCachedLinkTypes(profile string) {
 		_, _ = fmt.Fprintf(os.Stdout, "%s\t%s (%s / %s)\n",
 			cli.SanitizeCompletionField(t.Name), cli.SanitizeCompletionField(t.ID),
 			cli.SanitizeCompletionField(t.Inward), cli.SanitizeCompletionField(t.Outward))
+	}
+}
+
+// emitCachedIssueKeys prints the profile's recently used issue keys, newest
+// first. Null-safe like every emitter: a missing or broken cache emits
+// nothing, and candidates cross the completion sanitizer even though keys
+// are written normalized — cache files are still local input.
+func emitCachedIssueKeys(profile string) {
+	for _, key := range cache.IssueKeys(profile) {
+		_, _ = fmt.Fprintln(os.Stdout, cli.SanitizeCompletionField(key))
 	}
 }
