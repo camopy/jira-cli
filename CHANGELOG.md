@@ -1,6 +1,27 @@
 # Release Notes
 
 
+## [0.10.14](https://github.com/matcra587/jira-cli/releases/tag/v0.10.14) — 2026-07-12
+
+### Added
+
+- Spinners and the multi-key progress footer show a live countdown of the remaining --timeout budget while a request is in flight
+- Completion lines that carry summary fields (lists, mutations, multi-key batches) show the blocking round-trip time as a trailing elapsed field when it reaches one second; fast calls stay clean
+- Successful Jira mutations complete with a distinct SCS success line, separating writes that landed from informational reads; dry-run previews and partial failures stay informational
+- release-notes pages a full history taller than the screen on interactive terminals, like git log — built-in pager by default, JIRA_PAGER/PAGER honored, --no-pager to print directly; piped, machine-mode, and agent output always streams
+
+### Changed
+
+- Human output picks quote delimiters adaptively (values containing quotes render without backslash escaping) and groups digits in large numbers
+- config get and config profile human output renders as syntax-highlighted TOML matching the config file's own shape
+- Batch summary lines render succeeded as a gradient-colored fraction (succeeded=12/13) and show failed only when something failed
+
+### Fixed
+
+- Help text wraps at a readable measure (100 columns) on very wide terminals instead of running the full width; narrow terminals are unchanged
+- Issue list completion line no longer prints detail=false noise; the detail field appears only when detail mode is on
+- Status pills color by category consistently across issue list --detail and multi-key issue view, instead of drifting to arbitrary hues
+
 ## [0.10.13](https://github.com/matcra587/jira-cli/releases/tag/v0.10.13) — 2026-07-11
 
 ### Fixed

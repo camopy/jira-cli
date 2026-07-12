@@ -1,3 +1,0 @@
-kind: changed
-body: Human output picks quote delimiters adaptively (values containing quotes render without backslash escaping) and groups digits in large numbers
-time: 2026-07-12T11:21:58.023360372-04:00

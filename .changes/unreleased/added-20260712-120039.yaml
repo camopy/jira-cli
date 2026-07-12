@@ -1,3 +1,0 @@
-kind: added
-body: Successful Jira mutations complete with a distinct SCS success line, separating writes that landed from informational reads; dry-run previews and partial failures stay informational
-time: 2026-07-12T12:00:39.189307913-04:00

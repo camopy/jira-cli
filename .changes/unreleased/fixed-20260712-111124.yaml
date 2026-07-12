@@ -1,3 +1,0 @@
-kind: fixed
-body: Help text wraps at a readable measure (100 columns) on very wide terminals instead of running the full width; narrow terminals are unchanged
-time: 2026-07-12T11:11:24.686290913-04:00
