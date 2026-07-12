@@ -49,3 +49,32 @@ func TestKeyedSummaryCarriesElapsedOnceNotPerChild(t *testing.T) {
 		t.Fatalf("keyed output carried elapsed %d times, want exactly once on the summary line:\n%s", got, buf.String())
 	}
 }
+
+func TestMutationCompletionUsesSuccessLevelOnlyWhenReal(t *testing.T) {
+	var buf bytes.Buffer
+	real := map[string]any{"issue": "PROJ-1", "added": true}
+	if err := WriteCommandPlain(&buf, "epic.add", real); err != nil {
+		t.Fatalf("WriteCommandPlain() error = %v", err)
+	}
+	if !strings.Contains(buf.String(), "SCS") {
+		t.Fatalf("real mutation completion did not log at success level:\n%s", buf.String())
+	}
+
+	buf.Reset()
+	preview := map[string]any{"issue": "PROJ-1", "dry_run": true}
+	if err := WriteCommandPlain(&buf, "epic.add", preview); err != nil {
+		t.Fatalf("WriteCommandPlain(dry-run) error = %v", err)
+	}
+	if strings.Contains(buf.String(), "SCS") {
+		t.Fatalf("dry-run preview claimed success level:\n%s", buf.String())
+	}
+
+	buf.Reset()
+	read := map[string]any{"count": 2}
+	if err := WriteCommandPlain(&buf, "issue.list.count", read); err != nil {
+		t.Fatalf("WriteCommandPlain(read) error = %v", err)
+	}
+	if strings.Contains(buf.String(), "SCS") {
+		t.Fatalf("informational read claimed success level:\n%s", buf.String())
+	}
+}

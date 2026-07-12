@@ -109,10 +109,13 @@ func writeIssueViewManyPlain(logger *clog.Logger, command string, results []map[
 		successes = append(successes, row)
 	}
 
+	// succeeded renders as a gradient fraction; failed appears only when
+	// something failed, matching the keyed summary line.
 	event := logger.Info().
-		Int("total", len(results)).
-		Int("succeeded", len(successes)).
-		Int("failed", failureCount)
+		Fraction("succeeded", len(successes), len(results))
+	if failureCount > 0 {
+		event = event.Int("failed", failureCount)
+	}
 	if cfg.threads > 0 {
 		event = event.Int("threads", cfg.threads)
 	}
@@ -149,8 +152,7 @@ func WriteIssueViewFailureDiagnostics(w io.Writer, data any, errorsOut []Error) 
 	shown, omitted := issueViewShownFailureKeys(failures)
 	total, succeeded, failed := issueViewFailureCounts(data, len(failures))
 	event := logger.Error().
-		Int("total", total).
-		Int("succeeded", succeeded).
+		Fraction("succeeded", succeeded, total).
 		Int("failed", failed).
 		Str("reason", issueViewPlainFailureReason(errorsOut)).
 		Str("keys", strings.Join(shown, ", ")).

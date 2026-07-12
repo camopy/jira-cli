@@ -44,6 +44,10 @@ type plainConfig struct {
 	theme   *clibtheme.Theme
 	columns []string
 	tsv     bool
+	// command is the envelope op the render belongs to, stashed by
+	// WriteCommandPlain so completion lines can pick their level (a
+	// successful Jira mutation logs at LevelSuccess, reads at Info).
+	command string
 	// elapsed is the command's measured blocking time (Spin, fanout),
 	// attached to the completion line; clog's default 1s DurationMinimum
 	// hides it for fast calls. Zero means nothing blocking ran.
@@ -226,6 +230,7 @@ func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOptio
 	for _, opt := range opts {
 		opt(&cfg)
 	}
+	cfg.command = command
 	logger := newPlainLogger(w)
 	if command != "issue.view" && len(keyedResultRows(data)) > 0 {
 		return WriteKeyedResultsPlain(w, command, data, opts...)
@@ -315,12 +320,25 @@ func defaultPlainConfig() plainConfig {
 	}
 }
 
+// completionEvent opens the event for a command's completion line. A Jira
+// mutation that really happened — not a dry-run preview, with no failed
+// keys — logs at LevelSuccess so scrollback separates writes that landed
+// from informational reads; everything else stays at Info. Keyed child rows
+// (resultKey set) stay Info too: one batch earns one success line, on the
+// summary.
+func completionEvent(logger *clog.Logger, cfg plainConfig, data any, failed int) *clog.Event {
+	if OpMutating(cfg.command) && cfg.resultKey == "" && !dataDryRun(data) && failed == 0 {
+		return logger.Log(LevelSuccess)
+	}
+	return logger.Info()
+}
+
 func writeGenericPlain(logger *clog.Logger, cfg plainConfig, message string, data any) error {
 	fields := plainFields(data)
 	if len(fields) == 0 {
 		return nil
 	}
-	event := logger.Info()
+	event := completionEvent(logger, cfg, data, 0)
 	// A multi-key entry must be identifiable from its own line. When the
 	// data already carries the key's value under any field (issue=KEY,
 	// resource names, ...), that field identifies it; otherwise the key

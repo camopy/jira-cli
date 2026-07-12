@@ -166,6 +166,38 @@ var operationVerbs = map[string]OperationVerb{
 	"worklog.list":              {"listing", "listed", "list", "worklogs"},
 }
 
+// mutatingOps marks the operations that write to Jira. Their completion
+// lines log at LevelSuccess when the mutation really happened (not a
+// dry-run preview, no failed keys), while reads stay at Info. Local state
+// changes (config, cache, alias, auth) deliberately stay Info: the success
+// level answers "did my Jira write land", and diluting it with local
+// bookkeeping would blunt that signal.
+var mutatingOps = map[string]bool{
+	"epic.add":                true,
+	"epic.remove":             true,
+	"issue.attachment.add":    true,
+	"issue.attachment.delete": true,
+	"issue.clone":             true,
+	"issue.comment":           true,
+	"issue.comment.add":       true,
+	"issue.comment.delete":    true,
+	"issue.comment.edit":      true,
+	"issue.create":            true,
+	"issue.delete":            true,
+	"issue.edit":              true,
+	"issue.link":              true,
+	"issue.link.delete":       true,
+	"issue.move":              true,
+	"issue.transition":        true,
+	"issue.watchers.add":      true,
+	"issue.watchers.remove":   true,
+	"issue.weblink":           true,
+	"worklog.add":             true,
+}
+
+// OpMutating reports whether an operation writes to Jira (see mutatingOps).
+func OpMutating(op string) bool { return mutatingOps[op] }
+
 // VerbFor returns the verb forms for an operation. An unknown operation falls
 // back to a generic "processing" set so callers always get usable phrases.
 func VerbFor(op string) OperationVerb {

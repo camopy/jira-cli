@@ -216,7 +216,9 @@ func TestPlainOutputExtractsNestedADFText(t *testing.T) {
 		t.Fatalf("cmdutil.WriteEnvelope() error = %v", err)
 	}
 	got := stdout.String()
-	if strings.Contains(got, "comment=1") || !strings.Contains(got, `comment.body="hello world"`) || !strings.Contains(got, "INF") {
+	// issue.comment is a mutation, so its completion line logs at the
+	// registered success level rather than INF.
+	if strings.Contains(got, "comment=1") || !strings.Contains(got, `comment.body="hello world"`) || !strings.Contains(got, "SCS") {
 		t.Fatalf("plain output did not extract nested ADF text:\n%s", got)
 	}
 }

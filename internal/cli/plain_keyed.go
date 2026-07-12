@@ -15,16 +15,21 @@ func WriteKeyedResultsPlain(w io.Writer, command string, data any, opts ...Plain
 	for _, opt := range opts {
 		opt(&cfg)
 	}
+	cfg.command = command
 	logger := newPlainLogger(w)
 	results := keyedResultRows(data)
 	if len(results) == 0 {
 		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
 	}
 	total, succeeded, failed := keyedResultCounts(data, len(keyedFailureKeys(data)))
-	event := logger.Info().
-		Int("total", total).
-		Int("succeeded", succeeded).
-		Int("failed", failed)
+	// succeeded renders as a gradient fraction — full batches read green at
+	// a glance — and failed appears only when something failed, matching
+	// the omit-noise policy on the issue-list line.
+	event := completionEvent(logger, cfg, data, failed).
+		Fraction("succeeded", succeeded, total)
+	if failed > 0 {
+		event = event.Int("failed", failed)
+	}
 	if cfg.threads > 0 {
 		event = event.Int("threads", cfg.threads)
 	}
@@ -72,8 +77,7 @@ func WriteKeyedResultsFailureDiagnostics(w io.Writer, data any, errorsOut []Erro
 	shown, omitted := shownFailureKeys(failures)
 	total, succeeded, failed := keyedResultCounts(data, len(failures))
 	event := logger.Error().
-		Int("total", total).
-		Int("succeeded", succeeded).
+		Fraction("succeeded", succeeded, total).
 		Int("failed", failed).
 		Str("reason", plainFailureReason(errorsOut)).
 		Str("keys", strings.Join(shown, ", ")).

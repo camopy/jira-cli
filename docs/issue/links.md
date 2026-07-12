@@ -49,7 +49,7 @@ without `inwardIssue` acts as a template applied to every positional key.
 Human output confirms the relationship that was recorded:
 
 ```text
-INF ℹ️ dry_run=false inward_issue=PROJ-123 outward_issue=PROJ-456 type=Blocks
+SCS ✅ dry_run=false inward_issue=PROJ-123 outward_issue=PROJ-456 type=Blocks
 ```
 
 The `data` carries `inward_issue`, `outward_issue`, `type`, and `dry_run`. A
@@ -144,7 +144,7 @@ jira issue link delete PROJ-123 10173 --force
 ```
 
 ```text
-INF ℹ️ deleted=true dry_run=false key=PROJ-123 link_id=10173
+SCS ✅ deleted=true dry_run=false key=PROJ-123 link_id=10173
 ```
 
 `data.link_id` echoes the id you passed verbatim. `--dry-run` previews the
@@ -171,7 +171,7 @@ jira issue weblink PROJ-123 --url https://example.com/design --dry-run
 ```
 
 ```text
-INF ℹ️ dry_run=false issue=PROJ-123 title="Fix build" url=https://github.com/acme/app/pull/42
+SCS ✅ dry_run=false issue=PROJ-123 title="Fix build" url=https://github.com/acme/app/pull/42
 ```
 
 `--dry-run` validates the URL syntax locally and returns the same shape with

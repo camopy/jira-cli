@@ -165,8 +165,7 @@ func TestIssueViewMultipleKeysHumanOutputSummarizesPartialFailure(t *testing.T) 
 	if !strings.Contains(stderr.String(), "ERR") ||
 		!strings.Contains(stderr.String(), "Failed keys") ||
 		!strings.Contains(stderr.String(), "keys=PROJ-2") ||
-		!strings.Contains(stderr.String(), "total=2") ||
-		!strings.Contains(stderr.String(), "succeeded=1") ||
+		!strings.Contains(stderr.String(), "succeeded=1/2") ||
 		!strings.Contains(stderr.String(), "failed=1") ||
 		!strings.Contains(stderr.String(), `reason="jira not found"`) {
 		t.Fatalf("human stderr missing failed-key diagnostic:\nstdout=%s\nstderr=%s", stdout.String(), stderr.String())
@@ -217,8 +216,7 @@ func TestIssueViewMultipleKeysHumanOutputBoundsFailedKeyDiagnostics(t *testing.T
 		"shown=5",
 		"PROJ-6",
 		"omitted=25",
-		"total=31",
-		"succeeded=1",
+		"succeeded=1/31",
 		"failed=30",
 		`reason="jira not found"`,
 		`hint="use --output=json for full per-key errors"`,
