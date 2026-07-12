@@ -1,6 +1,12 @@
 # Release Notes
 
 
+## [0.10.15](https://github.com/matcra587/jira-cli/releases/tag/v0.10.15) — 2026-07-12
+
+### Added
+
+- Tab completion for issue KEY arguments offers recently used keys, recorded per profile as a side effect of list, view, search, and mutations; inspect with jira cache issuekeys, reset with jira cache clear issuekeys
+
 ## [0.10.14](https://github.com/matcra587/jira-cli/releases/tag/v0.10.14) — 2026-07-12
 
 ### Added
