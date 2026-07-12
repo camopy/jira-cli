@@ -153,9 +153,13 @@ type results struct {
 	// detailing is true. detailTab selects the Overview/Comments sub-tab.
 	detailing     bool
 	detailLoading bool
-	detailTab     int
-	detailIssue   *jira.Issue
-	detail        viewport.Model
+	// detailLines/previewLines are the view.Sync-normalized content lines
+	// backing each viewport; RenderContent consumes them for scrollbar alignment.
+	detailLines  []string
+	previewLines []string
+	detailTab    int
+	detailIssue  *jira.Issue
+	detail       viewport.Model
 }
 
 func newResults(ctx *core.ProgramContext, id core.SectionID) results {
@@ -245,7 +249,7 @@ func (r *results) applySize(reservedHeaderRows int) {
 	r.detail.SetWidth(r.detailWidth())
 	r.detail.SetHeight(dh)
 	if r.detailIssue != nil {
-		r.detail.SetContent(renderDetail(r.detailIssue, r.detailLoading, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))
+		r.setDetailContent(renderDetail(r.detailIssue, r.detailLoading, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))
 	}
 	// Rows embed the width (right-aligned age column), so a resize must rebuild
 	// them. applyFilter's trailing refreshPreview() also re-sizes and re-renders
@@ -301,7 +305,7 @@ func (r *results) view(header string) string {
 
 	body := main
 	if r.ctx.SidebarOpen && r.ctx.PreviewWidth > 0 {
-		side := r.ctx.Styles.Sidebar.Render(vpWithBar(r.preview))
+		side := r.ctx.Styles.Sidebar.Render(vpContent(r.previewLines, r.preview))
 		switch r.ctx.PreviewPosition() {
 		case core.PreviewRight:
 			side = r.ctx.Styles.SidebarBorder.Render(side)

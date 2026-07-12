@@ -10,36 +10,33 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/gechr/primer/scrollbar"
+	"github.com/gechr/primer/view"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui/core"
 )
 
-// barColumn builds a one-glyph-per-row scrollbar (█ thumb, │ track).
-func barColumn(height, total int, fraction float64) []string {
-	pos, size := scrollbar.ThumbMetrics(height, total, fraction)
-	end := pos + size - 1
-	col := make([]string, height)
-	for i := range col {
-		if i >= pos && i <= end {
-			col[i] = "█"
-		} else {
-			col[i] = "│"
-		}
-	}
-	return col
+// scrollbarConfig pins the light-vertical track this dashboard has always
+// drawn (primer defaults to the heavy ┃); the thumb stays the default █.
+var scrollbarConfig = scrollbar.Config{TrackSymbol: "│"}
+
+// setDetailContent loads rendered detail content into the viewport through
+// view.Sync, retaining the width-normalized lines view.RenderContent needs
+// to keep the scrollbar column aligned.
+func (r *results) setDetailContent(content string) {
+	r.detailLines = view.Sync(&r.detail, strings.Split(content, "\n"), r.detail.Width(), r.detail.Height())
 }
 
-// vpWithBar renders a viewport, appending a scrollbar column when it overflows.
-func vpWithBar(vp viewport.Model) string {
-	body := vp.View()
-	h, total := vp.Height(), vp.TotalLineCount()
-	if h <= 0 || total <= h {
-		return body
-	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, body, strings.Join(barColumn(h, total, vp.ScrollPercent()), "\n"))
+// setPreviewContent mirrors setDetailContent for the preview pane.
+func (r *results) setPreviewContent(content string) {
+	r.previewLines = view.Sync(&r.preview, strings.Split(content, "\n"), r.preview.Width(), r.preview.Height())
+}
+
+// vpContent renders synced viewport lines, appending a scrollbar column when
+// the content overflows.
+func vpContent(lines []string, vp viewport.Model) string {
+	return view.RenderContent(lines, vp, vp.TotalLineCount() > vp.Height(), scrollbarConfig, scrollbar.Styles{})
 }
 
 // detailWidth is the detail content width, leaving one column for the scrollbar.
@@ -53,14 +50,14 @@ func (r *results) detailWidth() int {
 
 // detailBody renders the detail viewport with a scrollbar column when the
 // content overflows, matching the list's scroll affordance.
-func (r *results) detailBody() string { return vpWithBar(r.detail) }
+func (r *results) detailBody() string { return vpContent(r.detailLines, r.detail) }
 
 // setDetailTab selects a detail sub-tab (modulo the tab count), re-renders the
 // viewport for it and resets the scroll.
 func (r *results) setDetailTab(tab int) {
 	r.detailTab = ((tab % detailTabCount) + detailTabCount) % detailTabCount
 	if r.detailIssue != nil {
-		r.detail.SetContent(renderDetail(r.detailIssue, r.detailLoading, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))
+		r.setDetailContent(renderDetail(r.detailIssue, r.detailLoading, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))
 		r.detail.GotoTop()
 	}
 }
@@ -142,7 +139,7 @@ func (r *results) syncPreviewContent(force bool) {
 	if !force && !changed && w == r.previewW {
 		return
 	}
-	r.preview.SetContent(sidebar(sel, w, r.md, r.ctx.BaseURL))
+	r.setPreviewContent(sidebar(sel, w, r.md, r.ctx.BaseURL))
 	if changed {
 		r.preview.GotoTop()
 	}
@@ -160,7 +157,7 @@ func (r *results) openDetail(iss *jira.Issue) tea.Cmd {
 	r.detailIssue = iss
 	r.detail.SetWidth(r.detailWidth())
 	r.detail.GotoTop()
-	r.detail.SetContent(renderDetail(iss, true, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))
+	r.setDetailContent(renderDetail(iss, true, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))
 	base := r.ctx.Base
 	svc := r.ctx.Services
 	key := issueKey(iss)

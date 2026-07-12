@@ -23,7 +23,7 @@ func (r *results) handleSpinner(msg spinner.TickMsg) tea.Cmd {
 	// The detail body is a cached viewport snapshot; while its comments are
 	// still loading, re-render so the embedded spinner actually animates.
 	if r.detailing && r.detailLoading {
-		r.detail.SetContent(renderDetail(r.detailIssue, true, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))
+		r.setDetailContent(renderDetail(r.detailIssue, true, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))
 	}
 	return cmd
 }
@@ -196,7 +196,7 @@ func (r *results) handleTask(msg core.TaskFinishedMsg) (tea.Cmd, bool) {
 			// Re-touch with the fetched summary: a foreign-key jump opened a
 			// bare stub, and a rename since the last visit is stale otherwise.
 			r.ctx.Recent.Touch(issueKey(res.issue), issueSummary(res.issue))
-			r.detail.SetContent(renderDetail(res.issue, false, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))
+			r.setDetailContent(renderDetail(res.issue, false, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))
 		}
 		return nil, true
 	}
