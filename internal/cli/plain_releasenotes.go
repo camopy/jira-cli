@@ -2,12 +2,14 @@ package cli
 
 import (
 	"io"
+	"os"
 	"regexp"
 
 	"charm.land/glamour/v2/ansi"
 	clibtheme "github.com/gechr/clib/theme"
 	"github.com/gechr/clog"
 	changelog "github.com/matcra587/jira-cli"
+	"github.com/matcra587/jira-cli/internal/pager"
 	"github.com/matcra587/jira-cli/internal/tui/components/markdown"
 )
 
@@ -48,12 +50,34 @@ func writeReleaseNotesPlain(w io.Writer, data any, cfg plainConfig) error {
 		}
 		md := mdLinkRe.ReplaceAllString(res.Markdown, "$1")
 		rendered := markdown.NewRenderer(releaseNotesStyle(cfg.theme)).Render("release-notes", width, md)
+		if paged, err := pageDocument(w, cfg, rendered+"\n"); paged {
+			return err
+		}
 		_, err := io.WriteString(w, rendered+"\n")
 		return err
 	}
 
+	if paged, err := pageDocument(w, cfg, res.Markdown); paged {
+		return err
+	}
 	_, err := io.WriteString(w, res.Markdown)
 	return err
+}
+
+// pageDocument pages content when policy allows it (cfg.pager, resolved by
+// cmdutil: human TTY, no agent, no --no-pager, prompts allowed) AND the
+// document genuinely overflows the terminal w writes to. Anything else —
+// short documents, buffers, pipes — reports false so the caller streams the
+// content unchanged; machine consumers can never hang on a pager.
+func pageDocument(w io.Writer, cfg plainConfig, content string) (bool, error) {
+	if !cfg.pager {
+		return false, nil
+	}
+	f, ok := w.(*os.File)
+	if !ok || !pager.Overflows(f, content) {
+		return false, nil
+	}
+	return true, pager.Run(content)
 }
 
 // releaseNotesStyle builds on the shared clib-derived Markdown style, then gives

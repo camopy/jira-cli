@@ -48,6 +48,11 @@ type plainConfig struct {
 	// WriteCommandPlain so completion lines can pick their level (a
 	// successful Jira mutation logs at LevelSuccess, reads at Info).
 	command string
+	// pager permits paging long document output on the terminal. cmdutil
+	// folds the whole policy gate into it (--no-pager off, human TTY, no
+	// agent detected, prompts allowed); the renderer still verifies the
+	// document actually overflows the real terminal before paging.
+	pager bool
 	// elapsed is the command's measured blocking time (Spin, fanout),
 	// attached to the completion line; clog's default 1s DurationMinimum
 	// hides it for fast calls. Zero means nothing blocking ran.
@@ -114,6 +119,15 @@ func WithPlainTTY(tty bool) PlainOption {
 func WithPlainTheme(theme *clibtheme.Theme) PlainOption {
 	return func(cfg *plainConfig) {
 		cfg.theme = theme
+	}
+}
+
+// WithPlainPager permits paging long document output. Callers pass the
+// resolved policy gate; the renderer adds the only check that belongs to
+// it — whether the rendered document overflows the terminal.
+func WithPlainPager(pager bool) PlainOption {
+	return func(cfg *plainConfig) {
+		cfg.pager = pager
 	}
 }
 

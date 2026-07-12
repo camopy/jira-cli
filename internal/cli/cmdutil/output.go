@@ -102,6 +102,17 @@ func PlainOptionsForCommand(cmd *cobra.Command) []cli.PlainOption {
 	if elapsed := APIElapsedFor(cmd); elapsed > 0 {
 		opts = append(opts, cli.WithPlainElapsed(elapsed))
 	}
+	// Paging is opt-in per command via a --no-pager flag declaration (git
+	// parity: the flag's presence marks the command as a pager candidate).
+	// The whole policy gate resolves here: never for agents, never off-TTY,
+	// never when prompts are off — a pager waiting for keys would hang any
+	// non-interactive consumer. The renderer adds the overflow check.
+	if cmd.Flags().Lookup("no-pager") != nil {
+		noPager, _ := cmd.Flags().GetBool("no-pager")
+		if !noPager && det.IsTTY && !det.Agent && !NoInputRequested(cmd) {
+			opts = append(opts, cli.WithPlainPager(true))
+		}
+	}
 	// Load the active config once and derive both the base URL (for link
 	// rendering) and the theme from it. On a load error both are simply
 	// omitted, leaving the renderer's defaults.

@@ -17,7 +17,8 @@ import (
 )
 
 type options struct {
-	latest bool
+	latest  bool
+	noPager bool
 }
 
 // NewCommand returns the `release-notes` command.
@@ -33,6 +34,11 @@ func NewCommand() *cobra.Command {
 			"(e.g. `0.7.7`) for a single release, or `--latest` for just the newest one. " +
 			"Human output is rendered Markdown; `--output=json` returns the notes as " +
 			"structured data.\n\n" +
+			"On an interactive terminal, a full history taller than the screen pages " +
+			"like `git log` (`JIRA_PAGER`/`PAGER` selects an external pager; a built-in " +
+			"one is the default). Pass `--no-pager` to print directly. Piped output, " +
+			"machine modes, and agent sessions always stream straight through and " +
+			"never page.\n\n" +
 			"This is jira-cli's changelog. It is unrelated to a Jira project's releases.",
 		Example: `$ jira release-notes
 $ jira release-notes --latest
@@ -45,6 +51,7 @@ $ jira release-notes --output=json`,
 		},
 	}
 	cmdutil.AddBoolVar(cmd.Flags(), &opts.latest, "latest", false, "Show only the newest release", clib.FlagExtra{})
+	cmdutil.AddBoolVar(cmd.Flags(), &opts.noPager, "no-pager", false, "Print directly instead of paging long output", clib.FlagExtra{Group: "Output"})
 	return cmd
 }
 

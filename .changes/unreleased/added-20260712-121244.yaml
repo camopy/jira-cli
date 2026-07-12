@@ -1,0 +1,3 @@
+kind: added
+body: release-notes pages a full history taller than the screen on interactive terminals, like git log — built-in pager by default, JIRA_PAGER/PAGER honored, --no-pager to print directly; piped, machine-mode, and agent output always streams
+time: 2026-07-12T12:12:44.926504801-04:00
