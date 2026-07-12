@@ -1,6 +1,12 @@
 # Release Notes
 
 
+## [0.10.11](https://github.com/matcra587/jira-cli/releases/tag/v0.10.11) — 2026-07-11
+
+### Fixed
+
+- Narrate dry-run fan-outs as previews in --debug lifecycles and progress labels ("previewing issue edit") instead of claiming the mutation ran
+
 ## [0.10.10](https://github.com/matcra587/jira-cli/releases/tag/v0.10.10) — 2026-07-11
 
 ### Fixed
