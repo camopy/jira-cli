@@ -59,8 +59,11 @@ sub-tab pills to switch, and scroll whichever pane is under the pointer.
 
 ## Tabs and sections
 
-Three built-in sections ship: **Issues** (the triage home), **Search**
-(the JQL workbench) and **Settings** (resolved config, always last).
+The built-in sections: **Issues** (the triage home), **Epics** (a strip of
+open epics — `[`/`]` cycles, the list shows the active epic's children),
+**Search** (the JQL workbench), **Board** (your profile's `default_board`
+as its own tab — it lights up once `jira cache boards` has run) and
+**Settings** (resolved config, always last).
 You can add your own sections — each one a saved JQL query
 with its own tab and result count:
 
@@ -85,9 +88,10 @@ default_tab = "Team board"
 
 The resolution rules:
 
-*   A name matches a built-in section ID first (`issues`, `search`,
-    `settings`), then a configured section's title (case-insensitive) —
-    so a query titled "Search" can never hijack `default_tab = "search"`.
+*   A name matches a built-in section ID first (`issues`, `epics`,
+    `search`, `board`, `settings`), then a configured section's title
+    (case-insensitive) — so a query titled "Search" can never hijack
+    `default_tab = "search"`.
 *   Configured sections always show; defining one is the opt-in and
     deleting it is how you hide it. Naming one in `tabs` only positions
     it explicitly; the rest slot in after Issues.

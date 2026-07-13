@@ -18,7 +18,7 @@ import (
 // newApp must land on the issues triage view and expose the search view as the
 // next section, so `jira tui` opens on the working queue with JQL one tab away.
 func TestNewAppLandsOnIssuesAndReachesSearch(t *testing.T) {
-	app := newApp(nil, nil, config.Profile{}, context.Background(), "")
+	app := newApp(nil, nil, config.Profile{}, context.Background(), "", "", "")
 	if got := app.CurrentSection().ID(); got != issues.ID {
 		t.Fatalf("landing section = %q, want %q", got, issues.ID)
 	}
@@ -32,7 +32,7 @@ func TestNewAppLandsOnIssuesAndReachesSearch(t *testing.T) {
 // A nil service (unconfigured profile) must not panic: the dashboard still opens
 // and renders, sections simply fetch nothing.
 func TestNewAppWithoutServicesRenders(t *testing.T) {
-	app := newApp(nil, nil, config.Profile{}, context.Background(), "")
+	app := newApp(nil, nil, config.Profile{}, context.Background(), "", "", "")
 	if s := app.CurrentSection(); s == nil {
 		t.Fatal("current section is nil with no services")
 	}

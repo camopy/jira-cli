@@ -10,7 +10,10 @@ import (
 	xstrings "github.com/gechr/x/strings"
 	"github.com/spf13/cobra"
 
+	"github.com/gechr/x/ptr"
+
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/boardscope"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -70,6 +73,19 @@ func buildApp(cmd *cobra.Command) (core.App, error) {
 	if ok {
 		svc = servicesAdapter{factory: cmdutil.ServicesForClient(client)}
 	}
+	// The profile's default board becomes its own tab when it resolves from
+	// the boards cache (cache-only, no network). An unset default or a cold
+	// cache just leaves the "board" tab dark — same as any unregistered name.
+	var boardTitle, boardJQL string
+	if scope, _, err := boardscope.FromFlags(cmd); err == nil {
+		if clause, has := scope.JQLClause(); has {
+			boardTitle = strings.TrimSpace(ptr.Deref(scope.Board.Name))
+			if boardTitle == "" {
+				boardTitle = "Board"
+			}
+			boardJQL = clause + " AND statusCategory != Done ORDER BY updated DESC"
+		}
+	}
 	var cfg *config.Config
 	if loaded, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd))); err == nil {
 		cfg = loaded
@@ -80,7 +96,7 @@ func buildApp(cmd *cobra.Command) (core.App, error) {
 	if cfgPath == "" {
 		cfgPath = config.DefaultPath()
 	}
-	return newApp(svc, cfg, profile, cmd.Context(), cfgPath), nil
+	return newApp(svc, cfg, profile, cmd.Context(), cfgPath, boardTitle, boardJQL), nil
 }
 
 // newApp registers the dashboard's sections and returns the root model. Issues
@@ -88,7 +104,7 @@ func buildApp(cmd *cobra.Command) (core.App, error) {
 // join by registering a factory here and appending to order — the App needs no
 // change. The profile supplies the footer context (profile name, default
 // project and board).
-func newApp(svc core.Services, cfg *config.Config, profile config.Profile, base context.Context, cfgPath string) core.App {
+func newApp(svc core.Services, cfg *config.Config, profile config.Profile, base context.Context, cfgPath, boardTitle, boardJQL string) core.App {
 	// Resolve and apply the configured clib theme ("auto" detects the
 	// terminal background) before any section derives styles from it — the
 	// glamour markdown style is built from this palette at section
@@ -125,6 +141,10 @@ func newApp(svc core.Services, cfg *config.Config, profile config.Profile, base 
 	registry := core.NewRegistry()
 	registry.Register(issues.ID, issues.New)
 	registry.Register(issues.SearchID, issues.NewSearch)
+	registry.Register(issues.EpicsID, issues.NewEpics)
+	if boardJQL != "" {
+		registry.Register(issues.BoardID, issues.NewQuery(issues.BoardID, boardTitle, boardJQL))
+	}
 	registry.Register(settings.ID, settings.New)
 	queries := registerQuerySections(registry, cfg)
 	app := core.NewApp(ctx, registry, resolveOrder(cfg, registry, queries))
