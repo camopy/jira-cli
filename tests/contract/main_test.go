@@ -35,8 +35,20 @@ func TestMain(m *testing.M) {
 	if err := os.Setenv("XDG_CACHE_HOME", cacheDir); err != nil {
 		panic(err)
 	}
+	// And the config file: tests that pass no --config resolve the default
+	// path, so the developer's real ~/.config/jira-cli/config.toml — which
+	// may hold keys this branch's strict decode does not know (a config
+	// written by a newer binary) — would otherwise fail the whole suite.
+	cfgDir, err := os.MkdirTemp("", "jira-cli-test-config-*")
+	if err != nil {
+		panic(err)
+	}
+	if err := os.Setenv("XDG_CONFIG_HOME", cfgDir); err != nil {
+		panic(err)
+	}
 	code := m.Run()
 	_ = os.RemoveAll(dir)
 	_ = os.RemoveAll(cacheDir)
+	_ = os.RemoveAll(cfgDir)
 	os.Exit(code)
 }

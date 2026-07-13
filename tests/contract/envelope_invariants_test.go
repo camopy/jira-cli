@@ -180,6 +180,33 @@ func assertValidationExitCode(t *testing.T, runErr error) {
 	assertExitCode(t, runErr, 3, "validation errors → exit 3")
 }
 
+// TestUnknownSubcommandReportsCommandUnknown pins the group-level typo
+// contract: a misspelled subcommand under a group parent must report
+// command_unknown at exit 3 — bare (where Cobra would exit 0 with usage)
+// and with a trailing flag (where the parent's flag parse would claim
+// "unknown flag" and mask the real mistake).
+func TestUnknownSubcommandReportsCommandUnknown(t *testing.T) {
+	bin := buildJiraBinary(t)
+	for _, args := range [][]string{
+		{"issue", "lst", "--output=json"},
+		{"issue", "lst", "--limit", "5", "--output=json"},
+	} {
+		env, runErr := requireEnvelopeOnStdout(t, bin, args...)
+		assertValidationExitCode(t, runErr)
+		errs, _ := env["errors"].([]any)
+		if len(errs) == 0 {
+			t.Fatalf("%v: no errors in envelope", args)
+		}
+		first, _ := errs[0].(map[string]any)
+		if code := first["code"]; code != "command_unknown" {
+			t.Errorf("%v: code = %v, want command_unknown", args, code)
+		}
+		if msg, _ := first["message"].(string); !bytes.Contains([]byte(msg), []byte(`"lst"`)) {
+			t.Errorf("%v: message %q should name the typo'd subcommand", args, msg)
+		}
+	}
+}
+
 // TestI1RemovedOutputFlagFails — Attack 3: a removed legacy output flag
 // must fail as an unknown flag, never be silently re-aliased onto a mode.
 func TestI1RemovedOutputFlagFails(t *testing.T) {
