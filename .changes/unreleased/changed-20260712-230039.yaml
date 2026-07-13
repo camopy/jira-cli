@@ -1,0 +1,3 @@
+kind: changed
+body: Style backtick code spans in TUI summary cells and detail headings with the markdown code accent
+time: 2026-07-12T23:00:39.530097576-04:00

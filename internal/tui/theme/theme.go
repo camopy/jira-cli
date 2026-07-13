@@ -130,6 +130,46 @@ var (
 	DetailDim    = lipgloss.NewStyle().Faint(true)
 )
 
+// Code is the inline-code accent, matching the markdown renderer's code color
+// so a `span` reads the same in a summary cell and a rendered description.
+var Code = lipgloss.NewStyle().Foreground(Theme.Yellow.GetForeground())
+
+// CodeSpans styles `backtick` spans in s with the Code accent, backticks
+// kept — the display width is unchanged, so cell-budgeted callers truncate
+// first and style after. An unpaired backtick renders as-is.
+func CodeSpans(s string) string { return CodeSpansWith(s, lipgloss.NewStyle()) }
+
+// CodeSpansWith is CodeSpans over a styled base: plain segments render with
+// base and spans with the Code accent layered on it, segment by segment, so
+// a span's SGR reset can never cut the base style off mid-string. Callers
+// wrap and truncate the raw text first — this must be the last styling pass.
+func CodeSpansWith(s string, base lipgloss.Style) string {
+	if !strings.Contains(s, "`") {
+		return base.Render(s)
+	}
+	code := Code.Inherit(base)
+	var b strings.Builder
+	for {
+		start := strings.IndexByte(s, '`')
+		if start < 0 {
+			break
+		}
+		end := strings.IndexByte(s[start+1:], '`')
+		if end < 0 {
+			break
+		}
+		if start > 0 {
+			b.WriteString(base.Render(s[:start]))
+		}
+		b.WriteString(code.Render(s[start : start+end+2]))
+		s = s[start+end+2:]
+	}
+	if s != "" {
+		b.WriteString(base.Render(s))
+	}
+	return b.String()
+}
+
 // Refresh indicator styles.
 var (
 	Paused = lipgloss.NewStyle().Foreground(Theme.Red.GetForeground()).Bold(true)
@@ -182,6 +222,7 @@ func applyTheme(t *clibtheme.Theme) {
 	DetailLabel = lipgloss.NewStyle().Bold(true).Foreground(t.Green.GetForeground())
 	DetailValue = lipgloss.NewStyle().Foreground(t.MarkdownText.GetForeground())
 	DetailDim = lipgloss.NewStyle().Faint(true)
+	Code = lipgloss.NewStyle().Foreground(t.Yellow.GetForeground())
 
 	Paused = lipgloss.NewStyle().Foreground(t.Red.GetForeground()).Bold(true)
 	Active = lipgloss.NewStyle().Foreground(t.Green.GetForeground()).Bold(true)

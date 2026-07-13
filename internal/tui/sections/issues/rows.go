@@ -111,9 +111,11 @@ func rowText(i *jira.Issue, width int, now time.Time) string {
 	left := typeCell(i) + " " + priorityCell(i) + " " + key + "  " + statusCell(i) + "  "
 	l := layoutFor(width)
 	if !l.age {
-		return left + issueSummary(i)
+		return left + theme.CodeSpans(issueSummary(i))
 	}
-	row := left + padRight(truncCells(issueSummary(i), l.sumW), l.sumW)
+	// Truncate on the raw text, style after: CodeSpans keeps backticks, so
+	// the styled cell is exactly as wide as the budgeted one.
+	row := left + padRight(theme.CodeSpans(truncCells(issueSummary(i), l.sumW)), l.sumW)
 	if l.assignee {
 		row += "  " + assigneeCell(i)
 	}

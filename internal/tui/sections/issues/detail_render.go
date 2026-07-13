@@ -37,7 +37,9 @@ func detailHeading(i *jira.Issue, width int, now time.Time, baseURL string) stri
 		linked = adf.Hyperlink(strings.TrimRight(baseURL, "/")+"/browse/"+key, key)
 	}
 	b.WriteString(theme.DetailHeader.Render(linked) + "\n")
-	b.WriteString(lipgloss.NewStyle().Bold(true).Render(wrap(issueSummary(i), width)) + "\n\n")
+	// Wrap the raw text, style after: CodeSpansWith is the last pass so a
+	// `span`'s reset can't cut the bold base off mid-heading.
+	b.WriteString(theme.CodeSpansWith(wrap(issueSummary(i), width), lipgloss.NewStyle().Bold(true)) + "\n\n")
 
 	meta := make([]string, 0, 3)
 	if pill := statusPill(i); pill != "" {
