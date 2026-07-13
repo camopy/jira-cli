@@ -11,6 +11,8 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 
+	termansi "github.com/gechr/x/ansi"
+
 	"github.com/gechr/primer/scrollbar"
 	"github.com/gechr/primer/view"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -74,7 +76,9 @@ func (r *results) detailPills() string {
 			parts[i] = r.ctx.Styles.TabInactive.Render(l)
 		}
 	}
-	return strings.Join(parts, " ")
+	// Clamp to the screen: a wrapped pill row would push the fixed-height
+	// detail layout down a line on narrow terminals.
+	return termansi.Truncate(strings.Join(parts, " "), r.ctx.ScreenWidth, "…")
 }
 
 // detailPillLabels is the single source for the sub-tab labels, shared by the

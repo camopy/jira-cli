@@ -332,7 +332,8 @@ that changes a lens's JQL also refetches, so the rows always match the
 header. Press `r` on the Settings tab to reload immediately (the only
 path when auto-refresh is disabled).
 
-Theme (`[theme]`) and credentials changes still need a restart.
+A changed `theme.name` hot-applies too: every view re-derives its styles
+on the spot. Credentials changes still need a restart.
 
 ## Theming
 

@@ -11,6 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/gechr/primer/flash"
+	termansi "github.com/gechr/x/ansi"
 	xmaps "github.com/gechr/x/maps"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui/components/action"
@@ -346,7 +347,9 @@ func (r *results) detailHint() string {
 	for _, p := range pairs {
 		segs = append(segs, core.HintSegment(r.ctx.Styles, p[0], p[1]))
 	}
-	return strings.Join(segs, "  ")
+	// Clamp to the screen: a wrapped hint row would break the detail
+	// view's fixed row budget on narrow terminals.
+	return termansi.Truncate(strings.Join(segs, "  "), r.ctx.ScreenWidth, "…")
 }
 
 // overlayContent is whichever modal is open: an action in flight, the facet

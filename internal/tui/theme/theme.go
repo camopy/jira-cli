@@ -31,11 +31,23 @@ func Resolve(name string) *clibtheme.Theme {
 
 // Apply resets all derived styles to the given clib theme. Runs at most
 // once per process; subsequent calls are no-ops (matching pdc's pattern,
-// which avoids style flicker mid-render).
+// which avoids style flicker mid-render). A deliberate theme change at
+// runtime goes through Reload instead.
 func Apply(t *clibtheme.Theme) {
 	applyOnce.Do(func() {
 		applyTheme(t)
 	})
+}
+
+// Reload swaps the active theme at runtime — the config hot-reload path.
+// Unlike Apply it is not once-guarded: the caller signals a real theme
+// change, owns the frame cadence (the reload lands between renders on the
+// Update goroutine), and rebuilds anything that cached derived styles.
+func Reload(t *clibtheme.Theme) {
+	if t == nil {
+		return
+	}
+	applyTheme(t)
 }
 
 // Status styles — mapped to Jira issue status categories.

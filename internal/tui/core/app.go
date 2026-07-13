@@ -13,6 +13,7 @@ import (
 	"github.com/gechr/primer/overlay"
 
 	"github.com/matcra587/jira-cli/internal/config"
+	"github.com/matcra587/jira-cli/internal/tui/theme"
 )
 
 var _ tea.Model = App{}
@@ -414,6 +415,10 @@ func (a App) applyConfig(msg ConfigReloadedMsg) (tea.Model, tea.Cmd) {
 	// running it re-arms itself with the new interval (and dies naturally if
 	// the reload disabled it) — arming again would double the heartbeat.
 	wasTicking := a.ctx.Config != nil && a.ctx.Config.TUI.RefreshInterval > 0
+	prevTheme := ""
+	if a.ctx.Config != nil {
+		prevTheme = a.ctx.Config.Theme.Name
+	}
 	a.ctx.Config = msg.Config
 	// Re-dock the sidebar per the new config (no-op when the key is absent, so
 	// a reload doesn't fight the p-key cycle).
@@ -422,6 +427,21 @@ func (a App) applyConfig(msg ConfigReloadedMsg) (tea.Model, tea.Cmd) {
 	// Lenses re-read from the new config; the issues section reads the set
 	// per call, so changed chips and JQL take effect on the next render.
 	a.ctx.SetLenses(msg.Config)
+	// A changed theme.name re-derives everything: the shared theme styles,
+	// the chrome bundle, and — because sections cache derived renderers
+	// (markdown, list styles) at construction — every section instance,
+	// which the start loop below rebuilds. An unchanged name is a no-op so
+	// an ordinary config edit never flickers the styles.
+	if msg.Config.Theme.Name != prevTheme {
+		theme.Reload(theme.Resolve(msg.Config.Theme.Name))
+		a.ctx.Styles = DefaultStyles()
+		for id := range a.sections {
+			delete(a.sections, id)
+		}
+		for id := range a.started {
+			delete(a.started, id)
+		}
+	}
 	var cmds []tea.Cmd
 	// A reload may have rewritten the active lens's JQL out from under the
 	// cached rows; a refresh tick re-runs every section's current query so

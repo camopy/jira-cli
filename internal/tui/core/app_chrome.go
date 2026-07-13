@@ -12,6 +12,7 @@ import (
 
 	"github.com/gechr/primer/helpsheet"
 	pkey "github.com/gechr/primer/key"
+	termansi "github.com/gechr/x/ansi"
 	xstrings "github.com/gechr/x/strings"
 )
 
@@ -83,7 +84,10 @@ func (a App) tabBar() string {
 			row += strings.Repeat(" ", fill) + brand
 		}
 	}
-	return row
+	// Clamp to the screen: on a narrow terminal a wrapped tab row would push
+	// the whole fixed-height chrome down a line. tabAt hit-tests only what
+	// remains visible, which is exactly right.
+	return termansi.Truncate(row, a.ctx.ScreenWidth, "…")
 }
 
 // tabLabel renders one tab cell (title, optional count, active styling) —

@@ -204,6 +204,13 @@ func TestGoldenIssues80x24(t *testing.T) {
 	assertGolden(t, frame(t, 80, 24), 24)
 }
 
+// TestGoldenIssues60x18 pins the narrow-terminal degradation: columns drop
+// per the row layout plan and every chrome row clamps instead of wrapping —
+// the frame-height assertion is the real guard here.
+func TestGoldenIssues60x18(t *testing.T) {
+	assertGolden(t, frame(t, 60, 18), 18)
+}
+
 func TestGoldenIssues120x40(t *testing.T) {
 	assertGolden(t, frame(t, 120, 40), 40)
 }

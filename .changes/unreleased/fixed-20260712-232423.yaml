@@ -1,0 +1,3 @@
+kind: fixed
+body: Clamp TUI chrome rows (tabs, detail pills, hint lines) on narrow terminals instead of wrapping and breaking the layout
+time: 2026-07-12T23:24:23.130838009-04:00

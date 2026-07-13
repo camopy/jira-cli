@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/matcra587/jira-cli/internal/config"
+	"github.com/matcra587/jira-cli/internal/tui/theme"
 )
 
 // countingSection records how it is driven so tests can assert routing.
@@ -295,6 +296,38 @@ func TestAppConfigReloadRebuildsSections(t *testing.T) {
 	}
 	if got := app.CurrentSection().ID(); got != "issues" {
 		t.Errorf("active section after reload = %q, want issues (kept by ID)", got)
+	}
+}
+
+// TestConfigReloadThemeChangeRebuildsAllSections pins the theme hot-reload:
+// an unchanged theme.name preserves section instances (no flicker), a changed
+// one drops every instance so cached derived styles re-derive.
+func TestConfigReloadThemeChangeRebuildsAllSections(t *testing.T) {
+	ctx := NewProgramContext(nil, nil)
+	ctx.SetSize(80, 24)
+	reg := NewRegistry()
+	builds := 0
+	reg.Register("issues", func(*ProgramContext) Section {
+		builds++
+		return &countingSection{id: "issues"}
+	})
+	app := NewApp(ctx, reg, []SectionID{"issues"})
+	app.Init()
+	t.Cleanup(func() { theme.Reload(theme.Resolve("")) }) // undo the global swap
+
+	m, _ := app.Update(ConfigReloadedMsg{Config: &config.Config{}})
+	app = m.(App)
+	if builds != 1 {
+		t.Fatalf("same-theme reload rebuilt sections: %d builds, want 1", builds)
+	}
+
+	m, _ = app.Update(ConfigReloadedMsg{Config: &config.Config{Theme: config.Theme{Name: "light"}}})
+	app = m.(App)
+	if builds != 2 {
+		t.Fatalf("theme change did not rebuild sections: %d builds, want 2", builds)
+	}
+	if got := app.CurrentSection().ID(); got != SectionID("issues") {
+		t.Errorf("active section lost across theme reload: %q", got)
 	}
 }
 
