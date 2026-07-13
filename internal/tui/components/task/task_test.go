@@ -1,14 +1,14 @@
-package core
+package task
 
 import "testing"
 
 func TestTaskManagerAcceptsLatestGenerationOnly(t *testing.T) {
-	m := NewTaskManager()
-	const scope TaskScope = "issues"
+	m := New()
+	const scope Scope = "issues"
 
-	m.Start(TaskSpec{Scope: scope})
+	m.Start(Spec{Scope: scope})
 	gen1 := m.Generation(scope)
-	m.Start(TaskSpec{Scope: scope})
+	m.Start(Spec{Scope: scope})
 	gen2 := m.Generation(scope)
 
 	if gen2 <= gen1 {
@@ -23,9 +23,9 @@ func TestTaskManagerAcceptsLatestGenerationOnly(t *testing.T) {
 }
 
 func TestTaskManagerScopesAreIndependent(t *testing.T) {
-	m := NewTaskManager()
-	m.Start(TaskSpec{Scope: "issues"})
-	m.Start(TaskSpec{Scope: "search"})
+	m := New()
+	m.Start(Spec{Scope: "issues"})
+	m.Start(Spec{Scope: "search"})
 
 	if got := m.Generation("issues"); got != 1 {
 		t.Errorf("issues generation = %d, want 1", got)
@@ -39,8 +39,8 @@ func TestTaskManagerScopesAreIndependent(t *testing.T) {
 }
 
 func TestTaskManagerStartRunsAndReportsResult(t *testing.T) {
-	m := NewTaskManager()
-	cmd := m.Start(TaskSpec{
+	m := New()
+	cmd := m.Start(Spec{
 		Scope: "issues",
 		Run:   func() (any, error) { return 42, nil },
 	})
@@ -48,12 +48,12 @@ func TestTaskManagerStartRunsAndReportsResult(t *testing.T) {
 		t.Fatal("Start returned a nil command")
 	}
 	// Start records the generation immediately; executing the command produces
-	// the TaskFinishedMsg carrying that generation.
+	// the FinishedMsg carrying that generation.
 	if m.Generation("issues") != 1 {
 		t.Errorf("generation = %d, want 1", m.Generation("issues"))
 	}
-	if fin, ok := cmd().(TaskFinishedMsg); !ok {
-		t.Errorf("command did not produce a TaskFinishedMsg, got %T", cmd())
+	if fin, ok := cmd().(FinishedMsg); !ok {
+		t.Errorf("command did not produce a FinishedMsg, got %T", cmd())
 	} else if fin.Result != 42 || fin.Gen != 1 {
 		t.Errorf("finished msg = %+v, want Result=42 Gen=1", fin)
 	}

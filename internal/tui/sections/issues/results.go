@@ -11,13 +11,13 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/gechr/primer/flash"
-	"github.com/gechr/primer/overlay"
 	xmaps "github.com/gechr/x/maps"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui/components/action"
 	"github.com/matcra587/jira-cli/internal/tui/components/input"
 	"github.com/matcra587/jira-cli/internal/tui/components/listviewport"
 	"github.com/matcra587/jira-cli/internal/tui/components/markdown"
+	"github.com/matcra587/jira-cli/internal/tui/components/modal"
 	"github.com/matcra587/jira-cli/internal/tui/components/picker"
 	"github.com/matcra587/jira-cli/internal/tui/core"
 	"github.com/matcra587/jira-cli/internal/tui/theme"
@@ -318,20 +318,19 @@ func (r *results) view(header string) string {
 		}
 	}
 	if content := r.overlayContent(); content != "" {
-		// Cap the modal width and wrap its content so a long edit prefill (e.g.
-		// the full summary) can never bleed past the screen edges.
-		boxW := r.ctx.ScreenWidth - 6
-		if boxW > 66 {
-			boxW = 66
-		}
-		if boxW < 1 {
-			boxW = 1
-		}
-		box := r.ctx.Styles.Overlay.Width(boxW).Render(content)
-		body = overlay.Place(body, box, r.ctx.ScreenWidth, r.ctx.MainHeight, overlay.Center)
+		frame := modal.Frame{Box: r.ctx.Styles.Overlay, MaxWidth: overlayMaxWidth, Margin: overlayMargin}
+		body = frame.Place(body, content, r.ctx.ScreenWidth, r.ctx.MainHeight)
 	}
 	return body
 }
+
+// overlayMaxWidth caps every modal at a readable measure; overlayMargin keeps
+// the box off the screen edges when the terminal, not the cap, binds. The cap
+// pairs with the action controller's 60-column inner text width.
+const (
+	overlayMaxWidth = 66
+	overlayMargin   = 6
+)
 
 // detailHint is the detail view's hint row, mnemonic-styled through the same
 // helper as the footer so single-letter verbs read as "(o)pen in browser".

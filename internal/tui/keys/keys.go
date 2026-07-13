@@ -1,11 +1,9 @@
 package keys
 
 import (
-	"fmt"
-	"maps"
-	"slices"
-
 	"charm.land/bubbles/v2/key"
+
+	"github.com/matcra587/jira-cli/internal/tui/components/keybind"
 )
 
 // Map is the global key map. Fields are grouped by purpose but all live in one
@@ -112,10 +110,10 @@ func Default() Map {
 }
 
 // index maps a stable name to the address of each binding so rebinding and
-// enumeration share one source of truth. Returning pointers lets [Map.Rebind]
-// mutate the caller's map in place.
-func (m *Map) index() map[string]*key.Binding {
-	return map[string]*key.Binding{
+// enumeration share one source of truth. The registry holds pointers, so
+// [Map.Rebind] mutates the caller's map in place.
+func (m *Map) index() keybind.Registry {
+	return keybind.Registry{
 		"up": &m.Up, "down": &m.Down, "top": &m.Top, "bottom": &m.Bottom,
 		"page_up": &m.PageUp, "page_down": &m.PageDown,
 		"next_section": &m.NextSection, "prev_section": &m.PrevSection,
@@ -140,27 +138,11 @@ func (m *Map) index() map[string]*key.Binding {
 
 // Names returns every rebindable binding name, sorted. Useful for docs and for
 // validating a config file's keybinding overrides.
-func (m *Map) Names() []string {
-	return slices.Sorted(maps.Keys(m.index()))
-}
+func (m *Map) Names() []string { return m.index().Names() }
 
 // Rebind applies user overrides keyed by binding name (e.g. {"transition":
-// {"x"}}). An empty key slice is ignored so a partial config never silently
-// unbinds an action. The first key becomes the help label. An unknown name is
-// an error rather than a silent no-op, so a typo in a config file is surfaced.
+// {"x"}}); the override semantics — empty slices ignored, first key becomes
+// the help label, unknown names error — live in the keybind registry.
 func (m *Map) Rebind(overrides map[string][]string) error {
-	idx := m.index()
-	for name, ks := range overrides {
-		if len(ks) == 0 {
-			continue
-		}
-		b, ok := idx[name]
-		if !ok {
-			return fmt.Errorf("keys: unknown binding %q", name)
-		}
-		desc := b.Help().Desc
-		b.SetKeys(ks...)
-		b.SetHelp(ks[0], desc)
-	}
-	return nil
+	return m.index().Rebind(overrides)
 }
