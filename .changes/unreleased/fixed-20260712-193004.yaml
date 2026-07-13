@@ -1,3 +1,0 @@
-kind: fixed
-body: TUI status pills use the same category-keyed fixed colors as the CLI's plain issue list, instead of theme colors keyed by guessing English status names
-time: 2026-07-12T19:30:04.978895515-04:00

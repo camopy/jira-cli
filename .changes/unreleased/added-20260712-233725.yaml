@@ -1,3 +1,0 @@
-kind: added
-body: 'Interactive TUI Settings tab: pick themes with a live preview as you browse, change icons, preview dock, tabs (with name autocompletion) and more — every change validates, saves atomically, and applies without a restart; press e to edit the raw config.toml with the same validation'
-time: 2026-07-12T23:37:25.732934818-04:00

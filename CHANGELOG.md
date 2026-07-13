@@ -1,6 +1,30 @@
 # Release Notes
 
 
+## [0.12.0](https://github.com/matcra587/jira-cli/releases/tag/v0.12.0) — 2026-07-13
+
+### Added
+
+- Create issues (n), edit labels (l), and pause auto-refresh (R) from the TUI dashboard — create opens a two-field overlay (summary plus Markdown description), labels edit the full comma-separated list in place
+- Ask before discarding edited TUI modal input: esc on a non-empty overlay now prompts discard input? (y)es (n)o
+- TUI epics tab: cycle open epics in a strip and triage the active epic's children with the full verb set
+- TUI board tab: the profile's default_board becomes its own tab once the boards cache is warm
+- Hot-apply theme changes in the TUI: editing theme.name re-skins every view without a restart
+- Choose the TUI glyph set with tui.icons: Nerd Font issue-type, priority, and pause icons, or the portable Unicode set (auto opts into Nerd Fonts only via the NERD_FONT convention)
+- Interactive TUI Settings tab: pick themes with a live preview as you browse, change icons, preview dock, tabs (with name autocompletion) and more — every change validates, saves atomically, and applies without a restart; press e to edit the raw config.toml with the same validation
+
+### Changed
+
+- TUI issue list renders status as the same reverse-video pills as the detail header and the CLI's plain list
+- Render TUI key hints with inline mnemonics — the binding letter is highlighted inside its verb, footer and detail view alike
+- Open TUI comments in the in-app overlay first; with an external editor configured, ctrl+e continues the draft there instead of the editor opening unasked
+- Style backtick code spans in TUI summary cells and detail headings with the markdown code accent
+
+### Fixed
+
+- TUI status pills use the same category-keyed fixed colors as the CLI's plain issue list, instead of theme colors keyed by guessing English status names
+- Clamp TUI chrome rows (tabs, detail pills, hint lines) on narrow terminals instead of wrapping and breaking the layout
+
 ## [0.11.2](https://github.com/matcra587/jira-cli/releases/tag/v0.11.2) — 2026-07-13
 
 ### Fixed
