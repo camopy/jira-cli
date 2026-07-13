@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	termansi "github.com/gechr/x/ansi"
+	xslices "github.com/gechr/x/slices"
 	xstrings "github.com/gechr/x/strings"
 
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -116,11 +117,7 @@ func (m *EpicsModel) applyEpics(res epicsResult) tea.Cmd {
 	prev := m.activeEpicKey()
 	m.epics = res.epics
 	m.epicsLoaded = true
-	labels := make([]string, len(res.epics))
-	for i, e := range res.epics {
-		labels[i] = issueKey(e)
-	}
-	m.strip.SetItems(labels)
+	m.strip.SetItems(xslices.Map(res.epics, issueKey))
 	if prev != "" {
 		for i, e := range res.epics {
 			if issueKey(e) == prev {
@@ -192,12 +189,24 @@ func (m *EpicsModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 		cmd, _ := m.handleTask(msg)
 		return m, cmd
 	case core.RestyleMsg:
+		// The carousel captured its styles at construction; a theme preview
+		// rebuilds ctx.Styles, so re-point them or the strip keeps the old
+		// theme until the commit-path section rebuild.
+		m.strip.ActiveStyle = m.ctx.Styles.TabActive
+		m.strip.InactiveStyle = m.ctx.Styles.TabInactive
 		m.restyle()
 		return m, nil
 	case core.RefreshTickMsg:
-		// Refresh both layers: the strip (an epic may have opened or closed)
-		// and the visible children.
-		return m, tea.Batch(m.fetchEpics(), m.autoRefresh())
+		// One fetch refreshes both layers: applyEpics chains the child fetch
+		// once the strip lands, so fetching children here too would run the
+		// same JQL twice per heartbeat. The gate matches autoRefresh's in
+		// full — skipping while the user is mid-input, a fetch or page is in
+		// flight, or a write is still reconciling — so a background tick can
+		// never supersede a page fetch or stomp optimistic row state.
+		if m.capturing() || m.loading || m.loadingMore || !m.canMutate() {
+			return m, nil
+		}
+		return m, m.fetchEpics()
 	case tea.MouseWheelMsg:
 		return m, m.handleWheel(msg)
 	case tea.MouseClickMsg:
@@ -221,7 +230,7 @@ func (m *EpicsModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 		}
 		switch {
 		case key.Matches(msg, m.ctx.Keys.Refresh):
-			return m, tea.Batch(m.fetchEpics(), m.fetchChildren())
+			return m, m.fetchEpics() // children follow via applyEpics
 		case key.Matches(msg, m.ctx.Keys.NextLens):
 			return m, m.cycleEpic(1)
 		case key.Matches(msg, m.ctx.Keys.PrevLens):

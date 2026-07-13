@@ -42,7 +42,11 @@ func DetectAutoOnce() {
 func Resolve(name string) *clibtheme.Theme {
 	if config.IsAutoTheme(name) {
 		if autoDetected == nil {
-			DetectAutoOnce()
+			// No startup detection ran (a test path, a future entrypoint):
+			// fall back to the process default rather than querying — the
+			// OSC round-trip mid-program is exactly the reply-as-keystrokes
+			// bug DetectAutoOnce exists to prevent.
+			return config.ThemeForName("")
 		}
 		return autoDetected
 	}
@@ -202,6 +206,16 @@ func CodeSpansWith(s string, base lipgloss.Style) string {
 	return b.String()
 }
 
+// Issue-type badge styles — color is the primary signal for the type glyph.
+var (
+	TypeEpic    = lipgloss.NewStyle().Foreground(Theme.Magenta.GetForeground())
+	TypeStory   = lipgloss.NewStyle().Foreground(Theme.Green.GetForeground())
+	TypeTask    = lipgloss.NewStyle().Foreground(Theme.Blue.GetForeground())
+	TypeSubtask = lipgloss.NewStyle().Foreground(Theme.Blue.GetForeground()).Faint(true)
+	TypeBug     = lipgloss.NewStyle().Foreground(Theme.Red.GetForeground())
+	TypeOther   = lipgloss.NewStyle().Foreground(Theme.Yellow.GetForeground())
+)
+
 // Refresh indicator styles.
 var (
 	Paused = lipgloss.NewStyle().Foreground(Theme.Red.GetForeground()).Bold(true)
@@ -258,6 +272,13 @@ func applyTheme(t *clibtheme.Theme) {
 
 	Paused = lipgloss.NewStyle().Foreground(t.Red.GetForeground()).Bold(true)
 	Active = lipgloss.NewStyle().Foreground(t.Green.GetForeground()).Bold(true)
+
+	TypeEpic = lipgloss.NewStyle().Foreground(t.Magenta.GetForeground())
+	TypeStory = lipgloss.NewStyle().Foreground(t.Green.GetForeground())
+	TypeTask = lipgloss.NewStyle().Foreground(t.Blue.GetForeground())
+	TypeSubtask = lipgloss.NewStyle().Foreground(t.Blue.GetForeground()).Faint(true)
+	TypeBug = lipgloss.NewStyle().Foreground(t.Red.GetForeground())
+	TypeOther = lipgloss.NewStyle().Foreground(t.Yellow.GetForeground())
 }
 
 // entityHues mirrors the CLI plain renderer's fixed mid-tone entity

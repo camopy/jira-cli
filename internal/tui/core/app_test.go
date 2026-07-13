@@ -332,10 +332,11 @@ func TestConfigReloadThemeChangeRebuildsAllSections(t *testing.T) {
 	}
 }
 
-// TestThemeReloadDetectsInPlaceConfigMutation pins the settings-menu path:
-// the menu mutates the shared config pointer before saving, so by the time
-// the reload message lands ctx.Config already carries the new name — the
-// change detection must compare against the applied theme, not the config.
+// TestThemeReloadDetectsInPlaceConfigMutation pins the change detection's
+// independence from the shared config pointer: even if the runtime config
+// already carries the new name when the reload lands (any caller may have
+// mutated it), the comparison must run against the theme the styles were
+// actually derived from, so the change still rebuilds every section.
 func TestThemeReloadDetectsInPlaceConfigMutation(t *testing.T) {
 	cfg := &config.Config{}
 	ctx := NewProgramContext(nil, cfg)
@@ -351,7 +352,8 @@ func TestThemeReloadDetectsInPlaceConfigMutation(t *testing.T) {
 	snap := theme.Theme // restore the pre-test theme, not the process default
 	t.Cleanup(func() { theme.Reload(snap) })
 
-	// The settings menu's flow: mutate in place, save, reload the same values.
+	// Mutate the shared pointer first, then reload the same values — the
+	// shape that would fool a config-vs-config comparison.
 	cfg.Theme.Name = "light"
 	reloaded := &config.Config{}
 	reloaded.Theme.Name = "light"
@@ -365,6 +367,27 @@ func TestThemeReloadDetectsInPlaceConfigMutation(t *testing.T) {
 	_ = m
 	if builds != 2 {
 		t.Fatalf("unchanged theme rebuilt sections again: %d builds", builds)
+	}
+}
+
+// TestRestyleMsgBroadcastsToEverySection pins RestyleMsg's contract: any
+// producer's restyle reaches all sections, not just the active one — the
+// icons preview is a non-App producer and silently missed background
+// sections before this routing existed.
+func TestRestyleMsgBroadcastsToEverySection(t *testing.T) {
+	ctx := NewProgramContext(nil, nil)
+	ctx.SetSize(80, 24)
+	reg := NewRegistry()
+	a := &countingSection{id: "a"}
+	b := &countingSection{id: "b"}
+	reg.Register("a", func(*ProgramContext) Section { return a })
+	reg.Register("b", func(*ProgramContext) Section { return b })
+	app := NewApp(ctx, reg, []SectionID{"a", "b"})
+	app.Init()
+	au, bu := a.updates, b.updates
+	app.Update(RestyleMsg{})
+	if a.updates != au+1 || b.updates != bu+1 {
+		t.Errorf("RestyleMsg not broadcast (a=%d b=%d)", a.updates-au, b.updates-bu)
 	}
 }
 

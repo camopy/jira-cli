@@ -202,6 +202,29 @@ func TestMenuSaveNeverPersistsEnvOverlay(t *testing.T) {
 	}
 }
 
+// TestPickerFailedSaveRestoresPreview pins the failure path on a previewing
+// row: when the save cannot land, the original value previews back instead
+// of the dashboard staying on a candidate the file never got.
+func TestPickerFailedSaveRestoresPreview(t *testing.T) {
+	path := writeConfig(t, t.TempDir(), sampleConfig)
+	ctx := newSizedCtx(t, path)
+	ctx.ConfigPath = "" // saving has nowhere to go — every save fails
+	m := New(ctx).(*Model)
+	m.Init(ctx)
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}) // Theme row picker
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})  // preview a candidate
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("failed save with a live preview returned no restore")
+	}
+	if restore := findPreview(t, cmd()); restore.Name != "" {
+		t.Errorf("restored %q, want the original empty name", restore.Name)
+	}
+	if m.fail == "" {
+		t.Error("failure reason not shown")
+	}
+}
+
 // TestMenuPickerEscCloses pins the cancel path: esc drops the picker with
 // nothing applied.
 func TestMenuPickerEscCloses(t *testing.T) {

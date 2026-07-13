@@ -12,6 +12,7 @@ import (
 
 	termansi "github.com/gechr/x/ansi"
 	xos "github.com/gechr/x/os"
+	xslices "github.com/gechr/x/slices"
 	xstrings "github.com/gechr/x/strings"
 
 	"github.com/matcra587/jira-cli/internal/config"
@@ -59,9 +60,6 @@ type Model struct {
 	pickOriginal string
 	pickShown    string
 
-	// raw is the file text the raw editor seeds from.
-	raw string
-
 	// editor is the whole-file editing form (one multiline field). Its dirty
 	// guard means a stray esc can never eat config edits.
 	editor  form.Model
@@ -79,12 +77,10 @@ func (m *Model) ID() core.SectionID { return ID }
 // Title returns the tab-bar label.
 func (m *Model) Title() string { return "Settings" }
 
-// Init records the config file's current mtime as the auto-reload baseline
-// and loads the file text for the raw editor.
+// Init records the config file's current mtime as the auto-reload baseline.
 func (m *Model) Init(ctx *core.ProgramContext) tea.Cmd {
 	m.ctx = ctx
 	m.lastMod = m.mtime()
-	m.loadRaw()
 	m.applySize()
 	return nil
 }
@@ -104,18 +100,18 @@ func (m *Model) applySize() {
 	}
 }
 
-// loadRaw reads the config file for the raw editor. A missing file is an
-// empty buffer, not an error — saving it creates the file.
-func (m *Model) loadRaw() {
-	m.raw = ""
+// rawConfig reads the config file at edit time — always the freshest bytes,
+// no cache to invalidate. A missing file is an empty buffer, not an error:
+// saving it creates the file.
+func (m *Model) rawConfig() string {
 	if m.ctx.ConfigPath == "" {
-		return
+		return ""
 	}
 	data, err := os.ReadFile(m.ctx.ConfigPath)
 	if err != nil {
-		return
+		return ""
 	}
-	m.raw = string(data)
+	return string(data)
 }
 
 // mtime returns the config file's modification time, or the zero time when
@@ -146,7 +142,6 @@ func (m *Model) maybeReload() tea.Cmd {
 		return nil
 	}
 	m.lastMod = cur
-	m.loadRaw()
 	return m.reloadCmd()
 }
 
@@ -160,7 +155,6 @@ func (m *Model) reload() tea.Cmd {
 		return nil
 	}
 	m.lastMod = m.mtime()
-	m.loadRaw()
 	return m.reloadCmd()
 }
 
@@ -204,7 +198,6 @@ func (m *Model) applyAndSave(s setting, value string) tea.Cmd {
 	m.fail = ""
 	m.notice = "saved + applied " + time.Now().Format("15:04:05")
 	m.lastMod = m.mtime()
-	m.loadRaw()
 	return m.reloadCmd()
 }
 
@@ -282,7 +275,6 @@ func (m *Model) saveRaw(text string) tea.Cmd {
 	m.fail = ""
 	m.notice = "saved + reloaded " + time.Now().Format("15:04:05")
 	m.lastMod = m.mtime()
-	m.loadRaw()
 	return m.reloadCmd()
 }
 
@@ -370,7 +362,7 @@ func (m *Model) updateMenu(msg tea.KeyPressMsg) tea.Cmd {
 			m.cursor++
 		}
 	case key.Matches(msg, k.Edit):
-		m.openEditor(m.raw)
+		m.openEditor(m.rawConfig())
 	case key.Matches(msg, k.Refresh):
 		return m.reload()
 	case key.Matches(msg, k.Open):
@@ -390,11 +382,9 @@ func (m *Model) updateMenu(msg tea.KeyPressMsg) tea.Cmd {
 // openPicker starts the enum chooser for row i.
 func (m *Model) openPicker(i int) {
 	s := m.menu[i]
-	opts := s.options(m)
-	items := make([]picker.Item, len(opts))
-	for j, o := range opts {
-		items[j] = picker.Item{Label: o, Value: o}
-	}
+	items := xslices.Map(s.options(m), func(o string) picker.Item {
+		return picker.Item{Label: o, Value: o}
+	})
 	m.pick = picker.New(strings.ToLower(s.name)+":", items)
 	m.pickingRow = i
 	m.pickOriginal = s.current(m.ctx.Config)
@@ -421,7 +411,14 @@ func (m *Model) updatePicking(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		m.pickingRow = -1
-		return m.applyAndSave(s, sel.Value)
+		save := m.applyAndSave(s, sel.Value)
+		if save == nil && s.preview != nil && m.pickShown != m.pickOriginal {
+			// The save failed with a candidate still previewing: restore the
+			// original live view, or the dashboard would keep rendering a
+			// value the file never got.
+			return s.preview(m, m.pickOriginal)
+		}
+		return save
 	}
 	cmd := m.pick.Update(msg)
 	if s.preview != nil {

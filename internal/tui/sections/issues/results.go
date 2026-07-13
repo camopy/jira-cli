@@ -339,7 +339,10 @@ const (
 // theme preview must stay free.
 func (r *results) restyle() {
 	r.md = markdown.NewRenderer(markdown.StyleFromTheme(theme.Theme))
-	r.spin = spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(theme.StatusInProgress))
+	// Restyle the spinner in place: replacing the model would mint a new
+	// internal id and the in-flight tick chain (whose messages carry the old
+	// id) would be rejected, freezing the spinner mid-fetch.
+	r.spin.Style = theme.StatusInProgress
 	r.applyFilter()
 	if r.detailIssue != nil {
 		r.setDetailContent(renderDetail(r.detailIssue, r.detailLoading, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))

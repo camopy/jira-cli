@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/bubbles/v2/spinner"
+
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui/core"
 )
@@ -74,3 +76,16 @@ func TestEpicsJQLScopesToProject(t *testing.T) {
 }
 
 var _ core.Section = (*EpicsModel)(nil)
+
+// TestRestyleKeepsSpinnerTicking pins the in-place spinner restyle: a theme
+// preview mid-fetch must not orphan the in-flight tick chain (a replaced
+// model would reject the old chain's id and the spinner would freeze).
+func TestRestyleKeepsSpinnerTicking(t *testing.T) {
+	m := newEpicsModel(t)
+	m.loading = true
+	tick := m.spin.Tick()
+	m.restyle()
+	if cmd := m.handleSpinner(tick.(spinner.TickMsg)); cmd == nil {
+		t.Fatal("pre-restyle tick was rejected; the spinner chain died")
+	}
+}

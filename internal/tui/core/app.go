@@ -49,9 +49,10 @@ type App struct {
 	// inspects volatile state; unlike blurred it only clears on the R key.
 	paused bool
 	// appliedTheme is the theme name the styles were last derived from. The
-	// reload comparison must use this, not ctx.Config: the settings menu
-	// mutates the shared config in place before saving, so by the time the
-	// reload message lands the config already carries the new name.
+	// reload comparison must use this, never a config-vs-config diff: a
+	// ThemePreviewMsg re-derives styles with no config reload at all, so
+	// only this field knows what is actually on screen — and it is what
+	// makes commit-after-preview a flicker-free no-op.
 	appliedTheme string
 	// sections caches built instances so a section is constructed once and
 	// keeps its state across tab switches; started records which have run
@@ -310,6 +311,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.blurred = true
 		return a, nil
 
+	case RestyleMsg:
+		// A first-class broadcast: any producer (the icons preview, a future
+		// density toggle) reaches every section, matching the message's
+		// contract — routing it like an ordinary message would deliver it to
+		// the active section only.
+		return a.broadcast(msg)
+
 	case ThemePreviewMsg:
 		// Live preview: re-derive the shared styles and let every section
 		// restyle what it already renders. No section instance is dropped —
@@ -453,17 +461,15 @@ func (a App) applyConfig(msg ConfigReloadedMsg) (tea.Model, tea.Cmd) {
 	// which the start loop below rebuilds. An unchanged name is a no-op so
 	// an ordinary config edit never flickers the styles. The comparison is
 	// against the name the styles were actually derived from (appliedTheme),
-	// never ctx.Config — the settings menu mutates that in place pre-save.
+	// never the previous config: a ThemePreviewMsg re-derives styles without
+	// any config reload, so the config's old name says nothing about what is
+	// on screen — and a commit-after-preview must be the no-op branch.
 	if msg.Config.Theme.Name != a.appliedTheme {
 		a.appliedTheme = msg.Config.Theme.Name
 		theme.Reload(theme.Resolve(msg.Config.Theme.Name))
 		a.ctx.Styles = DefaultStyles()
-		for id := range a.sections {
-			delete(a.sections, id)
-		}
-		for id := range a.started {
-			delete(a.started, id)
-		}
+		clear(a.sections)
+		clear(a.started)
 	}
 	var cmds []tea.Cmd
 	// A reload may have rewritten the active lens's JQL out from under the
