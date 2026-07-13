@@ -13,6 +13,7 @@ import (
 	"github.com/gechr/primer/overlay"
 
 	"github.com/matcra587/jira-cli/internal/config"
+	"github.com/matcra587/jira-cli/internal/tui/icons"
 	"github.com/matcra587/jira-cli/internal/tui/theme"
 )
 
@@ -427,6 +428,9 @@ func (a App) applyConfig(msg ConfigReloadedMsg) (tea.Model, tea.Cmd) {
 	// Lenses re-read from the new config; the issues section reads the set
 	// per call, so changed chips and JQL take effect on the next render.
 	a.ctx.SetLenses(msg.Config)
+	// The glyph set re-resolves every reload: render helpers read it per
+	// call, so a changed tui.icons shows on the next frame with no rebuild.
+	icons.Use(icons.For(icons.Resolve(msg.Config.TUI.Icons)))
 	// A changed theme.name re-derives everything: the shared theme styles,
 	// the chrome bundle, and — because sections cache derived renderers
 	// (markdown, list styles) at construction — every section instance,

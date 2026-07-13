@@ -77,7 +77,7 @@ func sidebar(i *jira.Issue, width int, md *markdown.Renderer, baseURL string) st
 		fmt.Fprintf(&b, "Reporter:  %s\n", rep)
 	}
 	if p := issuePriority(i); p != "" {
-		glyph := priorityGlyphs[p]
+		glyph, _ := priorityGlyph(p)
 		if ps, ok := theme.PriorityStyle(p); ok {
 			fmt.Fprintf(&b, "Priority:  %s\n", ps.Render(strings.TrimSpace(glyph+" "+p)))
 		} else {

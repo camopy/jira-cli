@@ -14,6 +14,8 @@ import (
 	pkey "github.com/gechr/primer/key"
 	termansi "github.com/gechr/x/ansi"
 	xstrings "github.com/gechr/x/strings"
+
+	"github.com/matcra587/jira-cli/internal/tui/icons"
 )
 
 // HintSegment renders one key/description hint. A single-letter key (with or
@@ -222,7 +224,7 @@ func (a App) contextLine() string {
 	if a.paused {
 		// The paused heartbeat is invisible otherwise — surface it where the
 		// user's eye already rests between refreshes.
-		parts = append(parts, "⏸ paused")
+		parts = append(parts, icons.Active().Paused+" paused")
 	}
 	for _, p := range []string{a.ctx.ProfileName, a.ctx.Project, a.ctx.Board} {
 		if p != "" {

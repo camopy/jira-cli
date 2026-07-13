@@ -143,6 +143,11 @@ type TUI struct {
 	// DefaultLens names the lens (by title, case-insensitive) the issues tab
 	// lands on. Absent or unmatched falls back to the first lens.
 	DefaultLens string `koanf:"default_lens" toml:"default_lens"`
+	// Icons picks the glyph set: "nerd" (Nerd Font codepoints), "unicode"
+	// (portable, the default look), or "auto" (Nerd only when the NERD_FONT
+	// environment convention says the font is installed). Applies on
+	// hot-reload.
+	Icons string `koanf:"icons" toml:"icons"`
 }
 
 // TUISection is one configured dashboard tab: a title and the JQL it runs.

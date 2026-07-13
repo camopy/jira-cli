@@ -18,6 +18,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui/core"
+	"github.com/matcra587/jira-cli/internal/tui/icons"
 	"github.com/matcra587/jira-cli/internal/tui/sections/issues"
 	"github.com/matcra587/jira-cli/internal/tui/sections/settings"
 	"github.com/matcra587/jira-cli/internal/tui/theme"
@@ -115,6 +116,11 @@ func newApp(svc core.Services, cfg *config.Config, profile config.Profile, base 
 		name = cfg.Theme.Name
 	}
 	theme.Apply(theme.Resolve(name))
+	iconMode := ""
+	if cfg != nil {
+		iconMode = cfg.TUI.Icons
+	}
+	icons.Use(icons.For(icons.Resolve(iconMode)))
 
 	ctx := core.NewProgramContext(svc, cfg)
 	// tui.keys overrides; a bad override shouldn't kill the dashboard, so it

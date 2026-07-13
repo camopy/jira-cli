@@ -13,49 +13,63 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/pill"
+	"github.com/matcra587/jira-cli/internal/tui/icons"
 	"github.com/matcra587/jira-cli/internal/tui/theme"
 )
 
 // priorityGlyphs maps Jira priority names to a single-rune arrow, Jira-style:
 // up for higher-than-normal, down for lower. Unknown/empty priority renders a
-// space so the column stays aligned.
-var priorityGlyphs = map[string]string{
-	"Highest": "↟",
-	"High":    "↑",
-	"Medium":  "=",
-	"Low":     "↓",
-	"Lowest":  "↡",
+// space so the column stays aligned. The glyphs come from the active icon set
+// (tui.icons), read per call so a config reload reskins the next frame.
+func priorityGlyph(name string) (string, bool) {
+	ic := icons.Active()
+	switch name {
+	case "Highest":
+		return ic.PriorityHighest, true
+	case "High":
+		return ic.PriorityHigh, true
+	case "Medium":
+		return ic.PriorityMedium, true
+	case "Low":
+		return ic.PriorityLow, true
+	case "Lowest":
+		return ic.PriorityLowest, true
+	default:
+		return "", false
+	}
 }
 
-// typeGlyphFor maps an issue type name to a colored single-rune badge. Color is
-// the primary signal; the shape is a secondary cue. Unknown types get a neutral
-// diamond, empty a blank so the column stays aligned.
+// typeGlyphFor maps an issue type name to a colored single-cell badge from
+// the active icon set. Color is the primary signal; the shape is a secondary
+// cue. Unknown types get the neutral glyph, empty a blank so the column
+// stays aligned.
 func typeGlyphFor(name string) string {
+	ic := icons.Active()
 	switch strings.ToLower(name) {
 	case "epic":
-		return lipgloss.NewStyle().Foreground(theme.Theme.Magenta.GetForeground()).Render("◆")
+		return lipgloss.NewStyle().Foreground(theme.Theme.Magenta.GetForeground()).Render(ic.Epic)
 	case "story":
-		return lipgloss.NewStyle().Foreground(theme.Theme.Green.GetForeground()).Render("●")
+		return lipgloss.NewStyle().Foreground(theme.Theme.Green.GetForeground()).Render(ic.Story)
 	case "task":
-		return lipgloss.NewStyle().Foreground(theme.Theme.Blue.GetForeground()).Render("■")
+		return lipgloss.NewStyle().Foreground(theme.Theme.Blue.GetForeground()).Render(ic.Task)
 	case "sub-task", "subtask":
-		return lipgloss.NewStyle().Foreground(theme.Theme.Blue.GetForeground()).Faint(true).Render("▸")
+		return lipgloss.NewStyle().Foreground(theme.Theme.Blue.GetForeground()).Faint(true).Render(ic.Subtask)
 	case "bug":
-		return lipgloss.NewStyle().Foreground(theme.Theme.Red.GetForeground()).Render("▲")
+		return lipgloss.NewStyle().Foreground(theme.Theme.Red.GetForeground()).Render(ic.Bug)
 	case "":
 		return " "
 	default:
-		return lipgloss.NewStyle().Foreground(theme.Theme.Yellow.GetForeground()).Render("◇")
+		return lipgloss.NewStyle().Foreground(theme.Theme.Yellow.GetForeground()).Render(ic.UnknownType)
 	}
 }
 
 // typeCell renders the issue's type badge for the list.
 func typeCell(i *jira.Issue) string { return typeGlyphFor(issueTypeName(i)) }
 
-// priorityCell renders the priority as a single colored arrow for the list.
+// priorityCell renders the priority as a single colored glyph for the list.
 func priorityCell(i *jira.Issue) string {
 	p := issuePriority(i)
-	g, ok := priorityGlyphs[p]
+	g, ok := priorityGlyph(p)
 	if !ok {
 		return " "
 	}

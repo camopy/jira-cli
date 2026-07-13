@@ -358,6 +358,7 @@ All keys live under `[tui]`:
 | `preview` | Preview dock: `right`, `left`, `bottom`, `hidden`, `auto` | `auto` |
 | `preview_size` | Preview share of the split, percent (20–80) | `50` |
 | `keys` | `[tui.keys]` — rebind any action by name | defaults above |
+| `icons` | Glyph set: `nerd` (Nerd Font), `unicode`, or `auto` (Nerd only when `NERD_FONT` is set in the environment) | `auto` |
 
 A complete example:
 
