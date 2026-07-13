@@ -10,7 +10,7 @@ import (
 
 // genericHint mirrors the package's fail-closed fallback; frozen here so a
 // reworded fallback is a conscious, test-visible change.
-const genericHint = "Rerun with --debug and report the failure if it persists."
+const genericHint = "Rerun with `--debug` and report the failure if it persists."
 
 func TestLookup(t *testing.T) {
 	t.Parallel()

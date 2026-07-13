@@ -194,7 +194,7 @@ type Spec struct {
 }
 
 // genericHint is the fail-closed remediation when no registry row applies.
-const genericHint = "Rerun with --debug and report the failure if it persists."
+const genericHint = "Rerun with `--debug` and report the failure if it persists."
 
 // registry binds every emittable code to its classification. Populated
 // once by this literal and never mutated; access it through [Lookup],
@@ -202,38 +202,38 @@ const genericHint = "Rerun with --debug and report the failure if it persists."
 // style in CONTRIBUTING.md.
 var registry = map[Code]Spec{
 	// validation (exit 3)
-	CodeFlagUnknown:             {Type: TypeValidation, Exit: 3, Hint: "Check the flag's spelling, or run the command with --help to see the ones it accepts.", Retryable: false},
+	CodeFlagUnknown:             {Type: TypeValidation, Exit: 3, Hint: "Check the flag's spelling, or run the command with `--help` to see the ones it accepts.", Retryable: false},
 	CodeFlagForeign:             {Type: TypeValidation, Exit: 3, Hint: "That flag belongs to a different Jira CLI — use this CLI's equivalent instead.", Retryable: false},
-	CodeFlagValueMissing:        {Type: TypeValidation, Exit: 3, Hint: "Give the flag a value, like --flag=value.", Retryable: false},
-	CodeFlagValueInvalid:        {Type: TypeValidation, Exit: 3, Hint: "That value isn't the type the flag expects — run the command with --help to see its format.", Retryable: false},
-	CodeFlagSyntaxInvalid:       {Type: TypeValidation, Exit: 3, Hint: "Write it as --flag=value or --flag value, with nothing stray around the flag.", Retryable: false},
-	CodeRequiredFlagMissing:     {Type: TypeValidation, Exit: 3, Hint: "This command needs that flag — run it with --help to see which ones are required.", Retryable: false},
-	CodeArgCountInvalid:         {Type: TypeValidation, Exit: 3, Hint: "Check how many arguments the command takes; its usage line is in --help.", Retryable: false},
-	CodeArgValueInvalid:         {Type: TypeValidation, Exit: 3, Hint: "That isn't one of the accepted values — run the command with --help to see the choices.", Retryable: false},
+	CodeFlagValueMissing:        {Type: TypeValidation, Exit: 3, Hint: "Give the flag a value, like `--flag=value`.", Retryable: false},
+	CodeFlagValueInvalid:        {Type: TypeValidation, Exit: 3, Hint: "That value isn't the type the flag expects — run the command with `--help` to see its format.", Retryable: false},
+	CodeFlagSyntaxInvalid:       {Type: TypeValidation, Exit: 3, Hint: "Write it as `--flag=value` or `--flag value`, with nothing stray around the flag.", Retryable: false},
+	CodeRequiredFlagMissing:     {Type: TypeValidation, Exit: 3, Hint: "This command needs that flag — run it with `--help` to see which ones are required.", Retryable: false},
+	CodeArgCountInvalid:         {Type: TypeValidation, Exit: 3, Hint: "Check how many arguments the command takes; its usage line is in `--help`.", Retryable: false},
+	CodeArgValueInvalid:         {Type: TypeValidation, Exit: 3, Hint: "That isn't one of the accepted values — run the command with `--help` to see the choices.", Retryable: false},
 	CodeIssueTypeUnknown:        {Type: TypeValidation, Exit: 3, Hint: "Pass one of the project's issue types.", Retryable: false},
 	CodeSavedQueryUnknown:       {Type: TypeValidation, Exit: 3, Hint: "Pass one of your saved query names — they live in the queries_path directory.", Retryable: false},
 	CodeJQExpressionInvalid:     {Type: TypeValidation, Exit: 3, Hint: "Fix the jq expression — the message carries the parser's position and token.", Retryable: false},
-	CodeJQOutputConflict:        {Type: TypeValidation, Exit: 3, Hint: "Remove --jq or the conflicting human-output flag; the filter runs over the JSON output.", Retryable: false},
-	CodeJQEvalFailed:            {Type: TypeValidation, Exit: 3, Hint: "The expression failed against this output's shape — inspect it first with --output=json and no filter.", Retryable: false},
+	CodeJQOutputConflict:        {Type: TypeValidation, Exit: 3, Hint: "Remove `--jq` or the conflicting human-output flag; the filter runs over the JSON output.", Retryable: false},
+	CodeJQEvalFailed:            {Type: TypeValidation, Exit: 3, Hint: "The expression failed against this output's shape — inspect it first with `--output=json` and no filter.", Retryable: false},
 	CodeRankRejected:            {Type: TypeValidation, Exit: 3, Hint: "Ranking needs a Jira Software board with backlog ordering — check the project has one and that the anchor issue exists on it.", Retryable: false},
 	CodeRankPartial:             {Type: TypeValidation, Exit: 3, Hint: "Re-run the command with just the issues named in the error once the cause is fixed; the others already ranked.", Retryable: false},
-	CodeCommandUnknown:          {Type: TypeValidation, Exit: 3, Hint: "Run `jira --help` to see the available commands.", Retryable: false},
+	CodeCommandUnknown:          {Type: TypeValidation, Exit: 3, Hint: "Check the command's spelling, or run `--help` on its parent to see the ones it accepts.", Retryable: false},
 	CodePromptAborted:           {Type: TypeValidation, Exit: 3, Hint: "Run it again and finish the prompt, or pass the value as a flag so it doesn't need to ask.", Retryable: false},
 	CodePromptCanceled:          {Type: TypeValidation, Exit: 3, Hint: "Run it again when you're ready to answer.", Retryable: false},
-	CodePromptUnavailable:       {Type: TypeValidation, Exit: 3, Hint: "There's no terminal to prompt on — pass the value with a flag or --json-input instead.", Retryable: false},
-	CodeMarkdownLossyConversion: {Type: TypeValidation, Exit: 3, Hint: "Rewrite the flagged Markdown, or add --adf-best-effort to accept the downgrade.", Retryable: false},
-	CodeReadOnly:                {Type: TypeValidation, Exit: 3, Hint: "Unset JIRA_READ_ONLY, set the profile's read_only=false, or switch to a profile that allows writes.", Retryable: false},
+	CodePromptUnavailable:       {Type: TypeValidation, Exit: 3, Hint: "There's no terminal to prompt on — pass the value with a flag or `--json-input` instead.", Retryable: false},
+	CodeMarkdownLossyConversion: {Type: TypeValidation, Exit: 3, Hint: "Rewrite the flagged Markdown, or add `--adf-best-effort` to accept the downgrade.", Retryable: false},
+	CodeReadOnly:                {Type: TypeValidation, Exit: 3, Hint: "Unset `JIRA_READ_ONLY`, set the profile's read_only=false, or switch to a profile that allows writes.", Retryable: false},
 	CodeADFInvalid:              {Type: TypeValidation, Exit: 3, Hint: "This field takes an ADF document, not a string — see `jira agent guide adf_reference` for the shape, or use the field's *_markdown alias.", Retryable: false},
 	CodeIssueKeyExpansionLimit:  {Type: TypeValidation, Exit: 3, Hint: "Ask for fewer keys at once, or narrow the search with a project or JQL filter.", Retryable: false},
 	CodeUserAmbiguous:           {Type: TypeValidation, Exit: 3, Hint: "Run `jira user search <name>` to see each match's account ID, then pass that ID instead of the email.", Retryable: false},
-	CodeBoardAmbiguous:          {Type: TypeValidation, Exit: 3, Hint: "Run `jira boards list` to see the boards and their IDs, then pass one with --board — or set a default board for the profile.", Retryable: false},
-	CodeDryRunBlocked:           {Type: TypeValidation, Exit: 3, Hint: "This was a dry run — run it again without --dry-run to actually make the change.", Retryable: false},
+	CodeBoardAmbiguous:          {Type: TypeValidation, Exit: 3, Hint: "Run `jira boards list` to see the boards and their IDs, then pass one with `--board` — or set a default board for the profile.", Retryable: false},
+	CodeDryRunBlocked:           {Type: TypeValidation, Exit: 3, Hint: "This was a dry run — run it again without `--dry-run` to actually make the change.", Retryable: false},
 	// The three credential-input codes classify as validation (see the
 	// const block): correct the input, don't re-authenticate.
 	CodeCredentialEmpty:              {Type: TypeValidation, Exit: 3, Hint: "Provide a non-empty API token.", Retryable: false},
 	CodeCredentialNamespaceCollision: {Type: TypeValidation, Exit: 3, Hint: "Rename the profile using only lowercase letters, digits, hyphens, and underscores.", Retryable: false},
 	CodeOnePasswordItemAmbiguous:     {Type: TypeValidation, Exit: 3, Hint: "Give the profile a unique 1Password item title, or point it at a specific item ID.", Retryable: false},
-	CodeEnvBackendReadOnly:           {Type: TypeValidation, Exit: 3, Hint: "The env backend only reads the profile's JIRA_TOKEN_<PROFILE> variable — set or unset it in the shell or secret manager that launches jira.", Retryable: false},
+	CodeEnvBackendReadOnly:           {Type: TypeValidation, Exit: 3, Hint: "The env backend only reads the profile's `JIRA_TOKEN_<PROFILE>` variable — set or unset it in the shell or secret manager that launches jira.", Retryable: false},
 	CodeValidationFailed:             {Type: TypeValidation, Exit: 3, Hint: "Check the values you passed and try again.", Retryable: false},
 	CodeJiraBadRequest:               {Type: TypeValidation, Exit: 3, Hint: "Jira rejected some of the values — fix the fields it flagged and send it again.", Retryable: false},
 	CodeJiraConflict:                 {Type: TypeValidation, Exit: 3, Hint: "Someone changed this issue since you loaded it — re-fetch it and try again on the latest version.", Retryable: false},
@@ -248,11 +248,11 @@ var registry = map[Code]Spec{
 	CodeCredentialMigrationFailed:    {Type: TypeAuth, Exit: 1, Hint: "The migration didn't finish — run `jira auth migrate` again.", Retryable: false},
 	CodeCredentialCleanupFailed:      {Type: TypeAuth, Exit: 1, Hint: "The new credential is in place, but the old one is still there — remove it from the old backend by hand.", Retryable: false},
 	CodeOnePasswordUnavailable:       {Type: TypeAuth, Exit: 1, Hint: "Couldn't use 1Password — make sure `op` is installed and your account is unlocked.", Retryable: false},
-	CodeCredentialRejected:           {Type: TypeAuth, Exit: 1, Hint: "Check the email and API token at id.atlassian.com, or pass --skip-verify to store the credential without checking.", Retryable: false},
-	CodeCredentialVerifyUnavailable:  {Type: TypeAuth, Exit: 1, Hint: "Jira couldn't be reached to verify the credential — try again, or pass --skip-verify to store it without checking.", Retryable: true},
+	CodeCredentialRejected:           {Type: TypeAuth, Exit: 1, Hint: "Check the email and API token at id.atlassian.com, or pass `--skip-verify` to store the credential without checking.", Retryable: false},
+	CodeCredentialVerifyUnavailable:  {Type: TypeAuth, Exit: 1, Hint: "Jira couldn't be reached to verify the credential — try again, or pass `--skip-verify` to store it without checking.", Retryable: true},
 	CodeOnePasswordUnsupportedBuild:  {Type: TypeAuth, Exit: 1, Hint: "This build has no 1Password support — use a source build with CGO enabled, or switch to the keyring or env backend.", Retryable: false},
-	CodeKeyringUnavailable:           {Type: TypeAuth, Exit: 1, Hint: "No OS keyring is available here (common on WSL and headless Linux) — set the profile's JIRA_TOKEN_<PROFILE> variable and run `jira auth login --backend env`, or install a Secret Service such as gnome-keyring.", Retryable: false},
-	CodeEnvCredentialUnset:           {Type: TypeAuth, Exit: 1, Hint: "Export the profile's JIRA_TOKEN_<PROFILE> variable with the API token (JIRA_TOKEN_DEFAULT for the default profile), then retry.", Retryable: false},
+	CodeKeyringUnavailable:           {Type: TypeAuth, Exit: 1, Hint: "No OS keyring is available here (common on WSL and headless Linux) — set the profile's `JIRA_TOKEN_<PROFILE>` variable and run `jira auth login --backend env`, or install a Secret Service such as gnome-keyring.", Retryable: false},
+	CodeEnvCredentialUnset:           {Type: TypeAuth, Exit: 1, Hint: "Export the profile's `JIRA_TOKEN_<PROFILE>` variable with the API token (`JIRA_TOKEN_DEFAULT` for the default profile), then retry.", Retryable: false},
 	CodeAuthFailed:                   {Type: TypeAuth, Exit: 1, Hint: "Check the credential with `jira auth status`, then sign in again with `jira auth login`.", Retryable: false},
 	// not_found (exit 2)
 	CodeProfileNotDefined: {Type: TypeNotFound, Exit: 2, Hint: "See your profiles with `jira config profile`, or create one with `jira auth login --profile <name>`.", Retryable: false},
@@ -262,8 +262,8 @@ var registry = map[Code]Spec{
 	CodeJiraGone:          {Type: TypeNotFound, Exit: 2, Hint: "This was permanently deleted in Jira — stop referring to it.", Retryable: false},
 	CodeNotFound:          {Type: TypeNotFound, Exit: 2, Hint: "Re-check the identifier — it doesn't exist, or this account can't see it.", Retryable: false},
 	// rate_limit (exit 4)
-	CodeJiraRateLimited: {Type: TypeRateLimit, Exit: 4, Hint: "Jira is rate-limiting you — wait for the window to reset, or raise --max-retry-wait (or JIRA_MAX_RETRY_WAIT) to keep waiting automatically.", Retryable: true},
-	CodeRateLimited:     {Type: TypeRateLimit, Exit: 4, Hint: "Wait for the limit to reset, or raise --max-retry-wait (or JIRA_MAX_RETRY_WAIT) to keep waiting automatically.", Retryable: true},
+	CodeJiraRateLimited: {Type: TypeRateLimit, Exit: 4, Hint: "Jira is rate-limiting you — wait for the window to reset, or raise `--max-retry-wait` (or `JIRA_MAX_RETRY_WAIT`) to keep waiting automatically.", Retryable: true},
+	CodeRateLimited:     {Type: TypeRateLimit, Exit: 4, Hint: "Wait for the limit to reset, or raise `--max-retry-wait` (or `JIRA_MAX_RETRY_WAIT`) to keep waiting automatically.", Retryable: true},
 	// server (exit 5; canceled and timeout pin their own exits)
 	CodeJiraServerError: {Type: TypeServer, Exit: 5, Hint: "Jira hit a server-side error — wait a moment and try again.", Retryable: true},
 	// CodeServerError stays retryable=false: the untyped fallback has never
@@ -271,7 +271,7 @@ var registry = map[Code]Spec{
 	// catch-all gets the transport retry rule from the assembler instead.
 	CodeServerError: {Type: TypeServer, Exit: 5, Hint: "Jira hit an unexpected error — wait a moment and try again.", Retryable: false},
 	CodeCanceled:    {Type: TypeServer, Exit: 6, Hint: "Run it again when you're ready.", Retryable: true},
-	CodeTimeout:     {Type: TypeServer, Exit: 7, Hint: "It ran past the --timeout deadline — raise --timeout or try again.", Retryable: true},
+	CodeTimeout:     {Type: TypeServer, Exit: 7, Hint: "It ran past the `--timeout` deadline — raise `--timeout` or try again.", Retryable: true},
 }
 
 // Lookup returns the registry row for a code. ok is false for an
