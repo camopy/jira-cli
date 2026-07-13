@@ -27,24 +27,23 @@ import (
 // new mutation won't race the optimistic rollback or a pending reconcile.
 func (r *results) canMutate() bool { return r.rollback == nil && !r.bulkPending && !r.writing }
 
-// openComment starts a comment: through the external editor when one is
-// configured ($JIRA_EDITOR/$EDITOR — the TUI suspends while it runs),
-// otherwise the in-modal textarea.
+// openComment starts a comment in the in-TUI overlay. When an external editor
+// is configured ($JIRA_EDITOR/$EDITOR), ctrl+e inside the overlay hands the
+// draft to it — the modal is the default, the editor the escape hatch.
 func (r *results) openComment() tea.Cmd {
 	iss := r.selected()
 	if iss == nil || !r.canMutate() {
 		return nil
 	}
-	if input.EditorCommand() != "" {
-		return input.Edit("comment:"+issueKey(iss), "")
-	}
 	r.ctrl.OpenText(action.ModeComment, issueKey(iss), "")
 	return nil
 }
 
-// handleEditor resumes a flow that went through the external editor: an error
-// or empty buffer surfaces and nothing is written; otherwise the text submits
-// exactly like its in-modal equivalent.
+// handleEditor resumes a flow that went through the external editor. On an
+// editor failure the comment overlay (still open, still holding the draft)
+// stays up so nothing typed is lost; otherwise the overlay closes and the
+// editor's text submits exactly like its in-modal equivalent — an emptied
+// buffer is a deliberate discard.
 func (r *results) handleEditor(msg input.EditorFinishedMsg) tea.Cmd {
 	if msg.Err != nil {
 		r.err = msg.Err
@@ -57,6 +56,7 @@ func (r *results) handleEditor(msg input.EditorFinishedMsg) tea.Cmd {
 	if kind != "comment" {
 		return nil
 	}
+	r.ctrl.Cancel()
 	if xstrings.IsBlank(msg.Text) {
 		return r.flashNotice("empty comment discarded", false)
 	}

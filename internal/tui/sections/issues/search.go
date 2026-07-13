@@ -11,6 +11,7 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui/components/action"
+	"github.com/matcra587/jira-cli/internal/tui/components/form"
 	"github.com/matcra587/jira-cli/internal/tui/components/input"
 	"github.com/matcra587/jira-cli/internal/tui/components/picker"
 	"github.com/matcra587/jira-cli/internal/tui/core"
@@ -280,23 +281,20 @@ func (s *SearchModel) openPresets() {
 }
 
 // updatePreset drives the open preset dropdown: enter commits the picked JQL
-// and runs it, esc closes, everything else types into the picker's filter.
+// and runs it, esc closes (the controller handles both), everything else
+// types into the picker's filter.
 func (s *SearchModel) updatePreset(msg tea.KeyPressMsg) tea.Cmd {
-	switch msg.String() {
-	case "esc":
-		s.ctrl.Cancel()
-		return nil
-	case "enter":
-		req, ok := s.ctrl.Submit()
-		if !ok {
-			return nil
-		}
-		s.editing = false
-		s.jql = req.Text
-		return s.fetch()
-	default:
-		return s.ctrl.Update(msg)
+	cmd, outcome := s.ctrl.Update(msg)
+	if outcome != action.OutcomeSubmit {
+		return cmd
 	}
+	req, ok := s.ctrl.Submit()
+	if !ok {
+		return nil
+	}
+	s.editing = false
+	s.jql = req.Text
+	return s.fetch()
 }
 
 // loadSaved cycles the saved queries into the committed query and runs it.
@@ -365,6 +363,11 @@ func (s *SearchModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 		return s, s.handleClick(msg)
 	case input.EditorFinishedMsg:
 		return s, s.handleEditor(msg)
+	case form.SuggestionsMsg:
+		// Autocomplete fetches resolve as commands; their results must find
+		// their way back into the open form or the seam silently drops them.
+		cmd, _ := s.ctrl.Update(msg)
+		return s, cmd
 	case spinner.TickMsg:
 		return s, s.handleSpinner(msg)
 	case flashClearMsg:
@@ -374,7 +377,8 @@ func (s *SearchModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 		// The preset dropdown outranks the editor: opened from edit mode it
 		// covers the box, so a paste must filter it, not the hidden input.
 		if s.ctrl.Active() && s.ctrl.Mode() == action.ModePreset {
-			return s, s.ctrl.Update(msg)
+			cmd, _ := s.ctrl.Update(msg)
+			return s, cmd
 		}
 		if s.editing {
 			cmd := s.jqlInput.Update(msg)

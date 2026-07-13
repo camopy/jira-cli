@@ -5,6 +5,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/matcra587/jira-cli/internal/tui/components/form"
 	"github.com/matcra587/jira-cli/internal/tui/components/input"
 	"github.com/matcra587/jira-cli/internal/tui/core"
 )
@@ -98,6 +99,11 @@ func (m *Model) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 		return m, m.handleClick(msg)
 	case input.EditorFinishedMsg:
 		return m, m.handleEditor(msg)
+	case form.SuggestionsMsg:
+		// Autocomplete fetches resolve as commands; their results must find
+		// their way back into the open form or the seam silently drops them.
+		cmd, _ := m.ctrl.Update(msg)
+		return m, cmd
 	case spinner.TickMsg:
 		return m, m.handleSpinner(msg)
 	case flashClearMsg:

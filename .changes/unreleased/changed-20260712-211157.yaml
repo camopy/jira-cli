@@ -1,0 +1,3 @@
+kind: changed
+body: Open TUI comments in the in-app overlay first; with an external editor configured, ctrl+e continues the draft there instead of the editor opening unasked
+time: 2026-07-12T21:11:57.811231335-04:00

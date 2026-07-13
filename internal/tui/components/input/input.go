@@ -1,6 +1,8 @@
 package input
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 
 	"charm.land/bubbles/v2/textarea"
@@ -48,6 +50,27 @@ func (l *Line) SetWidth(w int) {
 		w = 1
 	}
 	l.ti.SetWidth(w)
+}
+
+// BeforeCursor returns the content up to the cursor, for token detection
+// (e.g. an autocomplete trigger word being typed).
+func (l Line) BeforeCursor() string {
+	v := []rune(l.ti.Value())
+	pos := min(l.ti.Position(), len(v))
+	return string(v[:pos])
+}
+
+// ReplaceBeforeCursor swaps the n runes before the cursor for s, leaving the
+// cursor at the end of s — how an autocomplete acceptance lands.
+func (l *Line) ReplaceBeforeCursor(n int, s string) {
+	v := []rune(l.ti.Value())
+	pos := min(l.ti.Position(), len(v))
+	n = min(n, pos)
+	pre := append([]rune{}, v[:pos-n]...)
+	pre = append(pre, []rune(s)...)
+	at := len(pre)
+	l.ti.SetValue(string(append(pre, v[pos:]...)))
+	l.ti.SetCursor(at)
 }
 
 // SetSuggestions enables ghost-text autocompletion over the given values:
@@ -99,6 +122,36 @@ func (a *Area) SetValue(s string) { a.ta.SetValue(s) }
 
 // Value returns the current content.
 func (a Area) Value() string { return a.ta.Value() }
+
+// BeforeCursor returns the current logical line up to the cursor, for token
+// detection. Words never span newlines, so one line is the whole search space.
+func (a Area) BeforeCursor() string {
+	rows := strings.Split(a.ta.Value(), "\n")
+	row := a.ta.Line()
+	if row < 0 || row >= len(rows) {
+		return ""
+	}
+	line := []rune(rows[row])
+	col := min(a.ta.Column(), len(line))
+	return string(line[:col])
+}
+
+// ReplaceBeforeCursor swaps the n runes before the cursor for s. The textarea
+// exposes no direct cursor repositioning after SetValue, so the cursor lands
+// at the end of the buffer — exact for the dominant case of completing while
+// typing at the end, approximate for a mid-text edit.
+func (a *Area) ReplaceBeforeCursor(n int, s string) {
+	rows := strings.Split(a.ta.Value(), "\n")
+	row := a.ta.Line()
+	if row < 0 || row >= len(rows) {
+		return
+	}
+	line := []rune(rows[row])
+	col := min(a.ta.Column(), len(line))
+	n = min(n, col)
+	rows[row] = string(line[:col-n]) + s + string(line[col:])
+	a.ta.SetValue(strings.Join(rows, "\n"))
+}
 
 // Update routes a message into the textarea (enter inserts a newline).
 func (a *Area) Update(msg tea.Msg) tea.Cmd {

@@ -349,35 +349,31 @@ func (r *results) handlePaste(msg tea.PasteMsg) (tea.Cmd, bool) {
 	case r.jumping:
 		return r.jumpPick.Update(msg), true
 	case r.ctrl.Active():
-		return r.ctrl.Update(msg), true
+		cmd, _ := r.ctrl.Update(msg)
+		return cmd, true
 	case r.filtering:
 		return r.syncFilter(msg), true
 	}
 	return nil, false
 }
 
-// updateAction drives the open action: esc cancels; enter submits except in
-// the multiline comment area, where it inserts a newline and ctrl+s submits;
-// the transition picker takes up/down; everything else flows into the shared
-// text input, giving the verbs real cursor movement and paste.
+// updateAction routes a key into the open action and dispatches whatever it
+// completed. Submit, cancel, the dirty-discard guard, and the editor hatch
+// all live inside the controller's form now; this owner just executes.
 func (r *results) updateAction(msg tea.KeyPressMsg) tea.Cmd {
-	switch msg.String() {
-	case "esc":
-		r.ctrl.Cancel()
-		return nil
-	case "ctrl+s":
-		if r.ctrl.Multiline() {
-			return r.submitAction()
-		}
-		return nil
-	case "enter":
-		if !r.ctrl.Multiline() {
-			return r.submitAction()
-		}
+	cmd, outcome := r.ctrl.Update(msg)
+	switch outcome {
+	case action.OutcomeSubmit:
+		return r.submitAction()
+	case action.OutcomeEditor:
+		// The user asked for the full-screen editor: the draft rides along and
+		// the comment resumes through handleEditor. The overlay deliberately
+		// stays open — it still holds the draft, so a failed editor launch
+		// loses nothing; handleEditor closes it once the round-trip resolves.
+		return input.Edit("comment:"+r.ctrl.IssueKey(), r.ctrl.Draft())
+	case action.OutcomeCancel, action.OutcomeNone:
 	}
-	// Everything else — including up/down, which the transition picker
-	// consumes itself — flows into the active control.
-	return r.ctrl.Update(msg)
+	return cmd
 }
 
 // openTextVerb opens a free-text action against the selected issue, if any and

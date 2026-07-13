@@ -129,7 +129,77 @@ func TestTypeIgnoredOutsideTextMode(t *testing.T) {
 	var c Controller
 	c.OpenTransition("JCT-1", []*jira.Transition{transition("11", "To Do")})
 	c.Update(tea.KeyPressMsg{Text: "xyz"}) // must be ignored in a choice mode
-	if got := c.Text(); got != "" {
+	if got := c.Draft(); got != "" {
 		t.Errorf("text captured in transition mode: %q", got)
+	}
+}
+
+func TestPickerEscCancels(t *testing.T) {
+	var c Controller
+	c.OpenTransition("JCT-1", []*jira.Transition{transition("11", "To Do")})
+	_, outcome := c.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if outcome != OutcomeCancel || c.Active() {
+		t.Errorf("esc on picker: outcome=%v active=%v, want cancel+closed", outcome, c.Active())
+	}
+}
+
+func TestPickerEnterReportsSubmit(t *testing.T) {
+	var c Controller
+	c.OpenTransition("JCT-1", []*jira.Transition{transition("11", "To Do")})
+	_, outcome := c.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if outcome != OutcomeSubmit {
+		t.Errorf("enter on picker: outcome=%v, want submit", outcome)
+	}
+	if req, ok := c.Submit(); !ok || req.TransitionID != "11" {
+		t.Errorf("submit after enter = %+v, %v", req, ok)
+	}
+}
+
+func TestDirtyCommentEscGuardsBeforeCancel(t *testing.T) {
+	var c Controller
+	c.OpenText(ModeComment, "JCT-2", "")
+	c.Update(tea.KeyPressMsg{Text: "half a thought"})
+	if _, outcome := c.Update(tea.KeyPressMsg{Code: tea.KeyEscape}); outcome != OutcomeNone || !c.Active() {
+		t.Fatal("dirty esc dropped the draft without asking")
+	}
+	// y confirms the discard and closes the action.
+	if _, outcome := c.Update(tea.KeyPressMsg{Text: "y", Code: 'y'}); outcome != OutcomeCancel || c.Active() {
+		t.Fatal("confirmed discard did not cancel")
+	}
+}
+
+func TestCommentEditorHatchReportsOutcome(t *testing.T) {
+	t.Setenv("JIRA_EDITOR", "true")
+	var c Controller
+	c.OpenText(ModeComment, "JCT-2", "")
+	c.Update(tea.KeyPressMsg{Text: "draft so far"})
+	_, outcome := c.Update(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl})
+	if outcome != OutcomeEditor {
+		t.Fatalf("ctrl+e outcome = %v, want editor", outcome)
+	}
+	if got := c.Draft(); got != "draft so far" {
+		t.Errorf("draft = %q; the editor handoff would lose text", got)
+	}
+	if c.IssueKey() != "JCT-2" {
+		t.Errorf("issue key = %q", c.IssueKey())
+	}
+}
+
+func TestCommentNoEditorNoHatch(t *testing.T) {
+	t.Setenv("JIRA_EDITOR", "")
+	t.Setenv("EDITOR", "")
+	var c Controller
+	c.OpenText(ModeComment, "JCT-2", "")
+	if _, outcome := c.Update(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl}); outcome != OutcomeNone {
+		t.Errorf("ctrl+e with no editor configured: outcome=%v, want none", outcome)
+	}
+}
+
+func TestBulkCommentHasNoEditorHatch(t *testing.T) {
+	t.Setenv("JIRA_EDITOR", "true")
+	var c Controller
+	c.OpenText(ModeBulkComment, "", "")
+	if _, outcome := c.Update(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl}); outcome != OutcomeNone {
+		t.Errorf("bulk comment offered the editor hatch: outcome=%v", outcome)
 	}
 }

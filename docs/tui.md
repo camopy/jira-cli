@@ -175,7 +175,7 @@ failure rolls the row back with an error toast.
 | `t` | Transition | Type-to-filter picker over the workflow transitions Jira allows for this issue |
 | `a` | Assign | Type a name or email — resolved against Jira; `none`/`unassigned` (or empty) clears |
 | `A` | Assign to me | One keypress, no prompt |
-| `c` | Comment | Opens `$JIRA_EDITOR`/`$EDITOR` when set; otherwise an in-modal textarea (`ctrl+s` submits, `enter` is a newline). Markdown converts to ADF |
+| `c` | Comment | In-modal textarea (`ctrl+s` submits, `enter` is a newline); with `$JIRA_EDITOR`/`$EDITOR` set, `ctrl+e` continues the draft in the external editor. Markdown converts to ADF |
 | `e` | Edit summary | Prefilled with the current summary |
 | `l` | Labels | Prefilled with the current labels, comma-separated — what you submit replaces the whole list, so an emptied field clears them |
 | `w` | Log work | Accepts `2h`, `30m`, `1d` etc. (`workday_seconds` scales `d`) |
@@ -183,7 +183,9 @@ failure rolls the row back with an error toast.
 | `y` / `Y` | Copy issue key / URL | Via OSC 52, so it works over SSH |
 
 Modal prompts share one input substrate: real cursor movement, word-wise
-editing and bracketed paste everywhere. `esc` always cancels.
+editing and bracketed paste everywhere. `esc` cancels — and when you have
+typed something, it asks `discard input? (y)es (n)o` first, so a stray
+`esc` can never eat a half-written comment.
 
 ## Bulk actions
 

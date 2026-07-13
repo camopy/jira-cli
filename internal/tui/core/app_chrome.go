@@ -11,8 +11,21 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/gechr/primer/helpsheet"
+	pkey "github.com/gechr/primer/key"
 	xstrings "github.com/gechr/x/strings"
 )
+
+// HintSegment renders one key/description hint. A single-letter key (with or
+// without a modifier prefix) highlights its mnemonic inside the description —
+// the "(t)ransition" style — so the eye reads the word and the key at once;
+// anything else falls back to "key desc". Shared by the footer hint line and
+// the sections' own hint rows so the two can never drift apart.
+func HintSegment(styles Styles, hintKey, desc string) string {
+	if seg, ok := pkey.Inline(hintKey, desc, styles.HintKey, styles.HintDesc); ok {
+		return seg
+	}
+	return styles.HintKey.Render(hintKey) + " " + styles.HintDesc.Render(desc)
+}
 
 // helpSheet renders the full keymap: shared navigation and chrome bindings
 // plus the active section's contextual ones, deduplicated by key.
@@ -181,7 +194,7 @@ func (a App) hintLine(width int) string {
 		if hb.Key == "" {
 			continue
 		}
-		seg := a.ctx.Styles.HintKey.Render(hb.Key) + " " + a.ctx.Styles.HintDesc.Render(hb.Desc)
+		seg := HintSegment(a.ctx.Styles, hb.Key, hb.Desc)
 		need := lipgloss.Width(seg)
 		if len(parts) > 0 {
 			need += sepW

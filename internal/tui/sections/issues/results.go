@@ -298,8 +298,7 @@ func (r *results) find(key string) *jira.Issue {
 // overlaying the action controller when open.
 func (r *results) view(header string) string {
 	if r.detailing {
-		hint := r.ctx.Styles.Footer.Render("esc/enter back · tab switch · ↑/↓ scroll · o open in browser · q quit")
-		return lipgloss.JoinVertical(lipgloss.Left, header, r.detailPills(), hint, r.detailBody())
+		return lipgloss.JoinVertical(lipgloss.Left, header, r.detailPills(), r.detailHint(), r.detailBody())
 	}
 	main := lipgloss.JoinVertical(lipgloss.Left, header, r.statusLine(), columnHeader(r.ctx.MainWidth-3), r.list.View())
 
@@ -332,6 +331,23 @@ func (r *results) view(header string) string {
 		body = overlay.Place(body, box, r.ctx.ScreenWidth, r.ctx.MainHeight, overlay.Center)
 	}
 	return body
+}
+
+// detailHint is the detail view's hint row, mnemonic-styled through the same
+// helper as the footer so single-letter verbs read as "(o)pen in browser".
+func (r *results) detailHint() string {
+	pairs := [][2]string{
+		{"esc/enter", "back"},
+		{"tab", "switch"},
+		{"↑/↓", "scroll"},
+		{"o", "open in browser"},
+		{"q", "quit"},
+	}
+	segs := make([]string, 0, len(pairs))
+	for _, p := range pairs {
+		segs = append(segs, core.HintSegment(r.ctx.Styles, p[0], p[1]))
+	}
+	return strings.Join(segs, "  ")
 }
 
 // overlayContent is whichever modal is open: an action in flight, the facet

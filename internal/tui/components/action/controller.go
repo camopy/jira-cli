@@ -4,12 +4,15 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	lipgloss "charm.land/lipgloss/v2"
 
 	"github.com/gechr/x/ptr"
 	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/jira"
+	"github.com/matcra587/jira-cli/internal/tui/components/form"
 	"github.com/matcra587/jira-cli/internal/tui/components/input"
 	"github.com/matcra587/jira-cli/internal/tui/components/picker"
+	"github.com/matcra587/jira-cli/internal/tui/theme"
 )
 
 // Mode is the verb the controller is collecting input for.
@@ -115,9 +118,26 @@ type Request struct {
 	Summary string
 }
 
+// Outcome is what an Update asks the owner to do next. The controller closes
+// itself on a cancel; a submit leaves it open so the owner reads the Request
+// out through Submit.
+type Outcome int
+
+const (
+	// OutcomeNone means the input was consumed and the action stays open.
+	OutcomeNone Outcome = iota
+	// OutcomeSubmit means the action completed — call Submit for the Request.
+	OutcomeSubmit
+	// OutcomeCancel means the user backed out; the controller already closed.
+	OutcomeCancel
+	// OutcomeEditor asks the owner to continue the draft (Draft) in the
+	// external editor; the controller stays open until the owner closes it.
+	OutcomeEditor
+)
+
 // Controller collects input for one action against one issue. Text entry
-// rides the shared input substrate: a real single-line input for the quick
-// verbs and a textarea for comments when no external editor is configured.
+// rides the shared form component (focus ring, dirty-discard guard, inline
+// hints); transition and preset choices ride the filterable picker.
 type Controller struct {
 	mode     Mode
 	issueKey string
@@ -126,14 +146,9 @@ type Controller struct {
 	// id submitted.
 	pick picker.Model
 
-	// line collects the single-line text modes; area collects ModeComment.
-	line input.Line
-	area input.Area
-
-	// summary is ModeCreate's first field (the area carries the description);
-	// descFocused tracks which of the two owns the keyboard.
-	summary     input.Line
-	descFocused bool
+	// form collects every text mode, from the one-line verbs to the
+	// two-field create.
+	form form.Model
 }
 
 // modalTextWidth is the inner width text inputs render at inside the action
@@ -177,30 +192,38 @@ func (c *Controller) openPick(mode Mode, issueKey, title string, transitions []*
 }
 
 // OpenText opens a free-text action with an optional initial value (e.g. the
-// current summary for an edit). Comments get a multiline area; everything else
-// a single-line input.
+// current summary for an edit). Comments get a multiline area — with ctrl+e
+// as the external-editor escape hatch when one is configured — and everything
+// else a single-line input.
 func (c *Controller) OpenText(mode Mode, issueKey, initial string) {
 	c.reset()
 	c.mode = mode
 	c.issueKey = issueKey
-	if mode.multiline() {
-		c.area = input.NewArea("write a comment…", modalTextWidth, 6)
-		c.area.SetValue(initial)
-		return
+	spec := form.FieldSpec{Initial: initial, Placeholder: placeholderFor(mode)}
+	cfg := form.Config{
+		Title:  titleFor(mode, issueKey),
+		Width:  modalTextWidth,
+		Styles: formStyles(),
 	}
-	c.line = input.NewLine("", "")
-	c.line.SetWidth(modalTextWidth)
-	c.line.SetValue(initial)
+	if mode.multiline() {
+		spec.Multiline = true
+		spec.Rows = 6
+		// The hatch is single-issue only: the editor round-trip resumes by
+		// issue key, which a bulk selection doesn't have.
+		cfg.EditorHatch = mode == ModeComment && input.EditorCommand() != ""
+	}
+	// Labels and bulk assign accept empty text deliberately: clear all
+	// labels, and unassign the selection (the bulk path confirms first).
+	spec.Optional = mode == ModeLabels || mode == ModeBulkAssign
+	cfg.Fields = []form.FieldSpec{spec}
+	c.form = form.New(cfg)
 }
 
 func (c *Controller) reset() {
 	c.mode = ModeNone
 	c.issueKey = ""
 	c.pick = picker.Model{}
-	c.line = input.Line{}
-	c.area = input.Area{}
-	c.summary = input.Line{}
-	c.descFocused = false
+	c.form = form.Model{}
 }
 
 // OpenCreate opens the two-field new-issue overlay targeting project. The
@@ -210,23 +233,69 @@ func (c *Controller) OpenCreate(project string) {
 	c.reset()
 	c.mode = ModeCreate
 	c.issueKey = project
-	c.summary = input.NewLine("", "one-line summary")
-	c.summary.SetWidth(modalTextWidth)
-	c.area = input.NewArea("description (optional, Markdown)…", modalTextWidth, 5)
-	c.area.Blur()
+	c.form = form.New(form.Config{
+		Title:  "create in " + project,
+		Width:  modalTextWidth,
+		Styles: formStyles(),
+		Fields: []form.FieldSpec{
+			{Placeholder: "one-line summary"},
+			{Placeholder: "description (optional, Markdown)…", Multiline: true, Rows: 5, Optional: true},
+		},
+	})
 }
 
-// toggleCreateFocus moves keyboard ownership between the create form's two
-// fields, keeping exactly one cursor visible.
-func (c *Controller) toggleCreateFocus() {
-	c.descFocused = !c.descFocused
-	if c.descFocused {
-		c.summary.Blur()
-		c.area.Focus()
-		return
+// titleFor is the overlay heading: the verb plus its target, so the modal
+// says what it is about to do without a separate label row.
+func titleFor(mode Mode, issueKey string) string {
+	switch mode {
+	case ModeBulkComment:
+		return "comment on selection"
+	case ModeBulkAssign:
+		return "assign selection"
+	case ModeComment:
+		return "comment on " + issueKey
+	case ModeAssign:
+		return "assign " + issueKey
+	case ModeLabels:
+		return "labels for " + issueKey
+	case ModeWorklog:
+		return "log work on " + issueKey
+	case ModeEdit:
+		return "edit " + issueKey
+	default:
+		return strings.TrimSpace(mode.String() + " " + issueKey)
 	}
-	c.area.Blur()
-	c.summary.Focus()
+}
+
+// placeholderFor hints at each verb's expected input format.
+func placeholderFor(mode Mode) string {
+	switch mode {
+	case ModeComment, ModeBulkComment:
+		return "write a comment… (Markdown)"
+	case ModeAssign, ModeBulkAssign:
+		return "name or email — none clears"
+	case ModeLabels:
+		return "comma-separated — empty clears all"
+	case ModeWorklog:
+		return "e.g. 2h 30m"
+	default:
+		return ""
+	}
+}
+
+// formStyles wires the shared theme into the form's injected styles, keeping
+// the form package itself theme-agnostic.
+func formStyles() form.Styles {
+	return form.Styles{
+		Title:              theme.DetailHeader,
+		Label:              theme.HelpDesc,
+		LabelFocused:       theme.HelpKey,
+		HintKey:            theme.HelpKey,
+		HintText:           theme.HelpDesc,
+		Question:           lipgloss.NewStyle().Foreground(theme.Theme.Yellow.GetForeground()).Bold(true),
+		Suggestion:         theme.DetailValue,
+		SuggestionSelected: lipgloss.NewStyle().Bold(true).Reverse(true),
+	}
 }
 
 // Active reports whether an action is open.
@@ -238,52 +307,46 @@ func (c *Controller) Mode() Mode { return c.mode }
 // Cancel closes the controller without producing a request.
 func (c *Controller) Cancel() { c.reset() }
 
-// Update routes a message into the active control: the transition picker
-// (up/down navigate, typing filters) or the text input (cursor movement,
-// editing, paste).
-func (c *Controller) Update(msg tea.Msg) tea.Cmd {
+// Update routes a message into the active control and reports what completed.
+// The pickers handle esc/enter here (cancel and submit); the form modes carry
+// their own submit, cancel, guard, and editor-hatch contract.
+func (c *Controller) Update(msg tea.Msg) (tea.Cmd, Outcome) {
 	switch {
-	case c.mode == ModeCreate:
+	case c.mode == ModeNone:
+		return nil, OutcomeNone
+	case c.mode.isPick():
 		if key, ok := msg.(tea.KeyPressMsg); ok {
 			switch key.String() {
-			case "tab", "shift+tab":
-				c.toggleCreateFocus()
-				return nil
+			case "esc":
+				c.reset()
+				return nil, OutcomeCancel
 			case "enter":
-				// Enter on the one-line summary advances to the description
-				// (a newline is meaningless there); in the area it stays a
-				// newline via the textarea below.
-				if !c.descFocused {
-					c.toggleCreateFocus()
-					return nil
-				}
+				return nil, OutcomeSubmit
 			}
 		}
-		if c.descFocused {
-			return c.area.Update(msg)
+		return c.pick.Update(msg), OutcomeNone
+	default:
+		cmd, ev, _ := c.form.Update(msg)
+		switch ev {
+		case form.EventSubmit:
+			return cmd, OutcomeSubmit
+		case form.EventCancel:
+			c.reset()
+			return cmd, OutcomeCancel
+		case form.EventEditor:
+			return cmd, OutcomeEditor
+		case form.EventNone:
 		}
-		return c.summary.Update(msg)
-	case c.mode.isPick():
-		return c.pick.Update(msg)
-	case c.mode.multiline():
-		return c.area.Update(msg)
-	case c.mode.isText():
-		return c.line.Update(msg)
+		return cmd, OutcomeNone
 	}
-	return nil
 }
 
-// Text returns the current text-mode content.
-func (c *Controller) Text() string {
-	if c.mode.multiline() {
-		return c.area.Value()
-	}
-	return c.line.Value()
-}
+// Draft returns the open form's primary text — what an OutcomeEditor carries
+// into the external editor so no keystroke is lost in the handoff.
+func (c *Controller) Draft() string { return c.form.Value(0) }
 
-// Multiline reports that the open action collects multiline text, so enter
-// inserts a newline rather than submitting.
-func (c *Controller) Multiline() bool { return c.mode.multiline() }
+// IssueKey returns the open action's target (the project key for ModeCreate).
+func (c *Controller) IssueKey() string { return c.issueKey }
 
 // Submit produces the Request and closes the controller. It reports false when
 // the action is incomplete (no transitions, empty required text, or a create
@@ -291,11 +354,11 @@ func (c *Controller) Multiline() bool { return c.mode.multiline() }
 func (c *Controller) Submit() (Request, bool) {
 	switch {
 	case c.mode == ModeCreate:
-		summary := strings.TrimSpace(c.summary.Value())
+		summary := strings.TrimSpace(c.form.Value(0))
 		if summary == "" {
 			return Request{}, false
 		}
-		req := Request{Mode: ModeCreate, IssueKey: c.issueKey, Summary: summary, Text: c.area.Value()}
+		req := Request{Mode: ModeCreate, IssueKey: c.issueKey, Summary: summary, Text: c.form.Value(1)}
 		c.reset()
 		return req, true
 	case c.mode.isPick():
@@ -323,7 +386,7 @@ func (c *Controller) Submit() (Request, bool) {
 		c.reset()
 		return req, true
 	case c.mode.isText():
-		text := c.Text()
+		text := c.form.Value(0)
 		// Labels and bulk assign accept empty text deliberately: clear all
 		// labels, and unassign the selection (the bulk path confirms first).
 		if xstrings.IsBlank(text) && c.mode != ModeLabels && c.mode != ModeBulkAssign {
@@ -338,19 +401,14 @@ func (c *Controller) Submit() (Request, bool) {
 }
 
 // View renders the open action as overlay content: a choice list for a
-// transition, or a labeled text prompt otherwise. Empty when no action is open.
+// transition, or the titled form otherwise. Empty when no action is open.
 func (c *Controller) View() string {
 	switch {
+	case c.mode == ModeNone:
+		return ""
 	case c.mode.isPick():
 		return c.pick.View()
-	case c.mode == ModeCreate:
-		return "create in " + c.issueKey + " (tab switches, ctrl+s submits):\n" +
-			c.summary.View() + "\n" + c.area.View()
-	case c.mode.multiline():
-		return c.mode.String() + " (ctrl+s to submit):\n" + c.area.View()
-	case c.mode.isText():
-		return c.mode.String() + ": " + c.line.View()
 	default:
-		return ""
+		return c.form.View()
 	}
 }
