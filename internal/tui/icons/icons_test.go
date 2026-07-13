@@ -56,7 +56,8 @@ func TestSetsAreCompleteAndSingleCell(t *testing.T) {
 }
 
 func TestUseSwapsActiveSet(t *testing.T) {
-	t.Cleanup(func() { Use(unicodeSet) })
+	prev := Active() // restore whatever was active, not the package default
+	t.Cleanup(func() { Use(prev) })
 	Use(For(Nerd))
 	if Active().Bug != nerdSet.Bug {
 		t.Error("Use did not install the nerd set")

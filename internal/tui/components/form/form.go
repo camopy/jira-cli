@@ -132,6 +132,20 @@ func New(cfg Config) Model {
 // Active reports whether the form is open — a zero Model is inert.
 func (m *Model) Active() bool { return len(m.fields) > 0 }
 
+// SetValue replaces field i's content without touching its Initial, so the
+// dirty guard keeps comparing against the true baseline — the seam a caller
+// rebuilding a form mid-edit (a resize) needs to carry a draft over.
+func (m *Model) SetValue(i int, s string) {
+	if i < 0 || i >= len(m.fields) {
+		return
+	}
+	if m.fields[i].spec.Multiline {
+		m.fields[i].area.SetValue(s)
+		return
+	}
+	m.fields[i].line.SetValue(s)
+}
+
 // Value returns field i's current content ("" out of range).
 func (m *Model) Value(i int) string {
 	if i < 0 || i >= len(m.fields) {

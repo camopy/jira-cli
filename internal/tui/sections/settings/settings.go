@@ -61,9 +61,12 @@ type Model struct {
 	pickShown    string
 
 	// editor is the whole-file editing form (one multiline field). Its dirty
-	// guard means a stray esc can never eat config edits.
-	editor  form.Model
-	editing bool
+	// guard means a stray esc can never eat config edits; editBaseline is
+	// the file text the session started from, so a mid-edit rebuild (a
+	// resize, a failed save) never re-seeds the guard with the draft itself.
+	editor       form.Model
+	editing      bool
+	editBaseline string
 }
 
 // New builds the settings section.
@@ -93,25 +96,33 @@ const headerRows = 3
 // per render.
 func (m *Model) applySize() {
 	if m.editing {
-		// Rebuilding on resize keeps the textarea inside the body; the value
-		// carries over so a resize mid-edit loses nothing.
+		// Rebuilding on resize keeps the textarea inside the body. The form
+		// re-seeds from the session baseline and the draft carries over as
+		// the value — never as Initial, or the dirty guard would compare the
+		// draft to itself and esc would discard without asking.
 		draft := m.editor.Value(0)
-		m.openEditor(draft)
+		m.openEditor(m.editBaseline)
+		m.editor.SetValue(0, draft)
 	}
 }
 
 // rawConfig reads the config file at edit time — always the freshest bytes,
-// no cache to invalidate. A missing file is an empty buffer, not an error:
-// saving it creates the file.
-func (m *Model) rawConfig() string {
+// no cache to invalidate. A missing file is an empty buffer, not an error
+// (saving it creates the file); any other read failure is one, so an
+// existing-but-unreadable config can never silently open as a blank buffer
+// a later save would clobber.
+func (m *Model) rawConfig() (string, error) {
 	if m.ctx.ConfigPath == "" {
-		return ""
+		return "", nil
 	}
 	data, err := os.ReadFile(m.ctx.ConfigPath)
 	if err != nil {
-		return ""
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
 	}
-	return string(data)
+	return string(data), nil
 }
 
 // mtime returns the config file's modification time, or the zero time when
@@ -362,7 +373,13 @@ func (m *Model) updateMenu(msg tea.KeyPressMsg) tea.Cmd {
 			m.cursor++
 		}
 	case key.Matches(msg, k.Edit):
-		m.openEditor(m.rawConfig())
+		raw, err := m.rawConfig()
+		if err != nil {
+			m.fail = "read config: " + err.Error()
+			return nil
+		}
+		m.editBaseline = raw
+		m.openEditor(raw)
 	case key.Matches(msg, k.Refresh):
 		return m.reload()
 	case key.Matches(msg, k.Open):
@@ -480,7 +497,11 @@ func (m *Model) handleEditor(msg input.EditorFinishedMsg) tea.Cmd {
 		m.fail = msg.Err.Error()
 		return nil
 	}
-	m.openEditor(msg.Text) // show what came back, then save it
+	// Show what came back, then save it. The baseline stays the session's:
+	// if the save is rejected (bad TOML), the editor stays open with the
+	// returned text as a dirty draft the guard still protects.
+	m.openEditor(m.editBaseline)
+	m.editor.SetValue(0, msg.Text)
 	return m.saveRaw(msg.Text)
 }
 

@@ -3,6 +3,7 @@ package settings
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -222,6 +223,54 @@ func TestPickerFailedSaveRestoresPreview(t *testing.T) {
 	}
 	if m.fail == "" {
 		t.Error("failure reason not shown")
+	}
+}
+
+// TestResizeMidEditKeepsDirtyGuard pins the guard's baseline across a form
+// rebuild: after a resize, esc on an edited buffer must still ask — a
+// rebuild that re-seeded Initial from the draft would discard silently.
+func TestResizeMidEditKeepsDirtyGuard(t *testing.T) {
+	path := writeConfig(t, t.TempDir(), sampleConfig)
+	ctx := newSizedCtx(t, path)
+	m := New(ctx).(*Model)
+	m.Init(ctx)
+	m.Update(tea.KeyPressMsg{Code: 'e', Text: "e"})
+	m.editor.Update(tea.KeyPressMsg{Text: "# a change"})
+	m.Update(tea.WindowSizeMsg{Width: 90, Height: 30}) // rebuilds the form
+	if got := m.editor.Value(0); !strings.Contains(got, "# a change") {
+		t.Fatalf("draft lost across resize: %q", got)
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if !m.editing {
+		t.Fatal("dirty esc after a resize discarded without asking")
+	}
+}
+
+// TestUnreadableConfigRefusesEditor pins the read-failure path: an existing
+// but unreadable file must refuse to open (with the reason), never present a
+// blank buffer a later save would clobber.
+func TestUnreadableConfigRefusesEditor(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits don't bind on windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: permission bits don't bind")
+	}
+	path := writeConfig(t, t.TempDir(), sampleConfig)
+	ctx := newSizedCtx(t, path) // load while readable, like a live session
+	m := New(ctx).(*Model)
+	m.Init(ctx)
+	// The file turns unreadable underneath the running dashboard.
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o600) })
+	m.Update(tea.KeyPressMsg{Code: 'e', Text: "e"})
+	if m.editing {
+		t.Fatal("unreadable config opened as an editor buffer")
+	}
+	if m.fail == "" {
+		t.Error("no failure reason shown")
 	}
 }
 
