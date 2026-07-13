@@ -52,7 +52,19 @@ func (f fakeServices) JQL() jira.JQLService      { return fakeJQLSvc{} }
 
 func mkIssue(key, status, summary, issueType, priority, assignee string) *jira.Issue {
 	k, st, su := key, status, summary
-	f := &jira.IssueFields{Summary: &su, Status: &jira.Status{Name: &st}}
+	// Categories mirror what the live API attaches, so the pills pin the
+	// category-keyed palette rather than the per-name hash fallback.
+	categories := map[string][2]string{
+		"To Do":       {"new", "blue-gray"},
+		"In Progress": {"indeterminate", "yellow"},
+		"Done":        {"done", "green"},
+	}
+	stat := &jira.Status{Name: &st}
+	if c, ok := categories[status]; ok {
+		catKey, catColor := c[0], c[1]
+		stat.StatusCategory = &jira.StatusCategory{Key: &catKey, ColorName: &catColor}
+	}
+	f := &jira.IssueFields{Summary: &su, Status: stat}
 	if issueType != "" {
 		f.IssueType = &jira.IssueType{Name: &issueType}
 	}

@@ -331,8 +331,8 @@ func TestFocusAwareRefresh(t *testing.T) {
 	if a.updates != before {
 		t.Error("a tick while blurred must not reach sections")
 	}
-	if cmd == nil {
-		t.Error("a blurred tick must still re-arm the timer")
+	if cmd != nil {
+		t.Error("a blurred tick must not re-arm the timer — focus return starts a fresh one")
 	}
 
 	m, _ = app.Update(tea.FocusMsg{})
@@ -470,8 +470,8 @@ func TestPauseGatesRefresh(t *testing.T) {
 	if a.updates != before {
 		t.Error("a tick while paused must not reach sections")
 	}
-	if cmd == nil {
-		t.Error("a paused tick must still re-arm the timer")
+	if cmd != nil {
+		t.Error("a paused tick must not re-arm the timer — resume starts a fresh one")
 	}
 
 	// Pause must survive a blur/focus round-trip — the user chose it.

@@ -40,7 +40,7 @@ func detailHeading(i *jira.Issue, width int, now time.Time, baseURL string) stri
 	b.WriteString(lipgloss.NewStyle().Bold(true).Render(wrap(issueSummary(i), width)) + "\n\n")
 
 	meta := make([]string, 0, 3)
-	if pill := statusPill(issueStatus(i)); pill != "" {
+	if pill := statusPill(i); pill != "" {
 		meta = append(meta, pill)
 	}
 	if tn := issueTypeName(i); tn != "" {

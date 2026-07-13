@@ -26,6 +26,17 @@ func issueSummary(i *jira.Issue) string {
 	return ptr.Deref(i.Fields.Summary)
 }
 
+// issueStatusCategory returns the status's category key and Jira color name
+// ("", "" when the fetch did not expand them), the inputs the shared pill
+// palette keys on.
+func issueStatusCategory(i *jira.Issue) (category, colorName string) {
+	if i == nil || i.Fields == nil || i.Fields.Status == nil || i.Fields.Status.StatusCategory == nil {
+		return "", ""
+	}
+	sc := i.Fields.Status.StatusCategory
+	return ptr.Deref(sc.Key), ptr.Deref(sc.ColorName)
+}
+
 func issueStatus(i *jira.Issue) string {
 	if i.Fields == nil || i.Fields.Status == nil {
 		return ""

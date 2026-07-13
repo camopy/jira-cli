@@ -272,7 +272,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// refetching for a dashboard nobody is looking at. Focus triggers an
 		// immediate round instead.
 		if a.blurred || a.paused {
-			return a, a.refreshTick()
+			// No re-arm: the resume paths (FocusMsg, the R toggle) start a
+			// fresh timer, and re-arming here would stack one extra
+			// self-sustaining heartbeat per pause/blur cycle.
+			return a, nil
 		}
 		// Every idle section refetches; the timer is re-armed for the next round.
 		model, cmd := a.broadcast(msg)

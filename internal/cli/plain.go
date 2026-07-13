@@ -26,6 +26,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/browser"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/jira"
+	"github.com/matcra587/jira-cli/internal/pill"
 )
 
 // PlainOption configures one aspect of a plain-text render; the WithPlain*
@@ -1145,83 +1146,7 @@ func statusPill(cfg plainConfig, status, category, colorName string) lipgloss.St
 	if !cfg.tty || cfg.theme == nil {
 		return lipgloss.NewStyle()
 	}
-	bg := statusFill(status, category, colorName)
-	return lipgloss.NewStyle().Background(bg).Foreground(pillForeground(bg)).Bold(true)
-}
-
-// Pill fills are fixed truecolor values drawn from Atlassian's status
-// palette, NOT theme colors. Pills used to track the active theme, but
-// theme colors resolve to basic ANSI palette slots whose actual rendering
-// is whatever the user's terminal remaps them to — the CLI cannot know,
-// so fill/text contrast was a guess that broke on remapped palettes
-// (a light-blue "blue" slot under light pill text). Fixed RGB fills make
-// the contrast computation deterministic; the residual risk is confined
-// to terminals that cannot render 24-bit color, where the profile writer
-// downsamples toward the nearest palette slot.
-var (
-	pillFillGreen  = lipgloss.Color("#1f845a")
-	pillFillYellow = lipgloss.Color("#e2b203")
-	pillFillBlue   = lipgloss.Color("#1d7afc")
-	pillFillGray   = lipgloss.Color("#626f86")
-	// pillFillFallbacks color statuses with no recognized category: a
-	// per-name hash picks one, keeping distinct statuses distinguishable
-	// without ever touching a remappable palette slot.
-	pillFillFallbacks = []color.Color{
-		lipgloss.Color("#8f7ee7"), // purple
-		lipgloss.Color("#e56910"), // orange
-		lipgloss.Color("#227d9b"), // teal
-		lipgloss.Color("#da62ac"), // magenta
-		lipgloss.Color("#82b536"), // lime
-	}
-)
-
-// statusFill picks the pill background. Jira's own color designation
-// (statusCategory.colorName) is preferred so the badge matches the Jira UI;
-// when it is absent or unrecognized the stable category key is used; failing
-// both, a per-name hash keeps distinct statuses distinguishable. Every
-// result is a fixed truecolor fill — see the pillFill* rationale above for
-// why theme-tracking was dropped.
-func statusFill(status, category, colorName string) color.Color {
-	switch normalizeStyleKey(colorName) {
-	case "green":
-		return pillFillGreen
-	case "yellow":
-		return pillFillYellow
-	case "blue-gray", "blue-grey", "blue":
-		return pillFillBlue
-	case "medium-gray", "medium-grey", "gray", "grey":
-		return pillFillGray
-	}
-	switch normalizeStyleKey(category) {
-	case "done":
-		return pillFillGreen
-	case "indeterminate":
-		return pillFillYellow
-	case "new":
-		return pillFillBlue
-	}
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(strings.ToLower(strings.TrimSpace("status:" + status))))
-	return pillFillFallbacks[h.Sum32()%uint32(len(pillFillFallbacks))]
-}
-
-var (
-	pillTextDark  = lipgloss.Color("#1c1c1c")
-	pillTextLight = lipgloss.Color("#f5f5f5")
-)
-
-// pillForeground picks near-black or near-white text for legibility on the
-// pill fill, judged by the fill's Rec. 601 luma. Every fill is a fixed
-// truecolor constant (see statusFill), so the luma is the real rendered
-// brightness and the contrast decision is deterministic — the old
-// palette-index heuristic for basic ANSI fills is gone with the fills that
-// needed it.
-func pillForeground(bg color.Color) color.Color {
-	r, g, b, _ := bg.RGBA() // channels 0..0xffff, alpha-premultiplied
-	if (299*r+587*g+114*b)/1000 > 0x7fff {
-		return pillTextDark
-	}
-	return pillTextLight
+	return pill.Style(status, category, colorName)
 }
 
 // priorityStyle colors a priority on Jira's scale: red for high and highest,

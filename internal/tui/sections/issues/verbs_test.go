@@ -188,7 +188,7 @@ func TestCreateOverlayCollectsSummaryAndDescription(t *testing.T) {
 	m.ctrl.Update(tea.KeyPressMsg{Code: tea.KeyTab}) // move to the description
 	m.ctrl.Update(tea.KeyPressMsg{Text: "It sparks when engaged."})
 	runVerb(t, m)
-	if got := w.get("create:JCT"); got != "Fix the flux|Task|It sparks when engaged." {
+	if got := w.get("create:JCT"); got != "Fix the flux|Task|with-description" {
 		t.Fatalf("Create = %q, want summary|Task|description", got)
 	}
 }

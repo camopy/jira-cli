@@ -1,11 +1,12 @@
-// Writes from the results list: comments, transitions,
-// edits, assignments, and worklogs, plus the optimistic row updates and
+// Writes from the results list: creates, comments, transitions, edits,
+// assignments, labels, and worklogs, plus the optimistic row updates and
 // rollbacks that cover a write until the server confirms it.
 
 package issues
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -91,8 +92,9 @@ func (r *results) openCreate() tea.Cmd {
 }
 
 // createIssue submits a create against project proj with the profile's issue
-// type (Task when unset). The description travels as Markdown — the service
-// converts to ADF — and the refetch after the mutation surfaces the new issue.
+// type (Task when unset). The Markdown description converts to ADF here, the
+// same way comments do — the service's create payload does not translate
+// Markdown — and the refetch after the mutation surfaces the new issue.
 func (r *results) createIssue(proj, summary, desc string) tea.Cmd {
 	if summary == "" {
 		return r.flashNotice("issue needs a summary on the first line", true)
@@ -103,7 +105,12 @@ func (r *results) createIssue(proj, summary, desc string) tea.Cmd {
 	}
 	req := &jira.IssueCreateRequest{Project: proj, IssueType: issueType, Summary: summary}
 	if desc != "" {
-		req.Fields = map[string]any{"description_markdown": desc}
+		doc, _, err := adf.FromMarkdownLossy(desc)
+		if err != nil {
+			r.err = err
+			return nil
+		}
+		req.Fields = map[string]any{"description": doc}
 	}
 	return r.mutate(func(svc core.Services, base context.Context) error {
 		_, _, err := svc.Issues().Create(base, req)
@@ -266,7 +273,7 @@ func (r *results) assignMe(key string) tea.Cmd {
 			return err
 		}
 		if me.AccountID == "" {
-			return fmt.Errorf("could not resolve your account id for self-assign")
+			return errors.New("could not resolve your account id for self-assign")
 		}
 		return setAssignee(svc, base, key, me.AccountID)
 	})

@@ -12,6 +12,7 @@ import (
 	xstrings "github.com/gechr/x/strings"
 
 	"github.com/matcra587/jira-cli/internal/jira"
+	"github.com/matcra587/jira-cli/internal/pill"
 	"github.com/matcra587/jira-cli/internal/tui/theme"
 )
 
@@ -107,7 +108,7 @@ func layoutFor(width int) rowLayout {
 // width) keeps the columns aligned.
 func rowText(i *jira.Issue, width int, now time.Time) string {
 	key := fmt.Sprintf("%-*s", keyCol, xstrings.Truncate(issueKey(i), keyCol, "…"))
-	left := typeCell(i) + " " + priorityCell(i) + " " + key + "  " + statusCell(issueStatus(i)) + "  "
+	left := typeCell(i) + " " + priorityCell(i) + " " + key + "  " + statusCell(i) + "  "
 	l := layoutFor(width)
 	if !l.age {
 		return left + issueSummary(i)
@@ -129,18 +130,33 @@ func assigneeCell(i *jira.Issue) string {
 	return theme.EntityColor(name).Render(padRight(truncCells(name, assigneeCol), assigneeCol))
 }
 
-// statusCell renders the status name as a width-padded, colored cell.
-func statusCell(status string) string {
-	padded := fmt.Sprintf("%-*s", statusCol, xstrings.Truncate(status, statusCol, "…"))
-	return theme.StatusStyle(status).Render(padded)
+// statusCell renders the status as a filled pill padded to the column width —
+// the same category-keyed fixed-color badge the CLI's plain issue list draws,
+// so status reads identically everywhere. The pill hugs the name; the padding
+// stays unstyled so the row background shows through.
+func statusCell(i *jira.Issue) string {
+	status := issueStatus(i)
+	// truncCells, not rune truncation: status names are tenant text and a
+	// wide-glyph name would otherwise overflow the column and shift the row.
+	name := truncCells(status, statusCol-2)
+	category, colorName := issueStatusCategory(i)
+	badge := pill.Style(status, category, colorName).Render(" " + name + " ")
+	pad := statusCol - lipgloss.Width(badge)
+	if pad < 0 {
+		pad = 0
+	}
+	return badge + strings.Repeat(" ", pad)
 }
 
-// statusPill renders the status as a reverse-video pill for detail headers.
-func statusPill(status string) string {
+// statusPill renders the status as a filled pill for detail headers, from the
+// same shared palette as the list rows and the CLI.
+func statusPill(i *jira.Issue) string {
+	status := issueStatus(i)
 	if status == "" {
 		return ""
 	}
-	return theme.StatusStyle(status).Reverse(true).Render(" " + status + " ")
+	category, colorName := issueStatusCategory(i)
+	return pill.Style(status, category, colorName).Render(" " + status + " ")
 }
 
 // columnHeader is the dim heading row above the list, derived from the same

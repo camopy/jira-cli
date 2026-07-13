@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/matcra587/jira-cli/internal/pill"
+
 	"charm.land/lipgloss/v2"
 	ansi "github.com/charmbracelet/x/ansi"
 	clibtheme "github.com/gechr/clib/theme"
@@ -203,10 +205,10 @@ func TestPillForegroundContrast(t *testing.T) {
 		"#00008b": light, // dark navy
 	}
 	for fill, want := range cases {
-		gotR, gotG, gotB, _ := pillForeground(lipgloss.Color(fill)).RGBA()
+		gotR, gotG, gotB, _ := pill.Foreground(lipgloss.Color(fill)).RGBA()
 		wantR, wantG, wantB, _ := lipgloss.Color(want).RGBA()
 		if gotR != wantR || gotG != wantG || gotB != wantB {
-			t.Errorf("pillForeground(%s) = %s", fill, want)
+			t.Errorf("pill.Foreground(%s) = %s", fill, want)
 		}
 	}
 }
@@ -228,13 +230,13 @@ func TestStatusFillNeverUsesPaletteSlots(t *testing.T) {
 		{"Another Custom", "unrecognized", ""},
 	}
 	for _, in := range inputs {
-		fill := statusFill(in.status, in.category, in.colorName)
+		fill := pill.Fill(in.status, in.category, in.colorName)
 		if fill == nil {
-			t.Errorf("statusFill(%q,%q,%q) = nil; every status must get a fill", in.status, in.category, in.colorName)
+			t.Errorf("pill.Fill(%q,%q,%q) = nil; every status must get a fill", in.status, in.category, in.colorName)
 			continue
 		}
 		if _, isBasic := fill.(ansi.BasicColor); isBasic {
-			t.Errorf("statusFill(%q,%q,%q) resolved to remappable basic ANSI slot %v", in.status, in.category, in.colorName, fill)
+			t.Errorf("pill.Fill(%q,%q,%q) resolved to remappable basic ANSI slot %v", in.status, in.category, in.colorName, fill)
 		}
 	}
 

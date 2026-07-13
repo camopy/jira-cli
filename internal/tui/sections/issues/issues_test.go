@@ -84,7 +84,10 @@ func (f fakeIssueSvc) Update(_ context.Context, key string, req *jira.IssueUpdat
 
 func (f fakeIssueSvc) Create(_ context.Context, req *jira.IssueCreateRequest) (*jira.Issue, *jira.Response, error) {
 	if f.writes != nil && req != nil {
-		desc, _ := req.Fields["description_markdown"].(string)
+		desc := ""
+		if req.Fields["description"] != nil {
+			desc = "with-description"
+		}
 		f.writes.record("create:"+req.Project, req.Summary+"|"+req.IssueType+"|"+desc)
 	}
 	return nil, nil, nil
