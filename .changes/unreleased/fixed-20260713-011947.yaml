@@ -1,0 +1,3 @@
+kind: fixed
+body: Report a misspelled subcommand as an unknown command with suggestions, instead of exiting silently with usage or blaming a trailing flag
+time: 2026-07-13T01:19:47.380210226-04:00

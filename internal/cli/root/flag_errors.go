@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 
@@ -142,18 +143,30 @@ func requiredFlagError(missing []string) error {
 }
 
 // unknownCommandError builds the typed error for a first positional token
-// that does not name a command, with "did you mean" candidates drawn from
-// Cobra's own command-name suggestion logic.
-func unknownCommandError(root *cobra.Command, name string) error {
-	fe := cli.NewCLIInputError(cli.InputCommandUnknown, fmt.Sprintf("unknown command %q", name))
-	fe.Suggestions = root.SuggestionsFor(name)
+// that does not name a command under cmd, with "did you mean" candidates
+// drawn from Cobra's own command-name suggestion logic. A group parent
+// names itself in the message ("… for \"jira issue\"") so a subcommand typo
+// reads differently from a top-level one.
+func unknownCommandError(cmd *cobra.Command, name string) error {
+	msg := fmt.Sprintf("unknown command %q", name)
+	if cmd.HasParent() {
+		msg = fmt.Sprintf("unknown command %q for %q", name, cmd.CommandPath())
+	}
+	fe := cli.NewCLIInputError(cli.InputCommandUnknown, msg)
+	// SuggestionsMinimumDistance is configured on the root only; Cobra reads
+	// it from the command whose children are being matched, so a group
+	// parent would silently produce no candidates. Inherit before asking.
+	if cmd.SuggestionsMinimumDistance <= 0 {
+		cmd.SuggestionsMinimumDistance = cmd.Root().SuggestionsMinimumDistance
+	}
+	fe.Suggestions = cmd.SuggestionsFor(name)
 	return fe
 }
 
 // firstPositional returns the first non-flag token in args, resolved
-// against root's persistent flags so a flag that consumes a value
-// (--profile NAME) does not have its value mistaken for a command. It
-// mirrors the throwaway-flag-set technique timeoutFromArgs uses: a probe
+// against cmd's own and inherited persistent flags so a flag that consumes
+// a value (--profile NAME) does not have its value mistaken for a command.
+// It mirrors the throwaway-flag-set technique timeoutFromArgs uses: a probe
 // set carries each persistent flag's name and its value-vs-bool arity
 // (NoOptDefVal), and unknown flags are tolerated so a bad flag does not
 // abort the scan. A probe parse error is ignored — pflag still records
@@ -161,15 +174,30 @@ func unknownCommandError(root *cobra.Command, name string) error {
 // caller reaching here (an unknown command, possibly trailed by a
 // value-flag with no value) needs. An empty return means "no command
 // token present".
-func firstPositional(root *cobra.Command, args []string) string {
+func firstPositional(cmd *cobra.Command, args []string) string {
+	// Tokens past a bare "--" are declared non-flags by the caller — and
+	// declared non-commands just as much: naming one in an unknown-command
+	// error would contradict the terminator's whole meaning. Only what sits
+	// before it can be a command candidate.
+	if i := slices.Index(args, "--"); i >= 0 {
+		args = args[:i]
+	}
 	probe := pflag.NewFlagSet("command-probe", pflag.ContinueOnError)
 	probe.ParseErrorsAllowlist.UnknownFlags = true
 	probe.Usage = func() {}
 	probe.SetOutput(io.Discard)
-	root.PersistentFlags().VisitAll(func(f *pflag.Flag) {
+	register := func(f *pflag.Flag) {
+		if probe.Lookup(f.Name) != nil {
+			return
+		}
 		probed := probe.VarPF(noopValue{}, f.Name, f.Shorthand, "")
 		probed.NoOptDefVal = f.NoOptDefVal
-	})
+	}
+	// Own persistents first, then the ancestors' (root's --profile and
+	// friends) — a group parent is probed with everything a real parse
+	// would accept at its position.
+	cmd.PersistentFlags().VisitAll(register)
+	cmd.InheritedFlags().VisitAll(register)
 	_ = probe.Parse(args)
 	if probe.NArg() == 0 {
 		return ""

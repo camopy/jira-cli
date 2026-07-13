@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/matcra587/jira-cli/internal/cli"
@@ -292,6 +293,69 @@ func TestAssembledTreeRejectsUnknownCommand(t *testing.T) {
 	}
 	if len(ie.Suggestions) == 0 || ie.Suggestions[0] != "issue" {
 		t.Errorf("Suggestions = %v, want issue first", ie.Suggestions)
+	}
+}
+
+// TestAssembledTreeRejectsUnknownSubcommand exercises the group-parent
+// precheck: Cobra's legacy args handling accepts a stray positional on a
+// non-root group (Find returns the parent with no error), so Execute's
+// guard must recognize the typo'd subcommand itself — both bare, where
+// Cobra would exit 0 with usage, and with a trailing flag, where the
+// parent's flag parse would report "unknown flag" and mask the real
+// mistake.
+func TestAssembledTreeRejectsUnknownSubcommand(t *testing.T) {
+	root, _, err := NewRootCommandForTest()
+	if err != nil {
+		t.Fatalf("NewRootCommandForTest: %v", err)
+	}
+	for _, args := range [][]string{
+		{"issue", "lst"},
+		{"issue", "lst", "--limit", "5"},
+	} {
+		cmd, cargs, ferr := root.Find(args)
+		if ferr != nil {
+			t.Fatalf("Find(%v) errored (%v); the guard exists because Cobra accepts this", args, ferr)
+		}
+		if cmd.Runnable() || !cmd.HasSubCommands() {
+			t.Fatalf("Find(%v) = %q; want the non-runnable issue group", args, cmd.Name())
+		}
+		tok := firstPositional(cmd, cargs)
+		if tok != "lst" {
+			t.Fatalf("firstPositional(%v) = %q, want lst", cargs, tok)
+		}
+		ie := asInputError(t, unknownCommandError(cmd, tok))
+		if ie.Kind != cli.InputCommandUnknown {
+			t.Errorf("Kind = %d, want InputCommandUnknown", ie.Kind)
+		}
+		if msg := ie.Error(); !strings.Contains(msg, `for "jira issue"`) {
+			t.Errorf("message %q should name the group the typo sits under", msg)
+		}
+		if len(ie.Suggestions) == 0 || ie.Suggestions[0] != "list" {
+			t.Errorf("Suggestions = %v, want list first", ie.Suggestions)
+		}
+	}
+}
+
+// TestFirstPositionalStopsAtTerminator pins the "--" semantics: tokens the
+// caller explicitly declared non-flags are never offered up as command
+// candidates, so `jira issue -- --output=json` can't be told its terminated
+// token is an unknown command.
+func TestFirstPositionalStopsAtTerminator(t *testing.T) {
+	root, _, err := NewRootCommandForTest()
+	if err != nil {
+		t.Fatalf("NewRootCommandForTest: %v", err)
+	}
+	cmd, cargs, ferr := root.Find([]string{"issue", "--", "--output=json"})
+	if ferr != nil {
+		t.Fatalf("Find errored: %v", ferr)
+	}
+	if tok := firstPositional(cmd, cargs); tok != "" {
+		t.Errorf("terminated token offered as a command candidate: %q", tok)
+	}
+	// A real typo before the terminator is still caught.
+	cmd, cargs, _ = root.Find([]string{"issue", "lst", "--", "x"})
+	if tok := firstPositional(cmd, cargs); tok != "lst" {
+		t.Errorf("token before the terminator = %q, want lst", tok)
 	}
 }
 

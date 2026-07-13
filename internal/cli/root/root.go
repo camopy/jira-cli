@@ -454,18 +454,31 @@ func Execute(ctx context.Context) error {
 	if args != nil {
 		root.SetArgs(args)
 	}
-	// Reject an unknown top-level command before execution so it carries
-	// the stable command_unknown code. Cobra's own unknown-command error
-	// is an untyped string; here it becomes a typed *cli.CLIInputError
-	// with "did you mean" candidates from Cobra's suggestion logic.
+	// Reject an unknown command before execution so it carries the stable
+	// command_unknown code. Cobra's own unknown-command error is an untyped
+	// string; here it becomes a typed *cli.CLIInputError with "did you
+	// mean" candidates from Cobra's suggestion logic.
 	effectiveArgs := args
 	if effectiveArgs == nil {
 		effectiveArgs = os.Args[1:]
 	}
-	if _, _, ferr := root.Find(effectiveArgs); ferr != nil {
+	if cmd, cargs, ferr := root.Find(effectiveArgs); ferr != nil {
 		cerr := unknownCommandError(root, firstPositional(root, effectiveArgs))
 		writeCommandError(ctx, root, cerr)
 		return cerr
+	} else if !cmd.Runnable() && cmd.HasSubCommands() {
+		// Cobra only errors for unknown commands at the root; on a group
+		// parent it accepts stray positionals and renders help, so a typo'd
+		// subcommand either exited 0 with usage or — with a flag trailing —
+		// died on the parent's flag parse as "unknown flag", masking the
+		// real mistake. A pure group reached with a leftover positional can
+		// only mean an unknown subcommand: say so, with the group's own
+		// suggestions.
+		if tok := firstPositional(cmd, cargs); tok != "" {
+			cerr := unknownCommandError(cmd, tok)
+			writeCommandError(ctx, root, cerr)
+			return cerr
+		}
 	}
 	// Passive update notify wraps command dispatch: Check schedules a
 	// background cache refresh (never blocking, never on the calling

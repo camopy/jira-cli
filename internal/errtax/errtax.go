@@ -222,7 +222,7 @@ var registry = map[Code]Spec{
 	CodePromptCanceled:          {Type: TypeValidation, Exit: 3, Hint: "Run it again when you're ready to answer.", Retryable: false},
 	CodePromptUnavailable:       {Type: TypeValidation, Exit: 3, Hint: "There's no terminal to prompt on — pass the value with a flag or `--json-input` instead.", Retryable: false},
 	CodeMarkdownLossyConversion: {Type: TypeValidation, Exit: 3, Hint: "Rewrite the flagged Markdown, or add `--adf-best-effort` to accept the downgrade.", Retryable: false},
-	CodeReadOnly:                {Type: TypeValidation, Exit: 3, Hint: "Unset `JIRA_READ_ONLY`, set the profile's read_only=false, or switch to a profile that allows writes.", Retryable: false},
+	CodeReadOnly:                {Type: TypeValidation, Exit: 3, Hint: "Unset `JIRA_READ_ONLY`, set the profile's `read_only=false`, or switch to a profile that allows writes.", Retryable: false},
 	CodeADFInvalid:              {Type: TypeValidation, Exit: 3, Hint: "This field takes an ADF document, not a string — see `jira agent guide adf_reference` for the shape, or use the field's *_markdown alias.", Retryable: false},
 	CodeIssueKeyExpansionLimit:  {Type: TypeValidation, Exit: 3, Hint: "Ask for fewer keys at once, or narrow the search with a project or JQL filter.", Retryable: false},
 	CodeUserAmbiguous:           {Type: TypeValidation, Exit: 3, Hint: "Run `jira user search <name>` to see each match's account ID, then pass that ID instead of the email.", Retryable: false},
