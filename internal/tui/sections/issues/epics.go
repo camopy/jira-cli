@@ -257,7 +257,9 @@ func (m *EpicsModel) header() string {
 	strip := termansi.Truncate(m.strip.View(), w, "…")
 	active := ""
 	if i := m.strip.Active(); i >= 0 && i < len(m.epics) {
-		active = theme.CodeSpans(xstrings.Truncate(issueSummary(m.epics[i]), w, "…"))
+		// truncCells, not rune truncation: a CJK-heavy summary would otherwise
+		// wrap and push the fixed two-row header down a line.
+		active = theme.CodeSpans(truncCells(issueSummary(m.epics[i]), w))
 	}
 	return strip + "\n" + theme.DetailDim.Render(active)
 }

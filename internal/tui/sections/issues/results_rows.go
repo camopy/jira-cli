@@ -17,6 +17,10 @@ func (r *results) rebuildRows() {
 	// scrollbar column listviewport reserves on overflow.
 	rowW := r.ctx.MainWidth - 3
 	now := time.Now()
+	// Every pill in the view pads to the widest status shown, so the badges
+	// form an even column instead of a ragged one — the same normalization
+	// the CLI's plain list applies.
+	statusW := widestStatus(r.shown)
 	rows := make([]string, len(r.shown))
 	for i, iss := range r.shown {
 		marker := "  "
@@ -28,7 +32,7 @@ func (r *results) rebuildRows() {
 		case r.changed[key] == changeUpdated:
 			marker = theme.StatusInProgress.Render("●") + " "
 		}
-		rows[i] = marker + rowText(iss, rowW, now)
+		rows[i] = marker + rowText(iss, rowW, statusW, now)
 	}
 	r.list.SetRows(rows)
 }

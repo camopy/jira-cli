@@ -173,6 +173,35 @@ func TestMenuPickerSavesAndReloads(t *testing.T) {
 	}
 }
 
+// TestMenuSaveNeverPersistsEnvOverlay pins the save path's most important
+// property: a menu edit writes the file-backed config, never the runtime one
+// — the runtime carries the JIRA_* env overlay, and persisting it would bake
+// transient env values into config.toml.
+func TestMenuSaveNeverPersistsEnvOverlay(t *testing.T) {
+	t.Setenv("JIRA_DEFAULT_PROFILE", "env-only-profile")
+	path := writeConfig(t, t.TempDir(), sampleConfig)
+	ctx := newSizedCtx(t, path) // loads with the overlay, like the real wiring
+	m := New(ctx).(*Model)
+	m.Init(ctx)
+	// Change Icons through the picker and let the save land.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m.Update(tea.KeyPressMsg{Text: "nerd"})
+	if _, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}); cmd == nil {
+		t.Fatal("pick did not save")
+	}
+	onDisk, _ := os.ReadFile(path)
+	if strings.Contains(string(onDisk), "env-only-profile") {
+		t.Fatalf("env overlay persisted into config.toml:\n%s", onDisk)
+	}
+	if !strings.Contains(string(onDisk), `default_profile = "default"`) {
+		t.Fatalf("file-backed default_profile lost:\n%s", onDisk)
+	}
+	if !strings.Contains(string(onDisk), `icons = "nerd"`) {
+		t.Fatalf("the actual edit missing:\n%s", onDisk)
+	}
+}
+
 // TestMenuPickerEscCloses pins the cancel path: esc drops the picker with
 // nothing applied.
 func TestMenuPickerEscCloses(t *testing.T) {

@@ -116,13 +116,14 @@ func layoutFor(width int) rowLayout {
 
 // rowText renders one list row: a priority arrow, a fixed-width key, a colored
 // status cell, the summary, then right-aligned assignee and relative-age
-// columns. width is the total row budget; trailing columns
+// columns. width is the total row budget; statusW is the view's widest status
+// (see widestStatus) so the pills form an even column; trailing columns
 // degrade per layoutFor when it is too narrow. The colored cells carry ANSI
 // styling but a fixed display width, so listviewport (which measures display
 // width) keeps the columns aligned.
-func rowText(i *jira.Issue, width int, now time.Time) string {
+func rowText(i *jira.Issue, width, statusW int, now time.Time) string {
 	key := fmt.Sprintf("%-*s", keyCol, xstrings.Truncate(issueKey(i), keyCol, "…"))
-	left := typeCell(i) + " " + priorityCell(i) + " " + key + "  " + statusCell(i) + "  "
+	left := typeCell(i) + " " + priorityCell(i) + " " + key + "  " + statusCell(i, statusW) + "  "
 	l := layoutFor(width)
 	if !l.age {
 		return left + theme.CodeSpans(issueSummary(i))
@@ -146,15 +147,29 @@ func assigneeCell(i *jira.Issue) string {
 	return theme.EntityColor(name).Render(padRight(truncCells(name, assigneeCol), assigneeCol))
 }
 
+// widestStatus measures the view's widest status name in cells, capped at
+// the column budget — the shared pill width every row pads to, so the badges
+// form an even column (the CLI's plain list applies the same normalization).
+func widestStatus(issues []*jira.Issue) int {
+	w := 0
+	for _, iss := range issues {
+		if n := lipgloss.Width(issueStatus(iss)); n > w {
+			w = n
+		}
+	}
+	return min(w, statusCol-2)
+}
+
 // statusCell renders the status as a filled pill padded to the column width —
 // the same category-keyed fixed-color badge the CLI's plain issue list draws,
-// so status reads identically everywhere. The pill hugs the name; the padding
-// stays unstyled so the row background shows through.
-func statusCell(i *jira.Issue) string {
+// so status reads identically everywhere. The name pads to statusW inside the
+// fill, so every pill in the view is the same width; the padding beyond the
+// pill stays unstyled so the row background shows through.
+func statusCell(i *jira.Issue, statusW int) string {
 	status := issueStatus(i)
 	// truncCells, not rune truncation: status names are tenant text and a
 	// wide-glyph name would otherwise overflow the column and shift the row.
-	name := truncCells(status, statusCol-2)
+	name := padRight(truncCells(status, statusCol-2), statusW)
 	category, colorName := issueStatusCategory(i)
 	badge := pill.Style(status, category, colorName).Render(" " + name + " ")
 	pad := statusCol - lipgloss.Width(badge)

@@ -46,14 +46,18 @@ var unicodeSet = Set{
 }
 
 // nerdSet uses classic Font Awesome codepoints from the Nerd Fonts range —
-// escaped rather than pasted so review can verify each one — all single-cell
-// in the patched mono fonts. Shapes follow Jira's own iconography: bolt for
-// epic, bookmark for story, check for task, fork for subtask, bug for bug.
+// escaped rather than pasted so review can verify each one — every
+// codepoint checked against the project's glyphnames.json (3.4.0). Classic
+// FA deliberately: those glyphs render in both Nerd Fonts v2 and v3 patched
+// fonts, unlike the supplementary-plane Material set, and all are single
+// cell in the mono patches. Shapes follow Jira's own iconography: bolt for
+// epic, bookmark for story, check for task, hierarchy for subtask, bug for
+// bug, and the angle chevrons Jira itself draws for priorities.
 var nerdSet = Set{
 	Epic:        "\uf0e7", // nf-fa-bolt
 	Story:       "\uf02e", // nf-fa-bookmark
 	Task:        "\uf14a", // nf-fa-check_square
-	Subtask:     "\uf126", // nf-fa-code_fork
+	Subtask:     "\uf0e8", // nf-fa-sitemap — the parent-child hierarchy
 	Bug:         "\uf188", // nf-fa-bug
 	UnknownType: "\uf128", // nf-fa-question
 

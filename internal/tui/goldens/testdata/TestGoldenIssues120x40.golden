@@ -5,7 +5,7 @@
 [2m  T ! KEY           STATUS         SUMMARY              AGE[m │                                                           
 [7m  ■ ↑ JCT-1          To Do         Wire the flux cap…       [m│ [1;38;2;245;245;245;48;2;29;122;252m To Do [m  [34m■[m Task                                           
   [31m▲[m [1;31m↟[m JCT-2         [1;38;2;28;28;28;48;2;226;178;3m In Progress [m  Reticulate spline…       │                                                           
-  [2;34m▸[m [34m↓[m JCT-3         [1;38;2;245;245;245;48;2;31;132;90m Done [m         Document the spli…       │ Assignee:  Ann Example                                    
+  [2;34m▸[m [34m↓[m JCT-3         [1;38;2;245;245;245;48;2;31;132;90m Done        [m  Document the spli…       │ Assignee:  Ann Example                                    
                                                             │ Priority:  [1;38;5;208m↑ High[m                                         
                                                             │                                                           
                                                             │                                                           

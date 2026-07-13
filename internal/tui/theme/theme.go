@@ -17,14 +17,34 @@ var applyOnce sync.Once
 // Theme is the shared clib theme instance.
 var Theme = config.DefaultTheme()
 
+// autoDetected caches the "auto" background detection from startup. The
+// detection writes an OSC query and reads the terminal's reply — safe only
+// before the Bubble Tea program owns stdin. Run mid-program, the reply
+// arrives as keystrokes and types garbage into whatever holds focus, so
+// Resolve must never re-query once the dashboard is up.
+var autoDetected *clibtheme.Theme
+
+// DetectAutoOnce performs the terminal-background detection for the "auto"
+// theme and caches it. Call it exactly once, before the Bubble Tea program
+// starts; every later Resolve("auto") — a theme preview, a config reload —
+// reuses the cached answer instead of racing the program for stdin.
+func DetectAutoOnce() {
+	if autoDetected == nil {
+		autoDetected = config.AutoTheme(os.Stdout)
+	}
+}
+
 // Resolve returns a clib theme for the given preset name. The "auto" name
-// detects the terminal background (the TUI always runs on a TTY) and picks
-// clib's light or dark theme so hash-based entity colors contrast. An empty or
+// picks clib's light or dark theme from the startup background detection
+// (see DetectAutoOnce) so hash-based entity colors contrast. An empty or
 // unrecognized name falls back to the process default, which honors the
 // JIRA_THEME override before the dark built-in.
 func Resolve(name string) *clibtheme.Theme {
 	if config.IsAutoTheme(name) {
-		return config.AutoTheme(os.Stdout)
+		if autoDetected == nil {
+			DetectAutoOnce()
+		}
+		return autoDetected
 	}
 	return config.ThemeForName(name)
 }

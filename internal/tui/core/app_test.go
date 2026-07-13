@@ -313,7 +313,8 @@ func TestConfigReloadThemeChangeRebuildsAllSections(t *testing.T) {
 	})
 	app := NewApp(ctx, reg, []SectionID{"issues"})
 	app.Init()
-	t.Cleanup(func() { theme.Reload(theme.Resolve("")) }) // undo the global swap
+	snap := theme.Theme // restore the pre-test theme, not the process default
+	t.Cleanup(func() { theme.Reload(snap) })
 
 	m, _ := app.Update(ConfigReloadedMsg{Config: &config.Config{}})
 	app = m.(App)
@@ -347,7 +348,8 @@ func TestThemeReloadDetectsInPlaceConfigMutation(t *testing.T) {
 	})
 	app := NewApp(ctx, reg, []SectionID{"issues"})
 	app.Init()
-	t.Cleanup(func() { theme.Reload(theme.Resolve("")) })
+	snap := theme.Theme // restore the pre-test theme, not the process default
+	t.Cleanup(func() { theme.Reload(snap) })
 
 	// The settings menu's flow: mutate in place, save, reload the same values.
 	cfg.Theme.Name = "light"

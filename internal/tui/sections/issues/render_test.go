@@ -41,7 +41,7 @@ func TestRowTextRightAlignsAge(t *testing.T) {
 	iss.Fields.Updated = &upd
 	now := time.Date(2026, 6, 9, 12, 0, 0, 0, time.UTC)
 
-	row := rowText(iss, 70, now)
+	row := rowText(iss, 70, widestStatus([]*jira.Issue{iss}), now)
 	if w := lipgloss.Width(row); w != 70 {
 		t.Errorf("row width = %d, want 70:\n%q", w, row)
 	}
@@ -50,7 +50,7 @@ func TestRowTextRightAlignsAge(t *testing.T) {
 	}
 
 	// Too narrow for an age column: the summary just runs to the edge.
-	narrow := rowText(iss, rowFixed+minSummary+ageCol+1, now)
+	narrow := rowText(iss, rowFixed+minSummary+ageCol+1, widestStatus([]*jira.Issue{iss}), now)
 	if strings.HasSuffix(narrow, "2h") {
 		t.Errorf("narrow row should drop the age column:\n%q", narrow)
 	}
@@ -89,12 +89,37 @@ func TestRowTextKeepsAgeAlignedForWideGlyphs(t *testing.T) {
 	iss.Fields.Updated = &upd
 	now := time.Date(2026, 6, 9, 12, 0, 0, 0, time.UTC)
 
-	row := rowText(iss, 70, now)
+	row := rowText(iss, 70, widestStatus([]*jira.Issue{iss}), now)
 	if w := lipgloss.Width(row); w != 70 {
 		t.Errorf("CJK row width = %d, want 70:\n%q", w, row)
 	}
 	if !strings.HasSuffix(row, "2h") {
 		t.Errorf("CJK row should keep the age column:\n%q", row)
+	}
+}
+
+// TestStatusPillsPadToWidestInView pins the pill normalization: every badge
+// in a view is as wide as the view's widest status, so the pills form an
+// even column instead of a ragged one.
+func TestStatusPillsPadToWidestInView(t *testing.T) {
+	issues := []*jira.Issue{
+		mkIssue("JCT-1", "To Do", "short"),
+		mkIssue("JCT-2", "In Progress", "long"),
+	}
+	statusW := widestStatus(issues)
+	if want := lipgloss.Width("In Progress"); statusW != want {
+		t.Fatalf("widestStatus = %d, want %d", statusW, want)
+	}
+	a := statusCell(issues[0], statusW)
+	b := statusCell(issues[1], statusW)
+	// The styled badge (everything before the unstyled trailing pad) must be
+	// the same width for both rows: name + 2 spaces of pill.
+	wantBadge := statusW + 2
+	for _, cell := range []string{a, b} {
+		badge := strings.TrimRight(cell, " ")
+		if w := lipgloss.Width(badge); w != wantBadge {
+			t.Errorf("pill width = %d, want %d in %q", w, wantBadge, cell)
+		}
 	}
 }
 
@@ -151,7 +176,7 @@ func TestRowTextAssigneeColumn(t *testing.T) {
 	upd := "2026-06-09T10:00:00.000+0000"
 	iss.Fields.Updated = &upd
 
-	row := rowText(iss, 80, now)
+	row := rowText(iss, 80, widestStatus([]*jira.Issue{iss}), now)
 	if w := lipgloss.Width(row); w != 80 {
 		t.Errorf("row width = %d, want 80:\n%q", w, row)
 	}
@@ -170,7 +195,7 @@ func TestRowTextAssigneeColumn(t *testing.T) {
 
 	// Unassigned renders a dim dash, not the word.
 	un := mkIssue("JCT-2", "To Do", "summary")
-	if !strings.Contains(rowText(un, 80, now), "—") {
+	if !strings.Contains(rowText(un, 80, widestStatus([]*jira.Issue{un}), now), "—") {
 		t.Error("unassigned row should show a dash in the assignee column")
 	}
 }

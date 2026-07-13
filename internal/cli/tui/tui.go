@@ -111,6 +111,10 @@ func newApp(svc core.Services, cfg *config.Config, profile config.Profile, base 
 	// glamour markdown style is built from this palette at section
 	// construction. The legacy TUI did this in its own constructor; the
 	// cutover entrypoint must do it itself.
+	// Detect the "auto" theme's terminal background now, before Bubble Tea
+	// owns stdin: run later (a preview or reload naming "auto"), the OSC
+	// reply would arrive as keystrokes in whatever holds focus.
+	theme.DetectAutoOnce()
 	name := ""
 	if cfg != nil {
 		name = cfg.Theme.Name

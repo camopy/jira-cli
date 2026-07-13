@@ -334,10 +334,12 @@ const (
 )
 
 // restyle re-derives everything this list caches from the theme after a live
-// preview swap: the markdown renderer, the styled rows, and any open detail
-// content. Deliberately no fetch — a theme preview must stay free.
+// preview swap: the markdown renderer, the spinner (styled at construction),
+// the styled rows, and any open detail content. Deliberately no fetch — a
+// theme preview must stay free.
 func (r *results) restyle() {
 	r.md = markdown.NewRenderer(markdown.StyleFromTheme(theme.Theme))
+	r.spin = spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(theme.StatusInProgress))
 	r.applyFilter()
 	if r.detailIssue != nil {
 		r.setDetailContent(renderDetail(r.detailIssue, r.detailLoading, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))

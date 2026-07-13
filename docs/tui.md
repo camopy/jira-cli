@@ -324,13 +324,20 @@ the authoritative in-app reference after any rebinding.
 
 ## Settings and hot-reload
 
-The **Settings** tab is the config file itself: it shows the literal
-`config.toml` and edits it in place. Press `e` (or `enter`) to edit —
-`ctrl+s` validates the TOML with the same strict decode the loader uses
-at startup (a typo or unknown key is rejected with the reason, and your
-draft stays put), writes atomically, and hot-applies the result. With
-`$JIRA_EDITOR`/`$EDITOR` set, `ctrl+e` continues the draft in your
-editor. `esc` on an edited buffer asks before discarding.
+The **Settings** tab is an interactive menu over the config keys:
+`↑`/`↓` move, `enter` changes the selected setting — enums open the same
+type-to-filter picker as transitions, numbers and lists open a small
+form (the tabs list autocompletes known tab names). Browsing the theme
+picker previews each highlighted theme live; `enter` keeps it, `esc`
+puts the original back. Every change validates, writes the file
+atomically, and hot-applies on the spot.
+
+For anything the menu doesn't model (sections, lenses, keybindings),
+`e` opens the literal `config.toml` in place: `ctrl+s` validates the
+TOML with the same strict decode the loader uses at startup (a typo or
+unknown key is rejected with the reason, and your draft stays put) and
+saves; with `$JIRA_EDITOR`/`$EDITOR` set, `ctrl+e` continues the draft
+in your editor; `esc` on an edited buffer asks before discarding.
 
 Hot-apply covers the `[tui]` keys — lenses, sections, tabs, keybindings,
 preview, refresh interval, icons — and `theme.name`, which re-skins

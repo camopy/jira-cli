@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/key"
-	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
@@ -60,9 +59,8 @@ type Model struct {
 	pickOriginal string
 	pickShown    string
 
-	// raw is the file text the raw editor shows and seeds from.
-	raw  string
-	view viewport.Model
+	// raw is the file text the raw editor seeds from.
+	raw string
 
 	// editor is the whole-file editing form (one multiline field). Its dirty
 	// guard means a stray esc can never eat config edits.
@@ -95,13 +93,9 @@ func (m *Model) Init(ctx *core.ProgramContext) tea.Cmd {
 // status line, and the hint row.
 const headerRows = 3
 
-// applySize fits the raw-file viewport (and any open editor) to the body.
+// applySize re-fits an open raw editor to the body; the menu itself sizes
+// per render.
 func (m *Model) applySize() {
-	w := max(m.ctx.ScreenWidth-2, 1)
-	h := max(m.ctx.BodyHeight-headerRows, 1)
-	m.view.SetWidth(w)
-	m.view.SetHeight(h)
-	m.view.SetContent(m.raw)
 	if m.editing {
 		// Rebuilding on resize keeps the textarea inside the body; the value
 		// carries over so a resize mid-edit loses nothing.
@@ -122,7 +116,6 @@ func (m *Model) loadRaw() {
 		return
 	}
 	m.raw = string(data)
-	m.view.SetContent(m.raw)
 }
 
 // mtime returns the config file's modification time, or the zero time when
@@ -141,9 +134,11 @@ func (m *Model) mtime() time.Time {
 // maybeReload fires a reload when the file's mtime moved since the last load.
 // It runs on the shared refresh heartbeat, so auto-reload is only as live as
 // tui.refresh_interval (and off with it) — r always reloads immediately.
-// An open editor suppresses it: an external write must not fight the draft.
+// An open editor or picker suppresses it: an external write must not fight
+// a draft, and a reload naming a different theme would drop every section
+// instance — including the one driving an open preview.
 func (m *Model) maybeReload() tea.Cmd {
-	if m.editing || m.editingValue >= 0 {
+	if m.editing || m.editingValue >= 0 || m.pickingRow >= 0 {
 		return nil
 	}
 	cur := m.mtime()
@@ -182,14 +177,27 @@ func (m *Model) reloadCmd() tea.Cmd {
 	}
 }
 
-// saveAndReload persists the in-memory config (a menu edit already applied)
-// and hot-reloads the dashboard from what was written.
-func (m *Model) saveAndReload() tea.Cmd {
-	if m.ctx.Config == nil || m.ctx.ConfigPath == "" {
+// applyAndSave applies one row's change to the file-backed config and saves
+// it. The change lands on a fresh LoadOrInit copy — never the runtime config:
+// that carries the JIRA_* env overlay, and saving it would persist transient
+// env values into config.toml (the exact corruption LoadOrInit exists to
+// prevent). The runtime view updates through the reload, so a failed save
+// leaves both the file and the running dashboard untouched.
+func (m *Model) applyAndSave(s setting, value string) tea.Cmd {
+	if m.ctx.ConfigPath == "" {
 		m.fail = "no config file — press e to create one"
 		return nil
 	}
-	if err := config.Save(m.ctx.ConfigPath, m.ctx.Config); err != nil {
+	onDisk, err := config.LoadOrInit(config.WithPath(m.ctx.ConfigPath))
+	if err != nil {
+		m.fail = "load config: " + err.Error()
+		return nil
+	}
+	if err := s.apply(onDisk, value); err != nil {
+		m.fail = err.Error()
+		return nil
+	}
+	if err := config.Save(m.ctx.ConfigPath, onDisk); err != nil {
 		m.fail = "write config: " + err.Error()
 		return nil
 	}
@@ -413,11 +421,7 @@ func (m *Model) updatePicking(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		m.pickingRow = -1
-		if err := s.apply(m.ctx.Config, sel.Value); err != nil {
-			m.fail = err.Error()
-			return nil
-		}
-		return m.saveAndReload()
+		return m.applyAndSave(s, sel.Value)
 	}
 	cmd := m.pick.Update(msg)
 	if s.preview != nil {
@@ -435,13 +439,12 @@ func (m *Model) updateValueEditing(msg tea.KeyPressMsg) tea.Cmd {
 	cmd, ev, _ := m.valueEdit.Update(msg)
 	switch ev {
 	case form.EventSubmit:
-		s := m.menu[m.editingValue]
-		if err := s.apply(m.ctx.Config, m.valueEdit.Value(0)); err != nil {
-			m.fail = err.Error()
+		save := m.applyAndSave(m.menu[m.editingValue], m.valueEdit.Value(0))
+		if save == nil {
 			return nil // stay editing; the reason is on screen
 		}
 		m.editingValue = -1
-		return m.saveAndReload()
+		return save
 	case form.EventCancel:
 		m.editingValue = -1
 		m.fail = ""
