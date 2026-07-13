@@ -86,7 +86,6 @@ type Model struct {
 	editorHatch bool
 	width       int
 	styles      Styles
-	active      bool
 	ac          acState
 }
 
@@ -104,7 +103,6 @@ func New(cfg Config) Model {
 		editorHatch: cfg.EditorHatch,
 		width:       cfg.Width,
 		styles:      cfg.Styles,
-		active:      len(cfg.Fields) > 0,
 	}
 	for i, spec := range cfg.Fields {
 		f := field{spec: spec}
@@ -131,8 +129,8 @@ func New(cfg Config) Model {
 	return m
 }
 
-// Active reports whether the form is open.
-func (m *Model) Active() bool { return m.active }
+// Active reports whether the form is open — a zero Model is inert.
+func (m *Model) Active() bool { return len(m.fields) > 0 }
 
 // Value returns field i's current content ("" out of range).
 func (m *Model) Value(i int) string {
@@ -166,7 +164,7 @@ func (m *Model) dirty() bool {
 // completed; consumed reports whether the form owned the message, so an owner
 // layering global keys knows when to fall through.
 func (m *Model) Update(msg tea.Msg) (tea.Cmd, EventKind, bool) {
-	if !m.active {
+	if !m.Active() {
 		return nil, EventNone, false
 	}
 	if sug, ok := msg.(SuggestionsMsg); ok {
@@ -281,7 +279,7 @@ func (m *Model) setFocus(i int) {
 // under the focused field, and the hint row. The owner draws the box and
 // places it.
 func (m *Model) View() string {
-	if !m.active {
+	if !m.Active() {
 		return ""
 	}
 	var b strings.Builder

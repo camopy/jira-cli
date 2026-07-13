@@ -17,7 +17,6 @@ import (
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/browser"
 	"github.com/matcra587/jira-cli/internal/jira"
-	"github.com/matcra587/jira-cli/internal/jql"
 	"github.com/matcra587/jira-cli/internal/tui/components/action"
 	"github.com/matcra587/jira-cli/internal/tui/components/input"
 	"github.com/matcra587/jira-cli/internal/tui/core"
@@ -215,7 +214,7 @@ func (r *results) submitAction() tea.Cmd {
 	case action.ModeLabels:
 		// Full-replacement semantics: the field opened pre-filled, so what
 		// comes back is the complete list — empty input clears every label.
-		labels := jql.CompactStrings(strings.Split(req.Text, ","))
+		labels := xstrings.SplitCSV(req.Text)
 		issKey := req.IssueKey
 		return r.mutate(func(svc core.Services, base context.Context) error {
 			_, _, e := svc.Issues().Update(base, issKey, &jira.IssueUpdateRequest{

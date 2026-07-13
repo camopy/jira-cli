@@ -47,19 +47,19 @@ func typeGlyphFor(name string) string {
 	ic := icons.Active()
 	switch strings.ToLower(name) {
 	case "epic":
-		return lipgloss.NewStyle().Foreground(theme.Theme.Magenta.GetForeground()).Render(ic.Epic)
+		return theme.TypeEpic.Render(ic.Epic)
 	case "story":
-		return lipgloss.NewStyle().Foreground(theme.Theme.Green.GetForeground()).Render(ic.Story)
+		return theme.TypeStory.Render(ic.Story)
 	case "task":
-		return lipgloss.NewStyle().Foreground(theme.Theme.Blue.GetForeground()).Render(ic.Task)
+		return theme.TypeTask.Render(ic.Task)
 	case "sub-task", "subtask":
-		return lipgloss.NewStyle().Foreground(theme.Theme.Blue.GetForeground()).Faint(true).Render(ic.Subtask)
+		return theme.TypeSubtask.Render(ic.Subtask)
 	case "bug":
-		return lipgloss.NewStyle().Foreground(theme.Theme.Red.GetForeground()).Render(ic.Bug)
+		return theme.TypeBug.Render(ic.Bug)
 	case "":
 		return " "
 	default:
-		return lipgloss.NewStyle().Foreground(theme.Theme.Yellow.GetForeground()).Render(ic.UnknownType)
+		return theme.TypeOther.Render(ic.UnknownType)
 	}
 }
 
@@ -172,11 +172,7 @@ func statusCell(i *jira.Issue, statusW int) string {
 	name := padRight(truncCells(status, statusCol-2), statusW)
 	category, colorName := issueStatusCategory(i)
 	badge := pill.Style(status, category, colorName).Render(" " + name + " ")
-	pad := statusCol - lipgloss.Width(badge)
-	if pad < 0 {
-		pad = 0
-	}
-	return badge + strings.Repeat(" ", pad)
+	return padRight(badge, statusCol)
 }
 
 // statusPill renders the status as a filled pill for detail headers, from the

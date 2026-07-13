@@ -134,14 +134,7 @@ func settingsMenu() []setting {
 			hint:    "comma-separated, in order",
 			current: func(cfg *config.Config) string { return strings.Join(cfg.TUI.Tabs, ", ") },
 			apply: func(cfg *config.Config, v string) error {
-				parts := strings.Split(v, ",")
-				tabs := make([]string, 0, len(parts))
-				for _, p := range parts {
-					if t := strings.TrimSpace(p); t != "" {
-						tabs = append(tabs, t)
-					}
-				}
-				cfg.TUI.Tabs = tabs
+				cfg.TUI.Tabs = xstrings.SplitCSV(v)
 				return nil
 			},
 			complete: tabNameComplete,

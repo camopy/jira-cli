@@ -151,7 +151,7 @@ func (a App) footer() string {
 	}
 	w := a.ctx.ScreenWidth
 	h := a.ctx.Keys.Help.Help()
-	help := a.ctx.Styles.HintKey.Render(h.Key) + " " + a.ctx.Styles.HintDesc.Render(h.Desc)
+	help := HintSegment(a.ctx.Styles, h.Key, h.Desc)
 	return a.labeledBorder(w, a.contextLine(), help) + "\n" + a.hintLine(w)
 }
 

@@ -90,17 +90,17 @@ func (r *results) handleKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		if iss := r.selected(); iss != nil {
 			r.toggleMark(issueKey(iss))
 			r.markAnchor = issueKey(iss)
-			r.applyFilter()
+			r.rebuildRows() // only the marker column changed
 		}
 	case key.Matches(msg, k.SelectAll):
 		r.selectAllShown()
-		r.applyFilter()
+		r.rebuildRows()
 	case key.Matches(msg, k.SelectInvert):
 		r.invertShown()
-		r.applyFilter()
+		r.rebuildRows()
 	case key.Matches(msg, k.SelectRange):
 		r.selectRange()
-		r.applyFilter()
+		r.rebuildRows()
 	case key.Matches(msg, k.Transition):
 		if !r.canMutate() {
 			return nil, true // another write is still reconciling
