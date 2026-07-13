@@ -191,6 +191,9 @@ func (m *EpicsModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 		}
 		cmd, _ := m.handleTask(msg)
 		return m, cmd
+	case core.RestyleMsg:
+		m.restyle()
+		return m, nil
 	case core.RefreshTickMsg:
 		// Refresh both layers: the strip (an epic may have opened or closed)
 		// and the visible children.

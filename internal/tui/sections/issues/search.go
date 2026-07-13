@@ -341,6 +341,9 @@ func (s *SearchModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 		}
 		cmd, _ := s.handleTask(msg)
 		return s, cmd
+	case core.RestyleMsg:
+		s.restyle()
+		return s, nil
 	case core.RefreshTickMsg:
 		// Nothing to refresh until a query has been committed (an empty-JQL
 		// refetch would just churn tasks), and never mid-edit — the embedded

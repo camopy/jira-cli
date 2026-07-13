@@ -324,16 +324,19 @@ the authoritative in-app reference after any rebinding.
 
 ## Settings and hot-reload
 
-The **Settings** tab shows the resolved configuration and the file it
-came from. The TUI checks that file's mtime on the refresh heartbeat
-and hot-applies edits to `[tui]` keys — lenses, sections, tabs,
-keybindings, preview, refresh interval — without restarting. A reload
-that changes a lens's JQL also refetches, so the rows always match the
-header. Press `r` on the Settings tab to reload immediately (the only
-path when auto-refresh is disabled).
+The **Settings** tab is the config file itself: it shows the literal
+`config.toml` and edits it in place. Press `e` (or `enter`) to edit —
+`ctrl+s` validates the TOML with the same strict decode the loader uses
+at startup (a typo or unknown key is rejected with the reason, and your
+draft stays put), writes atomically, and hot-applies the result. With
+`$JIRA_EDITOR`/`$EDITOR` set, `ctrl+e` continues the draft in your
+editor. `esc` on an edited buffer asks before discarding.
 
-A changed `theme.name` hot-applies too: every view re-derives its styles
-on the spot. Credentials changes still need a restart.
+Hot-apply covers the `[tui]` keys — lenses, sections, tabs, keybindings,
+preview, refresh interval, icons — and `theme.name`, which re-skins
+every view on the spot. External edits to the file are picked up on the
+refresh heartbeat too (never while you're mid-edit in the tab); `r`
+reloads immediately. Credentials changes still need a restart.
 
 ## Theming
 

@@ -77,12 +77,43 @@ func TestTriggerToken(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			query, width, ok := triggerToken(tc.before, '@')
+			query, width, ok := triggerToken(tc.before, '@', nil)
 			if query != tc.query || width != tc.width || ok != tc.ok {
 				t.Fatalf("triggerToken(%q) = (%q, %d, %v), want (%q, %d, %v)",
 					tc.before, query, width, ok, tc.query, tc.width, tc.ok)
 			}
 		})
+	}
+}
+
+// TestBareTokenCompletion pins bare mode (no trigger rune) with a custom
+// boundary: each comma-separated entry completes alone and acceptance swaps
+// the token without a prefix.
+func TestBareTokenCompletion(t *testing.T) {
+	m := New(Config{
+		Fields: []FieldSpec{{
+			Autocomplete: &Autocomplete{
+				IsBoundary: func(r rune) bool { return r == ',' || r == ' ' },
+				Fetch: func(query string) []string {
+					var out []string
+					for _, name := range []string{"issues", "epics", "search"} {
+						if strings.HasPrefix(name, query) {
+							out = append(out, name)
+						}
+					}
+					return out
+				},
+			},
+		}},
+		Width: 40,
+	})
+	typeAndFetch(t, &m, "issues, ep")
+	if !m.ac.visible() {
+		t.Fatal("bare token after a comma did not arm suggestions")
+	}
+	press(t, &m, enter)
+	if got := m.Value(0); got != "issues, epics" {
+		t.Fatalf("bare acceptance produced %q, want the token swapped in place", got)
 	}
 }
 
@@ -223,7 +254,7 @@ func TestLineFieldMidTextAcceptance(t *testing.T) {
 		t.Fatalf("mid-text acceptance produced %q, want the suffix preserved", got)
 	}
 	// The cursor sits at the end of the completion, not the end of the line.
-	if _, _, ok := triggerToken(m.fields[0].beforeCursor(), '@'); !ok {
+	if _, _, ok := triggerToken(m.fields[0].beforeCursor(), '@', nil); !ok {
 		t.Fatalf("cursor not after the completed token: before=%q", m.fields[0].beforeCursor())
 	}
 }

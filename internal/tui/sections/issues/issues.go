@@ -81,6 +81,9 @@ func (m *Model) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 	case core.TaskFinishedMsg:
 		cmd, _ := m.handleTask(msg)
 		return m, cmd
+	case core.RestyleMsg:
+		m.restyle()
+		return m, nil
 	case core.RefreshTickMsg:
 		return m, m.autoRefresh()
 	case tea.MouseWheelMsg:

@@ -15,11 +15,16 @@ import (
 // being typed at the cursor; once it starts with Trigger and the query is
 // long enough, Fetch runs in a command and its results show as a list.
 type Autocomplete struct {
-	// Trigger starts a completion token at a word boundary, e.g. '@'.
+	// Trigger starts a completion token at a word boundary, e.g. '@'. Zero
+	// means bare mode: every trailing token completes and an acceptance
+	// replaces the token as-is — for value lists rather than mentions.
 	Trigger rune
 	// MinQuery is how many runes must follow the trigger before fetching;
 	// zero means 1, so a bare trigger never fires a fetch.
 	MinQuery int
+	// IsBoundary marks the runes that end a token; nil means whitespace.
+	// A comma-separated field adds ',' so each list entry completes alone.
+	IsBoundary func(r rune) bool
 	// Fetch resolves a query to suggestions. It runs inside a tea.Cmd (its
 	// own goroutine), so it may block on I/O; the result is dropped if the
 	// query has moved on by the time it lands.
@@ -58,7 +63,7 @@ func (m *Model) syncAutocomplete() tea.Cmd {
 	if ac == nil {
 		return nil
 	}
-	query, _, ok := triggerToken(m.fields[m.focus].beforeCursor(), ac.Trigger)
+	query, _, ok := triggerToken(m.fields[m.focus].beforeCursor(), ac.Trigger, ac.IsBoundary)
 	minQuery := max(ac.MinQuery, 1)
 	if !ok || len([]rune(query)) < minQuery {
 		m.ac.clear()
@@ -118,20 +123,24 @@ func (m *Model) updateSuggesting(key tea.KeyPressMsg) (tea.Cmd, EventKind, bool)
 	return nil, EventNone, false
 }
 
-// acceptSuggestion replaces the trigger token with the selected item, keeping
-// the trigger rune so the owner can recognize the mention when parsing.
+// acceptSuggestion replaces the token with the selected item — keeping the
+// trigger rune when there is one, so the owner can recognize the mention
+// when parsing; bare mode swaps the token as-is.
 func (m *Model) acceptSuggestion() {
 	ac := m.fields[m.focus].spec.Autocomplete
 	if ac == nil || !m.ac.visible() {
 		return
 	}
 	item := m.ac.items[m.ac.cursor]
-	_, width, ok := triggerToken(m.fields[m.focus].beforeCursor(), ac.Trigger)
+	_, width, ok := triggerToken(m.fields[m.focus].beforeCursor(), ac.Trigger, ac.IsBoundary)
 	if !ok {
 		m.ac.clear()
 		return
 	}
-	m.fields[m.focus].replaceBeforeCursor(width, string(ac.Trigger)+item)
+	if ac.Trigger != 0 {
+		item = string(ac.Trigger) + item
+	}
+	m.fields[m.focus].replaceBeforeCursor(width, item)
 	m.ac.clear()
 }
 
@@ -150,16 +159,26 @@ func (m *Model) viewSuggestions() string {
 }
 
 // triggerToken finds a completion token in the text before the cursor: the
-// trailing word must start with trigger. query is the text after the trigger;
-// width is the whole token's rune count including the trigger, which is what
-// an acceptance replaces.
-func triggerToken(before string, trigger rune) (query string, width int, ok bool) {
+// trailing word (bounded by isBoundary, whitespace when nil) must start with
+// trigger — or is taken whole in bare mode (trigger 0). query is the text
+// after any trigger; width is the whole token's rune count including the
+// trigger, which is what an acceptance replaces.
+func triggerToken(before string, trigger rune, isBoundary func(rune) bool) (query string, width int, ok bool) {
+	if isBoundary == nil {
+		isBoundary = unicode.IsSpace
+	}
 	runes := []rune(before)
 	start := len(runes)
-	for start > 0 && !unicode.IsSpace(runes[start-1]) {
+	for start > 0 && !isBoundary(runes[start-1]) {
 		start--
 	}
 	word := runes[start:]
+	if trigger == 0 {
+		if len(word) == 0 {
+			return "", 0, false
+		}
+		return string(word), len(word), true
+	}
 	if len(word) == 0 || word[0] != trigger {
 		return "", 0, false
 	}

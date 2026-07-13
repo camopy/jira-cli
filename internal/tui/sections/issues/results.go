@@ -333,6 +333,17 @@ const (
 	overlayMargin   = 6
 )
 
+// restyle re-derives everything this list caches from the theme after a live
+// preview swap: the markdown renderer, the styled rows, and any open detail
+// content. Deliberately no fetch — a theme preview must stay free.
+func (r *results) restyle() {
+	r.md = markdown.NewRenderer(markdown.StyleFromTheme(theme.Theme))
+	r.applyFilter()
+	if r.detailIssue != nil {
+		r.setDetailContent(renderDetail(r.detailIssue, r.detailLoading, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))
+	}
+}
+
 // detailHint is the detail view's hint row, mnemonic-styled through the same
 // helper as the footer so single-letter verbs read as "(o)pen in browser".
 func (r *results) detailHint() string {

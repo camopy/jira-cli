@@ -21,3 +21,15 @@ type RefreshTickMsg struct{}
 // shared config, asks its Reconfigure hook to rebuild the section order, and
 // re-broadcasts the message so sections (e.g. settings) can refresh their view.
 type ConfigReloadedMsg struct{ Config *config.Config }
+
+// ThemePreviewMsg applies a theme by name without touching the config file —
+// the settings picker sends one per cursor move so the dashboard shows the
+// highlighted theme live. Committing then saves the same name (the reload
+// sees it already applied and no-ops); backing out previews the original
+// name back.
+type ThemePreviewMsg struct{ Name string }
+
+// RestyleMsg tells sections the derived styles changed under them (a theme
+// preview): re-render cached content from data already in hand — never
+// refetch, a preview must stay free.
+type RestyleMsg struct{}

@@ -48,6 +48,11 @@ type App struct {
 	// paused stops the auto-refresh heartbeat from refetching while the user
 	// inspects volatile state; unlike blurred it only clears on the R key.
 	paused bool
+	// appliedTheme is the theme name the styles were last derived from. The
+	// reload comparison must use this, not ctx.Config: the settings menu
+	// mutates the shared config in place before saving, so by the time the
+	// reload message lands the config already carries the new name.
+	appliedTheme string
 	// sections caches built instances so a section is constructed once and
 	// keeps its state across tab switches; started records which have run
 	// Init so the first-activation fetch fires exactly once per section.
@@ -70,14 +75,19 @@ func NewApp(ctx *ProgramContext, registry *Registry, order []SectionID) App {
 	cancelCtx, cancel := context.WithCancel(base)
 	ctx.Base = cancelCtx
 
+	appliedTheme := ""
+	if ctx.Config != nil {
+		appliedTheme = ctx.Config.Theme.Name
+	}
 	a := App{
-		ctx:      ctx,
-		registry: registry,
-		tasks:    tasks,
-		order:    order,
-		cancel:   cancel,
-		sections: make(map[SectionID]Section),
-		started:  make(map[SectionID]bool),
+		ctx:          ctx,
+		registry:     registry,
+		tasks:        tasks,
+		order:        order,
+		cancel:       cancel,
+		sections:     make(map[SectionID]Section),
+		started:      make(map[SectionID]bool),
+		appliedTheme: appliedTheme,
 	}
 	if len(order) > 0 {
 		ctx.View = order[0]
@@ -300,6 +310,16 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.blurred = true
 		return a, nil
 
+	case ThemePreviewMsg:
+		// Live preview: re-derive the shared styles and let every section
+		// restyle what it already renders. No section instance is dropped —
+		// the settings picker driving the preview must survive — and nothing
+		// refetches; cached content re-renders through RestyleMsg.
+		theme.Reload(theme.Resolve(msg.Name))
+		a.ctx.Styles = DefaultStyles()
+		a.appliedTheme = msg.Name
+		return a.broadcast(RestyleMsg{})
+
 	case ConfigReloadedMsg:
 		return a.applyConfig(msg)
 
@@ -416,10 +436,6 @@ func (a App) applyConfig(msg ConfigReloadedMsg) (tea.Model, tea.Cmd) {
 	// running it re-arms itself with the new interval (and dies naturally if
 	// the reload disabled it) — arming again would double the heartbeat.
 	wasTicking := a.ctx.Config != nil && a.ctx.Config.TUI.RefreshInterval > 0
-	prevTheme := ""
-	if a.ctx.Config != nil {
-		prevTheme = a.ctx.Config.Theme.Name
-	}
 	a.ctx.Config = msg.Config
 	// Re-dock the sidebar per the new config (no-op when the key is absent, so
 	// a reload doesn't fight the p-key cycle).
@@ -435,8 +451,11 @@ func (a App) applyConfig(msg ConfigReloadedMsg) (tea.Model, tea.Cmd) {
 	// the chrome bundle, and — because sections cache derived renderers
 	// (markdown, list styles) at construction — every section instance,
 	// which the start loop below rebuilds. An unchanged name is a no-op so
-	// an ordinary config edit never flickers the styles.
-	if msg.Config.Theme.Name != prevTheme {
+	// an ordinary config edit never flickers the styles. The comparison is
+	// against the name the styles were actually derived from (appliedTheme),
+	// never ctx.Config — the settings menu mutates that in place pre-save.
+	if msg.Config.Theme.Name != a.appliedTheme {
+		a.appliedTheme = msg.Config.Theme.Name
 		theme.Reload(theme.Resolve(msg.Config.Theme.Name))
 		a.ctx.Styles = DefaultStyles()
 		for id := range a.sections {

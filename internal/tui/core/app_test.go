@@ -331,6 +331,41 @@ func TestConfigReloadThemeChangeRebuildsAllSections(t *testing.T) {
 	}
 }
 
+// TestThemeReloadDetectsInPlaceConfigMutation pins the settings-menu path:
+// the menu mutates the shared config pointer before saving, so by the time
+// the reload message lands ctx.Config already carries the new name — the
+// change detection must compare against the applied theme, not the config.
+func TestThemeReloadDetectsInPlaceConfigMutation(t *testing.T) {
+	cfg := &config.Config{}
+	ctx := NewProgramContext(nil, cfg)
+	ctx.SetSize(80, 24)
+	reg := NewRegistry()
+	builds := 0
+	reg.Register("issues", func(*ProgramContext) Section {
+		builds++
+		return &countingSection{id: "issues"}
+	})
+	app := NewApp(ctx, reg, []SectionID{"issues"})
+	app.Init()
+	t.Cleanup(func() { theme.Reload(theme.Resolve("")) })
+
+	// The settings menu's flow: mutate in place, save, reload the same values.
+	cfg.Theme.Name = "light"
+	reloaded := &config.Config{}
+	reloaded.Theme.Name = "light"
+	m, _ := app.Update(ConfigReloadedMsg{Config: reloaded})
+	app = m.(App)
+	if builds != 2 {
+		t.Fatalf("in-place theme change did not rebuild sections: %d builds, want 2", builds)
+	}
+	// The same theme arriving again is a no-op — no flicker loop.
+	m, _ = app.Update(ConfigReloadedMsg{Config: reloaded})
+	_ = m
+	if builds != 2 {
+		t.Fatalf("unchanged theme rebuilt sections again: %d builds", builds)
+	}
+}
+
 // TestConfigReloadArmsTickWhenEnabled pins the disabled→enabled edge: with no
 // tick loop running, a reload that turns refresh on must arm the timer.
 func TestConfigReloadArmsTickWhenEnabled(t *testing.T) {
