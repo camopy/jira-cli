@@ -136,19 +136,104 @@ the secret sits in the backend you chose.
 |---|---|
 | `keyring` | Default. The OS keyring: Keychain on macOS, Credential Manager on Windows, libsecret on Linux. |
 | `1password` | A 1Password item, read through the desktop app. |
-| `env` | Nothing is stored — the profile's `JIRA_TOKEN_<PROFILE>` variable is the credential, read every run. For WSL, headless Linux, containers, and `op run`-style injectors. |
+| `env` | Nothing is stored — the profile's `JIRA_TOKEN_<PROFILE>` variable is the credential, read every run. For containers, CI, `op run`-style injectors, or any host without a keyring (see [WSL and headless Linux](#wsl-and-headless-linux)). |
 | `JIRA_TOKEN_<PROFILE>` | An environment override, checked before the stored backend on every command — whatever the backend. |
 
 When jira resolves a token it checks `JIRA_TOKEN_<PROFILE>` first (profile `work`
 becomes `JIRA_TOKEN_WORK`), then the backend recorded on the profile.
 
-!!! note "No keyring on WSL and headless Linux"
-    Linux keyring support needs a Secret Service on the session D-Bus
-    (gnome-keyring, KWallet). WSL and most headless hosts don't have one, so
-    `keyring` operations fail with `keyring_unavailable` — interactive
-    `auth login` won't even offer the keyring there. Use the `env` backend:
-    export `JIRA_TOKEN_<PROFILE>` (for example from `op read`) and run
-    `jira auth login --backend env`.
+### WSL and headless Linux
+
+Linux keyring support needs a Secret Service on the session D-Bus. Desktop
+Linux ships one (gnome-keyring, KWallet); WSL and most headless hosts don't by
+default, so `keyring` operations fail with `keyring_unavailable` until you add
+one. You have two options.
+
+**Recommended — add a Secret Service, then use `keyring` as normal.** On a
+systemd-enabled WSL distro (Ubuntu, Debian) it takes about a minute, and the
+keyring then behaves exactly as it does on macOS or Windows.
+
+!!! info "Prerequisite: systemd enabled in WSL"
+    The keyring needs a per-user D-Bus session bus, which WSL provides only
+    when systemd is running. Check `/etc/wsl.conf` for:
+
+    ```ini
+    [boot]
+    systemd=true
+    ```
+
+    If it's missing, add it, then restart WSL from Windows
+    (`wsl --shutdown`) and reopen the distro. Confirm the session bus is live
+    before continuing:
+
+    ```sh
+    echo "$DBUS_SESSION_BUS_ADDRESS"
+    ```
+
+    A value like `unix:path=/run/user/1000/bus` confirms the bus is live; a
+    blank result means systemd isn't running — enable it first. (Native
+    headless Linux already has a user D-Bus session under a normal login and
+    can skip straight to the steps below.)
+
+```sh
+sudo apt install gnome-keyring libsecret-tools # (1)!
+
+printf '' | gnome-keyring-daemon --unlock --components=secrets --daemonize # (2)!
+
+jira auth login --backend keyring \
+  --base-url https://<site>.atlassian.net --email you@example.com # (3)!
+```
+
+1.  Install a Secret Service provider — the keyring daemon plus `secret-tool`,
+    handy for verifying.
+2.  Create the keyring once. WSL has no graphical login to unlock it, so it is
+    created **without a password**, which lets it unlock automatically from then
+    on. This only writes the keyring file; the running daemon is started later,
+    on demand.
+3.  Store the token in the keyring. Omit `--base-url` / `--email` to reuse the
+    profile's existing values.
+
+From then on D-Bus starts and unlocks the keyring on demand — including after
+every WSL restart — so there is no daemon to keep running and nothing to add to
+your shell profile. Confirm it resolves with nothing in the environment:
+
+```sh
+jira auth status
+```
+
+The `Credential` line should read `keyring`.
+
+!!! tip "If a keyring lookup fails from a script, cron job, or agent shell"
+    Non-login and non-interactive shells don't always inherit
+    `DBUS_SESSION_BUS_ADDRESS`, and without it the keyring is unreachable even
+    though it works in your interactive terminal. Export it in the rc your tools
+    load:
+
+    === "Bash / Zsh"
+
+        ```sh
+        # ~/.bashrc or ~/.zshrc
+        export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
+        ```
+
+    === "Fish"
+
+        ```fish
+        # ~/.config/fish/config.fish
+        set -gx DBUS_SESSION_BUS_ADDRESS "unix:path=/run/user/"(id -u)"/bus"
+        ```
+
+    And if step 3 prompts for a password or fails to unlock, a passworded
+    `login.keyring` left by a previous desktop session may be shadowing the
+    empty one — remove `~/.local/share/keyrings/login.keyring` and retry.
+
+**Simpler — skip the keyring, use the `env` backend.** The profile reads
+`JIRA_TOKEN_<PROFILE>` on every command and stores nothing:
+
+```sh
+export JIRA_TOKEN_DEFAULT="$(op read "op://<vault>/<item>/<field>")"
+jira auth login --backend env
+```
 
 !!! warning "WSL + the Windows `op.exe` bridge: use `op read`, not `op run`"
     A common WSL setup aliases `op` to the Windows `op.exe` so 1Password's
@@ -157,16 +242,15 @@ becomes `JIRA_TOKEN_WORK`), then the backend recorded on the profile.
     the Windows `PATH`, environment, and config — so
     `op run -- jira auth status` runs a Windows `jira` (or fails with
     `executable file not found in %PATH%`), never your WSL binary, and the
-    injected variable never reaches it. Pull the secret across instead:
+    injected variable never reaches it. Use `op read` into the variable, as
+    shown above. `op run` as a wrapper works only with a **native Linux** `op`
+    signed in inside WSL. (The `%PATH%` spelling in the error is the tell that
+    the Windows binary handled the call.)
 
-    ```sh
-    export JIRA_TOKEN_DEFAULT="$(op read "op://<vault>/<item>/<field>")"
-    jira auth status
-    ```
+### 1Password
 
-    `op run` as a wrapper works only with a **native Linux** `op` signed in
-    inside WSL. (The `%PATH%` spelling in the error is the tell that the
-    Windows binary handled the call.)
+The `1password` backend keeps the token in a 1Password item and reads it through
+the desktop app on demand. Two things to know before you choose it:
 
 !!! note "1Password on macOS and Linux needs a CGO build"
     The Windows release binary includes the `1password` backend. The macOS and

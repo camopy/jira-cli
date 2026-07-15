@@ -54,10 +54,10 @@ Map the per-profile `error` value to the next step:
     `JIRA_TOKEN_<PROFILE>` (the profile name, uppercased).
 
 `the OS keyring is unavailable` (`keyring_unavailable`)
-:   No Secret Service answered — the normal state on WSL and headless Linux,
-    where there's no gnome-keyring on the session D-Bus. Switch the profile to
-    the env backend: export `JIRA_TOKEN_<PROFILE>` and run
-    `jira auth login --backend env`. (Or install and start a Secret Service.)
+:   No Secret Service answered on the session D-Bus — common on WSL and
+    headless Linux. Add one (about a minute on WSL) and keep using the
+    keyring, or switch the profile to the env backend — both paths are in
+    [Auth › WSL and headless Linux](auth.md#wsl-and-headless-linux).
 
 `environment variable JIRA_TOKEN_<PROFILE> is not set` (`env_credential_unset`)
 :   The profile uses the env backend but the variable isn't exported in this
