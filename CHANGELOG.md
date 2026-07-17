@@ -1,6 +1,26 @@
 # Release Notes
 
 
+## [0.12.1](https://github.com/matcra587/jira-cli/releases/tag/v0.12.1) — 2026-07-17
+
+### Added
+
+- TUI new-issue form picks the issue type and offers live assignee and label suggestions, instead of silently defaulting to Task with free-text fields
+- TUI shows a footer status trail and an activity-log overlay (L) for your mutations, with the affected issue key as a clickable link
+- Choose the target project on the new-issue form; the issue-type list refetches to match the selection.
+- Press ctrl+k in the TUI to open a command palette that fuzzy-finds and runs any command available in the current view
+
+### Changed
+
+- TUI create/comment forms keep your draft and show an inline error when a submit fails, mark optional fields, and validate inline
+- Redesign the new-issue form with boxed fields and a pinned hint row that stays visible on short terminals.
+
+### Fixed
+
+- TUI Epics tab counts epics instead of the selected epic's child issues
+- TUI dialogs wider than the terminal now show a 'terminal too narrow' notice instead of garbled, wrapped borders
+- TUI pickers and the create form that open after a background fetch no longer capture keystrokes typed while waiting
+
 ## [0.12.0](https://github.com/matcra587/jira-cli/releases/tag/v0.12.0) — 2026-07-13
 
 ### Added
