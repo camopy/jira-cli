@@ -11,9 +11,9 @@ func TestCIQualityGateRunsRequiredGoChecks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile(ci) error = %v", err)
 	}
-	actions, err := os.ReadFile("../../.github/workflows/actions.yml")
+	security, err := os.ReadFile("../../.github/workflows/security.yml")
 	if err != nil {
-		t.Fatalf("ReadFile(actions) error = %v", err)
+		t.Fatalf("ReadFile(security) error = %v", err)
 	}
 	mise, err := os.ReadFile("../../.mise.toml")
 	if err != nil {
@@ -37,7 +37,7 @@ func TestCIQualityGateRunsRequiredGoChecks(t *testing.T) {
 	}
 	combined := strings.Join([]string{
 		string(ci),
-		string(actions),
+		string(security),
 		string(mise),
 		string(hk),
 		string(tasks),
@@ -62,11 +62,12 @@ func TestCIQualityGateRunsRequiredGoChecks(t *testing.T) {
 		"matcra587/github-actions/.github/workflows/go-test.yml@67f0de0d0ceebe69895e868207c04e5c66b3bde8",
 		"matcra587/github-actions/.github/workflows/go-lint.yml@67f0de0d0ceebe69895e868207c04e5c66b3bde8",
 		"matcra587/github-actions/.github/workflows/md-lint.yml@67f0de0d0ceebe69895e868207c04e5c66b3bde8",
-		"matcra587/github-actions/.github/workflows/workflow-lint.yml@67f0de0d0ceebe69895e868207c04e5c66b3bde8",
-		"mise-version: \"2026.5.0\"",
-		"zizmor-persona: pedantic",
-		"zizmor-advanced-security: false",
-		"zizmor-annotations: true",
+		// Workflow linting moved local (hk's actionlint/zizmor builtins,
+		// asserted below); the remote side is the shared security workflow,
+		// pinned by SHA with SARIF uploads to code scanning.
+		"matcra587/github-actions/.github/workflows/security.yml@3e61d37c312b21e008fa58eda8844a70b6a24f9d",
+		"security-events: write",
+		"sarif: true",
 		"lockfile = true",
 		"actionlint = \"latest\"",
 		// The binary linter must stay version-pinned: .golangci.yml is
@@ -86,7 +87,7 @@ func TestCIQualityGateRunsRequiredGoChecks(t *testing.T) {
 		"Builtins.zizmor",
 	} {
 		if !strings.Contains(combined, want) {
-			t.Fatalf("shared workflow gate missing %q\nCI:\n%s\nActions:\n%s", want, ci, actions)
+			t.Fatalf("shared workflow gate missing %q\nCI:\n%s\nSecurity:\n%s", want, ci, security)
 		}
 	}
 	for _, unwanted := range []string{"biome =", "bun =", "node ="} {
