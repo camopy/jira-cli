@@ -1,6 +1,7 @@
 package picker
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -18,6 +19,16 @@ func items(labels ...string) []Item {
 
 func press(m *Model, text string) {
 	m.Update(tea.KeyPressMsg{Text: text})
+}
+
+// matchedLabels returns the labels of the currently filtered rows, in order —
+// a readable stand-in for the unexported matches slice.
+func matchedLabels(m Model) []string {
+	out := make([]string, 0, len(m.matches))
+	for _, idx := range m.matches {
+		out = append(out, m.items[idx].Label)
+	}
+	return out
 }
 
 func TestSelectedDefaultsToFirstItem(t *testing.T) {
@@ -138,5 +149,32 @@ func TestPasteFiltersToo(t *testing.T) {
 	m.Update(tea.PasteMsg{Content: "bet"})
 	if sel, ok := m.Selected(); !ok || sel.Label != "beta" {
 		t.Errorf("paste filter Selected = %+v, %v; want beta", sel, ok)
+	}
+}
+
+// TestFuzzyMatching pins the primer/filter behavior: query runes match in
+// order without needing to be contiguous, which broadens the match set beyond
+// the old substring test while staying case-insensitive.
+func TestSubstringMatching(t *testing.T) {
+	all := []string{"To Do", "In Progress", "In Review", "Done"}
+	tests := []struct {
+		name  string
+		query string
+		want  []string
+	}{
+		{"contiguous substring matches", "prog", []string{"In Progress"}},
+		{"substring spanning both rows", "in", []string{"In Progress", "In Review"}},
+		{"uppercase query stays case-insensitive", "DONE", []string{"Done"}},
+		{"non-contiguous subsequence does not match", "ipr", nil},
+		{"absent substring matches nothing", "zzz", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := New("t", items(all...))
+			press(&m, tt.query)
+			if got := matchedLabels(m); !slices.Equal(got, tt.want) {
+				t.Errorf("query %q matched %v, want %v", tt.query, got, tt.want)
+			}
+		})
 	}
 }

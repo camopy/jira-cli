@@ -14,12 +14,11 @@ import (
 	termansi "github.com/gechr/x/ansi"
 	xmaps "github.com/gechr/x/maps"
 	"github.com/matcra587/jira-cli/internal/jira"
-	"github.com/matcra587/jira-cli/internal/tui/components/action"
+	"github.com/matcra587/jira-cli/internal/tui/components/dialog"
 	"github.com/matcra587/jira-cli/internal/tui/components/input"
 	"github.com/matcra587/jira-cli/internal/tui/components/listviewport"
 	"github.com/matcra587/jira-cli/internal/tui/components/markdown"
-	"github.com/matcra587/jira-cli/internal/tui/components/modal"
-	"github.com/matcra587/jira-cli/internal/tui/components/picker"
+	"github.com/matcra587/jira-cli/internal/tui/components/suggest"
 	"github.com/matcra587/jira-cli/internal/tui/core"
 	"github.com/matcra587/jira-cli/internal/tui/theme"
 )
@@ -56,6 +55,16 @@ type (
 	// detailResult delivers the fully-fetched issue (description + comments) for
 	// the detail view.
 	detailResult struct{ issue *jira.Issue }
+	// createMetaResult carries a project's issue types (and, on the initial open,
+	// the selectable project list) back to the create form. On the initial open
+	// it builds the form; when update is set — a project-pill change — it instead
+	// swaps the open form's type list in place.
+	createMetaResult struct {
+		project  string
+		types    []jira.ProjectIssueType
+		projects []string
+		update   bool
+	}
 )
 
 // summary is the one-line status shown after a bulk write lands. On a
@@ -109,15 +118,14 @@ type results struct {
 	filterInput input.Line
 
 	// facet narrows the rows to one status/assignee/label value on top of
-	// the text filter; facetPick is the open picker while faceting.
-	facet        facet
-	facetPick    picker.Model
-	facetChoices facetChoices
-	faceting     bool
+	// the text filter.
+	facet facet
 
-	// jumpPick is the recent-issues jumplist picker while jumping.
-	jumpPick   picker.Model
-	jumping    bool
+	// dialogs is the section's modal overlay stack (facet, jumplist,
+	// transition, and bulk-confirm dialogs); each dialog rides it with its
+	// outcome bound at push time (see sectionPick/sectionConfirm).
+	dialogs *dialog.Stack
+
 	md         *markdown.Renderer // cached, theme-styled body renderer
 	headerRows int                // owner header height (set by applySize), for click hit-tests
 	loading    bool
@@ -134,11 +142,33 @@ type results struct {
 	cursor      jira.PageCursor
 	loadingMore bool
 
-	ctrl        action.Controller
-	confirm     *bulkConfirm // a bulk request awaiting its y/N prompt
 	rollback    func()
 	bulkPending bool // a bulk write is in flight; blocks re-entry
 	writing     bool // a single-issue write (comment/assign/edit/worklog) is in flight
+	// formWriting marks that the in-flight single-issue write came from the open
+	// form dialog, so handleTask resolves the form (close on success, inline
+	// error on failure) instead of showing a detached toast.
+	formWriting bool
+
+	// writeOp tracks the current mutation's activity-registry entry so its
+	// footer/log line resolves (done or failed) when the write lands. writeOpID
+	// is 0 when no op is recorded; writeOpDesc carries the resolved text and
+	// hyperlinked key to apply on success.
+	writeOpID   uint64
+	writeOpDesc activityDesc
+
+	// createProject is the project the open create form targets; the assignee
+	// suggestion source scopes its search to it.
+	createProject string
+	// Session-scoped suggestion caches for the create form (TTL, in-memory),
+	// built lazily on the first create so a repeated open or keystroke reuses
+	// the last good result instead of re-hitting Jira. Nil until then.
+	issueTypeCache *suggest.Cached[string, []jira.ProjectIssueType]
+	assigneeCache  *suggest.Cached[assigneeKey, []*jira.User]
+	labelCache     *suggest.Cached[string, []string]
+	// projectCache holds the selectable target projects for the create pill,
+	// keyed by a constant (the list is tenant-wide, not per project).
+	projectCache *suggest.Cached[struct{}, []string]
 
 	// preview is the always-visible issue detail beside/below the list; it
 	// scrolls independently (PageUp/PageDown) for issues with long descriptions.
@@ -163,12 +193,22 @@ type results struct {
 	detail       viewport.Model
 }
 
+// submittingGlyph is the spinner frame the form dialog's foot row shows beside
+// "submitting…". It is MiniDot's first frame — a fixed glyph rather than the
+// live list spinner's current tick, so the submitting foot row is stable (and
+// its golden byte-stable) whatever the list spinner was doing when the form
+// opened. The indicator does not animate; a write is brief.
+func submittingGlyph() string {
+	return theme.StatusInProgress.Render(spinner.MiniDot.Frames[0])
+}
+
 func newResults(ctx *core.ProgramContext, id core.SectionID) results {
 	return results{
 		ctx: ctx, id: id,
 		list: listviewport.New(), preview: viewport.New(), detail: viewport.New(),
-		md:   markdown.NewRenderer(markdown.StyleFromTheme(theme.Theme)),
-		spin: spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(theme.StatusInProgress)),
+		dialogs: dialog.New(newSectionShell(ctx.Styles)),
+		md:      markdown.NewRenderer(markdown.StyleFromTheme(theme.Theme)),
+		spin:    spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(theme.StatusInProgress)),
 	}
 }
 
@@ -185,17 +225,22 @@ func (r *results) mutateScope() core.TaskScope { return core.TaskScope(string(r.
 
 func (r *results) detailScope() core.TaskScope { return core.TaskScope(string(r.id) + ".detail") }
 
+func (r *results) createMetaScope() core.TaskScope {
+	return core.TaskScope(string(r.id) + ".createmeta")
+}
+
 // capturing reports that keys must reach this component directly (filter editing,
 // an open action, or the scrollable detail view), bypassing global shortcuts.
 func (r *results) capturing() bool {
 	return r.filtering || r.detailing || r.modalOpen()
 }
 
-// modalOpen reports that an overlay covers the body (action prompt, facet or
-// jumplist picker, bulk confirmation), so list-targeted mouse events must not
-// act on the rows underneath it.
+// modalOpen reports that an overlay covers the body (any dialog on the stack:
+// the text/create form, the facet/jumplist/transition picker, or the bulk
+// confirmation), so list-targeted mouse events must not act on the rows
+// underneath it.
 func (r *results) modalOpen() bool {
-	return r.ctrl.Active() || r.faceting || r.jumping || r.confirm != nil
+	return r.dialogs.Active()
 }
 
 // flashDuration is how long a transient status toast stays up.
@@ -318,26 +363,27 @@ func (r *results) view(header string) string {
 			body = lipgloss.JoinVertical(lipgloss.Left, main, side)
 		}
 	}
-	if content := r.overlayContent(); content != "" {
-		frame := modal.Frame{Box: r.ctx.Styles.Overlay, MaxWidth: overlayMaxWidth, Margin: overlayMargin}
-		body = frame.Place(body, content, r.ctx.ScreenWidth, r.ctx.MainHeight)
-	}
+	// BodyHeight, not MainHeight: body spans the whole region between the App
+	// chrome (the list plus any docked preview), so the dialog centers over all
+	// of it and the Shell's height cap has the full body to work with rather
+	// than squishing the box into the list portion and scrolling it.
+	body = r.dialogs.View(body, r.ctx.ScreenWidth, r.ctx.BodyHeight)
 	return body
 }
 
-// overlayMaxWidth caps every modal at a readable measure; overlayMargin keeps
-// the box off the screen edges when the terminal, not the cap, binds. The cap
-// pairs with the action controller's 60-column inner text width.
-const (
-	overlayMaxWidth = 66
-	overlayMargin   = 6
-)
+// overlayMargin keeps the section overlays' box off the screen edges when the
+// terminal, not core.NewDialogShell's width cap, binds.
+const overlayMargin = 6
 
 // restyle re-derives everything this list caches from the theme after a live
 // preview swap: the markdown renderer, the spinner (styled at construction),
 // the styled rows, and any open detail content. Deliberately no fetch — a
 // theme preview must stay free.
 func (r *results) restyle() {
+	// Rebuild the dialog stack's frame from the re-derived styles so an open
+	// pick/confirm overlay never renders with stale chrome (mirrors the App's
+	// SetShell in its own restyle path).
+	r.dialogs.SetShell(newSectionShell(r.ctx.Styles))
 	r.md = markdown.NewRenderer(markdown.StyleFromTheme(theme.Theme))
 	// Restyle the spinner in place: replacing the model would mint a new
 	// internal id and the in-flight tick chain (whose messages carry the old
@@ -366,23 +412,6 @@ func (r *results) detailHint() string {
 	// Clamp to the screen: a wrapped hint row would break the detail
 	// view's fixed row budget on narrow terminals.
 	return termansi.Truncate(strings.Join(segs, "  "), r.ctx.ScreenWidth, "…")
-}
-
-// overlayContent is whichever modal is open: an action in flight, the facet
-// or jumplist picker, or a bulk confirmation. Empty when none.
-func (r *results) overlayContent() string {
-	switch {
-	case r.ctrl.Active():
-		return r.ctrl.View()
-	case r.confirm != nil:
-		return r.confirm.prompt()
-	case r.faceting:
-		return r.facetPick.View()
-	case r.jumping:
-		return r.jumpPick.View()
-	default:
-		return ""
-	}
 }
 
 func (r *results) statusLine() string {

@@ -2,16 +2,15 @@ package action
 
 import (
 	"strings"
+	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 
-	"github.com/gechr/x/ptr"
 	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui/components/form"
 	"github.com/matcra587/jira-cli/internal/tui/components/input"
-	"github.com/matcra587/jira-cli/internal/tui/components/picker"
 	"github.com/matcra587/jira-cli/internal/tui/theme"
 )
 
@@ -21,8 +20,6 @@ type Mode int
 const (
 	// ModeNone means no action is open.
 	ModeNone Mode = iota
-	// ModeTransition picks a workflow transition from a choice list.
-	ModeTransition
 	// ModeComment captures comment text.
 	ModeComment
 	// ModeAssign captures an assignee query.
@@ -37,26 +34,16 @@ const (
 	ModeWorklog
 	// ModeEdit captures a new summary.
 	ModeEdit
-	// ModeBulkTransition picks a workflow transition to apply across a
-	// multi-selection. The choices come from one representative issue; the
-	// match is by name, with the per-issue id resolved at apply time.
-	ModeBulkTransition
 	// ModeBulkAssign captures an assignee query to apply across a
 	// multi-selection (resolved to one account id at apply time).
 	ModeBulkAssign
 	// ModeBulkComment captures comment text to post on every selected issue.
 	ModeBulkComment
-	// ModePreset picks a saved query from a choice list; the selection's
-	// value (the JQL) comes back in Request.Text. The owning section drives
-	// this mode itself — results.submitAction never sees it.
-	ModePreset
 )
 
 // String returns a lower-case label for the mode.
 func (m Mode) String() string {
 	switch m {
-	case ModeTransition:
-		return "transition"
 	case ModeComment:
 		return "comment"
 	case ModeAssign:
@@ -69,28 +56,21 @@ func (m Mode) String() string {
 		return "worklog"
 	case ModeEdit:
 		return "edit"
-	case ModeBulkTransition:
-		return "bulk transition"
 	case ModeBulkAssign:
 		return "bulk assign"
 	case ModeBulkComment:
 		return "bulk comment"
-	case ModePreset:
-		return "preset"
 	default:
 		return "none"
 	}
 }
 
-// isText reports whether a mode collects free text (vs. a choice list).
+// isText reports whether a mode collects free text. Every non-create mode the
+// controller now owns is a text mode; the transition and preset choice lists
+// moved out to the section's dialog stack.
 func (m Mode) isText() bool {
 	return m == ModeComment || m == ModeAssign || m == ModeLabels || m == ModeWorklog ||
 		m == ModeEdit || m == ModeBulkAssign || m == ModeBulkComment
-}
-
-// isPick reports whether a mode selects from a choice picker.
-func (m Mode) isPick() bool {
-	return m == ModeTransition || m == ModeBulkTransition || m == ModePreset
 }
 
 // multiline reports whether a mode collects comment-style multiline text.
@@ -98,7 +78,7 @@ func (m Mode) multiline() bool { return m == ModeComment || m == ModeBulkComment
 
 // Bulk reports whether the mode applies to a multi-selection.
 func (m Mode) Bulk() bool {
-	return m == ModeBulkTransition || m == ModeBulkAssign || m == ModeBulkComment
+	return m == ModeBulkAssign || m == ModeBulkComment
 }
 
 // Request is the result of a completed action, handed to the caller to execute.
@@ -106,17 +86,45 @@ type Request struct {
 	Mode     Mode
 	IssueKey string
 
-	// TransitionID/TransitionName are set for ModeTransition. The ID is what
-	// Jira needs; the name is what the user saw, for optimistic display.
-	TransitionID   string
-	TransitionName string
-
 	// Text is the free-text payload for the text modes.
 	Text string
 
 	// Summary is ModeCreate's first field; Text carries its description.
 	Summary string
+
+	// IssueType, Assignee, and Labels carry ModeCreate's remaining fields.
+	// IssueType is the picked type name (always one of the create screen's
+	// types). Assignee is the accountId behind an accepted assignee suggestion,
+	// empty when none was accepted (the issue is created unassigned rather than
+	// guessing at free text). Labels are the parsed, non-empty label tokens.
+	IssueType string
+	Assignee  string
+	Labels    []string
 }
+
+// CreateConfig parameterizes the new-issue overlay. IssueTypes populates the
+// type cycle field (DefaultType selects the starting option); the two Fetch
+// funcs back the assignee and label autocompletes and run inside the form's
+// fetch command — nil disables a field's suggestions but leaves it editable.
+type CreateConfig struct {
+	Project       string
+	Projects      []string // selectable target projects; the pill starts on Project
+	IssueTypes    []string
+	DefaultType   string
+	AssigneeFetch func(string) []form.Suggestion
+	LabelFetch    func(string) []form.Suggestion
+}
+
+// The create form's field indices, fixed by OpenCreate's field order and read
+// back in Request. Project leads (type and the rest depend on it).
+const (
+	createFieldProject = iota
+	createFieldType
+	createFieldSummary
+	createFieldAssignee
+	createFieldLabels
+	createFieldDescription
+)
 
 // Outcome is what an Update asks the owner to do next. The controller closes
 // itself on a cancel; a submit leaves it open so the owner reads the Request
@@ -133,18 +141,19 @@ const (
 	// OutcomeEditor asks the owner to continue the draft (Draft) in the
 	// external editor; the controller stays open until the owner closes it.
 	OutcomeEditor
+	// OutcomeChanged means the project selector stepped to a new value; the
+	// owner refetches that project's issue types and pushes them back through
+	// SetTypeOptions. The controller stays open.
+	OutcomeChanged
 )
 
-// Controller collects input for one action against one issue. Text entry
-// rides the shared form component (focus ring, dirty-discard guard, inline
-// hints); transition and preset choices ride the filterable picker.
+// Controller collects input for one action against one issue. Every mode it
+// owns now collects free text (or the two-field create) through the shared form
+// component (focus ring, dirty-discard guard, inline hints); the transition and
+// preset choice lists moved out to the section's dialog stack.
 type Controller struct {
 	mode     Mode
 	issueKey string
-
-	// Transition choices (ModeTransition): a filterable picker — name shown,
-	// id submitted.
-	pick picker.Model
 
 	// form collects every text mode, from the one-line verbs to the
 	// two-field create.
@@ -154,42 +163,6 @@ type Controller struct {
 // modalTextWidth is the inner width text inputs render at inside the action
 // overlay (the modal box is capped at 66 columns with a border and padding).
 const modalTextWidth = 60
-
-// OpenTransition opens the transition picker for an issue with its valid
-// transitions. Only the transitions Jira allows for this issue are passed in,
-// so the user can never pick an invalid one.
-func (c *Controller) OpenTransition(issueKey string, transitions []*jira.Transition) {
-	c.openPick(ModeTransition, issueKey, "Transition to:", transitions)
-}
-
-// OpenBulkTransition opens the same picker for a multi-selection. The choices
-// come from one representative marked issue; issues whose workflow doesn't
-// offer the picked name report a per-issue failure at apply time.
-func (c *Controller) OpenBulkTransition(transitions []*jira.Transition) {
-	c.openPick(ModeBulkTransition, "", "Transition selection to:", transitions)
-}
-
-// OpenPreset opens a choice list of saved queries. Item values carry the JQL
-// and come back whole in Request.Text on submit.
-func (c *Controller) OpenPreset(items []picker.Item) {
-	c.reset()
-	c.mode = ModePreset
-	c.pick = picker.New("Run saved query:", items)
-}
-
-func (c *Controller) openPick(mode Mode, issueKey, title string, transitions []*jira.Transition) {
-	c.reset()
-	c.mode = mode
-	c.issueKey = issueKey
-	items := make([]picker.Item, 0, len(transitions))
-	for _, t := range transitions {
-		if t == nil {
-			continue
-		}
-		items = append(items, picker.Item{Label: ptr.Deref(t.Name), Value: ptr.Deref(t.ID)})
-	}
-	c.pick = picker.New(title, items)
-}
 
 // OpenText opens a free-text action with an optional initial value (e.g. the
 // current summary for an edit). Comments get a multiline area — with ctrl+e
@@ -215,6 +188,16 @@ func (c *Controller) OpenText(mode Mode, issueKey, initial string) {
 	// Labels and bulk assign accept empty text deliberately: clear all
 	// labels, and unassign the selection (the bulk path confirms first).
 	spec.Optional = mode == ModeLabels || mode == ModeBulkAssign
+	if mode == ModeWorklog {
+		// Catch an unparseable duration inline before the submit fans out, so
+		// "2 hrs" surfaces under the field rather than failing the write. The
+		// dispatch re-parses with the profile's real workday; validation only
+		// needs the default to reject garbage.
+		spec.Validate = func(s string) error {
+			_, err := jira.ParseDuration(s, jira.DefaultWorkdaySeconds)
+			return err
+		}
+	}
 	cfg.Fields = []form.FieldSpec{spec}
 	c.form = form.New(cfg)
 }
@@ -222,26 +205,82 @@ func (c *Controller) OpenText(mode Mode, issueKey, initial string) {
 func (c *Controller) reset() {
 	c.mode = ModeNone
 	c.issueKey = ""
-	c.pick = picker.Model{}
 	c.form = form.Model{}
 }
 
-// OpenCreate opens the two-field new-issue overlay targeting project. The
-// summary line starts focused; tab (or enter on the summary) moves to the
-// description area, and ctrl+s submits from either field.
-func (c *Controller) OpenCreate(project string) {
+// OpenCreate opens the new-issue overlay targeting cfg.Project: a type cycle
+// field, the summary line, optional assignee and label fields with inline
+// suggestions, and a Markdown description area. The type starts focused;
+// tab moves between fields and ctrl+s submits from any of them.
+func (c *Controller) OpenCreate(cfg CreateConfig) {
 	c.reset()
 	c.mode = ModeCreate
-	c.issueKey = project
+	c.issueKey = cfg.Project
+	types := cfg.IssueTypes
+	if len(types) == 0 {
+		// Never leave the cycle field optionless — an empty Options list would
+		// degrade it to a plain text input. Fall back to the default type alone.
+		fallback := cfg.DefaultType
+		if fallback == "" {
+			fallback = "Task"
+		}
+		types = []string{fallback}
+	}
+	// The project pill leads the form: it names the create target and, when
+	// stepped, drives a live refetch of the type list below it. It always holds
+	// at least the current project, so its index is fixed whether or not other
+	// projects are offered.
+	projects := cfg.Projects
+	if len(projects) == 0 {
+		projects = []string{cfg.Project}
+	}
+	// Each field carries its name — the project/type selectors as pill captions,
+	// the text fields as their box titles — with placeholders left to hint at the
+	// expected input rather than repeat the label. The form is taller than a
+	// small terminal now, but the dialog Shell scrolls to follow focus and pins
+	// the foot row, so the hints and any discard confirmation stay visible.
 	c.form = form.New(form.Config{
-		Title:  "create in " + project,
+		Title:  "new issue",
 		Width:  modalTextWidth,
 		Styles: formStyles(),
 		Fields: []form.FieldSpec{
-			{Placeholder: "one-line summary"},
-			{Placeholder: "description (optional, Markdown)…", Multiline: true, Rows: 5, Optional: true},
+			{Label: "project", Options: projects, Initial: cfg.Project, Notify: true},
+			{Label: "type", Options: types, Initial: cfg.DefaultType},
+			{Label: "summary", Placeholder: "a one-line summary"},
+			{Label: "assignee", Placeholder: "type a name", Optional: true, Autocomplete: assigneeAutocomplete(cfg.AssigneeFetch)},
+			{Label: "labels", Placeholder: "comma-separated", Optional: true, Autocomplete: labelAutocomplete(cfg.LabelFetch)},
+			{Label: "description", Placeholder: "Markdown", Multiline: true, Rows: 3, Optional: true},
 		},
 	})
+}
+
+// assigneeAutocomplete completes the whole assignee field against fetch: a name
+// carries spaces, so the query is the entire field (IsBoundary never fires)
+// rather than the trailing word. Each suggestion's Detail is the accountId,
+// recovered in Request without a re-resolve. Nil fetch disables suggestions.
+func assigneeAutocomplete(fetch func(string) []form.Suggestion) *form.Autocomplete {
+	if fetch == nil {
+		return nil
+	}
+	return &form.Autocomplete{
+		MinQuery:   3,
+		IsBoundary: func(rune) bool { return false },
+		Fetch:      fetch,
+	}
+}
+
+// labelAutocomplete completes one comma-separated label at a time: commas and
+// whitespace bound the token so each entry fetches and accepts alone. Nil fetch
+// disables suggestions.
+func labelAutocomplete(fetch func(string) []form.Suggestion) *form.Autocomplete {
+	if fetch == nil {
+		return nil
+	}
+	return &form.Autocomplete{
+		MinQuery:   2,
+		IsBoundary: func(r rune) bool { return r == ',' || unicode.IsSpace(r) },
+		Fetch:      fetch,
+	}
 }
 
 // titleFor is the overlay heading: the verb plus its target, so the modal
@@ -290,11 +329,14 @@ func formStyles() form.Styles {
 		Title:              theme.DetailHeader,
 		Label:              theme.HelpDesc,
 		LabelFocused:       theme.HelpKey,
+		Border:             lipgloss.NewStyle().Foreground(theme.Theme.Dim.GetForeground()),
+		BorderFocused:      lipgloss.NewStyle().Foreground(theme.Theme.Yellow.GetForeground()),
 		HintKey:            theme.HelpKey,
 		HintText:           theme.HelpDesc,
 		Question:           lipgloss.NewStyle().Foreground(theme.Theme.Yellow.GetForeground()).Bold(true),
 		Suggestion:         theme.DetailValue,
 		SuggestionSelected: lipgloss.NewStyle().Bold(true).Reverse(true),
+		Error:              theme.StatusErr,
 	}
 }
 
@@ -304,41 +346,45 @@ func (c *Controller) Active() bool { return c.mode != ModeNone }
 // Mode returns the current mode.
 func (c *Controller) Mode() Mode { return c.mode }
 
-// Cancel closes the controller without producing a request.
-func (c *Controller) Cancel() { c.reset() }
-
-// Update routes a message into the active control and reports what completed.
-// The pickers handle esc/enter here (cancel and submit); the form modes carry
-// their own submit, cancel, guard, and editor-hatch contract.
+// Update routes a message into the open form and reports what completed. The
+// form modes carry their own submit, cancel, guard, and editor-hatch contract.
 func (c *Controller) Update(msg tea.Msg) (tea.Cmd, Outcome) {
-	switch {
-	case c.mode == ModeNone:
+	if c.mode == ModeNone {
 		return nil, OutcomeNone
-	case c.mode.isPick():
-		if key, ok := msg.(tea.KeyPressMsg); ok {
-			switch key.String() {
-			case "esc":
-				c.reset()
-				return nil, OutcomeCancel
-			case "enter":
-				return nil, OutcomeSubmit
-			}
-		}
-		return c.pick.Update(msg), OutcomeNone
-	default:
-		cmd, ev, _ := c.form.Update(msg)
-		switch ev {
-		case form.EventSubmit:
-			return cmd, OutcomeSubmit
-		case form.EventCancel:
-			c.reset()
-			return cmd, OutcomeCancel
-		case form.EventEditor:
-			return cmd, OutcomeEditor
-		case form.EventNone:
-		}
-		return cmd, OutcomeNone
 	}
+	cmd, ev, _ := c.form.Update(msg)
+	switch ev {
+	case form.EventSubmit:
+		return cmd, OutcomeSubmit
+	case form.EventCancel:
+		c.reset()
+		return cmd, OutcomeCancel
+	case form.EventEditor:
+		return cmd, OutcomeEditor
+	case form.EventChanged:
+		return cmd, OutcomeChanged
+	case form.EventNone:
+	}
+	return cmd, OutcomeNone
+}
+
+// Project returns the create form's selected target project (the project pill's
+// value). Meaningful only in ModeCreate; empty otherwise.
+func (c *Controller) Project() string {
+	if c.mode != ModeCreate {
+		return ""
+	}
+	return c.form.Value(createFieldProject)
+}
+
+// SetTypeOptions swaps the create form's issue-type list — the owner's response
+// to an OutcomeChanged after refetching the newly selected project's types. An
+// empty list is ignored so the field never degrades to a blank.
+func (c *Controller) SetTypeOptions(types []string) {
+	if c.mode != ModeCreate {
+		return
+	}
+	c.form.SetOptions(createFieldType, types)
 }
 
 // Draft returns the open form's primary text — what an OutcomeEditor carries
@@ -348,43 +394,35 @@ func (c *Controller) Draft() string { return c.form.Value(0) }
 // IssueKey returns the open action's target (the project key for ModeCreate).
 func (c *Controller) IssueKey() string { return c.issueKey }
 
-// Submit produces the Request and closes the controller. It reports false when
-// the action is incomplete (no transitions, empty required text, or a create
-// without a summary), leaving the controller open so the user can finish.
-func (c *Controller) Submit() (Request, bool) {
+// Request reads the completed action's payload without closing the controller
+// — the async submit lifecycle keeps the form open until the write resolves, so
+// unlike a reset-on-success this leaves the draft in place. It reports false
+// when the action is incomplete (empty required text, or a create without a
+// summary); the form's own required-field gate already blocks that path, so a
+// caller acting on OutcomeSubmit always sees true.
+func (c *Controller) Request() (Request, bool) {
 	switch {
 	case c.mode == ModeCreate:
-		summary := strings.TrimSpace(c.form.Value(0))
+		summary := strings.TrimSpace(c.form.Value(createFieldSummary))
 		if summary == "" {
 			return Request{}, false
 		}
-		req := Request{Mode: ModeCreate, IssueKey: c.issueKey, Summary: summary, Text: c.form.Value(1)}
-		c.reset()
-		return req, true
-	case c.mode.isPick():
-		sel, ok := c.pick.Selected()
-		if !ok {
-			return Request{}, false
+		// The project pill is the create target — it may differ from the project
+		// the overlay opened on if the user stepped it — falling back to the
+		// opening project when the pill is somehow blank.
+		project := c.form.Value(createFieldProject)
+		if project == "" {
+			project = c.issueKey
 		}
-		if c.mode == ModePreset {
-			req := Request{Mode: ModePreset, Text: sel.Value}
-			c.reset()
-			return req, true
-		}
-		req := Request{
-			Mode:           c.mode,
-			IssueKey:       c.issueKey,
-			TransitionID:   sel.Value,
-			TransitionName: sel.Label,
-		}
-		if c.mode == ModeBulkTransition {
-			// The id belongs to the representative issue only; bulk applies
-			// by name with per-issue ids resolved at apply time. Zeroing it
-			// keeps a mode-unaware caller from posting the wrong id.
-			req.TransitionID = ""
-		}
-		c.reset()
-		return req, true
+		return Request{
+			Mode:      ModeCreate,
+			IssueKey:  project,
+			Summary:   summary,
+			Text:      c.form.Value(createFieldDescription),
+			IssueType: c.form.Value(createFieldType),
+			Assignee:  c.form.AcceptedDetail(createFieldAssignee),
+			Labels:    xstrings.SplitCSV(c.form.Value(createFieldLabels)),
+		}, true
 	case c.mode.isText():
 		text := c.form.Value(0)
 		// Labels and bulk assign accept empty text deliberately: clear all
@@ -392,23 +430,33 @@ func (c *Controller) Submit() (Request, bool) {
 		if xstrings.IsBlank(text) && c.mode != ModeLabels && c.mode != ModeBulkAssign {
 			return Request{}, false // empty comment/summary/etc is not a submit
 		}
-		req := Request{Mode: c.mode, IssueKey: c.issueKey, Text: text}
-		c.reset()
-		return req, true
+		return Request{Mode: c.mode, IssueKey: c.issueKey, Text: text}, true
 	default:
 		return Request{}, false
 	}
 }
 
-// View renders the open action as overlay content: a choice list for a
-// transition, or the titled form otherwise. Empty when no action is open.
-func (c *Controller) View() string {
-	switch {
-	case c.mode == ModeNone:
-		return ""
-	case c.mode.isPick():
-		return c.pick.View()
-	default:
-		return c.form.View()
-	}
-}
+// SetSubmitting freezes the form on an async submit, showing frame (a spinner
+// glyph) plus "submitting…" until the write resolves.
+func (c *Controller) SetSubmitting(frame string) { c.form.SetSubmitting(frame) }
+
+// SetError clears the submitting state and surfaces msg as the form's
+// inline error, leaving the draft intact for a retry.
+func (c *Controller) SetError(msg string) { c.form.SetError(msg) }
+
+// View renders the open action's titled form as overlay content, empty when no
+// action is open (the zero-value form renders empty on its own).
+func (c *Controller) View() string { return c.form.View() }
+
+// Body is the scrollable part of the form (title + fields); Foot is its pinned
+// chrome (the hint / submitting / discard-confirm row). A dialog that scrolls a
+// tall create form draws the two separately so the foot never scrolls off.
+func (c *Controller) Body() string { return c.form.Body() }
+
+// Foot is the form's pinned foot row — see [Controller.Body].
+func (c *Controller) Foot() string { return c.form.Foot() }
+
+// FocusRegion forwards the form's focused-field position so a framing Shell can
+// scroll to follow focus through a tall create form. It is meaningful only
+// while an action is open.
+func (c *Controller) FocusRegion() (top, height int, ok bool) { return c.form.FocusRegion() }

@@ -79,7 +79,7 @@ func TestLabelFacetMatchesAnyOfTheIssueLabels(t *testing.T) {
 func TestFacetKeyOpensPickerAndEnterApplies(t *testing.T) {
 	m := facetModel(t)
 	m.Update(tea.KeyPressMsg{Code: 'f', Text: "f"})
-	if !m.faceting || !m.CapturesInput() {
+	if !m.dialogs.Active() || !m.CapturesInput() {
 		t.Fatal("f did not open the facet picker")
 	}
 	// Type to narrow to the Bob facet, then apply.
@@ -87,7 +87,7 @@ func TestFacetKeyOpensPickerAndEnterApplies(t *testing.T) {
 		m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.faceting {
+	if m.dialogs.Active() {
 		t.Fatal("enter did not close the picker")
 	}
 	if m.facet.field != "assignee" || m.facet.value != "Bob" {
@@ -102,8 +102,8 @@ func TestFacetEscClosesWithoutApplying(t *testing.T) {
 	m := facetModel(t)
 	m.Update(tea.KeyPressMsg{Code: 'f', Text: "f"})
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
-	if m.faceting || m.facet != (facet{}) {
-		t.Errorf("esc should close without applying: faceting=%v facet=%+v", m.faceting, m.facet)
+	if m.dialogs.Active() || m.facet != (facet{}) {
+		t.Errorf("esc should close without applying: faceting=%v facet=%+v", m.dialogs.Active(), m.facet)
 	}
 }
 

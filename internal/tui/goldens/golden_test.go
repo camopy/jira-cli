@@ -12,6 +12,7 @@ package goldens
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -36,10 +37,29 @@ func (f fakeIssueSvc) List(context.Context, *jira.IssueListOptions) ([]*jira.Iss
 	return f.issues, nil, nil
 }
 
+// Transitions serves a fixed workflow so the transition-pick golden has choices
+// to render; the pick is by name, so ids are arbitrary here.
+func (fakeIssueSvc) Transitions(context.Context, string) ([]*jira.Transition, *jira.Response, error) {
+	mk := func(id, name string) *jira.Transition { return &jira.Transition{ID: &id, Name: &name} }
+	return []*jira.Transition{mk("11", "To Do"), mk("21", "In Progress"), mk("31", "Done")}, nil, nil
+}
+
 type fakeJQLSvc struct{ jira.JQLService }
 
 func (fakeJQLSvc) Parse(context.Context, []string, string) ([]jira.ParsedQuery, *jira.Response, error) {
 	return []jira.ParsedQuery{{}}, nil, nil
+}
+
+// fakeProjectSvc serves a fixed issue-type list and project list so the create
+// overlay's type and project cycle fields have options to render.
+type fakeProjectSvc struct{ jira.ProjectService }
+
+func (fakeProjectSvc) ListIssueTypes(context.Context, string) ([]jira.ProjectIssueType, *jira.Response, error) {
+	return []jira.ProjectIssueType{{ID: "1", Name: "Task"}, {ID: "2", Name: "Epic"}, {ID: "3", Name: "Subtask"}}, nil, nil
+}
+
+func (fakeProjectSvc) List(context.Context, *jira.ListOptions) ([]jira.ProjectSummary, *jira.Response, error) {
+	return []jira.ProjectSummary{{Key: "JCT"}, {Key: "PROJ"}}, nil, nil
 }
 
 type fakeServices struct {
@@ -47,8 +67,9 @@ type fakeServices struct {
 	issue jira.IssueService
 }
 
-func (f fakeServices) Issues() jira.IssueService { return f.issue }
-func (f fakeServices) JQL() jira.JQLService      { return fakeJQLSvc{} }
+func (f fakeServices) Issues() jira.IssueService     { return f.issue }
+func (f fakeServices) JQL() jira.JQLService          { return fakeJQLSvc{} }
+func (f fakeServices) Projects() jira.ProjectService { return fakeProjectSvc{} }
 
 func mkIssue(key, status, summary, issueType, priority, assignee string) *jira.Issue {
 	k, st, su := key, status, summary
@@ -89,7 +110,13 @@ func fixtureIssues() []*jira.Issue {
 // live client: issues + search + settings (always last, as the real order
 // resolver appends it), fake services, no config file.
 func buildApp() core.App {
-	ctx := core.NewProgramContext(fakeServices{issue: fakeIssueSvc{issues: fixtureIssues()}}, nil)
+	return buildAppWith(fakeIssueSvc{issues: fixtureIssues()})
+}
+
+// buildAppWith is buildApp over a caller-supplied issue service, so a golden
+// can drive a gated write (see gatedIssueSvc) instead of the default fixture.
+func buildAppWith(issue jira.IssueService) core.App {
+	ctx := core.NewProgramContext(fakeServices{issue: issue}, nil)
 	reg := core.NewRegistry()
 	reg.Register(issues.ID, issues.New)
 	reg.Register(issues.SearchID, issues.NewSearch)
@@ -229,4 +256,235 @@ func TestGoldenSettings80x24(t *testing.T) {
 
 func TestGoldenSettings120x40(t *testing.T) {
 	assertGolden(t, frame(t, 120, 40, tab(), tab()), 40)
+}
+
+func help() tea.KeyPressMsg { return tea.KeyPressMsg{Code: '?', Text: "?"} }
+
+// TestGoldenHelp* pins the full-keymap overlay over the issues section. It is
+// the regression guard for the help sheet's framing: the sheet draws its own
+// box and helpsheet sizes its columns from that box, so a bare render collapses
+// the width and wraps the longer descriptions ("select all/none"). The dialog
+// Shell must place the sheet without re-wrapping it.
+func TestGoldenHelp80x24(t *testing.T) {
+	assertGolden(t, frame(t, 80, 24, help()), 24)
+}
+
+func TestGoldenHelp120x40(t *testing.T) {
+	assertGolden(t, frame(t, 120, 40, help()), 40)
+}
+
+func facetKey() tea.KeyPressMsg      { return tea.KeyPressMsg{Code: 'f', Text: "f"} }
+func transitionKey() tea.KeyPressMsg { return tea.KeyPressMsg{Code: 't', Text: "t"} }
+
+// TestGoldenFacet* pins the facet picker over the issues section: pressing 'f'
+// pushes a filterable pick dialog onto the section's dialog stack, and the
+// Shell frames it centered over the list. It is the regression guard for the
+// section overlays' migration onto the dialog stack.
+func TestGoldenFacet80x24(t *testing.T) {
+	assertGolden(t, frame(t, 80, 24, facetKey()), 24)
+}
+
+func TestGoldenFacet120x40(t *testing.T) {
+	assertGolden(t, frame(t, 120, 40, facetKey()), 40)
+}
+
+// TestGoldenTransition* pins the transition picker: 't' fetches the selected
+// issue's transitions (via the fake service) and opens the same framed pick.
+func TestGoldenTransition80x24(t *testing.T) {
+	assertGolden(t, frame(t, 80, 24, transitionKey()), 24)
+}
+
+func TestGoldenTransition120x40(t *testing.T) {
+	assertGolden(t, frame(t, 120, 40, transitionKey()), 40)
+}
+
+func createKey() tea.KeyPressMsg { return tea.KeyPressMsg{Code: 'n', Text: "n"} }
+
+// TestGoldenCreate* pins the new-issue overlay: 'n' fetches the project's issue
+// types (via the fake project service), then opens the five-field form — the
+// type cycle field plus summary, assignee, labels, and description. The 80x24
+// frame is the regression guard for the form fitting the height cap without
+// clipping its hint row below the fold.
+func TestGoldenCreate80x24(t *testing.T) {
+	assertGolden(t, frame(t, 80, 24, createKey()), 24)
+}
+
+func TestGoldenCreate120x40(t *testing.T) {
+	assertGolden(t, frame(t, 120, 40, createKey()), 40)
+}
+
+// gatedIssueSvc blocks AddComment on a channel the test controls, so a comment
+// submit stays in flight long enough to snapshot the form's submitting frame.
+// Closing release lets the write land (or fail, per err); the fixture List and
+// Transitions come from the embedded fake so the reconcile after a success has
+// rows to render.
+type gatedIssueSvc struct {
+	fakeIssueSvc
+	release <-chan struct{}
+	err     error
+}
+
+func (g gatedIssueSvc) AddComment(context.Context, string, *jira.CommentAddRequest) (*jira.Comment, *jira.Response, error) {
+	<-g.release
+	return &jira.Comment{}, nil, g.err
+}
+
+func commentKey() tea.KeyPressMsg { return tea.KeyPressMsg{Code: 'c', Text: "c"} }
+func ctrlS() tea.KeyPressMsg      { return tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl} }
+
+// driveGated drives m to quiescence, but the first time the loop goes quiet with
+// a write still blocked (the gated AddComment) it snapshots that mid-flight
+// frame, releases the gate, and resumes to the settled frame — the two frames
+// the plain drive() harness cannot separate, since it settles to a single
+// quiescent frame.
+func driveGated(t *testing.T, m tea.Model, cmd tea.Cmd, release chan struct{}) (mid string, settled tea.Model) {
+	t.Helper()
+	msgs := make(chan tea.Msg, 256)
+	var inflight atomic.Int64
+	exec := func(c tea.Cmd) {
+		if c == nil {
+			return
+		}
+		inflight.Add(1)
+		go func() {
+			defer inflight.Add(-1)
+			if msg := c(); msg != nil {
+				select {
+				case msgs <- msg:
+				default:
+				}
+			}
+		}()
+	}
+	exec(cmd)
+	const quietWindow = 250 * time.Millisecond
+	released := false
+	quiet := time.NewTimer(quietWindow)
+	defer quiet.Stop()
+	step := func(msg tea.Msg) {
+		if batch, ok := msg.(tea.BatchMsg); ok {
+			for _, c := range batch {
+				exec(c)
+			}
+			return
+		}
+		var c tea.Cmd
+		m, c = m.Update(msg)
+		exec(c)
+	}
+	for {
+		select {
+		case msg := <-msgs:
+			step(msg)
+			quiet.Reset(quietWindow)
+		case <-quiet.C:
+			if inflight.Load() == 0 {
+				return mid, m
+			}
+			select {
+			case msg := <-msgs:
+				step(msg)
+				quiet.Reset(quietWindow)
+			case <-time.After(quietWindow):
+				// Work is still in flight with nothing to deliver: the blocked
+				// gated write. Snapshot it, release the gate, and resume; a
+				// second arrival here (after release) means only timers remain.
+				if released {
+					return mid, m
+				}
+				mid = m.(core.App).View().Content
+				close(release)
+				released = true
+				quiet.Reset(quietWindow)
+			}
+		}
+	}
+}
+
+// frameFormLifecycle opens a comment on the first issue, types a draft, and
+// submits against a gated service whose AddComment returns writeErr once
+// released. It returns the mid-flight (submitting) frame and the settled frame
+// — a closed overlay on success, or the reopened form with an inline error.
+func frameFormLifecycle(t *testing.T, w, h int, writeErr error) (mid, settled string) {
+	t.Helper()
+	release := make(chan struct{})
+	svc := gatedIssueSvc{
+		fakeIssueSvc: fakeIssueSvc{issues: fixtureIssues()},
+		release:      release,
+		err:          writeErr,
+	}
+	var m tea.Model = buildAppWith(svc)
+	m = drive(t, m, m.(core.App).Init())
+	m = drive(t, m, func() tea.Msg { return tea.WindowSizeMsg{Width: w, Height: h} })
+	m = drive(t, m, func() tea.Msg { return commentKey() })
+	m = drive(t, m, func() tea.Msg { return tea.KeyPressMsg{Text: "ship it"} })
+	var settledModel tea.Model
+	mid, settledModel = driveGated(t, m, func() tea.Msg { return ctrlS() }, release)
+	return mid, settledModel.(core.App).View().Content
+}
+
+func opLogKey() tea.KeyPressMsg { return tea.KeyPressMsg{Text: "L", Code: 'L'} }
+
+// frameActivityLog drives a completed comment write so the activity registry
+// holds a resolved entry, then opens the operation-log overlay with L. It pins
+// both the footer status slot (the resolved write) and the log dialog listing.
+func frameActivityLog(t *testing.T, w, h int) string {
+	t.Helper()
+	release := make(chan struct{})
+	svc := gatedIssueSvc{fakeIssueSvc: fakeIssueSvc{issues: fixtureIssues()}, release: release}
+	var m tea.Model = buildAppWith(svc)
+	m = drive(t, m, m.(core.App).Init())
+	m = drive(t, m, func() tea.Msg { return tea.WindowSizeMsg{Width: w, Height: h} })
+	m = drive(t, m, func() tea.Msg { return commentKey() })
+	m = drive(t, m, func() tea.Msg { return tea.KeyPressMsg{Text: "ship it"} })
+	_, settled := driveGated(t, m, func() tea.Msg { return ctrlS() }, release)
+	settled = drive(t, settled, func() tea.Msg { return opLogKey() })
+	return settled.(core.App).View().Content
+}
+
+// TestGoldenActivityLog* pins the operation-log overlay over the issues list,
+// after one comment write has resolved — the log line and the footer's resolved
+// status slot both render.
+func TestGoldenActivityLog80x24(t *testing.T) {
+	assertGolden(t, frameActivityLog(t, 80, 24), 24)
+}
+
+func TestGoldenActivityLog120x40(t *testing.T) {
+	assertGolden(t, frameActivityLog(t, 120, 40), 40)
+}
+
+// TestGoldenFormSubmitting* pins the comment form's in-flight frame: the hint
+// row is replaced by the spinner and "submitting…" while the write is gated.
+func TestGoldenFormSubmitting80x24(t *testing.T) {
+	mid, _ := frameFormLifecycle(t, 80, 24, nil)
+	assertGolden(t, mid, 24)
+}
+
+func TestGoldenFormSubmitting120x40(t *testing.T) {
+	mid, _ := frameFormLifecycle(t, 120, 40, nil)
+	assertGolden(t, mid, 40)
+}
+
+// TestGoldenFormSubmitted* pins the settled frame after the gated write lands:
+// the overlay is gone and the list is back.
+func TestGoldenFormSubmitted80x24(t *testing.T) {
+	_, settled := frameFormLifecycle(t, 80, 24, nil)
+	assertGolden(t, settled, 24)
+}
+
+func TestGoldenFormSubmitted120x40(t *testing.T) {
+	_, settled := frameFormLifecycle(t, 120, 40, nil)
+	assertGolden(t, settled, 40)
+}
+
+// TestGoldenFormError* pins the failure path: the write returns an error, so the
+// form stays open with the reason inline and the draft intact.
+func TestGoldenFormError80x24(t *testing.T) {
+	_, settled := frameFormLifecycle(t, 80, 24, errors.New("service unavailable"))
+	assertGolden(t, settled, 24)
+}
+
+func TestGoldenFormError120x40(t *testing.T) {
+	_, settled := frameFormLifecycle(t, 120, 40, errors.New("service unavailable"))
+	assertGolden(t, settled, 40)
 }

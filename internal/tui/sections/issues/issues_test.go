@@ -89,13 +89,25 @@ func (f fakeIssueSvc) Create(_ context.Context, req *jira.IssueCreateRequest) (*
 			desc = "with-description"
 		}
 		f.writes.record("create:"+req.Project, req.Summary+"|"+req.IssueType+"|"+desc)
+		if a, ok := req.Fields["assignee"].(map[string]any); ok {
+			id, _ := a["accountId"].(string)
+			f.writes.record("create-assignee:"+req.Project, id)
+		}
+		if labels, ok := req.Fields["labels"].([]string); ok {
+			f.writes.record("create-labels:"+req.Project, strings.Join(labels, ","))
+		}
 	}
 	return nil, nil, nil
 }
 
-func (f fakeIssueSvc) AddComment(_ context.Context, key string, _ *jira.CommentAddRequest) (*jira.Comment, *jira.Response, error) {
+func (f fakeIssueSvc) AddComment(_ context.Context, key string, req *jira.CommentAddRequest) (*jira.Comment, *jira.Response, error) {
 	if f.writes != nil {
 		f.writes.record("comment:"+key, "1")
+		// The body's leading node type distinguishes verbatim text (a code
+		// block from indented input) from trimmed prose (a paragraph).
+		if req != nil && len(req.Body.Content) > 0 {
+			f.writes.record("comment-node:"+key, req.Body.Content[0].Type)
+		}
 	}
 	return nil, nil, nil
 }
@@ -289,8 +301,41 @@ func TestFetchTransitionsOpensPicker(t *testing.T) {
 	cmd := m.fetchTransitions("JCT-1", false)
 	sec, _ := m.Update(cmd())
 	m = sec.(*Model)
-	if !m.ctrl.Active() {
-		t.Fatal("picker not opened after transitions fetch")
+	if !m.pickOpen() {
+		t.Fatalf("transition pick not opened after fetch: active=%v top=%T", m.dialogs.Active(), m.dialogs.Top())
+	}
+}
+
+func TestSingleTransitionPickAppliesOptimisticallyAndReconciles(t *testing.T) {
+	ctx := newTestCtx(fakeServices{issue: fakeIssueSvc{}})
+	m := New(ctx).(*Model)
+	m.all = []*jira.Issue{mkIssue("JCT-1", "To Do", "x")}
+	m.applyFilter()
+
+	// Accept the only choice in the transition pick: the row moves optimistically
+	// and the write starts, mirroring the old controller-driven submit.
+	m.handleTask(core.TaskFinishedMsg{
+		Scope:  m.transitionsScope(),
+		Result: transitionsResult{issueKey: "JCT-1", transitions: []*jira.Transition{mkTransition("41", "Done")}},
+	})
+	m.passGrace()
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("accepting a transition did not start the write")
+	}
+	if m.dialogs.Active() {
+		t.Error("transition pick still open after accepting")
+	}
+	if got := issueStatus(m.find("JCT-1")); got != "Done" {
+		t.Fatalf("status before reconcile = %q, want optimistic Done", got)
+	}
+	if m.rollback == nil {
+		t.Error("single transition did not register a rollback")
+	}
+	sec, _ := m.Update(cmd()) // write succeeds
+	m = sec.(*Model)
+	if m.rollback != nil {
+		t.Error("rollback not cleared after a successful transition")
 	}
 }
 
@@ -340,7 +385,7 @@ func TestEmptyTransitionsShowsNoticeNotPicker(t *testing.T) {
 
 	cmd := m.fetchTransitions("JCT-1", false)
 	m.Update(cmd())
-	if m.ctrl.Active() {
+	if m.dialogs.Active() {
 		t.Error("picker opened with no valid transitions")
 	}
 	if m.flash.Msg != "no transitions available" {
@@ -348,17 +393,20 @@ func TestEmptyTransitionsShowsNoticeNotPicker(t *testing.T) {
 	}
 }
 
-func TestViewRendersControllerOverlay(t *testing.T) {
+func TestViewRendersDialogOverlay(t *testing.T) {
 	ctx := newTestCtx(fakeServices{issue: fakeIssueSvc{}})
 	m := New(ctx).(*Model)
 	m.Init(ctx) // sizes the list
 	m.all = []*jira.Issue{mkIssue("JCT-1", "To Do", "x")}
 	m.applyFilter()
-	m.ctrl.OpenTransition("JCT-1", []*jira.Transition{mkTransition("41", "Done")})
+	m.handleTask(core.TaskFinishedMsg{
+		Scope:  m.transitionsScope(),
+		Result: transitionsResult{issueKey: "JCT-1", transitions: []*jira.Transition{mkTransition("41", "Done")}},
+	})
 
 	out := m.View()
 	if !strings.Contains(out, "Done") {
-		t.Error("active controller not rendered into the view")
+		t.Error("open transition pick not rendered into the view")
 	}
 }
 

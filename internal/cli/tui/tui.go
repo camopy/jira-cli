@@ -322,3 +322,5 @@ func (a servicesAdapter) Search() jira.SearchService    { return a.factory.Searc
 func (a servicesAdapter) JQL() jira.JQLService          { return a.factory.JQL() }
 func (a servicesAdapter) Users() jira.UserService       { return a.factory.User() }
 func (a servicesAdapter) Worklogs() jira.WorklogService { return a.factory.Worklog() }
+func (a servicesAdapter) Projects() jira.ProjectService { return a.factory.Project(0) }
+func (a servicesAdapter) Labels() jira.LabelService     { return a.factory.Label() }

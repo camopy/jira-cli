@@ -3,6 +3,7 @@ package issues
 import (
 	"context"
 	"strconv"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -38,12 +39,13 @@ func (f fakeWorklogSvc) Add(_ context.Context, key string, req *jira.WorklogAddR
 	return nil, nil, nil
 }
 
-// drive a completed action through submitAction and apply its task result.
-func runVerb(t *testing.T, m *Model) {
+// runVerb dispatches a completed action request and applies its task result —
+// the section-level equivalent of the form dialog emitting formSubmitMsg.
+func runVerb(t *testing.T, m *Model, req action.Request) {
 	t.Helper()
-	cmd := m.submitAction()
+	cmd, _ := m.dispatchSubmit(req)
 	if cmd == nil {
-		t.Fatal("submitAction returned no command")
+		t.Fatal("dispatchSubmit returned no command")
 	}
 	m.Update(cmd())
 }
@@ -60,9 +62,7 @@ func newVerbModel(t *testing.T, svc fakeServices) *Model {
 func TestEditSummaryUpdatesIssue(t *testing.T) {
 	w := &callRecorder{}
 	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{writes: w}})
-	m.ctrl.OpenText(action.ModeEdit, "JCT-1", "")
-	m.ctrl.Update(tea.KeyPressMsg{Text: "new summary"})
-	runVerb(t, m)
+	runVerb(t, m, action.Request{Mode: action.ModeEdit, IssueKey: "JCT-1", Text: "new summary"})
 	if got := w.get("summary:JCT-1"); got != "new summary" {
 		t.Fatalf("Update(summary) = %q, want %q", got, "new summary")
 	}
@@ -71,9 +71,7 @@ func TestEditSummaryUpdatesIssue(t *testing.T) {
 func TestCommentPostsADF(t *testing.T) {
 	w := &callRecorder{}
 	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{writes: w}})
-	m.ctrl.OpenText(action.ModeComment, "JCT-1", "")
-	m.ctrl.Update(tea.KeyPressMsg{Text: "looks good"})
-	runVerb(t, m)
+	runVerb(t, m, action.Request{Mode: action.ModeComment, IssueKey: "JCT-1", Text: "looks good"})
 	if w.get("comment:JCT-1") != "1" {
 		t.Errorf("AddComment not called; recorder=%v", w.posted)
 	}
@@ -94,9 +92,7 @@ func TestAssignToResolvesQuery(t *testing.T) {
 	w := &callRecorder{}
 	svc := fakeServices{issue: fakeIssueSvc{writes: w}, user: fakeUserSvc{resolved: "acc-bob"}}
 	m := newVerbModel(t, svc)
-	m.ctrl.OpenText(action.ModeAssign, "JCT-1", "")
-	m.ctrl.Update(tea.KeyPressMsg{Text: "bob"})
-	runVerb(t, m)
+	runVerb(t, m, action.Request{Mode: action.ModeAssign, IssueKey: "JCT-1", Text: "bob"})
 	if got := w.get("assignee:JCT-1"); got != "acc-bob" {
 		t.Errorf("assignee = %q, want acc-bob", got)
 	}
@@ -106,9 +102,7 @@ func TestWorklogParsesDurationToSeconds(t *testing.T) {
 	w := &callRecorder{}
 	svc := fakeServices{issue: fakeIssueSvc{}, worklog: fakeWorklogSvc{rec: w}}
 	m := newVerbModel(t, svc)
-	m.ctrl.OpenText(action.ModeWorklog, "JCT-1", "")
-	m.ctrl.Update(tea.KeyPressMsg{Text: "2h"})
-	runVerb(t, m)
+	runVerb(t, m, action.Request{Mode: action.ModeWorklog, IssueKey: "JCT-1", Text: "2h"})
 	if got := w.get("worklog:JCT-1"); got != "7200" {
 		t.Errorf("worklog seconds = %q, want 7200", got)
 	}
@@ -116,11 +110,9 @@ func TestWorklogParsesDurationToSeconds(t *testing.T) {
 
 func TestWriteInFlightBlocksAnotherWrite(t *testing.T) {
 	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{}})
-	m.ctrl.OpenText(action.ModeEdit, "JCT-1", "")
-	m.ctrl.Update(tea.KeyPressMsg{Text: "y"})
-	cmd := m.submitAction()
+	cmd, _ := m.dispatchSubmit(action.Request{Mode: action.ModeEdit, IssueKey: "JCT-1", Text: "y"})
 	if cmd == nil {
-		t.Fatal("submitAction returned no command")
+		t.Fatal("dispatchSubmit returned no command")
 	}
 	if m.canMutate() {
 		t.Error("a write in flight must block another mutation")
@@ -158,9 +150,7 @@ var _ core.Services = fakeServices{}
 func TestLabelsReplaceWholeList(t *testing.T) {
 	w := &callRecorder{}
 	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{writes: w}})
-	m.ctrl.OpenText(action.ModeLabels, "JCT-1", "")
-	m.ctrl.Update(tea.KeyPressMsg{Text: "bug, ux,, triage "})
-	runVerb(t, m)
+	runVerb(t, m, action.Request{Mode: action.ModeLabels, IssueKey: "JCT-1", Text: "bug, ux,, triage "})
 	if got := w.get("labels:JCT-1"); got != "bug,ux,triage" {
 		t.Fatalf("Update(labels) = %q, want bug,ux,triage", got)
 	}
@@ -169,12 +159,8 @@ func TestLabelsReplaceWholeList(t *testing.T) {
 func TestLabelsEmptyInputClearsAll(t *testing.T) {
 	w := &callRecorder{}
 	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{writes: w}})
-	m.ctrl.OpenText(action.ModeLabels, "JCT-1", "stale")
-	// Wipe the pre-filled value: the empty submission means "remove every label".
-	for range len("stale") {
-		m.ctrl.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
-	}
-	runVerb(t, m)
+	// An emptied labels field submits as "remove every label".
+	runVerb(t, m, action.Request{Mode: action.ModeLabels, IssueKey: "JCT-1", Text: ""})
 	if got, ok := w.posted["labels:JCT-1"]; !ok || got != "" {
 		t.Fatalf("Update(labels) = %q (recorded=%v), want recorded empty list", got, ok)
 	}
@@ -183,23 +169,62 @@ func TestLabelsEmptyInputClearsAll(t *testing.T) {
 func TestCreateOverlayCollectsSummaryAndDescription(t *testing.T) {
 	w := &callRecorder{}
 	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{writes: w}})
-	m.ctrl.OpenCreate("JCT")
-	m.ctrl.Update(tea.KeyPressMsg{Text: "Fix the flux"})
-	m.ctrl.Update(tea.KeyPressMsg{Code: tea.KeyTab}) // move to the description
-	m.ctrl.Update(tea.KeyPressMsg{Text: "It sparks when engaged."})
-	runVerb(t, m)
+	runVerb(t, m, action.Request{Mode: action.ModeCreate, IssueKey: "JCT", Summary: "Fix the flux", Text: "It sparks when engaged."})
 	if got := w.get("create:JCT"); got != "Fix the flux|Task|with-description" {
 		t.Fatalf("Create = %q, want summary|Task|description", got)
 	}
 }
 
+// A single transition records a footer/log entry like every other write — it
+// runs its own task rather than r.mutate, so the recording is easy to drop.
+func TestSingleTransitionRecordsActivity(t *testing.T) {
+	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{}})
+	m.applySingleTransition("JCT-1", "21", "In Progress")
+	e, ok := m.ctx.Activity.Recent()
+	if !ok || !strings.Contains(e.Pending, "JCT-1") {
+		t.Fatalf("transition recorded no pending entry naming JCT-1: %+v (ok=%v)", e, ok)
+	}
+	// On resolution the key lands so the footer/log can hyperlink it.
+	m.finishOp(nil)
+	if e, _ = m.ctx.Activity.Recent(); e.IssueKey != "JCT-1" {
+		t.Fatalf("resolved transition entry = %+v, want IssueKey JCT-1", e)
+	}
+}
+
+func TestCreateCarriesTypeAssigneeAndLabels(t *testing.T) {
+	w := &callRecorder{}
+	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{writes: w}})
+	m.ctx.DefaultIssueType = "Bug" // the request's own type must win over this
+	runVerb(t, m, action.Request{
+		Mode:      action.ModeCreate,
+		IssueKey:  "JCT",
+		Summary:   "Ship the widget",
+		IssueType: "Story",
+		Assignee:  "acc-42",
+		Labels:    []string{"ux", "backend"},
+	})
+	if got := w.get("create:JCT"); got != "Ship the widget|Story|" {
+		t.Fatalf("create payload = %q, want type Story with no description", got)
+	}
+	if got := w.get("create-assignee:JCT"); got != "acc-42" {
+		t.Fatalf("create assignee = %q, want the accepted accountId acc-42", got)
+	}
+	if got := w.get("create-labels:JCT"); got != "ux,backend" {
+		t.Fatalf("create labels = %q, want ux,backend", got)
+	}
+}
+
 func TestCreateWithoutSummaryStaysOpen(t *testing.T) {
 	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{}})
-	m.ctrl.OpenCreate("JCT")
-	if cmd := m.submitAction(); cmd != nil {
-		t.Fatal("submit with an empty summary must not produce a command")
+	m.openCreateForm("JCT", nil, nil)
+	m.passGrace() // the async-open grace must not be what blocks the submit
+	// ctrl+s on a blank required summary: the form blocks the submit (no
+	// formSubmitMsg) and stays on the stack for the user to finish.
+	cmd := m.updateDialog(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
+	if cmd != nil {
+		t.Fatal("submit with an empty summary must not emit a command")
 	}
-	if !m.ctrl.Active() {
+	if m.activeForm() == nil {
 		t.Fatal("the create overlay must stay open for the user to finish")
 	}
 }
@@ -208,9 +233,7 @@ func TestCreateUsesProfileIssueType(t *testing.T) {
 	w := &callRecorder{}
 	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{writes: w}})
 	m.ctx.DefaultIssueType = "Bug"
-	m.ctrl.OpenCreate("JCT")
-	m.ctrl.Update(tea.KeyPressMsg{Text: "Only a summary"})
-	runVerb(t, m)
+	runVerb(t, m, action.Request{Mode: action.ModeCreate, IssueKey: "JCT", Summary: "Only a summary"})
 	if got := w.get("create:JCT"); got != "Only a summary|Bug|" {
 		t.Fatalf("Create = %q, want summary-only with profile type", got)
 	}

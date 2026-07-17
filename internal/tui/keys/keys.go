@@ -43,19 +43,21 @@ type Map struct {
 	Create     key.Binding
 
 	// Cross-cutting.
-	TogglePreview key.Binding
-	GrowPreview   key.Binding
-	ShrinkPreview key.Binding
-	Zoom          key.Binding
-	OpenBrowse    key.Binding
-	CopyKey       key.Binding
-	CopyURL       key.Binding
-	Select        key.Binding
-	SelectAll     key.Binding
-	SelectInvert  key.Binding
-	SelectRange   key.Binding
-	Help          key.Binding
-	Quit          key.Binding
+	CommandPalette key.Binding
+	TogglePreview  key.Binding
+	GrowPreview    key.Binding
+	ShrinkPreview  key.Binding
+	Zoom           key.Binding
+	OpenBrowse     key.Binding
+	CopyKey        key.Binding
+	CopyURL        key.Binding
+	Select         key.Binding
+	SelectAll      key.Binding
+	SelectInvert   key.Binding
+	SelectRange    key.Binding
+	OpLog          key.Binding
+	Help           key.Binding
+	Quit           key.Binding
 }
 
 // Default returns the stock key map. Bindings favor a Jira-native triage loop:
@@ -93,19 +95,21 @@ func Default() Map {
 		Edit:       key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit")),
 		Create:     key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new issue")),
 
-		TogglePreview: key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "move preview")),
-		GrowPreview:   key.NewBinding(key.WithKeys("+", "="), key.WithHelp("+", "grow preview")),
-		ShrinkPreview: key.NewBinding(key.WithKeys("-"), key.WithHelp("-", "shrink preview")),
-		Zoom:          key.NewBinding(key.WithKeys("z"), key.WithHelp("z", "zoom")),
-		OpenBrowse:    key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "open browser")),
-		CopyKey:       key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "copy key")),
-		CopyURL:       key.NewBinding(key.WithKeys("Y"), key.WithHelp("Y", "copy url")),
-		Select:        key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "select")),
-		SelectAll:     key.NewBinding(key.WithKeys("ctrl+a"), key.WithHelp("ctrl+a", "select all/none")),
-		SelectInvert:  key.NewBinding(key.WithKeys("X"), key.WithHelp("X", "invert selection")),
-		SelectRange:   key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "select range")),
-		Help:          key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
-		Quit:          key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
+		CommandPalette: key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("ctrl+k", "commands")),
+		TogglePreview:  key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "move preview")),
+		GrowPreview:    key.NewBinding(key.WithKeys("+", "="), key.WithHelp("+", "grow preview")),
+		ShrinkPreview:  key.NewBinding(key.WithKeys("-"), key.WithHelp("-", "shrink preview")),
+		Zoom:           key.NewBinding(key.WithKeys("z"), key.WithHelp("z", "zoom")),
+		OpenBrowse:     key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "open browser")),
+		CopyKey:        key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "copy key")),
+		CopyURL:        key.NewBinding(key.WithKeys("Y"), key.WithHelp("Y", "copy url")),
+		Select:         key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "select")),
+		SelectAll:      key.NewBinding(key.WithKeys("ctrl+a"), key.WithHelp("ctrl+a", "select all/none")),
+		SelectInvert:   key.NewBinding(key.WithKeys("X"), key.WithHelp("X", "invert selection")),
+		SelectRange:    key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "select range")),
+		OpLog:          key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "activity log")),
+		Help:           key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+		Quit:           key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 	}
 }
 
@@ -126,13 +130,15 @@ func (m *Map) index() keybind.Registry {
 		"assign": &m.Assign, "assign_me": &m.AssignMe,
 		"labels": &m.Labels, "worklog": &m.Worklog,
 		"edit": &m.Edit, "create": &m.Create,
-		"toggle_preview": &m.TogglePreview,
-		"grow_preview":   &m.GrowPreview, "shrink_preview": &m.ShrinkPreview,
+		"command_palette": &m.CommandPalette,
+		"toggle_preview":  &m.TogglePreview,
+		"grow_preview":    &m.GrowPreview, "shrink_preview": &m.ShrinkPreview,
 		"zoom":        &m.Zoom,
 		"open_browse": &m.OpenBrowse, "copy_key": &m.CopyKey, "copy_url": &m.CopyURL,
 		"select": &m.Select, "select_all": &m.SelectAll,
 		"select_invert": &m.SelectInvert, "select_range": &m.SelectRange,
-		"help": &m.Help, "quit": &m.Quit,
+		"op_log": &m.OpLog,
+		"help":   &m.Help, "quit": &m.Quit,
 	}
 }
 

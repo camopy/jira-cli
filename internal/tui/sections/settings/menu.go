@@ -166,11 +166,12 @@ func tabNameComplete(m *Model) *form.Autocomplete {
 	}
 	return &form.Autocomplete{
 		IsBoundary: func(r rune) bool { return r == ',' || unicode.IsSpace(r) },
-		Fetch: func(query string) []string {
-			var out []string
+		Fetch: func(query string) []form.Suggestion {
+			var out []form.Suggestion
 			for _, name := range known {
 				if strings.HasPrefix(strings.ToLower(name), strings.ToLower(query)) {
-					out = append(out, name)
+					// A tab name is its own value and label.
+					out = append(out, form.Suggestion{Value: name, Label: name})
 				}
 			}
 			return out

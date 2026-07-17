@@ -1,0 +1,3 @@
+kind: added
+body: Press ctrl+k in the TUI to open a command palette that fuzzy-finds and runs any command available in the current view
+time: 2026-07-15T09:04:06.858814858-04:00

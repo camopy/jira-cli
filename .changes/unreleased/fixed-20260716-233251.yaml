@@ -1,0 +1,3 @@
+kind: fixed
+body: TUI dialogs wider than the terminal now show a 'terminal too narrow' notice instead of garbled, wrapped borders
+time: 2026-07-16T23:32:51.246355955-04:00

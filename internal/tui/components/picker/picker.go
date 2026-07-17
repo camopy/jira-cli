@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/gechr/primer/filter"
 
 	"github.com/matcra587/jira-cli/internal/tui/components/input"
 	"github.com/matcra587/jira-cli/internal/tui/theme"
@@ -56,13 +57,24 @@ func (m *Model) clamp() {
 // refilter recomputes matches for the current filter text and snaps the
 // cursor to the first match — a narrowed list under a stale cursor would
 // submit something the user isn't looking at.
+//
+// Matching is fuzzy (primer/filter): query runes must appear in the label in
+// order but need not be contiguous, so "ipr" now matches "In Progress". This
+// broadens the match set versus the old substring test. CaseInsensitive keeps
+// the picker's long-standing case-blind contract (an uppercased query still
+// matches a lowercase label); smart case would have quietly narrowed it.
 func (m *Model) refilter() {
-	q := strings.ToLower(strings.TrimSpace(m.filter.Value()))
+	q := strings.TrimSpace(m.filter.Value())
 	// A fresh slice, not a truncation: Model is copied by value, and two
 	// copies sharing a backing array would stomp each other's matches.
 	m.matches = nil
+	// Case-insensitive substring through primer's filter, preserving the prior
+	// strings.Contains behavior. Fuzzy subsequence matching is a deliberate
+	// later change: it broadens matches unhelpfully over labels that embed a
+	// JQL (the preset dropdown), so it is not adopted in this refactor.
+	term := filter.Term{Text: q, Case: filter.CaseInsensitive}
 	for i, it := range m.items {
-		if q == "" || strings.Contains(strings.ToLower(it.Label), q) {
+		if q == "" || term.Match(it.Label) {
 			m.matches = append(m.matches, i)
 		}
 	}

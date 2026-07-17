@@ -113,37 +113,26 @@ func applyFacet(issues []*jira.Issue, f facet) []*jira.Issue {
 
 // openFacets opens the facet picker over the loaded set; with a facet
 // already active the first item clears it (the zero facet in the choice
-// table means "clear").
+// table means "clear"). The choice table rides the pick's bound action, so
+// nothing has to be stashed on the section for the pop.
 func (r *results) openFacets() {
 	choices := collectFacets(r.all)
 	if r.facet.active() {
 		choices.items = append([]picker.Item{{Label: "✕ clear (" + r.facet.String() + ")", Value: strconv.Itoa(len(choices.facets))}}, choices.items...)
 		choices.facets = append(choices.facets, facet{})
 	}
-	r.facetChoices = choices
-	r.facetPick = picker.New("Filter by:", choices.items)
-	r.faceting = true
+	r.pushPick("Filter by:", choices.items, func(sel picker.Item) tea.Cmd {
+		r.applyFacetChoice(choices, sel)
+		return nil
+	})
 }
 
-// updateFacet drives the open facet picker: esc closes, enter applies the
-// selection (or clears), everything else types into its filter.
-func (r *results) updateFacet(msg tea.KeyPressMsg) tea.Cmd {
-	switch msg.String() {
-	case "esc":
-		r.faceting = false
-		return nil
-	case "enter":
-		r.faceting = false
-		sel, ok := r.facetPick.Selected()
-		if !ok {
-			return nil
-		}
-		if idx, err := strconv.Atoi(sel.Value); err == nil && idx >= 0 && idx < len(r.facetChoices.facets) {
-			r.facet = r.facetChoices.facets[idx]
-		}
-		r.applyFilter()
-		return nil
-	default:
-		return r.facetPick.Update(msg)
+// applyFacetChoice applies the facet chosen in the pick dialog. The
+// selection's value is an index into choices; the zero facet at that index
+// clears an active facet (see openFacets).
+func (r *results) applyFacetChoice(choices facetChoices, sel picker.Item) {
+	if idx, err := strconv.Atoi(sel.Value); err == nil && idx >= 0 && idx < len(choices.facets) {
+		r.facet = choices.facets[idx]
 	}
+	r.applyFilter()
 }

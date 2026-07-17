@@ -5,90 +5,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/matcra587/jira-cli/internal/jira"
+	"github.com/matcra587/jira-cli/internal/tui/components/form"
 )
-
-func transition(id, name string) *jira.Transition {
-	return &jira.Transition{ID: &id, Name: &name}
-}
-
-func TestTransitionSubmitReturnsIDAndName(t *testing.T) {
-	var c Controller
-	c.OpenTransition("JCT-1", []*jira.Transition{
-		transition("11", "To Do"),
-		transition("21", "In Progress"),
-		transition("41", "Done"),
-	})
-	if !c.Active() || c.Mode() != ModeTransition {
-		t.Fatal("controller not in transition mode after open")
-	}
-	c.Update(tea.KeyPressMsg{Code: tea.KeyDown}) // → In Progress
-
-	req, ok := c.Submit()
-	if !ok {
-		t.Fatal("submit reported incomplete")
-	}
-	if req.TransitionID != "21" || req.TransitionName != "In Progress" {
-		t.Errorf("submitted %q/%q, want 21/In Progress", req.TransitionID, req.TransitionName)
-	}
-	if c.Active() {
-		t.Error("controller still active after submit")
-	}
-}
-
-func TestTransitionNavigationClampsAtBounds(t *testing.T) {
-	var c Controller
-	c.OpenTransition("JCT-1", []*jira.Transition{transition("11", "To Do"), transition("41", "Done")})
-	for i := 0; i < 5; i++ {
-		c.Update(tea.KeyPressMsg{Code: tea.KeyUp})
-	}
-	if req, ok := c.Submit(); !ok || req.TransitionID != "11" {
-		t.Errorf("choice underflow submitted %q, want 11", req.TransitionID)
-	}
-	c.OpenTransition("JCT-1", []*jira.Transition{transition("11", "To Do"), transition("41", "Done")})
-	for i := 0; i < 5; i++ {
-		c.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	}
-	if req, ok := c.Submit(); !ok || req.TransitionID != "41" {
-		t.Errorf("choice overflow submitted %q, want 41", req.TransitionID)
-	}
-}
-
-func TestTransitionPickerFiltersOnTyping(t *testing.T) {
-	var c Controller
-	c.OpenTransition("JCT-1", []*jira.Transition{
-		transition("11", "To Do"),
-		transition("21", "In Progress"),
-		transition("41", "Done"),
-	})
-	for _, r := range "done" {
-		c.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
-	}
-	req, ok := c.Submit()
-	if !ok || req.TransitionID != "41" || req.TransitionName != "Done" {
-		t.Errorf("filtered submit = %+v, %v; want Done/41", req, ok)
-	}
-}
-
-func TestTransitionPickerNoMatchCannotSubmit(t *testing.T) {
-	var c Controller
-	c.OpenTransition("JCT-1", []*jira.Transition{transition("11", "To Do")})
-	c.Update(tea.KeyPressMsg{Text: "zzz"})
-	if _, ok := c.Submit(); ok {
-		t.Error("submit succeeded with no transition matching the filter")
-	}
-	if !c.Active() {
-		t.Error("controller should stay open after a rejected submit")
-	}
-}
-
-func TestEmptyTransitionListCannotSubmit(t *testing.T) {
-	var c Controller
-	c.OpenTransition("JCT-1", nil)
-	if _, ok := c.Submit(); ok {
-		t.Error("submit succeeded with no valid transitions")
-	}
-}
 
 func TestCommentTextRoundTrips(t *testing.T) {
 	var c Controller
@@ -96,7 +14,7 @@ func TestCommentTextRoundTrips(t *testing.T) {
 	c.Update(tea.KeyPressMsg{Text: "looks goof"})
 	c.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
 	c.Update(tea.KeyPressMsg{Text: "d"})
-	req, ok := c.Submit()
+	req, ok := c.Request()
 	if !ok {
 		t.Fatal("comment submit reported incomplete")
 	}
@@ -108,7 +26,7 @@ func TestCommentTextRoundTrips(t *testing.T) {
 func TestEmptyCommentCannotSubmit(t *testing.T) {
 	var c Controller
 	c.OpenText(ModeComment, "JCT-2", "   ")
-	if _, ok := c.Submit(); ok {
+	if _, ok := c.Request(); ok {
 		t.Error("empty comment was submitted")
 	}
 	if !c.Active() {
@@ -119,39 +37,12 @@ func TestEmptyCommentCannotSubmit(t *testing.T) {
 func TestCancelClears(t *testing.T) {
 	var c Controller
 	c.OpenText(ModeEdit, "JCT-3", "old summary")
-	c.Cancel()
+	// A pristine draft needs no discard confirmation: esc cancels outright.
+	if _, outcome := c.Update(tea.KeyPressMsg{Code: tea.KeyEscape}); outcome != OutcomeCancel {
+		t.Fatal("esc on a clean draft did not cancel")
+	}
 	if c.Active() || c.Mode() != ModeNone {
 		t.Error("cancel did not close the controller")
-	}
-}
-
-func TestTypeIgnoredOutsideTextMode(t *testing.T) {
-	var c Controller
-	c.OpenTransition("JCT-1", []*jira.Transition{transition("11", "To Do")})
-	c.Update(tea.KeyPressMsg{Text: "xyz"}) // must be ignored in a choice mode
-	if got := c.Draft(); got != "" {
-		t.Errorf("text captured in transition mode: %q", got)
-	}
-}
-
-func TestPickerEscCancels(t *testing.T) {
-	var c Controller
-	c.OpenTransition("JCT-1", []*jira.Transition{transition("11", "To Do")})
-	_, outcome := c.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if outcome != OutcomeCancel || c.Active() {
-		t.Errorf("esc on picker: outcome=%v active=%v, want cancel+closed", outcome, c.Active())
-	}
-}
-
-func TestPickerEnterReportsSubmit(t *testing.T) {
-	var c Controller
-	c.OpenTransition("JCT-1", []*jira.Transition{transition("11", "To Do")})
-	_, outcome := c.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if outcome != OutcomeSubmit {
-		t.Errorf("enter on picker: outcome=%v, want submit", outcome)
-	}
-	if req, ok := c.Submit(); !ok || req.TransitionID != "11" {
-		t.Errorf("submit after enter = %+v, %v", req, ok)
 	}
 }
 
@@ -201,5 +92,94 @@ func TestBulkCommentHasNoEditorHatch(t *testing.T) {
 	c.OpenText(ModeBulkComment, "", "")
 	if _, outcome := c.Update(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl}); outcome != OutcomeNone {
 		t.Errorf("bulk comment offered the editor hatch: outcome=%v", outcome)
+	}
+}
+
+// Stepping the project pill reports OutcomeChanged so the owner can refetch the
+// new project's types; SetTypeOptions swaps them in, and the Request carries the
+// chosen project and type.
+func TestCreateProjectPillDrivesTypeRefetch(t *testing.T) {
+	var c Controller
+	c.OpenCreate(CreateConfig{
+		Project:     "JCT",
+		Projects:    []string{"JCT", "PROJ"},
+		IssueTypes:  []string{"Task", "Bug"},
+		DefaultType: "Task",
+	})
+
+	// Stepping the project pill reports OutcomeChanged and the new target.
+	_, outcome := c.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	if outcome != OutcomeChanged {
+		t.Fatalf("stepping the project pill = %v, want OutcomeChanged", outcome)
+	}
+	if got := c.Project(); got != "PROJ" {
+		t.Fatalf("Project() = %q, want PROJ", got)
+	}
+
+	// The owner refetches and pushes the new project's types back; the type field
+	// adopts them, snapping to the first when the old value is gone.
+	c.SetTypeOptions([]string{"Story", "Epic"})
+	c.Update(tea.KeyPressMsg{Code: tea.KeyTab})   // project → type
+	c.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // Story → Epic
+	c.Update(tea.KeyPressMsg{Code: tea.KeyTab})   // → summary
+	c.Update(tea.KeyPressMsg{Text: "New issue"})
+	if _, outcome := c.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}); outcome != OutcomeSubmit {
+		t.Fatalf("ctrl+s outcome = %v, want OutcomeSubmit", outcome)
+	}
+	req, ok := c.Request()
+	if !ok {
+		t.Fatal("create request reported incomplete")
+	}
+	if req.IssueKey != "PROJ" || req.IssueType != "Epic" {
+		t.Errorf("req project/type = %q/%q, want PROJ/Epic", req.IssueKey, req.IssueType)
+	}
+}
+
+// The create form collects the picked type, an accepted assignee's accountId,
+// and parsed labels into the Request — the payload the section turns into a
+// create call without any re-resolve.
+func TestCreateFormBuildsRequest(t *testing.T) {
+	var c Controller
+	c.OpenCreate(CreateConfig{
+		Project:     "JCT",
+		IssueTypes:  []string{"Task", "Bug", "Story"},
+		DefaultType: "Task",
+		AssigneeFetch: func(string) []form.Suggestion {
+			return []form.Suggestion{{Value: "Alice Smith", Label: "Alice Smith", Detail: "acc-99"}}
+		},
+	})
+	c.Update(tea.KeyPressMsg{Code: tea.KeyTab})   // project → type
+	c.Update(tea.KeyPressMsg{Code: tea.KeyRight}) // type: Task → Bug
+	c.Update(tea.KeyPressMsg{Code: tea.KeyTab})   // → summary
+	c.Update(tea.KeyPressMsg{Text: "Ship it"})
+	c.Update(tea.KeyPressMsg{Code: tea.KeyTab}) // → assignee
+	c.Update(tea.KeyPressMsg{Text: "ali"})
+	// The assignee fetch is async; deliver the suggestion the live query awaits.
+	c.Update(form.SuggestionsMsg{Field: createFieldAssignee, Query: "ali", Items: []form.Suggestion{
+		{Value: "Alice Smith", Label: "Alice Smith", Detail: "acc-99"},
+	}})
+	c.Update(tea.KeyPressMsg{Code: tea.KeyEnter}) // accept the assignee
+	c.Update(tea.KeyPressMsg{Code: tea.KeyTab})   // → labels
+	c.Update(tea.KeyPressMsg{Text: "ux, backend"})
+
+	_, outcome := c.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
+	if outcome != OutcomeSubmit {
+		t.Fatalf("ctrl+s outcome = %v, want OutcomeSubmit", outcome)
+	}
+	req, ok := c.Request()
+	if !ok {
+		t.Fatal("create request reported incomplete")
+	}
+	if req.IssueKey != "JCT" {
+		t.Errorf("req project = %q, want the pill's JCT", req.IssueKey)
+	}
+	if req.Summary != "Ship it" || req.IssueType != "Bug" {
+		t.Errorf("req summary/type = %q/%q, want 'Ship it'/'Bug'", req.Summary, req.IssueType)
+	}
+	if req.Assignee != "acc-99" {
+		t.Errorf("req assignee = %q, want the accepted accountId acc-99", req.Assignee)
+	}
+	if len(req.Labels) != 2 || req.Labels[0] != "ux" || req.Labels[1] != "backend" {
+		t.Errorf("req labels = %v, want [ux backend]", req.Labels)
 	}
 }

@@ -22,9 +22,7 @@ func rowAssignee(m *Model) string {
 
 func TestEditAppliesSummaryBeforeTheWriteLands(t *testing.T) {
 	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{}})
-	m.ctrl.OpenText(action.ModeEdit, "JCT-1", "")
-	m.ctrl.Update(tea.KeyPressMsg{Text: "new summary"})
-	cmd := m.submitAction()
+	cmd, _ := m.dispatchSubmit(action.Request{Mode: action.ModeEdit, IssueKey: "JCT-1", Text: "new summary"})
 	if got := rowSummary(m); got != "new summary" {
 		t.Fatalf("summary before reconcile = %q, want optimistic value", got)
 	}
@@ -39,9 +37,7 @@ func TestEditAppliesSummaryBeforeTheWriteLands(t *testing.T) {
 
 func TestEditRollsBackOnWriteFailure(t *testing.T) {
 	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{updateErr: errBoom}})
-	m.ctrl.OpenText(action.ModeEdit, "JCT-1", "")
-	m.ctrl.Update(tea.KeyPressMsg{Text: "new summary"})
-	cmd := m.submitAction()
+	cmd, _ := m.dispatchSubmit(action.Request{Mode: action.ModeEdit, IssueKey: "JCT-1", Text: "new summary"})
 	m.Update(cmd()) // write fails
 	if got := rowSummary(m); got != "old summary" {
 		t.Errorf("summary after failed write = %q, want rolled back", got)
@@ -54,9 +50,7 @@ func TestEditRollsBackOnWriteFailure(t *testing.T) {
 func TestAssignShowsTypedQueryOptimistically(t *testing.T) {
 	svc := fakeServices{issue: fakeIssueSvc{}, user: fakeUserSvc{resolved: "acc-bob"}}
 	m := newVerbModel(t, svc)
-	m.ctrl.OpenText(action.ModeAssign, "JCT-1", "")
-	m.ctrl.Update(tea.KeyPressMsg{Text: "bob"})
-	m.submitAction()
+	_, _ = m.dispatchSubmit(action.Request{Mode: action.ModeAssign, IssueKey: "JCT-1", Text: "bob"})
 	if got := rowAssignee(m); got != "bob" {
 		t.Errorf("assignee before reconcile = %q, want typed query", got)
 	}
@@ -66,9 +60,7 @@ func TestAssignNoneClearsAssigneeOptimistically(t *testing.T) {
 	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{}})
 	name := "Ann"
 	m.all[0].Fields.Assignee = &jira.User{DisplayName: &name}
-	m.ctrl.OpenText(action.ModeAssign, "JCT-1", "")
-	m.ctrl.Update(tea.KeyPressMsg{Text: "none"})
-	m.submitAction()
+	_, _ = m.dispatchSubmit(action.Request{Mode: action.ModeAssign, IssueKey: "JCT-1", Text: "none"})
 	if got := rowAssignee(m); got != "" {
 		t.Errorf("assignee after unassign = %q, want cleared", got)
 	}
@@ -80,9 +72,7 @@ func TestAssignRollsBackOnFailure(t *testing.T) {
 	if got := rowAssignee(m); got != "" {
 		t.Fatalf("precondition: fixture assignee = %q, want none", got)
 	}
-	m.ctrl.OpenText(action.ModeAssign, "JCT-1", "")
-	m.ctrl.Update(tea.KeyPressMsg{Text: "bob"})
-	cmd := m.submitAction()
+	cmd, _ := m.dispatchSubmit(action.Request{Mode: action.ModeAssign, IssueKey: "JCT-1", Text: "bob"})
 	m.Update(cmd())
 	if got := rowAssignee(m); got != "" {
 		t.Errorf("assignee after failed write = %q, want original (none)", got)

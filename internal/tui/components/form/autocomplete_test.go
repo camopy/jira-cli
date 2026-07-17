@@ -7,6 +7,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
+// sug builds a suggestion whose value and label are equal — the common case for
+// plain value lists.
+func sug(s string) Suggestion { return Suggestion{Value: s, Label: s} }
+
 // mentionForm is a one-area form completing @-mentions from a fixed set.
 func mentionForm(fetched *[]string) Model {
 	return New(Config{
@@ -14,14 +18,14 @@ func mentionForm(fetched *[]string) Model {
 			Multiline: true,
 			Autocomplete: &Autocomplete{
 				Trigger: '@',
-				Fetch: func(query string) []string {
+				Fetch: func(query string) []Suggestion {
 					if fetched != nil {
 						*fetched = append(*fetched, query)
 					}
-					var out []string
+					var out []Suggestion
 					for _, name := range []string{"alice", "alan", "bob"} {
 						if strings.HasPrefix(name, query) {
-							out = append(out, name)
+							out = append(out, sug(name))
 						}
 					}
 					return out
@@ -94,11 +98,11 @@ func TestBareTokenCompletion(t *testing.T) {
 		Fields: []FieldSpec{{
 			Autocomplete: &Autocomplete{
 				IsBoundary: func(r rune) bool { return r == ',' || r == ' ' },
-				Fetch: func(query string) []string {
-					var out []string
+				Fetch: func(query string) []Suggestion {
+					var out []Suggestion
 					for _, name := range []string{"issues", "epics", "search"} {
 						if strings.HasPrefix(name, query) {
-							out = append(out, name)
+							out = append(out, sug(name))
 						}
 					}
 					return out
@@ -138,6 +142,30 @@ func TestSuggestionsFetchRenderAccept(t *testing.T) {
 	}
 }
 
+// TestSuggestionValueDiffersFromLabel pins the {Value,Label} split: the list
+// renders the human-readable Label while acceptance inserts the opaque Value.
+func TestSuggestionValueDiffersFromLabel(t *testing.T) {
+	m := New(Config{
+		Fields: []FieldSpec{{
+			Autocomplete: &Autocomplete{
+				Trigger: '@',
+				Fetch: func(string) []Suggestion {
+					return []Suggestion{{Value: "acc-123", Label: "Ann Example"}}
+				},
+			},
+		}},
+		Width: 40,
+	})
+	typeAndFetch(t, &m, "@a")
+	if v := m.View(); !strings.Contains(v, "Ann Example") || strings.Contains(v, "acc-123") {
+		t.Fatalf("list must show the label, not the value: %q", v)
+	}
+	press(t, &m, enter)
+	if got := m.Value(0); got != "@acc-123" {
+		t.Fatalf("acceptance inserted %q, want the value with the trigger", got)
+	}
+}
+
 func TestEnterAcceptsInsteadOfNewline(t *testing.T) {
 	m := mentionForm(nil)
 	typeAndFetch(t, &m, "@b")
@@ -167,7 +195,7 @@ func TestStaleSuggestionsDrop(t *testing.T) {
 	m := mentionForm(nil)
 	typeAndFetch(t, &m, "@a")
 	// A slow response for an older query arrives after the token moved on.
-	m.Update(SuggestionsMsg{Field: 0, Query: "zz", Items: []string{"zoe"}})
+	m.Update(SuggestionsMsg{Field: 0, Query: "zz", Items: []Suggestion{sug("zoe")}})
 	if strings.Contains(m.View(), "zoe") {
 		t.Fatal("stale suggestions installed")
 	}
@@ -193,7 +221,7 @@ func TestNoFetchBelowMinQuery(t *testing.T) {
 			Autocomplete: &Autocomplete{
 				Trigger:  '@',
 				MinQuery: 2,
-				Fetch: func(q string) []string {
+				Fetch: func(q string) []Suggestion {
 					queries = append(queries, q)
 					return nil
 				},
@@ -216,8 +244,8 @@ func TestSuggestionListCapped(t *testing.T) {
 		Fields: []FieldSpec{{
 			Autocomplete: &Autocomplete{
 				Trigger: '@',
-				Fetch: func(string) []string {
-					return []string{"a1", "a2", "a3", "a4", "a5", "a6", "a7"}
+				Fetch: func(string) []Suggestion {
+					return []Suggestion{sug("a1"), sug("a2"), sug("a3"), sug("a4"), sug("a5"), sug("a6"), sug("a7")}
 				},
 			},
 		}},
@@ -234,7 +262,7 @@ func TestLineFieldMidTextAcceptance(t *testing.T) {
 		Fields: []FieldSpec{{
 			Autocomplete: &Autocomplete{
 				Trigger: '@',
-				Fetch:   func(string) []string { return []string{"alice"} },
+				Fetch:   func(string) []Suggestion { return []Suggestion{sug("alice")} },
 			},
 		}},
 		Width: 40,
@@ -274,7 +302,7 @@ func TestPasteDuringConfirmIsSwallowed(t *testing.T) {
 func TestFocusChangeClearsSuggestions(t *testing.T) {
 	m := New(Config{
 		Fields: []FieldSpec{
-			{Autocomplete: &Autocomplete{Trigger: '@', Fetch: func(string) []string { return []string{"alice"} }}},
+			{Autocomplete: &Autocomplete{Trigger: '@', Fetch: func(string) []Suggestion { return []Suggestion{sug("alice")} }}},
 			{Optional: true},
 		},
 		Width: 40,

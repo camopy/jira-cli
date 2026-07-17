@@ -14,6 +14,35 @@ import (
 // marked drives a space press, which toggles the current row's selection.
 func space() tea.KeyPressMsg { return tea.KeyPressMsg{Code: tea.KeySpace} }
 
+// deliver runs a command tree and feeds each resulting message back into the
+// section, unwrapping batches — the harness the form dialog's async submit
+// needs, since ctrl+s emits its request on a command rather than inline.
+func deliver(t *testing.T, m *Model, cmd tea.Cmd) {
+	t.Helper()
+	if cmd == nil {
+		return
+	}
+	switch msg := cmd().(type) {
+	case tea.BatchMsg:
+		for _, c := range msg {
+			deliver(t, m, c)
+		}
+	case nil:
+	default:
+		var next core.Section
+		next, cmd = m.Update(msg)
+		m = next.(*Model)
+		deliver(t, m, cmd)
+	}
+}
+
+// submitOpenForm presses ctrl+s in the open form dialog and drives the emitted
+// formSubmitMsg into the section, mirroring the runtime submit path.
+func submitOpenForm(t *testing.T, m *Model) {
+	t.Helper()
+	deliver(t, m, m.updateDialog(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}))
+}
+
 func TestSelectTogglesMarkAndRendersMarker(t *testing.T) {
 	ctx := newTestCtx(fakeServices{issue: fakeIssueSvc{}})
 	m := New(ctx).(*Model)
@@ -55,8 +84,8 @@ func TestTransitionWithMarksOpensBulkPicker(t *testing.T) {
 		t.Fatal("t with marks did not fetch transitions")
 	}
 	m.Update(cmd())
-	if !m.ctrl.Active() || m.ctrl.Mode() != action.ModeBulkTransition {
-		t.Fatalf("expected bulk-transition picker, got active=%v mode=%v", m.ctrl.Active(), m.ctrl.Mode())
+	if !m.pickOpen() {
+		t.Fatalf("expected bulk-transition pick, got active=%v top=%T", m.dialogs.Active(), m.dialogs.Top())
 	}
 }
 
@@ -96,13 +125,19 @@ func TestBulkTransitionAllSucceed(t *testing.T) {
 	m.applyFilter()
 	m.marks = map[string]bool{"JCT-1": true, "JCT-2": true}
 
-	// Drive the real submit path: open the bulk picker, take the selected
-	// transition, then approve the confirmation prompt.
-	m.ctrl.OpenBulkTransition([]*jira.Transition{mkTransition("11", "Done")})
-	if cmd := m.submitAction(); cmd != nil || m.confirm == nil {
-		t.Fatal("bulk submit must park behind the confirmation prompt")
+	// Drive the real submit path: open the bulk transition pick, take the
+	// selected transition, then approve the confirmation prompt.
+	m.handleTask(core.TaskFinishedMsg{
+		Scope:  m.transitionsScope(),
+		Result: transitionsResult{bulk: true, transitions: []*jira.Transition{mkTransition("11", "Done")}},
+	})
+	m.passGrace()
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}) // pick the only transition → parks the confirm
+	p := m.confirmPrompt()
+	if p == "" {
+		t.Fatal("bulk pick must park behind the confirmation prompt")
 	}
-	if p := m.confirm.prompt(); !strings.Contains(p, "2 issues") || !strings.Contains(p, `"Done"`) {
+	if !strings.Contains(p, "2 issues") || !strings.Contains(p, `"Done"`) {
 		t.Fatalf("confirm prompt = %q, want count and status", p)
 	}
 	_, cmd := m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
@@ -197,13 +232,17 @@ func TestSelectRangeMarksAnchorThroughCursor(t *testing.T) {
 func TestBulkConfirmAnyOtherKeyCancelsAndKeepsMarks(t *testing.T) {
 	m := bulkModel(t, fakeServices{issue: fakeIssueSvc{}})
 	m.marks = map[string]bool{"JCT-1": true, "JCT-2": true}
-	m.ctrl.OpenBulkTransition([]*jira.Transition{mkTransition("11", "Done")})
-	m.submitAction()
-	if m.confirm == nil || !m.CapturesInput() {
-		t.Fatal("submit did not open the confirmation")
+	m.handleTask(core.TaskFinishedMsg{
+		Scope:  m.transitionsScope(),
+		Result: transitionsResult{bulk: true, transitions: []*jira.Transition{mkTransition("11", "Done")}},
+	})
+	m.passGrace()
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}) // pick → parks the confirm
+	if m.confirmPrompt() == "" || !m.CapturesInput() {
+		t.Fatal("pick did not open the confirmation")
 	}
 	m.Update(tea.KeyPressMsg{Code: 'n', Text: "n"})
-	if m.confirm != nil || m.bulkPending {
+	if m.dialogs.Active() || m.bulkPending {
 		t.Fatal("n did not cancel the bulk request")
 	}
 	if len(m.marks) != 2 {
@@ -218,11 +257,11 @@ func TestBulkAssignAppliesResolvedUserToEveryMark(t *testing.T) {
 	m.marks = map[string]bool{"JCT-1": true, "JCT-3": true}
 
 	m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
-	if !m.ctrl.Active() || m.ctrl.Mode() != action.ModeBulkAssign {
-		t.Fatalf("a with marks opened mode %v, want bulk assign", m.ctrl.Mode())
+	if f := m.activeForm(); f == nil || f.ctrl.Mode() != action.ModeBulkAssign {
+		t.Fatal("a with marks did not open the bulk assign form")
 	}
-	m.ctrl.Update(tea.KeyPressMsg{Text: "bob"})
-	m.submitAction()
+	m.dialogs.Update(tea.KeyPressMsg{Text: "bob"})
+	submitOpenForm(t, m)
 	_, cmd := m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
 	msg := cmd().(core.TaskFinishedMsg)
 	res := msg.Result.(bulkResult)
@@ -243,11 +282,11 @@ func TestBulkCommentPostsToEveryMark(t *testing.T) {
 	m.marks = map[string]bool{"JCT-1": true, "JCT-2": true}
 
 	m.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
-	if !m.ctrl.Active() || m.ctrl.Mode() != action.ModeBulkComment {
-		t.Fatalf("c with marks opened mode %v, want bulk comment", m.ctrl.Mode())
+	if f := m.activeForm(); f == nil || f.ctrl.Mode() != action.ModeBulkComment {
+		t.Fatal("c with marks did not open the bulk comment form")
 	}
-	m.ctrl.Update(tea.KeyPressMsg{Text: "ping"})
-	m.submitAction()
+	m.dialogs.Update(tea.KeyPressMsg{Text: "ping"})
+	submitOpenForm(t, m)
 	_, cmd := m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
 	msg := cmd().(core.TaskFinishedMsg)
 	res := msg.Result.(bulkResult)
@@ -262,25 +301,35 @@ func TestBulkCommentPostsToEveryMark(t *testing.T) {
 }
 
 func TestBulkCommentTextIsNotTrimmed(t *testing.T) {
-	m := bulkModel(t, fakeServices{issue: fakeIssueSvc{}})
+	w := &callRecorder{}
+	m := bulkModel(t, fakeServices{issue: fakeIssueSvc{writes: w}})
 	m.marks = map[string]bool{"JCT-1": true}
-	m.ctrl.OpenText(action.ModeBulkComment, "", "")
-	m.ctrl.Update(tea.KeyPressMsg{Text: "    indented code"})
-	m.submitAction()
-	if m.confirm == nil || m.confirm.text != "    indented code" {
-		t.Fatalf("bulk comment text = %q, want leading whitespace kept", m.confirm.text)
+	m.openTextForm(action.ModeBulkComment, "", "")
+	m.dialogs.Update(tea.KeyPressMsg{Text: "    indented code"})
+	submitOpenForm(t, m)
+	if m.confirmPrompt() == "" {
+		t.Fatal("bulk comment did not park behind the confirmation")
+	}
+	// Approve and run the batch: the leading whitespace must reach the
+	// Markdown conversion, so the posted body is a code block, not a paragraph
+	// of trimmed prose.
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
+	m.Update(cmd())
+	if got := w.get("comment-node:JCT-1"); got != "codeBlock" {
+		t.Fatalf("posted body's first node = %q, want codeBlock (whitespace kept)", got)
 	}
 }
 
 func TestEmptyBulkAssignReachesUnassignConfirm(t *testing.T) {
 	m := bulkModel(t, fakeServices{issue: fakeIssueSvc{}})
 	m.marks = map[string]bool{"JCT-1": true, "JCT-2": true}
-	m.ctrl.OpenText(action.ModeBulkAssign, "", "")
-	m.submitAction() // empty query means unassign
-	if m.confirm == nil {
+	m.openTextForm(action.ModeBulkAssign, "", "")
+	submitOpenForm(t, m) // empty query means unassign
+	p := m.confirmPrompt()
+	if p == "" {
 		t.Fatal("empty bulk assign did not reach the confirmation")
 	}
-	if p := m.confirm.prompt(); !strings.Contains(p, "Unassign 2 issues") {
+	if !strings.Contains(p, "Unassign 2 issues") {
 		t.Errorf("prompt = %q, want unassign wording", p)
 	}
 }
@@ -290,7 +339,7 @@ func TestTransitionKeyBlockedWhileSingleWriteInFlight(t *testing.T) {
 	m.marks = map[string]bool{"JCT-1": true}
 	m.writing = true // a comment/assign/edit is reconciling
 	m.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
-	if m.ctrl.Active() {
+	if m.dialogs.Active() {
 		t.Error("t opened a bulk transition while a write was in flight")
 	}
 }

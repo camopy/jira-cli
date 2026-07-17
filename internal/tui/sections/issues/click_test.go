@@ -75,7 +75,7 @@ func TestClickOnPreviewPaneDoesNotSelect(t *testing.T) {
 
 func TestClickIgnoredWhileModalOpen(t *testing.T) {
 	m := clickModel(t, 3)
-	m.ctrl.OpenText(action.ModeEdit, "JCT-1", "")
+	m.openTextForm(action.ModeEdit, "JCT-1", "")
 	before := m.list.Cursor()
 	m.Update(click(2, m.listTop()+2))
 	if m.list.Cursor() != before {

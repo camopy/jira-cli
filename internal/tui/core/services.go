@@ -16,4 +16,8 @@ type Services interface {
 	JQL() jira.JQLService
 	Users() jira.UserService
 	Worklogs() jira.WorklogService
+	// Projects backs the create form's issue-type list (ListIssueTypes).
+	Projects() jira.ProjectService
+	// Labels backs the create form's label suggestions.
+	Labels() jira.LabelService
 }

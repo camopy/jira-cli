@@ -10,7 +10,6 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/matcra587/jira-cli/internal/jira"
-	"github.com/matcra587/jira-cli/internal/tui/components/action"
 	"github.com/matcra587/jira-cli/internal/tui/components/form"
 	"github.com/matcra587/jira-cli/internal/tui/components/input"
 	"github.com/matcra587/jira-cli/internal/tui/components/picker"
@@ -269,32 +268,22 @@ func (s *SearchModel) fetchValueSuggestions(field, prefix string) tea.Cmd {
 	})
 }
 
-// openPresets opens the saved-query dropdown. Labels carry the name and the
-// query so type-to-filter matches either; the value is the JQL itself.
+// openPresets opens the saved-query dropdown as a section dialog. Labels carry
+// the name and the query so type-to-filter matches either; the value is the
+// JQL itself, applied by the pick's bound action — so however the pick's
+// messages reach the shared updateDialog dispatcher, an accepted preset always
+// commits and runs its query.
 func (s *SearchModel) openPresets() {
 	saved := s.saved()
 	items := make([]picker.Item, len(saved))
 	for i, l := range saved {
 		items[i] = picker.Item{Label: l.Name + " — " + l.JQL, Value: l.JQL}
 	}
-	s.ctrl.OpenPreset(items)
-}
-
-// updatePreset drives the open preset dropdown: enter commits the picked JQL
-// and runs it, esc closes (the controller handles both), everything else
-// types into the picker's filter.
-func (s *SearchModel) updatePreset(msg tea.KeyPressMsg) tea.Cmd {
-	cmd, outcome := s.ctrl.Update(msg)
-	if outcome != action.OutcomeSubmit {
-		return cmd
-	}
-	req, ok := s.ctrl.Submit()
-	if !ok {
-		return nil
-	}
-	s.editing = false
-	s.jql = req.Text
-	return s.fetch()
+	s.pushPick("Run saved query:", items, func(sel picker.Item) tea.Cmd {
+		s.editing = false
+		s.jql = sel.Value
+		return s.fetch()
+	})
 }
 
 // loadSaved cycles the saved queries into the committed query and runs it.
@@ -368,20 +357,23 @@ func (s *SearchModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 		return s, s.handleEditor(msg)
 	case form.SuggestionsMsg:
 		// Autocomplete fetches resolve as commands; their results must find
-		// their way back into the open form or the seam silently drops them.
-		cmd, _ := s.ctrl.Update(msg)
+		// their way back into the open form dialog or the seam silently drops them.
+		cmd, _, _ := s.dialogs.Update(msg)
 		return s, cmd
+	case formSubmitMsg:
+		return s, s.handleFormSubmit(msg)
 	case spinner.TickMsg:
 		return s, s.handleSpinner(msg)
 	case flashClearMsg:
 		s.handleFlashClear(msg)
 		return s, nil
 	case tea.PasteMsg:
-		// The preset dropdown outranks the editor: opened from edit mode it
-		// covers the box, so a paste must filter it, not the hidden input.
-		if s.ctrl.Active() && s.ctrl.Mode() == action.ModePreset {
-			cmd, _ := s.ctrl.Update(msg)
-			return s, cmd
+		// An open dialog outranks the editor: the preset dropdown opens from
+		// edit mode and covers the box, so a paste must filter it, not the
+		// hidden input. (When not editing, the shared paste routing already
+		// drives an open dialog first.)
+		if s.editing && s.dialogs.Active() {
+			return s, s.updateDialog(msg)
 		}
 		if s.editing {
 			cmd := s.jqlInput.Update(msg)
@@ -390,10 +382,12 @@ func (s *SearchModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 		cmd, _ := s.handlePaste(msg)
 		return s, cmd
 	case tea.KeyPressMsg:
-		// The preset dropdown is search-owned: it must run before the editor
-		// and the shared key routing so its keys never leak through.
-		if s.ctrl.Active() && s.ctrl.Mode() == action.ModePreset {
-			return s, s.updatePreset(msg)
+		// An open dialog outranks the editor: the preset dropdown opens from
+		// edit mode and covers the box, so its keys must never leak into the
+		// hidden input. (When not editing, handleKey already routes an open
+		// dialog first.)
+		if s.editing && s.dialogs.Active() {
+			return s, s.updateDialog(msg)
 		}
 		if s.editing {
 			if key.Matches(msg, s.ctx.Keys.Presets) {

@@ -108,6 +108,7 @@ type UserService interface {
 	Myself(context.Context) (*CurrentUser, *Response, error)
 	MyPermissions(ctx context.Context, projectKey string, keys []string) (*PermissionsResponse, *Response, error)
 	Search(ctx context.Context, query string) ([]*User, *Response, error)
+	AssignableSearch(ctx context.Context, query, projectKey string) ([]*User, *Response, error)
 	ResolveAccountID(ctx context.Context, accountID string) (string, error)
 	ResolveUser(ctx context.Context, query string) (string, error)
 }
@@ -161,6 +162,25 @@ func (s *userService) Search(ctx context.Context, query string) ([]*User, *Respo
 	q := url.Values{}
 	q.Set("query", query)
 	req, err := s.client.NewRequest(ctx, http.MethodGet, withQuery(RESTPath("user", "search"), q), nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	var out []*User
+	resp, err := s.client.Do(req, &out)
+	return out, resp, err
+}
+
+// AssignableSearch runs /rest/api/3/user/assignable/search?query=<q>&project=<key>
+// and returns the users assignable to issues in that project, in Atlassian's
+// relevance order. It is the assignee-suggestion source for the create form's
+// assignee picker: unlike Search (which spans the whole directory) this endpoint
+// is already scoped to who can be assigned, so the candidates are returned
+// as-is — no filtering, the caller renders them in the order Jira ranked them.
+func (s *userService) AssignableSearch(ctx context.Context, query, projectKey string) ([]*User, *Response, error) {
+	q := url.Values{}
+	q.Set("query", query)
+	q.Set("project", projectKey)
+	req, err := s.client.NewRequest(ctx, http.MethodGet, withQuery(RESTPath("user", "assignable", "search"), q), nil)
 	if err != nil {
 		return nil, nil, err
 	}

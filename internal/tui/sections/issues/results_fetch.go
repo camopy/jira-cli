@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/matcra587/jira-cli/internal/jira"
+	"github.com/matcra587/jira-cli/internal/tui/components/picker"
 	"github.com/matcra587/jira-cli/internal/tui/core"
 )
 
@@ -142,6 +143,25 @@ func (r *results) handleTask(msg core.TaskFinishedMsg) (tea.Cmd, bool) {
 			r.applyFilter()
 		}
 		return nil, true
+	case r.createMetaScope():
+		if msg.Err != nil {
+			// Degrade rather than block: open the form on the default type alone
+			// (OpenCreate falls back when the option list is empty) and note the
+			// load failure, so a transient createmeta error still lets a create
+			// through.
+			r.openCreateForm(r.createProject, nil, nil)
+			return r.flashNotice("✗ couldn't load issue types: "+msg.Err.Error(), true), true
+		}
+		if res, ok := msg.Result.(createMetaResult); ok {
+			if res.update {
+				// A project-pill change: swap the open form's type list in place
+				// rather than reopening it, keeping the draft and focus intact.
+				r.dialogs.Update(formSetTypesMsg{types: issueTypeNames(res.types)})
+			} else {
+				r.openCreateForm(res.project, res.types, res.projects)
+			}
+		}
+		return nil, true
 	case r.transitionsScope():
 		if msg.Err != nil {
 			r.err = msg.Err
@@ -152,19 +172,38 @@ func (r *results) handleTask(msg core.TaskFinishedMsg) (tea.Cmd, bool) {
 				return r.flashNotice("no transitions available", false), true
 			}
 			if res.bulk {
-				r.ctrl.OpenBulkTransition(res.transitions)
+				// A bulk pick parks a confirmation instead of mutating directly.
+				r.pushPickWithGrace("Transition selection to:", transitionItems(res.transitions), func(sel picker.Item) tea.Cmd {
+					return r.parkBulkTransition(sel.Label)
+				})
 			} else {
-				r.ctrl.OpenTransition(res.issueKey, res.transitions)
+				key := res.issueKey
+				r.pushPickWithGrace("Transition to:", transitionItems(res.transitions), func(sel picker.Item) tea.Cmd {
+					return r.applySingleTransition(key, sel.Value, sel.Label)
+				})
 			}
 		}
 		return nil, true
 	case r.mutateScope():
 		r.bulkPending = false // any mutate completion ends the in-flight batch
 		r.writing = false
+		r.finishOp(msg.Err) // resolve the footer/log entry for this write
+		formWrite := r.formWriting
+		r.formWriting = false
+		// Resolve an open form dialog: a nil error closes it, a non-nil error
+		// reopens it with the message inline and the draft intact. Routed
+		// unconditionally — a stack without the form (or with a different
+		// dialog) ignores a message it doesn't own.
+		r.dialogs.Update(formFinishMsg{err: msg.Err})
 		if msg.Err != nil {
 			if r.rollback != nil {
 				r.rollback()
 				r.rollback = nil
+			}
+			if formWrite {
+				// The form now shows the error inline and holds the draft for a
+				// retry; a detached toast would double-report it.
+				return nil, true
 			}
 			// The optimistic change is already rolled back; the toast tells
 			// the user why, then clears — a write error is transient state,

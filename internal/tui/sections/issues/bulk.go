@@ -12,7 +12,6 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/jira"
-	"github.com/matcra587/jira-cli/internal/tui/components/action"
 	"github.com/matcra587/jira-cli/internal/tui/core"
 )
 
@@ -79,11 +78,22 @@ func (r *results) selectRange() {
 	}
 }
 
+// bulkKind is the verb a parked bulk request applies. Transition no longer
+// rides action.Mode (it moved out of the controller to the transition pick
+// dialog), so bulkConfirm carries its own discriminator across all three verbs.
+type bulkKind int
+
+const (
+	bulkTransitionKind bulkKind = iota
+	bulkAssignKind
+	bulkCommentKind
+)
+
 // bulkConfirm is a bulk request parked behind a y/N prompt. Bulk writes hit
 // every marked issue at once, so they never run straight off the modal
 // submit; the prompt restates the verb and the target count first.
 type bulkConfirm struct {
-	mode action.Mode
+	kind bulkKind
 	text string
 	keys []string
 }
@@ -93,20 +103,20 @@ type bulkConfirm struct {
 func (b *bulkConfirm) prompt() string {
 	n := len(b.keys)
 	target := fmt.Sprintf("%s (%s)", human.Pluralize(n, "issue", "issues"), keysPreview(b.keys))
-	switch b.mode {
-	case action.ModeBulkTransition:
+	switch b.kind {
+	case bulkTransitionKind:
 		return fmt.Sprintf("Transition %s to %q? (y/N)", target, b.text)
-	case action.ModeBulkAssign:
+	case bulkAssignKind:
 		if clearsAssignee(b.text) {
 			return fmt.Sprintf("Unassign %s? (y/N)", target)
 		}
 		return fmt.Sprintf("Assign %s to %q? (y/N)", target, b.text)
-	case action.ModeBulkComment:
+	case bulkCommentKind:
 		return fmt.Sprintf("Comment on %s? (y/N)", target)
 	}
-	// Unreachable today (submitAction only parks the three modes above), but
-	// an empty overlay would strand the user with no clue what y applies.
-	return fmt.Sprintf("Apply %s to %s? (y/N)", b.mode, target)
+	// Unreachable today (only the three kinds above are ever parked), but an
+	// empty overlay would strand the user with no clue what y applies.
+	return fmt.Sprintf("Apply to %s? (y/N)", target)
 }
 
 // keysPreview shows the first few target keys so the user confirms against
@@ -119,17 +129,23 @@ func keysPreview(keys []string) string {
 	return strings.Join(keys[:max], ", ") + fmt.Sprintf(" +%d more", len(keys)-max)
 }
 
-// updateConfirm resolves the pending bulk confirmation: y applies, anything
-// else cancels and keeps the selection so the user can adjust and retry.
-func (r *results) updateConfirm(msg tea.KeyPressMsg) tea.Cmd {
-	c := r.confirm
-	r.confirm = nil
-	switch msg.String() {
-	case "y", "Y":
-		return r.runBulk(c)
-	default:
+// parkBulkConfirm pushes the y/N guard in front of a bulk write. The request
+// rides the confirm's bound action, so approval runs it directly and a decline
+// simply drops it with the dialog.
+func (r *results) parkBulkConfirm(c *bulkConfirm) tea.Cmd {
+	r.pushConfirm(c.prompt(), func() tea.Cmd { return r.runBulk(c) })
+	return nil
+}
+
+// parkBulkTransition turns a chosen transition name into a parked bulk request.
+// The name is carried verbatim — the apply side matches it exactly against each
+// issue's transition names, with per-issue ids resolved at apply time.
+func (r *results) parkBulkTransition(name string) tea.Cmd {
+	keys := r.markedKeys()
+	if len(keys) == 0 {
 		return nil
 	}
+	return r.parkBulkConfirm(&bulkConfirm{kind: bulkTransitionKind, text: name, keys: keys})
 }
 
 // runBulk dispatches a confirmed bulk request, marking the batch in flight
@@ -137,18 +153,34 @@ func (r *results) updateConfirm(msg tea.KeyPressMsg) tea.Cmd {
 // must not strand bulkPending).
 func (r *results) runBulk(c *bulkConfirm) tea.Cmd {
 	var cmd tea.Cmd
-	switch c.mode {
-	case action.ModeBulkTransition:
+	switch c.kind {
+	case bulkTransitionKind:
 		cmd = r.bulkTransition(c.keys, c.text)
-	case action.ModeBulkAssign:
+	case bulkAssignKind:
 		cmd = r.bulkAssign(c.keys, c.text)
-	case action.ModeBulkComment:
+	case bulkCommentKind:
 		cmd = r.bulkComment(c.keys, c.text)
 	}
 	if cmd != nil {
 		r.bulkPending = true
+		r.startOp(bulkDesc(c))
 	}
 	return cmd
+}
+
+// bulkDesc is the footer/log text for a bulk write. It carries no issue key —
+// the entry covers a whole selection, not one issue.
+func bulkDesc(c *bulkConfirm) activityDesc {
+	count := human.Pluralize(len(c.keys), "issue", "issues")
+	switch c.kind {
+	case bulkTransitionKind:
+		return activityDesc{pending: fmt.Sprintf("transitioning %s %s", count, c.text), done: fmt.Sprintf("%s %s", count, c.text)}
+	case bulkAssignKind:
+		return activityDesc{pending: "assigning " + count, done: count + " assigned"}
+	case bulkCommentKind:
+		return activityDesc{pending: "commenting on " + count, done: count + " commented"}
+	}
+	return activityDesc{}
 }
 
 // runBulkPool applies one mutation per key through a bounded worker pool.

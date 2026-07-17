@@ -1,0 +1,3 @@
+kind: fixed
+body: TUI Epics tab counts epics instead of the selected epic's child issues
+time: 2026-07-15T00:28:33.106235613-04:00

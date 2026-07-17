@@ -237,6 +237,7 @@ func menuFormStyles(st core.Styles) form.Styles {
 		HintKey:  st.HintKey,
 		HintText: st.HintDesc,
 		Question: theme.PillWarning,
+		Error:    st.Error,
 	}
 }
 

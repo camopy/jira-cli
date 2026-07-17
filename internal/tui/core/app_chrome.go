@@ -15,7 +15,11 @@ import (
 	termansi "github.com/gechr/x/ansi"
 	xstrings "github.com/gechr/x/strings"
 
+	"github.com/matcra587/jira-cli/internal/adf"
+	"github.com/matcra587/jira-cli/internal/browser"
+	"github.com/matcra587/jira-cli/internal/tui/components/activity"
 	"github.com/matcra587/jira-cli/internal/tui/icons"
+	"github.com/matcra587/jira-cli/internal/tui/theme"
 )
 
 // HintSegment renders one key/description hint. A single-letter key (with or
@@ -30,9 +34,11 @@ func HintSegment(styles Styles, hintKey, desc string) string {
 	return styles.HintKey.Render(hintKey) + " " + styles.HintDesc.Render(desc)
 }
 
-// helpSheet renders the full keymap: shared navigation and chrome bindings
-// plus the active section's contextual ones, deduplicated by key.
-func (a App) helpSheet() string {
+// newHelpDialog builds the full-keymap sheet as a stack dialog: shared
+// navigation and chrome bindings plus the active section's contextual ones,
+// deduplicated by key. The dialog Shell frames the sheet, so it renders
+// without its own box.
+func (a App) newHelpDialog() helpDialog {
 	k := a.ctx.Keys
 	// App-level chrome bindings lead so the first-occurrence dedupe can never
 	// let a section binding shadow them in the sheet.
@@ -44,7 +50,7 @@ func (a App) helpSheet() string {
 	if s := a.build(a.activeID()); s != nil {
 		bindings = append(bindings, s.HelpBindings()...)
 	}
-	bindings = append(bindings, k.CopyKey, k.CopyURL, k.Help, k.Quit)
+	bindings = append(bindings, k.CommandPalette, k.CopyKey, k.CopyURL, k.OpLog, k.Help, k.Quit)
 
 	seen := make(map[string]bool, len(bindings))
 	pairs := make([]helpsheet.Pair, 0, len(bindings))
@@ -56,16 +62,20 @@ func (a App) helpSheet() string {
 		seen[hb.Key] = true
 		pairs = append(pairs, helpsheet.Pair{Key: hb.Key, Desc: hb.Desc})
 	}
-	return helpsheet.Model{
-		Pairs:   pairs,
-		Dismiss: "press any key to close",
-		Styles: helpsheet.Styles{
+	return helpDialog{
+		pairs:   pairs,
+		dismiss: "press any key to close",
+		styles: helpsheet.Styles{
 			Key:     a.ctx.Styles.HintKey,
 			Text:    a.ctx.Styles.Footer,
 			Dismiss: a.ctx.Styles.HintDesc,
-			Box:     a.ctx.Styles.HelpBox,
+			// The sheet draws its own box in the shared overlay style, so the
+			// help menu matches the other overlays. It must be self-drawn:
+			// helpsheet sizes its columns from the box, so rendering it bare
+			// narrows the layout and wraps the longer descriptions.
+			Box: a.ctx.Styles.Overlay,
 		},
-	}.Render()
+	}
 }
 
 // tabBar renders the section titles as pills, the active one reverse-video,
@@ -152,7 +162,57 @@ func (a App) footer() string {
 	w := a.ctx.ScreenWidth
 	h := a.ctx.Keys.Help.Help()
 	help := HintSegment(a.ctx.Styles, h.Key, h.Desc)
-	return a.labeledBorder(w, a.contextLine(), help) + "\n" + a.hintLine(w)
+	// The mutation status slot sits left of the help affordance on the border
+	// row; it is empty until the first write is recorded.
+	right := help
+	if status := a.activityStatus(); status != "" {
+		right = status + a.ctx.Styles.FooterRule.Render("  ·  ") + help
+	}
+	return a.labeledBorder(w, a.contextLine(), right) + "\n" + a.hintLine(w)
+}
+
+// activityStatus renders the footer's mutation status slot from the activity
+// registry: the most-recent operation's text (pending, resolved, or failed),
+// prefixed with an [N] counter when more than one write is in flight, and with
+// the affected issue key rendered as an OSC-8 hyperlink. Empty when nothing has
+// been recorded, so an untouched session shows only context and help.
+func (a App) activityStatus() string {
+	reg := a.ctx.Activity
+	if reg == nil {
+		return ""
+	}
+	e, ok := reg.Recent()
+	if !ok {
+		return ""
+	}
+	var (
+		text string
+		st   lipgloss.Style
+	)
+	switch e.Status {
+	case activity.StatusPending:
+		text, st = e.Pending+"…", theme.StatusInProgress
+	case activity.StatusDone:
+		text, st = "✓ "+e.Done, theme.StatusDone
+	case activity.StatusFailed:
+		text, st = "✗ "+e.Pending+" failed", theme.StatusErr
+	}
+	if n := reg.InFlight(); n > 1 {
+		text = fmt.Sprintf("[%d] %s", n, text)
+	}
+	return st.Render(linkIssueKey(text, e.IssueKey, a.ctx.BaseURL))
+}
+
+// linkIssueKey rewrites the issue key inside an activity entry's text as an
+// OSC-8 hyperlink when the entry names one and the site root is known. The
+// footer status slot and the activity log share it so their linking can't
+// drift.
+func linkIssueKey(text, key, baseURL string) string {
+	url := browser.IssueURL(baseURL, key)
+	if url == "" || !strings.Contains(text, key) {
+		return text
+	}
+	return strings.Replace(text, key, adf.Hyperlink(url, key), 1)
 }
 
 // labeledBorder draws a horizontal rule with an optional label embedded at each

@@ -20,12 +20,14 @@ type countingSection struct {
 	updates  int
 	finished int
 	captures bool
+	bindings []key.Binding // reported as HelpBindings when set
+	lastKey  string        // String() of the last KeyPressMsg it received
 }
 
 func (s *countingSection) ID() SectionID               { return s.id }
 func (s *countingSection) Title() string               { return string(s.id) }
 func (s *countingSection) View() string                { return "" }
-func (s *countingSection) HelpBindings() []key.Binding { return nil }
+func (s *countingSection) HelpBindings() []key.Binding { return s.bindings }
 func (s *countingSection) CapturesInput() bool         { return s.captures }
 
 func (s *countingSection) Init(*ProgramContext) tea.Cmd {
@@ -37,6 +39,9 @@ func (s *countingSection) Update(msg tea.Msg) (Section, tea.Cmd) {
 	s.updates++
 	if _, ok := msg.(TaskFinishedMsg); ok {
 		s.finished++
+	}
+	if k, ok := msg.(tea.KeyPressMsg); ok {
+		s.lastKey = k.String()
 	}
 	return s, nil
 }
@@ -241,17 +246,17 @@ func TestHelpSheetTogglesOnAnyKey(t *testing.T) {
 
 	m, _ := app.Update(tea.KeyPressMsg{Code: '?', Text: "?"})
 	app = m.(App)
-	if !app.helpOpen {
+	if !app.dialogs.Active() {
 		t.Fatal("? should open the help sheet")
 	}
-	if sheet := app.helpSheet(); !strings.Contains(sheet, "press any key to close") {
-		t.Fatalf("help sheet missing dismiss hint:\n%s", sheet)
+	if view := app.View().Content; !strings.Contains(view, "press any key to close") {
+		t.Fatalf("help sheet missing dismiss hint:\n%s", view)
 	}
 
 	// The dismissing key is consumed: tab closes help, does NOT switch section.
 	m, _ = app.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	app = m.(App)
-	if app.helpOpen {
+	if app.dialogs.Active() {
 		t.Error("any key should close the help sheet")
 	}
 	if app.CurrentSection().ID() != "a" {

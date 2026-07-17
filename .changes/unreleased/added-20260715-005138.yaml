@@ -1,0 +1,3 @@
+kind: added
+body: TUI new-issue form picks the issue type and offers live assignee and label suggestions, instead of silently defaulting to Task with free-text fields
+time: 2026-07-15T00:51:38.325848915-04:00

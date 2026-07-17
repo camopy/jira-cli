@@ -19,12 +19,30 @@ import (
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui/components/action"
 	"github.com/matcra587/jira-cli/internal/tui/components/input"
+	"github.com/matcra587/jira-cli/internal/tui/components/picker"
 	"github.com/matcra587/jira-cli/internal/tui/core"
 )
 
 // canMutate reports that no single transition or bulk batch is mid-flight, so a
 // new mutation won't race the optimistic rollback or a pending reconcile.
 func (r *results) canMutate() bool { return r.rollback == nil && !r.bulkPending && !r.writing }
+
+// openTextForm opens a free-text action on the dialog stack. The controller
+// renders the box-less form; the section's dialog stack frames and drives it.
+func (r *results) openTextForm(mode action.Mode, key, initial string) {
+	var c action.Controller
+	c.OpenText(mode, key, initial)
+	r.dialogs.Push(newFormDialog(c, submittingGlyph()))
+}
+
+// closeForm pops the text/create form when it is the top dialog — the seam the
+// external-editor round-trip uses to dismiss the overlay once it has the draft.
+// It no-ops under any other dialog, so a stray call can't disturb a pick.
+func (r *results) closeForm() {
+	if _, ok := r.dialogs.Top().(*formDialog); ok {
+		r.dialogs.Update(formFinishMsg{})
+	}
+}
 
 // openComment starts a comment in the in-TUI overlay. When an external editor
 // is configured ($JIRA_EDITOR/$EDITOR), ctrl+e inside the overlay hands the
@@ -34,7 +52,7 @@ func (r *results) openComment() tea.Cmd {
 	if iss == nil || !r.canMutate() {
 		return nil
 	}
-	r.ctrl.OpenText(action.ModeComment, issueKey(iss), "")
+	r.openTextForm(action.ModeComment, issueKey(iss), "")
 	return nil
 }
 
@@ -55,7 +73,7 @@ func (r *results) handleEditor(msg input.EditorFinishedMsg) tea.Cmd {
 	if kind != "comment" {
 		return nil
 	}
-	r.ctrl.Cancel()
+	r.closeForm()
 	if xstrings.IsBlank(msg.Text) {
 		return r.flashNotice("empty comment discarded", false)
 	}
@@ -64,15 +82,17 @@ func (r *results) handleEditor(msg input.EditorFinishedMsg) tea.Cmd {
 		r.err = err
 		return nil
 	}
-	return r.mutate(func(svc core.Services, base context.Context) error {
+	return r.mutate(activityDesc{pending: "commenting on " + ident, done: ident + " commented", key: ident}, func(svc core.Services, base context.Context) error {
 		_, _, e := svc.Issues().AddComment(base, ident, &jira.CommentAddRequest{Body: body})
 		return e
 	})
 }
 
-// openCreate opens the two-field new-issue overlay. The target project is the
-// profile default, falling back to the selected issue's project so a scoped
-// list "just works" without config.
+// openCreate starts the new-issue overlay. The target project is the profile
+// default, falling back to the selected issue's project so a scoped list "just
+// works" without config. The overlay itself opens only once the project's issue
+// types load (loadIssueTypes → createMetaScope → openCreateForm), since the
+// type cycle field needs its options up front.
 func (r *results) openCreate() tea.Cmd {
 	if !r.canMutate() {
 		return nil
@@ -86,34 +106,86 @@ func (r *results) openCreate() tea.Cmd {
 	if proj == "" {
 		return r.flashNotice("no target project: set default_project or select an issue", true)
 	}
-	r.ctrl.OpenCreate(proj)
-	return nil
+	// Stash the target now so a failed type load can still open the form on the
+	// default type (see the createMetaScope arm in handleTask).
+	r.createProject = proj
+	return r.loadIssueTypes(proj, false)
 }
 
-// createIssue submits a create against project proj with the profile's issue
-// type (Task when unset). The Markdown description converts to ADF here, the
-// same way comments do — the service's create payload does not translate
-// Markdown — and the refetch after the mutation surfaces the new issue.
-func (r *results) createIssue(proj, summary, desc string) tea.Cmd {
-	if summary == "" {
-		return r.flashNotice("issue needs a summary on the first line", true)
+// createIssue submits the new-issue request. The picked type overrides the
+// profile default (still Task when neither is set); an accepted assignee rides
+// as its accountId and labels as a plain list. The Markdown description
+// converts to ADF here, the same way comments do — the service's create payload
+// does not translate Markdown — and the refetch after the mutation surfaces the
+// new issue.
+func (r *results) createIssue(req action.Request) (tea.Cmd, error) {
+	if req.Summary == "" {
+		return r.flashNotice("issue needs a summary on the first line", true), nil
 	}
-	issueType := r.ctx.DefaultIssueType
+	issueType := req.IssueType
+	if issueType == "" {
+		issueType = r.ctx.DefaultIssueType
+	}
 	if issueType == "" {
 		issueType = "Task"
 	}
-	req := &jira.IssueCreateRequest{Project: proj, IssueType: issueType, Summary: summary}
-	if desc != "" {
+	create := &jira.IssueCreateRequest{Project: req.IssueKey, IssueType: issueType, Summary: req.Summary}
+	fields := map[string]any{}
+	if desc := strings.TrimSpace(req.Text); desc != "" {
 		doc, _, err := adf.FromMarkdownLossy(desc)
 		if err != nil {
-			r.err = err
-			return nil
+			return nil, err
 		}
-		req.Fields = map[string]any{"description": doc}
+		fields["description"] = doc
 	}
-	return r.mutate(func(svc core.Services, base context.Context) error {
-		_, _, err := svc.Issues().Create(base, req)
+	if req.Assignee != "" {
+		fields["assignee"] = map[string]any{"accountId": req.Assignee}
+	}
+	if len(req.Labels) > 0 {
+		fields["labels"] = req.Labels
+	}
+	if len(fields) > 0 {
+		create.Fields = fields
+	}
+	return r.mutate(activityDesc{pending: "creating issue in " + req.IssueKey, done: "created in " + req.IssueKey}, func(svc core.Services, base context.Context) error {
+		_, _, err := svc.Issues().Create(base, create)
 		return err
+	}), nil
+}
+
+// transitionItems builds picker items from an issue's valid transitions: the
+// name is shown, the id rides the value. Only the transitions Jira allows for
+// the issue are passed in, so the user can never pick an invalid one.
+func transitionItems(transitions []*jira.Transition) []picker.Item {
+	items := make([]picker.Item, 0, len(transitions))
+	for _, t := range transitions {
+		if t == nil {
+			continue
+		}
+		items = append(items, picker.Item{Label: ptr.Deref(t.Name), Value: ptr.Deref(t.ID)})
+	}
+	return items
+}
+
+// applySingleTransition applies the picked transition to one issue: the row
+// moves optimistically, then the write reconciles on the mutate scope.
+func (r *results) applySingleTransition(key, id, name string) tea.Cmd {
+	r.rollback = r.applyOptimisticTransition(key, name)
+	// Record the move for the footer/log. Transitions run their own task rather
+	// than r.mutate (they carry a bespoke optimistic update), so they must start
+	// the activity entry here; handleTask's mutateScope arm resolves it.
+	r.startOp(activityDesc{pending: "moving " + key + " to " + name, done: key + " → " + name, key: key})
+	base := r.ctx.Base
+	svc := r.ctx.Services
+	return r.ctx.StartTask(core.TaskSpec{
+		Scope: r.mutateScope(),
+		Run: func() (any, error) {
+			if svc == nil {
+				return nil, nil
+			}
+			_, err := svc.Issues().Transition(base, key, &jira.TransitionRequest{ID: id})
+			return nil, err
+		},
 	})
 }
 
@@ -139,69 +211,80 @@ func (r *results) fetchTransitions(key string, bulk bool) tea.Cmd {
 // worklog durations like "1d". Jira's default is 8 hours.
 const workdaySeconds = 8 * 60 * 60
 
-func (r *results) submitAction() tea.Cmd {
-	req, ok := r.ctrl.Submit()
-	if !ok {
+// handleFormSubmit routes a request the form dialog emitted. A bulk collect
+// parks its y/N confirmation; a single-issue write starts on the mutate scope
+// and is remembered as form-owned (formWriting) so its outcome resolves the
+// open form rather than a detached toast. When the dispatch can't even start a
+// write (a local encode failure), the form reopens with the reason inline.
+func (r *results) handleFormSubmit(msg formSubmitMsg) tea.Cmd {
+	if msg.req.Mode.Bulk() {
+		// The form dialog stays open until now so the overlay never blinks
+		// empty; swap it for the y/N confirmation the bulk write parks. The
+		// bulk arms never fail locally, so the error is always nil here.
+		r.closeForm()
+		cmd, _ := r.dispatchSubmit(msg.req)
+		return cmd
+	}
+	r.formWriting = true
+	cmd, err := r.dispatchSubmit(msg.req)
+	if cmd == nil {
+		// The dispatch bailed before contacting Jira (e.g. an unparseable
+		// worklog or a Markdown-to-ADF failure). Surface it in the form and let
+		// the draft stand instead of stranding it submitting.
+		r.formWriting = false
+		if err == nil {
+			err = errors.New("could not submit")
+		}
+		r.dialogs.Update(formFinishMsg{err: err})
 		return nil
 	}
+	return cmd
+}
+
+// dispatchSubmit executes a completed action request: it parks bulk writes
+// behind a confirmation and runs single-issue writes on the mutate scope,
+// applying any optimistic row change first. A nil cmd with a non-nil error
+// means the dispatch failed locally, before contacting Jira; the caller
+// surfaces the error in the open form.
+func (r *results) dispatchSubmit(req action.Request) (tea.Cmd, error) {
 	switch req.Mode {
-	case action.ModeTransition:
-		r.rollback = r.applyOptimisticTransition(req.IssueKey, req.TransitionName)
-		base := r.ctx.Base
-		svc := r.ctx.Services
-		key, id := req.IssueKey, req.TransitionID
-		return r.ctx.StartTask(core.TaskSpec{
-			Scope: r.mutateScope(),
-			Run: func() (any, error) {
-				if svc == nil {
-					return nil, nil
-				}
-				_, err := svc.Issues().Transition(base, key, &jira.TransitionRequest{ID: id})
-				return nil, err
-			},
-		})
-	case action.ModeBulkTransition, action.ModeBulkAssign, action.ModeBulkComment:
-		// Bulk writes hit every marked issue at once, so they park behind a
-		// y/N confirmation (default No) instead of running off the submit.
+	case action.ModeBulkAssign, action.ModeBulkComment:
+		// The remaining bulk modes are text verbs collected by the controller;
+		// bulk transition now flows through the transition pick dialog. Bulk
+		// writes hit every marked issue at once, so they park behind a y/N
+		// confirmation (default No) instead of running off the submit.
 		keys := r.markedKeys()
 		if len(keys) == 0 {
-			return nil
+			return nil, nil
 		}
 		text := req.Text
-		switch req.Mode {
-		case action.ModeBulkTransition:
-			// The picker carries the chosen name verbatim — no trim, because
-			// the apply side matches it exactly against each issue's
-			// transition names, whitespace included; per-issue ids resolve at
-			// apply time because each issue exposes its own transitions.
-			text = req.TransitionName
-		case action.ModeBulkAssign:
+		kind := bulkCommentKind
+		if req.Mode == action.ModeBulkAssign {
 			// Assignee queries are lookup keys; comments post verbatim
 			// (leading whitespace is markdown).
 			text = strings.TrimSpace(text)
+			kind = bulkAssignKind
 		}
-		r.confirm = &bulkConfirm{mode: req.Mode, text: text, keys: keys}
-		return nil
+		return r.parkBulkConfirm(&bulkConfirm{kind: kind, text: text, keys: keys}), nil
 	case action.ModeComment:
 		body, _, err := adf.FromMarkdownLossy(req.Text)
 		if err != nil {
-			r.err = err
-			return nil
+			return nil, err
 		}
 		issKey := req.IssueKey
-		return r.mutate(func(svc core.Services, base context.Context) error {
+		return r.mutate(activityDesc{pending: "commenting on " + issKey, done: issKey + " commented", key: issKey}, func(svc core.Services, base context.Context) error {
 			_, _, e := svc.Issues().AddComment(base, issKey, &jira.CommentAddRequest{Body: body})
 			return e
-		})
+		}), nil
 	case action.ModeEdit:
 		key, summary := req.IssueKey, req.Text
 		r.rollback = r.applyOptimisticSummary(key, summary)
-		return r.mutate(func(svc core.Services, base context.Context) error {
+		return r.mutate(activityDesc{pending: "editing " + key, done: key + " updated", key: key}, func(svc core.Services, base context.Context) error {
 			_, _, e := svc.Issues().Update(base, key, &jira.IssueUpdateRequest{
 				Fields: map[string]any{"summary": summary},
 			})
 			return e
-		})
+		}), nil
 	case action.ModeAssign:
 		// One normalised value drives both the optimistic row and the write:
 		// "" means unassign for each.
@@ -210,21 +293,21 @@ func (r *results) submitAction() tea.Cmd {
 			display = ""
 		}
 		r.rollback = r.applyOptimisticAssignee(req.IssueKey, display)
-		return r.assignTo(req.IssueKey, display)
+		return r.assignTo(req.IssueKey, display), nil
 	case action.ModeLabels:
 		// Full-replacement semantics: the field opened pre-filled, so what
 		// comes back is the complete list — empty input clears every label.
 		labels := xstrings.SplitCSV(req.Text)
 		issKey := req.IssueKey
-		return r.mutate(func(svc core.Services, base context.Context) error {
+		return r.mutate(activityDesc{pending: "updating labels on " + issKey, done: issKey + " labels updated", key: issKey}, func(svc core.Services, base context.Context) error {
 			_, _, e := svc.Issues().Update(base, issKey, &jira.IssueUpdateRequest{
 				Fields: map[string]any{"labels": labels},
 			})
 			return e
-		})
+		}), nil
 	case action.ModeCreate:
 		// IssueKey carries the project for this mode (see openCreate).
-		return r.createIssue(req.IssueKey, req.Summary, strings.TrimSpace(req.Text))
+		return r.createIssue(req)
 	case action.ModeWorklog:
 		wd := r.ctx.WorkdaySeconds
 		if wd <= 0 {
@@ -232,16 +315,50 @@ func (r *results) submitAction() tea.Cmd {
 		}
 		secs, err := jira.ParseDuration(req.Text, wd)
 		if err != nil {
-			r.err = err
-			return nil
+			return nil, err
 		}
 		key := req.IssueKey
-		return r.mutate(func(svc core.Services, base context.Context) error {
+		return r.mutate(activityDesc{pending: "logging work on " + key, done: key + " work logged", key: key}, func(svc core.Services, base context.Context) error {
 			_, _, e := svc.Worklogs().Add(base, key, &jira.WorklogAddRequest{TimeSpentSeconds: secs})
 			return e
-		})
+		}), nil
 	}
-	return nil
+	return nil, nil
+}
+
+// activityDesc is the footer/log text for one mutation: pending shows while the
+// write is in flight, done replaces it on success, and key (when set) renders
+// as the entry's hyperlinked issue key.
+type activityDesc struct {
+	pending string
+	done    string
+	key     string
+}
+
+// startOp records a mutation on the activity registry and stashes the resolved
+// text/key to apply when it lands. A nil registry (bare test context) is a
+// no-op, so mutations still run without the footer.
+func (r *results) startOp(desc activityDesc) {
+	if r.ctx.Activity == nil {
+		return
+	}
+	r.writeOpID = r.ctx.Activity.Start(desc.pending)
+	r.writeOpDesc = desc
+}
+
+// finishOp resolves the recorded mutation: a non-nil error fails it, otherwise
+// it lands with the stashed done text and key. It clears the handle so a later
+// non-op completion on the scope can't re-resolve it.
+func (r *results) finishOp(err error) {
+	if r.ctx.Activity == nil || r.writeOpID == 0 {
+		return
+	}
+	if err != nil {
+		r.ctx.Activity.Fail(r.writeOpID, err)
+	} else {
+		r.ctx.Activity.Finish(r.writeOpID, r.writeOpDesc.done, r.writeOpDesc.key)
+	}
+	r.writeOpID = 0
 }
 
 // mutate runs a single-issue write on the mutate scope. On success handleTask
@@ -249,10 +366,12 @@ func (r *results) submitAction() tea.Cmd {
 // caller registered (r.rollback) and shows the failure toast. Verbs whose
 // field shows in the row (edit, assign) apply optimistically before calling
 // this; comment and worklog have nothing row-visible, so they just reconcile.
-func (r *results) mutate(run func(svc core.Services, base context.Context) error) tea.Cmd {
+// desc records the write in the activity registry for the footer and log.
+func (r *results) mutate(desc activityDesc, run func(svc core.Services, base context.Context) error) tea.Cmd {
 	base := r.ctx.Base
 	svc := r.ctx.Services
 	r.writing = true // block overlapping writes until this one reconciles
+	r.startOp(desc)
 	return r.ctx.StartTask(core.TaskSpec{
 		Scope: r.mutateScope(),
 		Run: func() (any, error) {
@@ -266,7 +385,7 @@ func (r *results) mutate(run func(svc core.Services, base context.Context) error
 
 // assignMe resolves the current user's account id and assigns the issue to them.
 func (r *results) assignMe(key string) tea.Cmd {
-	return r.mutate(func(svc core.Services, base context.Context) error {
+	return r.mutate(activityDesc{pending: "assigning " + key, done: key + " assigned", key: key}, func(svc core.Services, base context.Context) error {
 		me, _, err := svc.Users().Myself(base)
 		if err != nil {
 			return err
@@ -283,7 +402,7 @@ func (r *results) assignMe(key string) tea.Cmd {
 // instead of being treated as a user search.
 func (r *results) assignTo(key, query string) tea.Cmd {
 	q := strings.TrimSpace(query)
-	return r.mutate(func(svc core.Services, base context.Context) error {
+	return r.mutate(activityDesc{pending: "assigning " + key, done: key + " assigned", key: key}, func(svc core.Services, base context.Context) error {
 		if q == "" || strings.EqualFold(q, "none") || strings.EqualFold(q, "unassigned") {
 			return setAssignee(svc, base, key, "")
 		}

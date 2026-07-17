@@ -24,6 +24,17 @@ type ProjectService interface {
 	// create/clone. Cached per profile + issue key.
 	GetEditSchemaForProfile(context.Context, string, string) (*ProjectFieldSchema, *Response, error)
 	List(context.Context, *ListOptions) ([]ProjectSummary, *Response, error)
+	ListIssueTypes(ctx context.Context, projectKey string) ([]ProjectIssueType, *Response, error)
+}
+
+// ProjectIssueType is one entry from a project's create screen — the id/name
+// pair carried by the paginated createmeta issuetypes endpoint. The create
+// form's type picker lists these; the field-metadata endpoint is keyed by the
+// id, not the name (see resolveIssueTypeID). Distinct from the IssueType in
+// types.go, which is the issue-type reference embedded on a fetched Issue.
+type ProjectIssueType struct {
+	ID   string
+	Name string
 }
 
 // ProjectSummary is the discovery shape for `jira cache projects` (and shell
@@ -241,16 +252,23 @@ func (e *IssueTypeUnknownError) Error() string {
 	return "issue type " + e.IssueType + " not found on the create screen for project " + e.ProjectKey
 }
 
-// resolveIssueTypeID walks the paginated createmeta issuetypes endpoint
-// and returns the id of the issue type whose name matches issueType. An
-// issueType value that already looks like a numeric id is returned
-// as-is. An unknown name returns *IssueTypeUnknownError carrying the
-// project's valid type names — a validation failure, not a 404.
-func (s *projectService) resolveIssueTypeID(ctx context.Context, projectKey, issueType string) (string, error) {
-	if isNumericID(issueType) {
-		return issueType, nil
-	}
-	var available []string
+// ListIssueTypes returns every issue type on a project's create screen,
+// in the endpoint's own order. It is the source for the create form's
+// type picker; unlike resolveIssueTypeID it never treats its input as an
+// id — it always lists. The last page's *Response rides back for callers
+// that inspect pagination headers.
+func (s *projectService) ListIssueTypes(ctx context.Context, projectKey string) ([]ProjectIssueType, *Response, error) {
+	return s.walkIssueTypes(ctx, projectKey)
+}
+
+// walkIssueTypes pages the createmeta issuetypes endpoint end to end and
+// returns every {id, name} pair in encounter order. Both resolveIssueTypeID
+// (name→id lookup) and ListIssueTypes (the type picker) share this walk so
+// the pagination contract lives in one place. The last page's *Response is
+// returned so a caller can surface it even on the zero-result path.
+func (s *projectService) walkIssueTypes(ctx context.Context, projectKey string) ([]ProjectIssueType, *Response, error) {
+	var out []ProjectIssueType
+	var lastResp *Response
 	startAt := 0
 	for {
 		q := url.Values{}
@@ -259,22 +277,45 @@ func (s *projectService) resolveIssueTypeID(ctx context.Context, projectKey, iss
 		path := withQuery(RESTPath("issue", "createmeta", projectKey, "issuetypes"), q)
 		req, err := s.client.NewRequest(ctx, "GET", path, nil)
 		if err != nil {
-			return "", err
+			return nil, nil, err
 		}
 		var page createMetaIssueTypePage
-		if _, err := s.client.Do(req, &page); err != nil {
-			return "", err
+		resp, err := s.client.Do(req, &page)
+		if err != nil {
+			return nil, resp, err
 		}
+		lastResp = resp
 		for _, it := range page.IssueTypes {
-			if it.Name == issueType {
-				return it.ID, nil
-			}
-			available = append(available, it.Name)
+			out = append(out, ProjectIssueType{ID: it.ID, Name: it.Name})
 		}
 		startAt += len(page.IssueTypes)
 		if len(page.IssueTypes) == 0 || startAt >= page.Total {
 			break
 		}
+	}
+	return out, lastResp, nil
+}
+
+// resolveIssueTypeID returns the id of the issue type whose name matches
+// issueType. An issueType value that already looks like a numeric id is
+// returned as-is without a walk. Otherwise the createmeta issuetypes
+// endpoint is walked via walkIssueTypes and the matching id returned; an
+// unknown name returns *IssueTypeUnknownError carrying the project's valid
+// type names — a validation failure, not a 404.
+func (s *projectService) resolveIssueTypeID(ctx context.Context, projectKey, issueType string) (string, error) {
+	if isNumericID(issueType) {
+		return issueType, nil
+	}
+	types, _, err := s.walkIssueTypes(ctx, projectKey)
+	if err != nil {
+		return "", err
+	}
+	var available []string
+	for _, it := range types {
+		if it.Name == issueType {
+			return it.ID, nil
+		}
+		available = append(available, it.Name)
 	}
 	return "", &IssueTypeUnknownError{IssueType: issueType, ProjectKey: projectKey, Available: available}
 }

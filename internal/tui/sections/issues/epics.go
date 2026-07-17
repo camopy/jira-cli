@@ -60,6 +60,13 @@ func (m *EpicsModel) ID() core.SectionID { return EpicsID }
 // Title returns the tab-bar label.
 func (m *EpicsModel) Title() string { return "Epics" }
 
+// Count overrides the embedded results.Count for the tab bar: the Epics tab
+// counts epics, not the active epic's children. Without this the section would
+// inherit results.Count (len(all) — the loaded child page of the selected
+// epic), so "Epics (N)" showed a child total that shifted per selection and
+// read like a stray issue number. ok stays false until the strip has loaded.
+func (m *EpicsModel) Count() (int, bool) { return len(m.epics), m.epicsLoaded }
+
 // epicsScope tracks the epic-list fetch, separate from the child fetch so a
 // strip reload can never clobber a child page (or vice versa).
 func (m *EpicsModel) epicsScope() core.TaskScope { return core.TaskScope(string(EpicsID) + ".epics") }
@@ -214,8 +221,10 @@ func (m *EpicsModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 	case input.EditorFinishedMsg:
 		return m, m.handleEditor(msg)
 	case form.SuggestionsMsg:
-		cmd, _ := m.ctrl.Update(msg)
+		cmd, _, _ := m.dialogs.Update(msg)
 		return m, cmd
+	case formSubmitMsg:
+		return m, m.handleFormSubmit(msg)
 	case spinner.TickMsg:
 		return m, m.handleSpinner(msg)
 	case flashClearMsg:

@@ -15,28 +15,9 @@ func (r *results) openJumplist() {
 	for i, e := range recent {
 		items[i] = picker.Item{Label: e.Key + "  " + e.Summary, Value: e.Key}
 	}
-	r.jumpPick = picker.New("Recent issues:", items)
-	r.jumping = true
-}
-
-// updateJump drives the jumplist picker: enter jumps to the chosen issue —
-// selecting it in the current list when present, otherwise opening its
-// detail view directly (the detail fetch loads the full issue by key).
-func (r *results) updateJump(msg tea.KeyPressMsg) tea.Cmd {
-	switch msg.String() {
-	case "esc":
-		r.jumping = false
-		return nil
-	case "enter":
-		r.jumping = false
-		sel, ok := r.jumpPick.Selected()
-		if !ok {
-			return nil
-		}
+	r.pushPick("Recent issues:", items, func(sel picker.Item) tea.Cmd {
 		return r.jumpTo(sel.Value)
-	default:
-		return r.jumpPick.Update(msg)
-	}
+	})
 }
 
 // jumpTo opens the issue's detail: in-list issues also move the cursor so

@@ -22,17 +22,11 @@ func (r *results) handleKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	if r.detailing {
 		return r.updateDetail(msg), true
 	}
-	if r.ctrl.Active() {
-		return r.updateAction(msg), true
-	}
-	if r.confirm != nil {
-		return r.updateConfirm(msg), true
-	}
-	if r.jumping {
-		return r.updateJump(msg), true
-	}
-	if r.faceting {
-		return r.updateFacet(msg), true
+	// The dialog stack is modal: the text/create form, a facet/jumplist/
+	// transition pick, or a bulk confirmation gets keys before the filter
+	// routing, mirroring how the App routes its own stack ahead of section input.
+	if r.dialogs.Active() {
+		return r.updateDialog(msg), true
 	}
 	if r.filtering {
 		return r.updateFilter(msg), true
@@ -117,7 +111,7 @@ func (r *results) handleKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		// With a selection the comment goes to every marked issue through the
 		// in-modal textarea (the external-editor flow stays single-issue).
 		if len(r.markedKeys()) > 0 && r.canMutate() {
-			r.ctrl.OpenText(action.ModeBulkComment, "", "")
+			r.openTextForm(action.ModeBulkComment, "", "")
 			return nil, true
 		}
 		return r.openComment(), true
@@ -127,7 +121,7 @@ func (r *results) handleKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		}
 	case key.Matches(msg, k.Assign):
 		if len(r.markedKeys()) > 0 && r.canMutate() {
-			r.ctrl.OpenText(action.ModeBulkAssign, "", "")
+			r.openTextForm(action.ModeBulkAssign, "", "")
 			return nil, true
 		}
 		r.openTextVerb(action.ModeAssign, "")
@@ -344,42 +338,18 @@ func (r *results) syncFilter(msg tea.Msg) tea.Cmd {
 // focus; the boolean reports whether anything consumed it.
 func (r *results) handlePaste(msg tea.PasteMsg) (tea.Cmd, bool) {
 	switch {
-	case r.faceting:
-		return r.facetPick.Update(msg), true
-	case r.jumping:
-		return r.jumpPick.Update(msg), true
-	case r.ctrl.Active():
-		cmd, _ := r.ctrl.Update(msg)
-		return cmd, true
+	case r.dialogs.Active():
+		return r.updateDialog(msg), true
 	case r.filtering:
 		return r.syncFilter(msg), true
 	}
 	return nil, false
 }
 
-// updateAction routes a key into the open action and dispatches whatever it
-// completed. Submit, cancel, the dirty-discard guard, and the editor hatch
-// all live inside the controller's form now; this owner just executes.
-func (r *results) updateAction(msg tea.KeyPressMsg) tea.Cmd {
-	cmd, outcome := r.ctrl.Update(msg)
-	switch outcome {
-	case action.OutcomeSubmit:
-		return r.submitAction()
-	case action.OutcomeEditor:
-		// The user asked for the full-screen editor: the draft rides along and
-		// the comment resumes through handleEditor. The overlay deliberately
-		// stays open — it still holds the draft, so a failed editor launch
-		// loses nothing; handleEditor closes it once the round-trip resolves.
-		return input.Edit("comment:"+r.ctrl.IssueKey(), r.ctrl.Draft())
-	case action.OutcomeCancel, action.OutcomeNone:
-	}
-	return cmd
-}
-
 // openTextVerb opens a free-text action against the selected issue, if any and
 // if no other mutation is in flight.
 func (r *results) openTextVerb(mode action.Mode, initial string) {
 	if iss := r.selected(); iss != nil && r.canMutate() {
-		r.ctrl.OpenText(mode, issueKey(iss), initial)
+		r.openTextForm(mode, issueKey(iss), initial)
 	}
 }

@@ -35,7 +35,7 @@ func TestCtrlOOpensJumplistAndCapturesInput(t *testing.T) {
 	m := jumpModel(t)
 	m.ctx.Recent.Touch("JCT-2", "second")
 	m.Update(ctrlO())
-	if !m.jumping || !m.CapturesInput() {
+	if !m.dialogs.Active() || !m.CapturesInput() {
 		t.Fatal("ctrl+o did not open the jumplist")
 	}
 }
@@ -50,7 +50,7 @@ func TestJumpToInListIssueSelectsRowAndOpensDetail(t *testing.T) {
 		m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.jumping {
+	if m.dialogs.Active() {
 		t.Fatal("enter did not close the jumplist")
 	}
 	if !m.detailing || issueKey(m.detailIssue) != "JCT-1" {
@@ -80,8 +80,8 @@ func TestJumplistEscClosesWithoutJumping(t *testing.T) {
 	m.ctx.Recent.Touch("JCT-2", "second")
 	m.Update(ctrlO())
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
-	if m.jumping || m.detailing {
-		t.Errorf("esc left jumping=%v detailing=%v", m.jumping, m.detailing)
+	if m.dialogs.Active() || m.detailing {
+		t.Errorf("esc left jumping=%v detailing=%v", m.dialogs.Active(), m.detailing)
 	}
 }
 
@@ -109,7 +109,7 @@ func TestClickAndWheelIgnoredUnderJumplist(t *testing.T) {
 	if m.list.Cursor() != 0 {
 		t.Errorf("wheel under jumplist moved cursor to %d", m.list.Cursor())
 	}
-	if !m.jumping {
+	if !m.dialogs.Active() {
 		t.Error("mouse events closed the jumplist")
 	}
 }

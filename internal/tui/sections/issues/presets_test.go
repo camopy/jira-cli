@@ -5,8 +5,6 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
-
-	"github.com/matcra587/jira-cli/internal/tui/components/action"
 )
 
 func presetModel(t *testing.T) *SearchModel {
@@ -22,8 +20,8 @@ func ctrlP() tea.KeyPressMsg { return tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtr
 func TestCtrlPOpensPresetDropdownAndCapturesInput(t *testing.T) {
 	s := presetModel(t)
 	s.Update(ctrlP())
-	if !s.ctrl.Active() || s.ctrl.Mode() != action.ModePreset {
-		t.Fatalf("ctrl+p opened mode %v, want preset dropdown", s.ctrl.Mode())
+	if !s.pickOpen() {
+		t.Fatalf("ctrl+p opened active=%v top=%T, want preset dropdown", s.dialogs.Active(), s.dialogs.Top())
 	}
 	if !s.CapturesInput() {
 		t.Error("preset dropdown must capture input")
@@ -38,7 +36,7 @@ func TestPresetEnterCommitsPickedJQLAndRuns(t *testing.T) {
 		s.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
 	_, cmd := s.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if s.ctrl.Active() {
+	if s.dialogs.Active() {
 		t.Fatal("enter did not close the dropdown")
 	}
 	if !strings.Contains(s.jql, "reporter = currentUser()") {
@@ -53,8 +51,8 @@ func TestPresetEscClosesWithoutRunning(t *testing.T) {
 	s := presetModel(t)
 	s.Update(ctrlP())
 	s.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
-	if s.ctrl.Active() || s.jql != "" {
-		t.Errorf("esc left dropdown active=%v jql=%q", s.ctrl.Active(), s.jql)
+	if s.dialogs.Active() || s.jql != "" {
+		t.Errorf("esc left dropdown active=%v jql=%q", s.dialogs.Active(), s.jql)
 	}
 }
 
@@ -62,7 +60,7 @@ func TestCtrlPWorksWhileEditingJQL(t *testing.T) {
 	s := presetModel(t)
 	s.Update(tea.KeyPressMsg{Code: tea.KeyEnter}) // start editing
 	s.Update(ctrlP())
-	if !s.ctrl.Active() || s.ctrl.Mode() != action.ModePreset {
+	if !s.pickOpen() {
 		t.Fatal("ctrl+p during JQL edit did not open the dropdown")
 	}
 	s.Update(tea.KeyPressMsg{Code: tea.KeyEnter}) // pick first preset

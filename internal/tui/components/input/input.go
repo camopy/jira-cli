@@ -42,14 +42,17 @@ func (l *Line) SetValue(s string) {
 // Value returns the current content.
 func (l Line) Value() string { return l.ti.Value() }
 
-// SetWidth bounds the rendered width, clamped to at least one column so a
-// too-narrow pane can never push a negative width into the textinput (which
-// panics on View).
+// SetWidth makes the field render exactly w columns, clamped to at least one so
+// a too-narrow pane can never push a negative width into the textinput (which
+// panics on View). textinput.View draws one column wider than its set width —
+// a trailing cell for the end-of-line cursor — so the set width is one less
+// than w; a boxed caller budgets exactly w and the field fills it without
+// overrunning the frame.
 func (l *Line) SetWidth(w int) {
 	if w < 1 {
 		w = 1
 	}
-	l.ti.SetWidth(w)
+	l.ti.SetWidth(max(1, w-1))
 }
 
 // BeforeCursor returns the content up to the cursor, for token detection

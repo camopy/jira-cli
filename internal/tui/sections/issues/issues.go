@@ -104,9 +104,11 @@ func (m *Model) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 		return m, m.handleEditor(msg)
 	case form.SuggestionsMsg:
 		// Autocomplete fetches resolve as commands; their results must find
-		// their way back into the open form or the seam silently drops them.
-		cmd, _ := m.ctrl.Update(msg)
+		// their way back into the open form dialog or the seam silently drops them.
+		cmd, _, _ := m.dialogs.Update(msg)
 		return m, cmd
+	case formSubmitMsg:
+		return m, m.handleFormSubmit(msg)
 	case spinner.TickMsg:
 		return m, m.handleSpinner(msg)
 	case flashClearMsg:

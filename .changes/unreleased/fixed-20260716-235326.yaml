@@ -1,0 +1,3 @@
+kind: fixed
+body: TUI pickers and the create form that open after a background fetch no longer capture keystrokes typed while waiting
+time: 2026-07-16T23:53:26.629045834-04:00

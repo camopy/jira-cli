@@ -9,6 +9,7 @@ import (
 	xstrings "github.com/gechr/x/strings"
 
 	"github.com/matcra587/jira-cli/internal/config"
+	"github.com/matcra587/jira-cli/internal/tui/components/activity"
 	"github.com/matcra587/jira-cli/internal/tui/keys"
 	"github.com/matcra587/jira-cli/internal/tui/theme"
 )
@@ -84,7 +85,11 @@ type ProgramContext struct {
 	Lenses      []Lens
 	DefaultLens string
 	// Recent is the app-wide recently-viewed issue jumplist (ctrl+o).
-	Recent   *RecentList
+	Recent *RecentList
+	// Activity is the app-wide record of user-facing mutations, surfaced in the
+	// footer status slot and the operation-log overlay. Sections write to it
+	// (Start/Finish/Fail); only the footer and log read it back.
+	Activity *activity.Registry
 	Config   *config.Config
 	View     SectionID
 	Err      error
@@ -128,6 +133,7 @@ func NewProgramContext(svc Services, cfg *config.Config) *ProgramContext {
 		Styles:      DefaultStyles(),
 		Keys:        keys.Default(),
 		Recent:      NewRecentList(),
+		Activity:    activity.New(),
 		Config:      cfg,
 		Services:    svc,
 		Base:        context.Background(),

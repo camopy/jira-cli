@@ -10,9 +10,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/gechr/primer/overlay"
-
 	"github.com/matcra587/jira-cli/internal/config"
+	"github.com/matcra587/jira-cli/internal/tui/components/dialog"
 	"github.com/matcra587/jira-cli/internal/tui/icons"
 	"github.com/matcra587/jira-cli/internal/tui/theme"
 )
@@ -40,8 +39,10 @@ type App struct {
 	Reconfigure func(ctx *ProgramContext, registry *Registry, cfg *config.Config) (order, invalidate []SectionID)
 
 	current int
-	// helpOpen shows the full-keymap sheet over the body; any key closes it.
-	helpOpen bool
+	// dialogs is the modal overlay stack drawn over the body. While any dialog
+	// is open the App routes keys and clicks to it before capture routing or
+	// global shortcuts, so the overlay is fully modal.
+	dialogs *dialog.Stack
 	// blurred tracks terminal focus (ReportFocus): refresh ticks are skipped
 	// while true and a refresh fires immediately on regaining focus.
 	blurred bool
@@ -84,6 +85,7 @@ func NewApp(ctx *ProgramContext, registry *Registry, order []SectionID) App {
 		ctx:          ctx,
 		registry:     registry,
 		tasks:        tasks,
+		dialogs:      dialog.New(newDialogShell(ctx.Styles)),
 		order:        order,
 		cancel:       cancel,
 		sections:     make(map[SectionID]Section),
@@ -198,13 +200,24 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.broadcast(msg)
 
 	case tea.KeyPressMsg:
-		// The help sheet is modal: any key dismisses it. This must run before
-		// capture routing — a section can start capturing underneath the open
-		// sheet (an async task opening its action controller), and keys must
-		// close the visible overlay, not mutate hidden UI.
-		if a.helpOpen {
-			a.helpOpen = false
-			return a, nil
+		// Dialogs are modal: while any is open the App routes keys to the stack
+		// before capture routing — a section can start capturing underneath an
+		// open dialog (an async task opening its controller), and keys must
+		// drive the visible overlay, not mutate hidden UI.
+		if a.dialogs.Active() {
+			cmd, popped, res := a.dialogs.Update(msg)
+			// A palette accept replays the chosen command's key. The dialog is
+			// already popped, so the replay drives the underlying view — not the
+			// palette — and cannot be re-intercepted by the just-closed overlay
+			// (pop-then-replay, strictly ordered within this Update).
+			if res == dialog.ResultSubmit {
+				if p, ok := popped.(*paletteDialog); ok {
+					if entry, ok := p.Selected(); ok && entry.Key != "" {
+						return a.Update(replayKey(entry.Key))
+					}
+				}
+			}
+			return a, cmd
 		}
 		// A section capturing text input gets keys before global shortcuts, so
 		// a filter/editor can contain "q" or "tab" without quitting/switching
@@ -217,8 +230,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		switch {
+		case key.Matches(msg, a.ctx.Keys.CommandPalette):
+			a.dialogs.Push(a.newPaletteDialog())
+			return a, nil
 		case key.Matches(msg, a.ctx.Keys.Help):
-			a.helpOpen = true
+			a.dialogs.Push(a.newHelpDialog())
+			return a, nil
+		case key.Matches(msg, a.ctx.Keys.OpLog):
+			a.dialogs.Push(a.newLogDialog())
 			return a, nil
 		case key.Matches(msg, a.ctx.Keys.Quit):
 			if a.cancel != nil {
@@ -255,10 +274,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseClickMsg:
-		// Any click dismisses the modal help sheet, mirroring its any-key rule.
-		if a.helpOpen {
-			a.helpOpen = false
-			return a, nil
+		// A click drives an open dialog (the help sheet dismisses on any click),
+		// mirroring the key path above.
+		if a.dialogs.Active() {
+			cmd, _, _ := a.dialogs.Update(msg)
+			return a, cmd
 		}
 		// The tab row is App chrome: a click on a tab activates it — except
 		// while the active section captures input (a modal/filter/detail must
@@ -325,6 +345,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// refetches; cached content re-renders through RestyleMsg.
 		theme.Reload(theme.Resolve(msg.Name))
 		a.ctx.Styles = DefaultStyles()
+		a.dialogs.SetShell(newDialogShell(a.ctx.Styles))
 		a.appliedTheme = msg.Name
 		return a.broadcast(RestyleMsg{})
 
@@ -409,9 +430,7 @@ func (a App) View() tea.View {
 		body,
 		a.footer(),
 	)
-	if a.helpOpen {
-		out = overlay.Place(out, a.helpSheet(), a.ctx.ScreenWidth, a.ctx.ScreenHeight, overlay.Center)
-	}
+	out = a.dialogs.View(out, a.ctx.ScreenWidth, a.ctx.ScreenHeight)
 	v := tea.NewView(out)
 	v.AltScreen = true
 	// Enable mouse cell-motion reporting so wheel events reach the focused
@@ -468,6 +487,7 @@ func (a App) applyConfig(msg ConfigReloadedMsg) (tea.Model, tea.Cmd) {
 		a.appliedTheme = msg.Config.Theme.Name
 		theme.Reload(theme.Resolve(msg.Config.Theme.Name))
 		a.ctx.Styles = DefaultStyles()
+		a.dialogs.SetShell(newDialogShell(a.ctx.Styles))
 		clear(a.sections)
 		clear(a.started)
 	}

@@ -317,7 +317,7 @@ quit = ["q"]
 | `presets` | `ctrl+p` | `toggle_preview` | `p` |
 | `next_lens` / `prev_lens` | `]`, `[` | `grow_preview` / `shrink_preview` | `+`/`=`, `-` |
 | `help` | `?` | `zoom` | `z` |
-| `quit` | `q`, `ctrl+c` | | |
+| `quit` | `q`, `ctrl+c` | `command_palette` | `ctrl+k` |
 
 `?` opens a help sheet with the current bindings, grouped by purpose —
 the authoritative in-app reference after any rebinding.

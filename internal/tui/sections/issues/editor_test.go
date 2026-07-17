@@ -19,7 +19,7 @@ func TestOpenCommentAlwaysOpensOverlay(t *testing.T) {
 	if cmd := m.openComment(); cmd != nil {
 		t.Fatal("openComment bypassed the overlay for the external editor")
 	}
-	if !m.ctrl.Active() || m.ctrl.Mode() != action.ModeComment {
+	if f := m.activeForm(); f == nil || f.ctrl.Mode() != action.ModeComment {
 		t.Fatal("modal comment not open")
 	}
 }
@@ -29,14 +29,14 @@ func TestCommentEditorHatchCarriesDraft(t *testing.T) {
 	w := &callRecorder{}
 	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{writes: w}})
 	m.openComment()
-	m.ctrl.Update(tea.KeyPressMsg{Text: "started in the modal"})
-	cmd := m.updateAction(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl})
+	m.dialogs.Update(tea.KeyPressMsg{Text: "started in the modal"})
+	cmd := m.updateDialog(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl})
 	if cmd == nil {
 		t.Fatal("ctrl+e did not launch the editor")
 	}
 	// The overlay stays open across the handoff: it still holds the draft, so
 	// a failed editor launch loses nothing. handleEditor closes it.
-	if !m.ctrl.Active() {
+	if m.activeForm() == nil {
 		t.Error("overlay closed before the editor round-trip resolved")
 	}
 }
@@ -46,11 +46,12 @@ func TestEditorFailureKeepsOverlayAndDraft(t *testing.T) {
 	w := &callRecorder{}
 	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{writes: w}})
 	m.openComment()
-	m.ctrl.Update(tea.KeyPressMsg{Text: "precious draft"})
-	m.updateAction(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl})
+	m.dialogs.Update(tea.KeyPressMsg{Text: "precious draft"})
+	m.updateDialog(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl})
 	m.handleEditor(input.EditorFinishedMsg{ID: "comment:JCT-1", Err: errors.New("editor exploded")})
-	if !m.ctrl.Active() || m.ctrl.Draft() != "precious draft" {
-		t.Fatalf("editor failure lost the draft: active=%v draft=%q", m.ctrl.Active(), m.ctrl.Draft())
+	f := m.activeForm()
+	if f == nil || f.ctrl.Draft() != "precious draft" {
+		t.Fatalf("editor failure lost the draft: open=%v", f != nil)
 	}
 }
 
@@ -59,10 +60,10 @@ func TestEditorSuccessClosesOverlay(t *testing.T) {
 	w := &callRecorder{}
 	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{writes: w}})
 	m.openComment()
-	m.ctrl.Update(tea.KeyPressMsg{Text: "draft"})
-	m.updateAction(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl})
+	m.dialogs.Update(tea.KeyPressMsg{Text: "draft"})
+	m.updateDialog(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl})
 	cmd := m.handleEditor(input.EditorFinishedMsg{ID: "comment:JCT-1", Text: "final text"})
-	if m.ctrl.Active() {
+	if m.activeForm() != nil {
 		t.Error("overlay still open after the editor delivered the comment")
 	}
 	if cmd == nil {
@@ -82,7 +83,7 @@ func TestOpenCommentNoEditorStillOverlay(t *testing.T) {
 	if cmd := m.openComment(); cmd != nil {
 		t.Fatal("no editor configured: comment must stay in the modal")
 	}
-	if !m.ctrl.Active() || m.ctrl.Mode() != action.ModeComment {
+	if f := m.activeForm(); f == nil || f.ctrl.Mode() != action.ModeComment {
 		t.Error("modal comment not open")
 	}
 }
@@ -134,9 +135,13 @@ func TestEditorFinishedForeignKindIgnored(t *testing.T) {
 func TestPasteRoutesIntoOpenAction(t *testing.T) {
 	w := &callRecorder{}
 	m := newVerbModel(t, fakeServices{issue: fakeIssueSvc{writes: w}})
-	m.ctrl.OpenText(action.ModeEdit, "JCT-1", "")
+	m.openTextForm(action.ModeEdit, "JCT-1", "")
 	m.Update(tea.PasteMsg{Content: "pasted summary"})
-	if got := m.ctrl.Draft(); got != "pasted summary" {
+	f := m.activeForm()
+	if f == nil {
+		t.Fatal("paste closed the open action")
+	}
+	if got := f.ctrl.Draft(); got != "pasted summary" {
 		t.Errorf("action text = %q, want pasted content", got)
 	}
 }

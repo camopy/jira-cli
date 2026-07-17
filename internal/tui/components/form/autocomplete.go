@@ -11,6 +11,21 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
+// Suggestion is one completion candidate: Value is inserted into the field on
+// acceptance (with the trigger rune re-prefixed when there is one), while Label
+// is what the list renders. The two are equal for plain value lists; they
+// diverge when a human-readable label stands in for an opaque value.
+type Suggestion struct {
+	Value string
+	Label string
+	// Detail is an opaque payload carried with the suggestion but never
+	// inserted into the field — the owner reads it via AcceptedDetail after an
+	// acceptance. It lets a readable label (an assignee's display name) stand
+	// in the field while the owner keeps the value it maps to (an accountId),
+	// so no re-resolve is needed at submit.
+	Detail string
+}
+
 // Autocomplete plugs completion into one field. The form watches the word
 // being typed at the cursor; once it starts with Trigger and the query is
 // long enough, Fetch runs in a command and its results show as a list.
@@ -28,7 +43,7 @@ type Autocomplete struct {
 	// Fetch resolves a query to suggestions. It runs inside a tea.Cmd (its
 	// own goroutine), so it may block on I/O; the result is dropped if the
 	// query has moved on by the time it lands.
-	Fetch func(query string) []string
+	Fetch func(query string) []Suggestion
 }
 
 // SuggestionsMsg carries fetched suggestions back into the form. Field and
@@ -37,14 +52,14 @@ type Autocomplete struct {
 type SuggestionsMsg struct {
 	Field int
 	Query string
-	Items []string
+	Items []Suggestion
 }
 
 // acState is the live completion state for the focused field.
 type acState struct {
 	query  string // token text after the trigger; "" means inactive
 	active bool
-	items  []string
+	items  []Suggestion
 	cursor int
 }
 
@@ -131,7 +146,8 @@ func (m *Model) acceptSuggestion() {
 	if ac == nil || !m.ac.visible() {
 		return
 	}
-	item := m.ac.items[m.ac.cursor]
+	chosen := m.ac.items[m.ac.cursor]
+	item := chosen.Value
 	_, width, ok := triggerToken(m.fields[m.focus].beforeCursor(), ac.Trigger, ac.IsBoundary)
 	if !ok {
 		m.ac.clear()
@@ -141,10 +157,16 @@ func (m *Model) acceptSuggestion() {
 		item = string(ac.Trigger) + item
 	}
 	m.fields[m.focus].replaceBeforeCursor(width, item)
+	// Record the accepted detail on this (main-loop) goroutine so the owner can
+	// read the accountId behind an assignee's display name without a re-resolve.
+	// A later edit to the field clears it (see clearErrors), invalidating a
+	// stale mapping.
+	m.acceptedDetail[m.focus] = chosen.Detail
 	m.ac.clear()
 }
 
 // viewSuggestions renders the list under the focused field, selection styled.
+// The list shows each suggestion's Label; acceptance inserts its Value.
 func (m *Model) viewSuggestions() string {
 	var b strings.Builder
 	for i, item := range m.ac.items {
@@ -152,7 +174,7 @@ func (m *Model) viewSuggestions() string {
 		if i == m.ac.cursor {
 			st = m.styles.SuggestionSelected
 		}
-		b.WriteString(st.Render(" " + item))
+		b.WriteString(st.Render(" " + item.Label))
 		b.WriteString("\n")
 	}
 	return b.String()
