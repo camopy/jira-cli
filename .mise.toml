@@ -5,12 +5,14 @@ min_version = "2026.5.0"
 lockfile = true
 
 [tools]
+# clover: provider=auto constraint=minor tags=go
 go = "1.26.5"
 # Pinned to the version .golangci.yml is written against. A release binary,
 # not `go tool`: the maintainers advise against source installs (rebuilds
 # defeat their distribution). The go.mod tool directive stays until the
 # shared go-lint workflow stops invoking `go tool golangci-lint`; keep the
 # two pins on the same version.
+# clover: provider=auto constraint=minor tags=golangci-lint
 golangci-lint = "2.12.2"
 actionlint = "latest"
 betterleaks = "latest"

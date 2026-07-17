@@ -1,5 +1,6 @@
 module github.com/matcra587/jira-cli
 
+// clover: provider=auto constraint=minor tags=go
 go 1.26.5
 
 require (

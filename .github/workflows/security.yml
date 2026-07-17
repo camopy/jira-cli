@@ -20,7 +20,7 @@ jobs:
   security:
     name: Security
     # clover: provider=auto constraint=minor tag-prefix=security/ tags=actions
-    uses: matcra587/github-actions/.github/workflows/security.yml@3e61d37c312b21e008fa58eda8844a70b6a24f9d # security/v0.4.0
+    uses: matcra587/github-actions/.github/workflows/security.yml@1f771927fa94bbb42fee46581c0cf6676080519e # security/v0.4.1
     permissions:
       contents: read
       security-events: write # SARIF + CodeQL uploads to code scanning.
