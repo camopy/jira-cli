@@ -28,7 +28,7 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail {0}
     steps:
       - name: Checkout
-        # clover: provider=auto constraint=minor
+        # clover: provider=auto constraint=minor tags=checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           # GoReleaser refuses shallow clones; it needs tags for snapshot versioning.
@@ -36,7 +36,7 @@ jobs:
           persist-credentials: false
 
       - name: Install mise
-        # clover: provider=auto constraint=minor
+        # clover: provider=auto constraint=minor tags=mise-action
         uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -57,7 +57,7 @@ jobs:
         run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
 
       - name: Restore Go caches
-        # clover: provider=auto constraint=minor
+        # clover: provider=auto constraint=minor tags=cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -90,7 +90,7 @@ jobs:
   go-test:
     name: Go test
     if: github.event_name == 'pull_request'
-    # clover: provider=auto
+    # clover: provider=auto tags=actions
     uses: matcra587/github-actions/.github/workflows/go-test.yml@67f0de0d0ceebe69895e868207c04e5c66b3bde8
     permissions:
       contents: read
@@ -98,7 +98,7 @@ jobs:
   go-lint:
     name: Go lint
     if: github.event_name == 'pull_request'
-    # clover: provider=auto
+    # clover: provider=auto tags=actions
     uses: matcra587/github-actions/.github/workflows/go-lint.yml@67f0de0d0ceebe69895e868207c04e5c66b3bde8
     permissions:
       contents: read
@@ -106,7 +106,7 @@ jobs:
   md-lint:
     name: Markdown lint
     if: github.event_name == 'pull_request'
-    # clover: provider=auto
+    # clover: provider=auto tags=actions
     uses: matcra587/github-actions/.github/workflows/md-lint.yml@67f0de0d0ceebe69895e868207c04e5c66b3bde8
     permissions:
       contents: read
