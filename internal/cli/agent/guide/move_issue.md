@@ -22,7 +22,7 @@ Minimum override shape:
 
 **Save**
 > Requires `--output=json`.
-- Single-key live submit returns the moved issue under `data.result`; multi-key move returns ordered `data.results[]`, with each successful entry carrying `data.result`. `data.issue` echoes the **source** key, not the result.
+- Single-key live submit returns the moved issue under `data.result`; multi-key move returns ordered `data.results[]`, with each successful entry carrying `data.result`. `data.issue.key` echoes the **source** key, not the result.
 - `data.result.key` [string] — the issue key after the move; `data.result.id` [string] — numeric id; `data.result.self` [string] — its REST URL.
 
 **Preconditions**

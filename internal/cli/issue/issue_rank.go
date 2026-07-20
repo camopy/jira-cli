@@ -68,6 +68,7 @@ $ jira issue rank PROJ-7 PROJ-9 --before PROJ-3 --dry-run --output=json`,
 			}
 			if !ok {
 				data["ranked"] = false
+				data["dry_run"] = false
 				return cmdutil.WriteEnvelope(cmd, "issue.rank", data)
 			}
 			service := cmdutil.ServicesForClient(client).Rank()

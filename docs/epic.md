@@ -70,7 +70,7 @@ be created in the same project as the parent."
   "added": true,
   "dry_run": false,
   "epic": "PROJ-100",
-  "issue": "PROJ-123"
+  "issue": { "key": "PROJ-123" }
 }
 ```
 
@@ -94,7 +94,7 @@ returns `removed: true`.
 {
   "removed": true,
   "dry_run": false,
-  "issue": "PROJ-123"
+  "issue": { "key": "PROJ-123" }
 }
 ```
 

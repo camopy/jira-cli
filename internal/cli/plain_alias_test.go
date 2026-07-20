@@ -11,11 +11,11 @@ import (
 // (sprint2 before sprint10), never the generic value={...} collapse.
 func TestAliasListPlainRendersAliases(t *testing.T) {
 	var buf bytes.Buffer
-	err := WriteAliasListPlain(&buf, "alias.list", map[string]string{
+	err := WriteAliasListPlain(&buf, "alias.list", map[string]any{"aliases": map[string]string{
 		"sprint10": "search jql 'sprint = 10'",
 		"mine":     "issue list --assignee me",
 		"sprint2":  "search jql 'sprint = 2'",
-	})
+	}, "count": 3})
 	if err != nil {
 		t.Fatalf("WriteAliasListPlain() error = %v", err)
 	}
@@ -32,7 +32,7 @@ func TestAliasListPlainRendersAliases(t *testing.T) {
 // instead of printing nothing.
 func TestAliasListPlainEmpty(t *testing.T) {
 	var buf bytes.Buffer
-	if err := WriteAliasListPlain(&buf, "alias.list", map[string]string{}); err != nil {
+	if err := WriteAliasListPlain(&buf, "alias.list", map[string]any{"aliases": map[string]string{}, "count": 0}); err != nil {
 		t.Fatalf("WriteAliasListPlain() error = %v", err)
 	}
 	want := "Aliases\n  (no aliases configured)\n"
@@ -45,9 +45,9 @@ func TestAliasListPlainEmpty(t *testing.T) {
 // the dedicated renderer rather than the generic fallback.
 func TestAliasListPlainDispatch(t *testing.T) {
 	var buf bytes.Buffer
-	err := WriteCommandPlain(&buf, "alias.list", map[string]string{
+	err := WriteCommandPlain(&buf, "alias.list", map[string]any{"aliases": map[string]string{
 		"mine": "issue list --assignee me",
-	})
+	}, "count": 1})
 	if err != nil {
 		t.Fatalf("WriteCommandPlain() error = %v", err)
 	}

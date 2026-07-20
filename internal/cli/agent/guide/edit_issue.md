@@ -45,7 +45,7 @@ Object-valued system fields also accept a bare string, lifted to one fixed ident
 
 **Save**
 > Requires `--output=json`.
-- `data.issue` [string, required] — echo of the edited issue key.
+- `data.issue.key` [string, required] — echo of the edited issue key. `data.issue` is always an identity object (`{key, ...}`), the same place the key lives on every issue envelope.
 - Multi-key edits return ordered `data.results[]`; each successful entry has `data.issue`, `data.fields`, `data.dry_run`, and live submits include `data.result`.
 - `meta.command` [string] — `issue.edit`.
 - Field values after the edit are NOT projected in the envelope; → `read_issue` to confirm rendered state.

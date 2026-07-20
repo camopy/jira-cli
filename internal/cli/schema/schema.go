@@ -52,7 +52,7 @@ type flagSchema struct {
 // flag/field; minor for additive surface (new command, flag, field, or guide
 // section); patch for wording-only changes. Independent of the binary
 // version — a release with no contract change keeps the same value.
-const ContractVersion = "1.0.0"
+const ContractVersion = "2.0.0"
 
 // WriteSchema emits the CLI command schema. The envelope vs compact vs
 // human output shape is decided by the resolved --output mode.
@@ -318,7 +318,40 @@ func outputSchemas() map[string]any {
 			"id":               map[string]any{"type": "string"},
 			"timeSpentSeconds": map[string]any{"type": "integer"},
 			"started":          map[string]any{"type": "string"},
-			"comment":          map[string]any{"type": "object", "description": "ADF document; absent when the worklog carries no comment."},
+			"comment":          map[string]any{"type": []string{"object", "null"}, "description": "ADF document; null or absent when the worklog carries no comment."},
+		},
+	}
+	// The contract-v2 issue identity: data.issue is always an object with at
+	// least key (see cmdutil.IssueRef), never a bare string.
+	issueRef := map[string]any{
+		"type":     "object",
+		"required": []string{"key"},
+		"properties": map[string]any{
+			"id":   map[string]any{"type": "string"},
+			"key":  map[string]any{"type": "string"},
+			"self": map[string]any{"type": "string"},
+		},
+	}
+	// The optional post-write verification block create/edit emit under
+	// --verify (see internal/cli/issue/verify.go verificationResult).
+	verificationBlock := map[string]any{
+		"type":        "object",
+		"description": "Present on --verify live writes: the re-fetch diff of requested fields.",
+		"required":    []string{"applied", "dropped"},
+		"properties": map[string]any{
+			"applied":    map[string]any{"type": "object"},
+			"dropped":    map[string]any{"type": "array"},
+			"unverified": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Requested fields the typed diff cannot observe (ADF description, duedate, ...)."},
+		},
+	}
+	// Attachment authors carry no email_address: the attachment wire shape
+	// projects account_id and display_name only.
+	attachmentUser := map[string]any{
+		"type":        []string{"object", "null"},
+		"description": "Jira user identity; null when Jira reports none.",
+		"properties": map[string]any{
+			"account_id":   map[string]any{"type": "string"},
+			"display_name": map[string]any{"type": "string"},
 		},
 	}
 	linkType := map[string]any{
@@ -427,7 +460,7 @@ func outputSchemas() map[string]any {
 				"detail": map[string]any{"type": "boolean"},
 				"board_scope": map[string]any{
 					"type":        "object",
-					"description": "Present for board-scoped lists (--board / --board-id). Reports the resolved board and whether its scope was applied.",
+					"description": "Always present. Reports the resolved board and whether its scope was applied; applied is false on unscoped lists.",
 					"properties": map[string]any{
 						"applied":      map[string]any{"type": "boolean"},
 						"project_keys": map[string]any{"type": "array"},
@@ -438,12 +471,14 @@ func outputSchemas() map[string]any {
 				},
 				"jql": map[string]any{
 					"type":        "string",
-					"description": "Present for board-scoped lists; the JQL the query resolved to.",
+					"description": "Always present; the JQL the query resolved to.",
 				},
 				"precedence": map[string]any{
 					"type":        "string",
-					"description": "Present for board-scoped lists; which scope source won when several were set.",
+					"description": "Always present; which scope source won when several were set (\"none\" when unscoped).",
 				},
+				"count": map[string]any{"type": "integer", "description": "Present only under --count (meta.command issue.list.count); issues is absent on that variant."},
+				"url":   map[string]any{"type": "string", "description": "Present only under --as-jql (meta.command issue.list.jql); the Jira search URL for the resolved JQL."},
 				"succeeded_key_chunks": map[string]any{
 					"type":        "integer",
 					"description": "Present when chunked --key reads partially fail.",
@@ -466,26 +501,31 @@ func outputSchemas() map[string]any {
 			"type":     "object",
 			"required": []string{"dry_run"},
 			"properties": map[string]any{
-				"issue":   map[string]any{"type": "object", "description": "Present on non-dry-run success."},
-				"preview": map[string]any{"type": "object", "description": "Present on --dry-run; carries the would-be payload after Markdown→ADF."},
-				"dry_run": map[string]any{"type": "boolean"},
+				"issue":              map[string]any{"type": "object", "description": "Present on non-dry-run success."},
+				"preview":            map[string]any{"type": "object", "description": "Present on --dry-run; carries the would-be payload after Markdown→ADF."},
+				"dry_run":            map[string]any{"type": "boolean"},
+				"validated_remotely": map[string]any{"type": "boolean", "description": "Present on --dry-run --validate-remote; confirms the createmeta fetch ran."},
+				"verification":       verificationBlock,
 			},
 		},
 		"issue.edit": map[string]any{
 			"type":     "object",
 			"required": []string{"issue", "dry_run", "fields"},
 			"properties": map[string]any{
-				"issue":   map[string]any{"type": "string"},
-				"dry_run": map[string]any{"type": "boolean"},
-				"fields":  map[string]any{"type": "object"},
-				"result":  map[string]any{"type": "object"},
+				"issue":              issueRef,
+				"dry_run":            map[string]any{"type": "boolean"},
+				"fields":             map[string]any{"type": "object"},
+				"result":             map[string]any{"type": "object"},
+				"update":             map[string]any{"type": "object", "description": "Present when the payload carried an update operation block; forwarded verbatim."},
+				"validated_remotely": map[string]any{"type": "boolean", "description": "Present on --dry-run --validate-remote; confirms the editmeta fetch ran."},
+				"verification":       verificationBlock,
 			},
 		},
 		"worklog.add": map[string]any{
 			"type":     "object",
 			"required": []string{"issue", "worklog", "dry_run"},
 			"properties": map[string]any{
-				"issue":   map[string]any{"type": "string"},
+				"issue":   issueRef,
 				"worklog": worklogEntry,
 				"dry_run": map[string]any{"type": "boolean"},
 			},
@@ -494,7 +534,7 @@ func outputSchemas() map[string]any {
 			"type":     "object",
 			"required": []string{"issue", "worklogs"},
 			"properties": map[string]any{
-				"issue":    map[string]any{"type": "string"},
+				"issue":    issueRef,
 				"worklogs": map[string]any{"type": "array", "items": worklogEntry},
 			},
 		},
@@ -503,6 +543,7 @@ func outputSchemas() map[string]any {
 			"description": "Single-key form; multi-key reads carry the same object at results[].data with its pagination block inside.",
 			"required":    []string{"comments"},
 			"properties": map[string]any{
+				"pagination": map[string]any{"type": "object", "description": "Present only inside multi-key results[].data; single-key reads report pagination at meta.pagination."},
 				"comments": map[string]any{
 					"type": "array",
 					"items": map[string]any{
@@ -533,6 +574,7 @@ func outputSchemas() map[string]any {
 			"description": "Single-key form; multi-key reads carry the same object at results[].data with its pagination block inside.",
 			"required":    []string{"attachments"},
 			"properties": map[string]any{
+				"pagination": map[string]any{"type": "object", "description": "Present only inside multi-key results[].data; single-key reads report pagination at meta.pagination."},
 				"attachments": map[string]any{
 					"type": "array",
 					"items": map[string]any{
@@ -544,7 +586,7 @@ func outputSchemas() map[string]any {
 							"mime_type": map[string]any{"type": "string"},
 							"size":      map[string]any{"type": "integer"},
 							"created":   map[string]any{"type": "string", "format": "date-time"},
-							"author":    commentUser,
+							"author":    attachmentUser,
 						},
 					},
 				},
@@ -552,9 +594,9 @@ func outputSchemas() map[string]any {
 		},
 		"issue.link.list": map[string]any{
 			"type":     "object",
-			"required": []string{"key", "links", "count"},
+			"required": []string{"issue", "links", "count"},
 			"properties": map[string]any{
-				"key":   map[string]any{"type": "string"},
+				"issue": issueRef,
 				"count": map[string]any{"type": "integer"},
 				"links": map[string]any{
 					"type":        "array",
@@ -564,6 +606,7 @@ func outputSchemas() map[string]any {
 						"required": []string{"id", "type", "direction", "other_issue"},
 						"properties": map[string]any{
 							"id":        map[string]any{"type": "string"},
+							"self":      map[string]any{"type": "string"},
 							"type":      linkType,
 							"direction": map[string]any{"type": "string", "enum": []string{"inward", "outward"}},
 							"other_issue": map[string]any{
@@ -593,10 +636,13 @@ func outputSchemas() map[string]any {
 			"description": "Dual-form: with a target STATUS the data reports the applied transition; without one the command is a read that lists the available transitions.",
 			"required":    []string{"issue"},
 			"properties": map[string]any{
-				"issue":                map[string]any{"type": "string"},
+				"issue":                issueRef,
 				"transition":           map[string]any{"type": "string", "description": "Resolved transition id; present when a target was applied (or validated under --dry-run --validate-remote)."},
 				"transition_validated": map[string]any{"type": "boolean", "description": "Present on --dry-run --validate-remote."},
 				"dry_run":              map[string]any{"type": "boolean"},
+				"fields":               map[string]any{"type": "object", "description": "Present on --dry-run when the payload carried transition-screen fields."},
+				"comment":              map[string]any{"type": "object", "description": "Present on --dry-run when the payload carried an ADF comment."},
+				"update":               map[string]any{"type": "object", "description": "Present on --dry-run when the payload carried an update operation block."},
 				"transitions": map[string]any{
 					"type":        "array",
 					"description": "Present on the no-target list form.",

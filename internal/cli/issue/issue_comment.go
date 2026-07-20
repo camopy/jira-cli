@@ -415,7 +415,7 @@ func runCommentAddKeys(cmd *cobra.Command, keys []string, flags commentAddFlags)
 	key := keys[0]
 	if flags.dryRun {
 		return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.comment.add", map[string]any{
-			"issue":   key,
+			"issue":   cmdutil.IssueRef{Key: key},
 			"comment": map[string]any{"body": submitDoc},
 			"dry_run": true,
 		}, pipeOut.Warnings)
@@ -445,7 +445,7 @@ func runCommentAddKeys(cmd *cobra.Command, keys []string, flags commentAddFlags)
 		return err
 	}
 	return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.comment.add", map[string]any{
-		"issue":   key,
+		"issue":   cmdutil.IssueRef{Key: key},
 		"comment": commentToMap(comment),
 		"dry_run": false,
 	}, resp, pipeOut.Warnings)
@@ -465,7 +465,7 @@ func runCommentAddMany(
 			return cmdutil.KeyResult[map[string]any]{
 				Key: key,
 				Value: map[string]any{
-					"issue":   key,
+					"issue":   cmdutil.IssueRef{Key: key},
 					"comment": map[string]any{"body": submitDoc},
 					"dry_run": true,
 				},
@@ -496,7 +496,7 @@ func runCommentAddMany(
 			return nil, addErr
 		}
 		return map[string]any{
-			"issue":   key,
+			"issue":   cmdutil.IssueRef{Key: key},
 			"comment": commentToMap(comment),
 			"dry_run": false,
 		}, nil
@@ -641,7 +641,7 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 	submitDoc := pipeOut.SubmitADF
 	if flags.dryRun {
 		return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.comment.edit", map[string]any{
-			"issue":             key,
+			"issue":             cmdutil.IssueRef{Key: key},
 			"comment_id":        commentID,
 			"body_adf_summary":  submitDoc,
 			"visibility_change": describeVisibilityChange(vis),
@@ -667,7 +667,7 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 		return err
 	}
 	return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.comment.edit", map[string]any{
-		"issue":   key,
+		"issue":   cmdutil.IssueRef{Key: key},
 		"comment": commentToMap(comment),
 		"dry_run": false,
 	}, resp, pipeOut.Warnings)
@@ -707,7 +707,7 @@ $ jira issue comment delete PROJ-123 10042 --force`,
 			noInput := cmdutil.NoInputRequested(cmd)
 			if dryRun {
 				return cmdutil.WriteEnvelope(cmd, "issue.comment.delete", map[string]any{
-					"issue":      args[0],
+					"issue":      cmdutil.IssueRef{Key: args[0]},
 					"comment_id": args[1],
 					"dry_run":    true,
 				})
@@ -743,8 +743,10 @@ $ jira issue comment delete PROJ-123 10042 --force`,
 				return err
 			}
 			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.comment.delete", map[string]any{
+				"issue":      cmdutil.IssueRef{Key: args[0]},
 				"comment_id": args[1],
 				"deleted":    true,
+				"dry_run":    false,
 			}, resp)
 		},
 	}

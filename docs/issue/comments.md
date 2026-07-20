@@ -40,7 +40,7 @@ The `data.comment` object carries the created comment with snake-case keys; the
 
 ```json
 {
-  "issue": "PROJ-123",
+  "issue": { "key": "PROJ-123" },
   "comment": {
     "id": "10244",
     "body": { "type": "doc", "version": 1, "content": [ { "type": "paragraph", "content": [ { "type": "text", "text": "Deployed to staging." } ] } ] },

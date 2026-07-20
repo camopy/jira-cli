@@ -432,7 +432,7 @@ func watcherDryRunPreviewMany(cmd *cobra.Command, command string, keys []string,
 	}
 	results := xslices.Map(keys, func(key string) cmdutil.KeyResult[map[string]any] {
 		data := map[string]any{
-			"key":           key,
+			"issue":         cmdutil.IssueRef{Key: key},
 			"user":          args.UserIdent,
 			"dry_run":       true,
 			"user_resolved": userResolved,
@@ -499,8 +499,10 @@ func watcherAddData(ctx context.Context, watcherSvc jira.WatcherService, account
 
 	if args.NoReadback {
 		return map[string]any{
+			"issue":      cmdutil.IssueRef{Key: args.Key},
 			"account_id": accountID,
 			"attempted":  true,
+			"dry_run":    false,
 		}, nil
 	}
 
@@ -510,10 +512,12 @@ func watcherAddData(ctx context.Context, watcherSvc jira.WatcherService, account
 	}
 	wasAlready := containsAccount(preState, accountID)
 	return map[string]any{
+		"issue":                cmdutil.IssueRef{Key: args.Key},
 		"watchers":             watcherListData(post.Watchers),
 		"is_watching":          post.IsWatching,
 		"watch_count":          post.WatchCount,
 		"was_already_watching": wasAlready,
+		"dry_run":              false,
 	}, nil
 }
 
@@ -564,8 +568,10 @@ func watcherRemoveData(ctx context.Context, watcherSvc jira.WatcherService, acco
 
 	if args.NoReadback {
 		return map[string]any{
+			"issue":      cmdutil.IssueRef{Key: args.Key},
 			"account_id": accountID,
 			"attempted":  true,
+			"dry_run":    false,
 		}, nil
 	}
 
@@ -575,10 +581,12 @@ func watcherRemoveData(ctx context.Context, watcherSvc jira.WatcherService, acco
 	}
 	wasAlready := containsAccount(preState, accountID)
 	return map[string]any{
+		"issue":                cmdutil.IssueRef{Key: args.Key},
 		"watchers":             watcherListData(post.Watchers),
 		"is_watching":          post.IsWatching,
 		"watch_count":          post.WatchCount,
 		"was_already_watching": wasAlready,
+		"dry_run":              false,
 	}, nil
 }
 
@@ -623,7 +631,7 @@ func localResolveUser(cmd *cobra.Command, ident string) (string, bool) {
 // about whether resolution actually ran.
 func watcherDryRunPreview(cmd *cobra.Command, command string, args watcherMutationArgs) error {
 	data := map[string]any{
-		"key":           args.Key,
+		"issue":         cmdutil.IssueRef{Key: args.Key},
 		"user":          args.UserIdent,
 		"dry_run":       true,
 		"user_resolved": false,

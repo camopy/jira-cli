@@ -27,7 +27,7 @@ func WriteLinkListPlain(w io.Writer, command string, data any, opts ...PlainOpti
 	links := normalizeMapList(m["links"])
 	style := authPlainStyle{tty: cfg.tty, theme: cfg.theme}
 
-	key, _ := m["key"].(string)
+	key := stringFromMap(mapFromAny(m["issue"]), "key")
 	header := style.bold("Links on " + key)
 	if count := len(links); count > 0 {
 		header += style.dim("  (" + human.Pluralize(count, "link", "links") + ")")

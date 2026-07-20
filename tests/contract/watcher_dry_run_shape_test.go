@@ -46,8 +46,9 @@ func TestWatcherDryRunAccountIDPrefixResolvesLocally(t *testing.T) {
 	if env.Data["dry_run"] != true {
 		t.Fatalf("data.dry_run = %#v, want true", env.Data["dry_run"])
 	}
-	if env.Data["key"] != "JCT-1" {
-		t.Fatalf("data.key = %#v, want JCT-1", env.Data["key"])
+	issue, _ := env.Data["issue"].(map[string]any)
+	if issue["key"] != "JCT-1" {
+		t.Fatalf("data.issue.key = %#v, want JCT-1", env.Data["issue"])
 	}
 	if env.Data["account_id_resolved"] != "712020:abc" {
 		t.Fatalf("data.account_id_resolved = %#v, want \"712020:abc\" (locally derivable)", env.Data["account_id_resolved"])

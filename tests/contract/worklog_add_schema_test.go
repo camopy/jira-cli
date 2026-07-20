@@ -49,7 +49,7 @@ workday_seconds = 36000
 	var env struct {
 		Data struct {
 			Worklog struct {
-				TimeSpentSeconds int `json:"time_spent_seconds"`
+				TimeSpentSeconds int `json:"timeSpentSeconds"`
 			} `json:"worklog"`
 		} `json:"data"`
 	}
@@ -74,7 +74,7 @@ func TestWorklogAddAcceptsStartedAndJSONInput(t *testing.T) {
 	var env struct {
 		Data struct {
 			Worklog struct {
-				TimeSpentSeconds int    `json:"time_spent_seconds"`
+				TimeSpentSeconds int    `json:"timeSpentSeconds"`
 				Started          string `json:"started"`
 			} `json:"worklog"`
 		} `json:"data"`

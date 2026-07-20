@@ -41,6 +41,35 @@ IMPORTANT: JSON envelopes must be byte-clean. Machine output goes to stdout
 through `cli.WriteEnvelope`; never a raw `json.Encoder`. In `json`/`compact`
 modes nothing else may write to stdout.
 
+## Envelope data conventions (contract v2)
+
+*   **Issue identity is always an object.** Any issue-scoped `data.issue`
+    (and link create's `inward_issue`/`outward_issue`) is a
+    `cmdutil.IssueRef` — `{id?, key, self?}` — never a bare key string, and
+    never an ad-hoc `data.key`. `IssueRef.String()` renders the key for
+    human/plain output; richer objects (`issue view`, create's POST echo)
+    satisfy the same minimum by carrying `key` at the same place.
+*   **Every mutation carries `dry_run` on both paths** — `true` on preview,
+    `false` on the live write — including no-profile and `--no-readback`
+    variants. A live path never drops fields its dry-run counterpart
+    carries (identity included).
+*   **A new or changed `data` field must land in `outputSchemas()`
+    (`internal/cli/schema/schema.go`) in the same change** — conditional
+    fields too, with a description saying when they appear. The
+    conformance guardrail
+    (`tests/contract/schema_conformance_test.go`) validates emitted
+    envelopes against the published schemas and fails on an emitted
+    field the schema does not declare; extend its case table when a new
+    op is hermetically producible (dry-run, local-only, or a simple
+    stub). The identity invariant itself is pinned by
+    `tests/contract/issue_ref_shape_test.go`.
+*   **Direction: typed Output structs.** Envelope `data` should migrate
+    from `map[string]any` literals to one exported struct per operation
+    (composed from shared parts — `IssueRef`, verification, an embedded
+    dry-run carrier) so builders cannot emit undeclared fields and
+    renderers switch on types. New ops should start typed; do not add a
+    new `map[string]any` data literal where a struct is straightforward.
+
 *   Envelopes render through the clog printer path (`internal/cli/json.go`):
     `JSONFlat` for machine modes, `JSONPretty` retinted to the active theme
     for human-mode JSON. The custom `errWriter` wrapper exists to capture

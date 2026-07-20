@@ -246,7 +246,7 @@ func runEpicAddMany(cmd *cobra.Command, keys []string, epicKey string, paralleli
 
 func epicAddData(issueKey, epicKey string, dryRun bool) map[string]any {
 	return map[string]any{
-		"issue":   issueKey,
+		"issue":   cmdutil.IssueRef{Key: issueKey},
 		"epic":    epicKey,
 		"dry_run": dryRun,
 		"added":   !dryRun,
@@ -336,7 +336,7 @@ func runEpicRemoveMany(cmd *cobra.Command, keys []string, parallelism int, dryRu
 
 func epicRemoveData(issueKey string, dryRun bool) map[string]any {
 	return map[string]any{
-		"issue":   issueKey,
+		"issue":   cmdutil.IssueRef{Key: issueKey},
 		"dry_run": dryRun,
 		"removed": !dryRun,
 	}

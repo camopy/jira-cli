@@ -84,7 +84,7 @@ Each `data.links[]` entry pairs the link's `direction` and `type` with the
 
 ```json
 {
-  "key": "PROJ-123",
+  "issue": { "key": "PROJ-123" },
   "count": 1,
   "links": [
     {

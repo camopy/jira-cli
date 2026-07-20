@@ -22,7 +22,7 @@ func TestPlainPadRightUsesDisplayWidth(t *testing.T) {
 func TestLinkListPlainRendersTypedLinks(t *testing.T) {
 	var buf bytes.Buffer
 	err := WriteLinkListPlain(&buf, "issue.link.list", map[string]any{
-		"key": "PROJ-1",
+		"issue": map[string]any{"key": "PROJ-1"},
 		"links": []jira.IssueLinkView{
 			{
 				ID:        "9001",

@@ -29,7 +29,7 @@ Different-project clone:
 
 **Save**
 > Requires `--output=json`.
-- Single-key live submit returns the cloned issue under `data.result`; multi-key clone returns ordered `data.results[]`, with each successful entry carrying `data.result`. `data.issue` echoes the **source** key, not the clone.
+- Single-key live submit returns the cloned issue under `data.result`; multi-key clone returns ordered `data.results[]`, with each successful entry carrying `data.result`. `data.issue.key` echoes the **source** key, not the clone.
 - `data.result.key` [string, required] — the new issue key; feed into downstream mutations.
 - `data.result.id` [string] — numeric id of the new issue; `data.result.self` [string] — its REST URL.
 

@@ -100,7 +100,7 @@ func TestIssueViewPlainRendersMultiKeySummary(t *testing.T) {
 func TestIssueTransitionsPlainRendersReadableTable(t *testing.T) {
 	var buf bytes.Buffer
 	err := WriteCommandPlain(&buf, "issue.transitions", map[string]any{
-		"issue": "PROJ-1",
+		"issue": map[string]any{"key": "PROJ-1"},
 		"transitions": []*jira.Transition{
 			{ID: jira.String("11"), Name: jira.String("To Do")},
 			{ID: jira.String("21"), Name: jira.String("In Progress")},

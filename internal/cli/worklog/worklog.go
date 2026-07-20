@@ -168,16 +168,16 @@ $ jira worklog add PROJ-123 --json-input worklog.json --dry-run --output=json`,
 					if err != nil {
 						return err
 					}
-					return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "worklog.add", map[string]any{"issue": key, "worklog": worklog, "dry_run": false}, resp, pipeOut.Warnings)
+					return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "worklog.add", map[string]any{"issue": cmdutil.IssueRef{Key: key}, "worklog": worklog, "dry_run": false}, resp, pipeOut.Warnings)
 				}
 				return fmt.Errorf("jira base URL is required for worklog.add")
 			}
 			return cmdutil.WriteEnvelopeWithWarnings(cmd, "worklog.add", map[string]any{
-				"issue": key,
+				"issue": cmdutil.IssueRef{Key: key},
 				"worklog": map[string]any{
-					"time_spent_seconds": seconds,
-					"started":            started,
-					"comment":            comment,
+					"timeSpentSeconds": seconds,
+					"started":          started,
+					"comment":          comment,
 				},
 				"dry_run": dryRun,
 			}, pipeOut.Warnings)
@@ -207,11 +207,11 @@ func runWorklogAddMany(cmd *cobra.Command, keys []string, parallelism int, in wo
 			return cmdutil.KeyResult[map[string]any]{
 				Key: key,
 				Value: map[string]any{
-					"issue": key,
+					"issue": cmdutil.IssueRef{Key: key},
 					"worklog": map[string]any{
-						"time_spent_seconds": in.TimeSpentSeconds,
-						"started":            in.Started,
-						"comment":            in.Comment,
+						"timeSpentSeconds": in.TimeSpentSeconds,
+						"started":          in.Started,
+						"comment":          in.Comment,
 					},
 					"dry_run": true,
 				},
@@ -236,7 +236,7 @@ func runWorklogAddMany(cmd *cobra.Command, keys []string, parallelism int, in wo
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"issue": key, "worklog": worklog, "dry_run": false}, nil
+		return map[string]any{"issue": cmdutil.IssueRef{Key: key}, "worklog": worklog, "dry_run": false}, nil
 	})
 	if err != nil {
 		return err
@@ -331,7 +331,7 @@ $ jira worklog list PROJ-123 --output=json`,
 
 func worklogListData(key string, worklogs any) map[string]any {
 	return map[string]any{
-		"issue":    key,
+		"issue":    cmdutil.IssueRef{Key: key},
 		"worklogs": worklogs,
 	}
 }

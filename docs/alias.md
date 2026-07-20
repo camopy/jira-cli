@@ -54,8 +54,11 @@ jira alias list
 
 ```json
 {
-  "inbox": "issue list --assignee me --status 'To Do,In Progress'",
-  "my-bugs": "search jql 'project = PROJ AND type = Bug AND assignee = currentUser()'"
+  "aliases": {
+    "inbox": "issue list --assignee me --status 'To Do,In Progress'",
+    "my-bugs": "search jql 'project = PROJ AND type = Bug AND assignee = currentUser()'"
+  },
+  "count": 2
 }
 ```
 

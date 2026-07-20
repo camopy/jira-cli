@@ -41,7 +41,7 @@ later:
 
 ```json
 {
-  "key": "PROJ-123",
+  "issue": { "key": "PROJ-123" },
   "dry_run": false,
   "attachments": [
     {

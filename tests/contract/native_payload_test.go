@@ -262,8 +262,12 @@ func TestLinkJSONInputDryRun(t *testing.T) {
 	var env struct {
 		OK   bool `json:"ok"`
 		Data struct {
-			Inward  string         `json:"inward_issue"`
-			Outward string         `json:"outward_issue"`
+			Inward struct {
+				Key string `json:"key"`
+			} `json:"inward_issue"`
+			Outward struct {
+				Key string `json:"key"`
+			} `json:"outward_issue"`
 			Type    string         `json:"type"`
 			Comment map[string]any `json:"comment"`
 		} `json:"data"`
@@ -271,7 +275,7 @@ func TestLinkJSONInputDryRun(t *testing.T) {
 	if jerr := json.Unmarshal(out, &env); jerr != nil || !env.OK {
 		t.Fatalf("expected ok envelope: %v\n%s", jerr, out)
 	}
-	if env.Data.Inward != "PROJ-1" || env.Data.Outward != "PROJ-2" || env.Data.Type != "Blocks" {
+	if env.Data.Inward.Key != "PROJ-1" || env.Data.Outward.Key != "PROJ-2" || env.Data.Type != "Blocks" {
 		t.Fatalf("preview must carry the body's endpoints and type: %s", out)
 	}
 	if env.Data.Comment == nil {

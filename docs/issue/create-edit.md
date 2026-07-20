@@ -168,7 +168,7 @@ clone — that pairing is easy to misread:
 ```json
 {
   "dry_run": false,
-  "issue": "PROJ-123",
+  "issue": { "key": "PROJ-123" },
   "result": {
     "id": "10407",
     "key": "PROJ-145",

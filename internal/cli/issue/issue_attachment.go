@@ -214,7 +214,7 @@ $ jira issue attachment add PROJ-123 ./report.pdf --dry-run`,
 					return runAttachmentAddManyDryRun(cmd, keys, previews)
 				}
 				return cmdutil.WriteEnvelope(cmd, "issue.attachment.add", map[string]any{
-					"key":     keys[0],
+					"issue":   cmdutil.IssueRef{Key: keys[0]},
 					"files":   previews,
 					"dry_run": true,
 				})
@@ -247,7 +247,7 @@ $ jira issue attachment add PROJ-123 ./report.pdf --dry-run`,
 				rows = append(rows, attachmentToOutput(a))
 			}
 			return cmdutil.WriteEnvelope(cmd, "issue.attachment.add", map[string]any{
-				"key":         keys[0],
+				"issue":       cmdutil.IssueRef{Key: keys[0]},
 				"attachments": rows,
 				"dry_run":     false,
 			})
@@ -299,7 +299,7 @@ func runAttachmentAddManyDryRun(cmd *cobra.Command, keys []string, previews []ma
 		return cmdutil.KeyResult[map[string]any]{
 			Key: key,
 			Value: map[string]any{
-				"key":     key,
+				"issue":   cmdutil.IssueRef{Key: key},
 				"files":   previews,
 				"dry_run": true,
 			},
@@ -330,7 +330,7 @@ func runAttachmentAddMany(
 			rows = append(rows, attachmentToOutput(a))
 		}
 		return map[string]any{
-			"key":         key,
+			"issue":       cmdutil.IssueRef{Key: key},
 			"attachments": rows,
 			"dry_run":     false,
 		}, nil
@@ -422,7 +422,7 @@ $ jira issue attachment delete PROJ-123 10500 --force`,
 			attachmentID := args[1]
 			if dryRun {
 				return cmdutil.WriteEnvelope(cmd, "issue.attachment.delete", map[string]any{
-					"key":           key,
+					"issue":         cmdutil.IssueRef{Key: key},
 					"attachment_id": attachmentID,
 					"dry_run":       true,
 				})
@@ -456,8 +456,10 @@ $ jira issue attachment delete PROJ-123 10500 --force`,
 				return err
 			}
 			return cmdutil.WriteEnvelope(cmd, "issue.attachment.delete", map[string]any{
+				"issue":         cmdutil.IssueRef{Key: key},
 				"attachment_id": attachmentID,
 				"deleted":       true,
+				"dry_run":       false,
 			})
 		},
 	}
@@ -512,7 +514,7 @@ $ jira issue attachment download PROJ-123 10500 --to ./report.pdf --dry-run`,
 			}
 			if dryRun {
 				return cmdutil.WriteEnvelope(cmd, "issue.attachment.download", map[string]any{
-					"key":           key,
+					"issue":         cmdutil.IssueRef{Key: key},
 					"attachment_id": attachmentID,
 					"mode":          string(mode),
 					"target":        target,
@@ -561,10 +563,12 @@ $ jira issue attachment download PROJ-123 10500 --to ./report.pdf --dry-run`,
 				return err
 			}
 			return cmdutil.WriteEnvelope(cmd, "issue.attachment.download", map[string]any{
+				"issue":         cmdutil.IssueRef{Key: key},
 				"attachment_id": attachmentID,
 				"written_to":    target,
 				"bytes":         wrote,
 				"mode":          string(mode),
+				"dry_run":       false,
 			})
 		},
 	}

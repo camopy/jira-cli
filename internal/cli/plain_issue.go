@@ -259,7 +259,7 @@ func WriteIssueTransitionsPlain(w io.Writer, command string, data any, opts ...P
 	transitions := normalizeMapList(m["transitions"])
 	style := authPlainStyle{tty: cfg.tty, theme: cfg.theme}
 
-	issue, _ := m["issue"].(string)
+	issue := stringFromMap(mapFromAny(m["issue"]), "key")
 	header := "Transitions"
 	if issue != "" {
 		header += " on " + issue

@@ -16,7 +16,7 @@ When: a duplicate, mis-filed, or test issue must be removed and the team accepts
 
 **Save**
 > Requires `--output=json`.
-- Single-key output echoes the deleted issue under `data.issue`; multi-key delete returns ordered `data.results[]`.
+- Single-key output echoes the deleted issue's identity under `data.issue` (`data.issue.key`); multi-key delete returns ordered `data.results[]`.
 
 **Preconditions**
 - `--force` is mandatory for live deletes in agent / non-TTY / `--no-input` mode. Omitting it exits `3` with `validation_error`.

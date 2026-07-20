@@ -149,7 +149,7 @@ offline, so it comes back unresolved:
 
 ```json
 {
-  "key": "PROJ-123",
+  "issue": { "key": "PROJ-123" },
   "user": "me",
   "dry_run": true,
   "user_resolved": true,

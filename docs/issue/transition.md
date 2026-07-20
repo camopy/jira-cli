@@ -68,7 +68,7 @@ for the list and `issue.transition` (singular) for an executed move:
 
 ```json
 {
-  "issue": "PROJ-123",
+  "issue": { "key": "PROJ-123" },
   "transitions": [
     { "id": "11", "name": "To Do" },
     { "id": "21", "name": "In Progress" },
@@ -77,7 +77,7 @@ for the list and `issue.transition` (singular) for an executed move:
 }
 ```
 
-An executed transition returns just the resolved id: `{ "issue": "PROJ-123",
+An executed transition returns just the resolved id: `{ "issue": { "key": "PROJ-123" },
 "transition": "21", "dry_run": false }`.
 
 !!! warning "`--dry-run` is a local preview and never contacts Jira"
@@ -127,7 +127,7 @@ the move with `204 No Content`) and the unchanged `data.issue` key:
 ```json
 {
   "dry_run": true,
-  "issue": "PROJ-123",
+  "issue": { "key": "PROJ-123" },
   "payload": {
     "fields": {
       "project":   { "key": "OPS" },

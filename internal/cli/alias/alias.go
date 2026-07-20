@@ -60,7 +60,12 @@ $ jira alias list --output=json`,
 			if err != nil {
 				return err
 			}
-			return cmdutil.WriteEnvelope(cmd, "alias.list", cfg.Aliases)
+			// An object wrapper, not the bare map: every other alias envelope
+			// is an object, and a count spares consumers a keys-length dance.
+			return cmdutil.WriteEnvelope(cmd, "alias.list", map[string]any{
+				"aliases": cfg.Aliases,
+				"count":   len(cfg.Aliases),
+			})
 		},
 	}
 }

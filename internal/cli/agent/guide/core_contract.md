@@ -92,6 +92,8 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
 - Agent env detection: the cross-tool `AGENT` / `AI_AGENT` convention wins first — a name (`AGENT=claude`) or truthy token (`AGENT=1`) opts in, a falsy value (`AGENT=0`) is an explicit opt-out even when a marker variable is present. Otherwise the per-vendor markers, first match wins: `CLAUDECODE`, `CLINE_ACTIVE`, `CODEX_SANDBOX`, `CURSOR_AGENT`, `GEMINI_CLI`, `OPENCODE`, `REPL_ID`.
 - `--output=compact` strips `meta` and `errors` on success. **Error paths still emit the full envelope** so failures stay parseable regardless of mode flags.
 - Machine envelopes never carry `meta.profile` — a command that reports a profile puts it in command-specific `data`.
+- **Issue identity is uniform**: wherever an envelope's `data` names an issue it is an object with at least `key` — `data.issue.key` reads identically on create, view, edit, transition, comment, worklog, epic, attachment, link, weblink, watcher, and delete envelopes (link create reports `inward_issue`/`outward_issue` the same way). No envelope carries a bare issue-key string or a `data.key` field.
+- **Every mutation reports `dry_run`** — `true` on a preview, `false` on the live write — on every path, so a consumer can always distinguish the two without inspecting flags.
 - `--output` value table:
 
   | `--output` value | Effect                                                                         |

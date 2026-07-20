@@ -53,14 +53,16 @@ func TestAttachmentDownloadValidatesIssueKey(t *testing.T) {
 	}
 	var env struct {
 		Data struct {
-			Key string `json:"key"`
+			Issue struct {
+				Key string `json:"key"`
+			} `json:"issue"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(out, &env); err != nil {
 		t.Fatalf("decode envelope: %v\n%s", err, out)
 	}
-	if env.Data.Key != "PROJ-1" {
-		t.Fatalf("dry-run key = %q, want PROJ-1\n%s", env.Data.Key, out)
+	if env.Data.Issue.Key != "PROJ-1" {
+		t.Fatalf("dry-run issue key = %q, want PROJ-1\n%s", env.Data.Issue.Key, out)
 	}
 }
 

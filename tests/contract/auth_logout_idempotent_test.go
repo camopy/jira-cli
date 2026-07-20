@@ -5,7 +5,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 )
 
@@ -39,8 +38,11 @@ workday_seconds = 28800
 	if err != nil {
 		t.Fatalf("auth logout of an absent credential error = %v\n%s", err, out)
 	}
-	if strings.Contains(strings.ToLower(string(out)), "keyring") {
-		t.Fatalf("auth logout surfaced a keyring backend error for a missing entry:\n%s", out)
+	// data.backend legitimately names the keyring backend now, so the guard
+	// is structural: the envelope must be ok with no errors, not error-free
+	// by substring absence.
+	if !envelopeHasKV(t, out, "ok", true) {
+		t.Fatalf("auth logout of an absent credential returned a failure envelope:\n%s", out)
 	}
 	if !envelopeHasKV(t, out, "removed", false) {
 		t.Fatalf("auth logout of an absent credential did not report removed=false:\n%s", out)

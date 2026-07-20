@@ -21,8 +21,10 @@ func TestIssueEditNoInputJSONInputDryRunShowsPreviewPayload(t *testing.T) {
 
 	var env struct {
 		Data struct {
-			Issue  string `json:"issue"`
-			DryRun bool   `json:"dry_run"`
+			Issue struct {
+				Key string `json:"key"`
+			} `json:"issue"`
+			DryRun bool `json:"dry_run"`
 			Fields struct {
 				Summary     string         `json:"summary"`
 				Description map[string]any `json:"description"`
@@ -32,7 +34,7 @@ func TestIssueEditNoInputJSONInputDryRunShowsPreviewPayload(t *testing.T) {
 	if err := json.Unmarshal(out, &env); err != nil {
 		t.Fatalf("issue edit dry-run output is not JSON: %v\n%s", err, out)
 	}
-	if env.Data.Issue != "PROJ-1" || !env.Data.DryRun {
+	if env.Data.Issue.Key != "PROJ-1" || !env.Data.DryRun {
 		t.Fatalf("issue edit dry-run metadata = %+v", env.Data)
 	}
 	if env.Data.Fields.Summary != "Updated from JSON" {

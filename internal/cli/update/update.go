@@ -115,8 +115,13 @@ func run(cmd *cobra.Command, dryRun, force bool) error {
 		"current":          current,
 		"latest":           latest,
 		"update_available": available,
-		"updated":          false,
-		"dry_run":          dryRun,
+		// The discriminator between the two update shapes: false here (jira
+		// replaces its own binary), true on the managed-channel envelope
+		// (the installer owns updates and data carries hint instead of
+		// latest/update_available).
+		"managed": false,
+		"updated": false,
+		"dry_run": dryRun,
 	}
 	if dryRun || !available {
 		return cmdutil.WriteEnvelope(cmd, "update", data)

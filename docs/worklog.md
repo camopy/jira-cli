@@ -45,9 +45,9 @@ so you can check the converted duration first:
 ```json
 {
   "dry_run": true,
-  "issue": "PROJ-123",
+  "issue": { "key": "PROJ-123" },
   "worklog": {
-    "time_spent_seconds": 5400,
+    "timeSpentSeconds": 5400,
     "started": "",
     "comment": { "type": "doc", "version": 1, "content": [ … ] }
   }
@@ -59,11 +59,9 @@ so you can check the converted duration first:
     the compact `"1h30m"`. Fractional units (`"1.5h"`) are rejected as
     `unsupported duration unit` — combine integer units instead.
 
-!!! note "Dry-run and submit name the duration field differently"
-    The dry-run preview returns `time_spent_seconds` (snake_case); a real submit
-    returns `timeSpentSeconds` (camelCase). A script that diffs dry-run output
-    against the persisted record needs to handle both keys until that asymmetry
-    is reconciled upstream.
+The dry-run preview and a real submit both name the duration field
+`timeSpentSeconds`, so a script can diff preview output against the persisted
+record with one key.
 
 To author the payload directly, pass `--json-input <file>` (or `--json-input -`
 for stdin). The duration goes under `time_spent` as a Jira-style string (same
@@ -101,7 +99,7 @@ jira worklog list PROJ-1..PROJ-10 -p 4
 
 ```json
 {
-  "issue": "PROJ-123",
+  "issue": { "key": "PROJ-123" },
   "worklogs": [
     {
       "id": "10169",

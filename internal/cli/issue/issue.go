@@ -176,7 +176,7 @@ func openIssueWeb(cmd *cobra.Command, key, command string) error {
 	if u == "" {
 		return fmt.Errorf("validation: opening an issue in the browser requires a configured base URL")
 	}
-	return cmdutil.WriteWebEnvelope(cmd, command, u, map[string]any{"issue": map[string]any{"key": key}})
+	return cmdutil.WriteWebEnvelope(cmd, command, u, map[string]any{"issue": cmdutil.IssueRef{Key: key}})
 }
 
 // NewOpenCommand returns the top-level `jira open KEY` shortcut that opens an
@@ -1575,7 +1575,7 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 					return err
 				}
 				data := map[string]any{
-					"issue":   keys[0],
+					"issue":   cmdutil.IssueRef{Key: keys[0]},
 					"result":  issue,
 					"dry_run": false,
 					"fields":  submitFields,
@@ -1594,7 +1594,7 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.edit", data, resp, warnings)
 			}
 			data := map[string]any{
-				"issue":   keys[0],
+				"issue":   cmdutil.IssueRef{Key: keys[0]},
 				"dry_run": true,
 				"fields":  submitFields,
 			}
@@ -1693,7 +1693,7 @@ func runIssueEditMany(cmd *cobra.Command, keys []string, parallelism int, in iss
 			submitFields["description"] = *pipeOut.SubmitADF
 		}
 		data := map[string]any{
-			"issue":   key,
+			"issue":   cmdutil.IssueRef{Key: key},
 			"dry_run": in.DryRun,
 			"fields":  submitFields,
 		}
@@ -1791,7 +1791,7 @@ func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
 	}
 	if dryRun {
 		return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.edit", map[string]any{
-			"issue":   key,
+			"issue":   cmdutil.IssueRef{Key: key},
 			"dry_run": true,
 			"fields":  submitFields,
 		}, pipeOut.Warnings)
@@ -1808,7 +1808,7 @@ func issueEditWithEditor(cmd *cobra.Command, key string, dryRun bool) error {
 		return err
 	}
 	return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.edit", map[string]any{
-		"issue":   key,
+		"issue":   cmdutil.IssueRef{Key: key},
 		"result":  updatedIssue,
 		"dry_run": false,
 		"fields":  submitFields,
@@ -1897,7 +1897,7 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 					return err
 				}
 				return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.transitions", results, func(key string, transitions []*jira.Transition) any {
-					return map[string]any{"issue": key, "transitions": transitions}
+					return map[string]any{"issue": cmdutil.IssueRef{Key: key}, "transitions": transitions}
 				})
 			}
 			key := keys[0]
@@ -1967,7 +1967,7 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 				// No target → list available transitions (a read). Offline
 				// (no base URL) returns a bare envelope, as before.
 				if !ok {
-					return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", map[string]any{"issue": key, "dry_run": dryRun}, pipeOut.Warnings)
+					return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.transition", map[string]any{"issue": cmdutil.IssueRef{Key: key}, "dry_run": dryRun}, pipeOut.Warnings)
 				}
 				var (
 					transitions []*jira.Transition
@@ -1980,7 +1980,7 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 				}); err != nil {
 					return err
 				}
-				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transitions", map[string]any{"issue": key, "transitions": transitions}, resp, pipeOut.Warnings)
+				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transitions", map[string]any{"issue": cmdutil.IssueRef{Key: key}, "transitions": transitions}, resp, pipeOut.Warnings)
 			}
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.transition")
@@ -2003,7 +2003,7 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 			}); err != nil {
 				return err
 			}
-			return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transition", map[string]any{"issue": key, "transition": id, "dry_run": false}, resp, pipeOut.Warnings)
+			return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transition", map[string]any{"issue": cmdutil.IssueRef{Key: key}, "transition": id, "dry_run": false}, resp, pipeOut.Warnings)
 		},
 	}
 	cmdutil.AddDryRunFlag(returnCmd.Flags(), &dryRun, "Preview mutation without submitting")
@@ -2326,7 +2326,7 @@ func transitionNames(transitions []*jira.Transition) string {
 // target (as requested, or resolved under --validate-remote) plus the
 // validated payload sections.
 func transitionDryRunData(key, target string, fields map[string]any, comment *adf.Document, update map[string]any) map[string]any {
-	data := map[string]any{"issue": key, "transition": target, "dry_run": true}
+	data := map[string]any{"issue": cmdutil.IssueRef{Key: key}, "transition": target, "dry_run": true}
 	if len(fields) > 0 {
 		data["fields"] = fields
 	}
@@ -2415,7 +2415,7 @@ func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, 
 			return nil, err
 		}
 		return map[string]any{
-			"issue":      key,
+			"issue":      cmdutil.IssueRef{Key: key},
 			"transition": id,
 			"dry_run":    false,
 		}, nil
@@ -2515,7 +2515,7 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 				submitFields = map[string]any{}
 			}
 			if dryRun {
-				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue."+name, map[string]any{"issue": keys[0], "payload": map[string]any{"fields": submitFields}, "dry_run": true}, pipeOut.Warnings)
+				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue."+name, map[string]any{"issue": cmdutil.IssueRef{Key: keys[0]}, "payload": map[string]any{"fields": submitFields}, "dry_run": true}, pipeOut.Warnings)
 			}
 			// Destructive op safety: in TTY mode (a human at the
 			// keyboard) require either --force OR an interactive
@@ -2564,7 +2564,7 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 				}); err != nil {
 					return err
 				}
-				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue."+name, map[string]any{"issue": keys[0], "result": issue, "dry_run": false}, resp, pipeOut.Warnings)
+				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue."+name, map[string]any{"issue": cmdutil.IssueRef{Key: keys[0]}, "result": issue, "dry_run": false}, resp, pipeOut.Warnings)
 			}
 			return fmt.Errorf("jira base URL is required for issue.%s", name)
 		},
@@ -2643,7 +2643,7 @@ func runDestructiveIssueMany(
 			submitFields = map[string]any{}
 		}
 		data := map[string]any{
-			"issue":   key,
+			"issue":   cmdutil.IssueRef{Key: key},
 			"dry_run": in.DryRun,
 		}
 		if in.DryRun {
@@ -2760,7 +2760,7 @@ $ jira issue weblink PROJ-123 PROJ-124 --url https://example.com/runbook --title
 			}
 			if dryRun {
 				return cmdutil.WriteEnvelope(cmd, "issue.weblink", map[string]any{
-					"issue": keys[0], "url": url, "title": title, "dry_run": true,
+					"issue": cmdutil.IssueRef{Key: keys[0]}, "url": url, "title": title, "dry_run": true,
 					// Be explicit that dry-run did NOT contact the
 					// target URL — only its syntax was checked locally.
 					"url_remote_checked": false,
@@ -2784,7 +2784,7 @@ $ jira issue weblink PROJ-123 PROJ-124 --url https://example.com/runbook --title
 				return err
 			}
 			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.weblink", map[string]any{
-				"issue": keys[0], "url": url, "title": title, "dry_run": false,
+				"issue": cmdutil.IssueRef{Key: keys[0]}, "url": url, "title": title, "dry_run": false,
 			}, resp)
 		},
 	}
@@ -2830,7 +2830,7 @@ func runIssueWebLinkMany(cmd *cobra.Command, keys []string, parallelism int, in 
 
 func issueWebLinkData(key string, in issueWebLinkInput, dryRun bool) map[string]any {
 	data := map[string]any{
-		"issue":   key,
+		"issue":   cmdutil.IssueRef{Key: key},
 		"url":     in.URL,
 		"title":   in.Title,
 		"dry_run": dryRun,

@@ -1510,7 +1510,12 @@ $ jira auth logout old-work --base-url acme.atlassian.net`,
 			if note != "" {
 				cmdutil.RecordCredentialWarnings(cmd, []string{note})
 			}
-			return cmdutil.WriteEnvelope(cmd, "auth.logout", map[string]any{"profile": profile.Name, "removed": removed, "dry_run": false})
+			return cmdutil.WriteEnvelope(cmd, "auth.logout", map[string]any{
+				"profile": profile.Name,
+				"backend": string(profile.SecretBackend),
+				"removed": removed,
+				"dry_run": false,
+			})
 		},
 	}
 	cmdutil.AddStringVar(cmd.Flags(), &baseURL, "base-url", "", "Jira site of the credential to remove; required to purge a credential whose profile was deleted from config", clib.FlagExtra{Group: "Configuration", Placeholder: "URL", Terse: "site URL"})

@@ -186,10 +186,17 @@ func verifyAppliedFields(requested map[string]any, issue *jira.Issue) verificati
 				names = append(names, ptr.Deref(v.Name))
 			}
 			verifyNamedSet(&result, key, req, names)
-		case key == "project" || key == "description":
-			// project cannot silently change on a successful write, and ADF
-			// description diffing is out of scope for v1.
+		case key == "project":
+			// project cannot silently change on a successful write; nothing
+			// to verify and nothing left ambiguous.
 			continue
+		case key == "description":
+			// ADF diffing is out of scope: the server normalizes documents
+			// (rewrapping marks, dropping empty nodes), so a byte diff would
+			// report false drops. Reported as unverified rather than silently
+			// skipped — an empty verification block must not imply "checked
+			// and clean" for a field the diff never looked at.
+			result.Unverified = append(result.Unverified, key)
 		case strings.HasPrefix(key, "customfield_"):
 			raw, ok := fields.CustomFields[key]
 			var applied any

@@ -22,7 +22,13 @@ func WriteAliasListPlain(w io.Writer, command string, data any, opts ...PlainOpt
 	}
 	logger := newPlainLogger(w)
 
-	aliases, ok := data.(map[string]string)
+	// alias.list data wraps the map: {aliases, count}. Unwrap; anything
+	// else falls back to the generic renderer.
+	wrapper, ok := data.(map[string]any)
+	if !ok {
+		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
+	}
+	aliases, ok := wrapper["aliases"].(map[string]string)
 	if !ok {
 		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
 	}

@@ -272,8 +272,8 @@ func runIssueLinkCreateMany(cmd *cobra.Command, keys []string, parallelism int, 
 
 func issueLinkCreateData(key string, in issueLinkCreateInput, dryRun bool) map[string]any {
 	data := map[string]any{
-		"inward_issue":  key,
-		"outward_issue": in.To,
+		"inward_issue":  cmdutil.IssueRef{Key: key},
+		"outward_issue": cmdutil.IssueRef{Key: in.To},
 		"type":          in.Type,
 		"dry_run":       dryRun,
 	}
@@ -351,7 +351,7 @@ $ jira issue link list PROJ-123 PROJ-124 --output=json`,
 
 func issueLinkListData(key string, links []jira.IssueLinkView) map[string]any {
 	return map[string]any{
-		"key":   key,
+		"issue": cmdutil.IssueRef{Key: key},
 		"links": links,
 		"count": len(links),
 	}
@@ -385,7 +385,7 @@ $ jira issue link delete PROJ-123 10001 --force`,
 			key, linkID := args[0], args[1]
 			if dryRun {
 				return cmdutil.WriteEnvelope(cmd, "issue.link.delete", map[string]any{
-					"key":     key,
+					"issue":   cmdutil.IssueRef{Key: key},
 					"link_id": linkID,
 					"dry_run": true,
 				})
@@ -420,7 +420,7 @@ $ jira issue link delete PROJ-123 10001 --force`,
 			// regardless of the source KEY — links are global; the
 			// CLI is explicit about which id was removed.
 			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.link.delete", map[string]any{
-				"key":     key,
+				"issue":   cmdutil.IssueRef{Key: key},
 				"link_id": linkID,
 				"deleted": true,
 				"dry_run": false,
