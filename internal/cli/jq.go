@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 
+	xerrors "github.com/gechr/x/errors"
 	"github.com/itchyny/gojq"
 
 	"github.com/matcra587/jira-cli/internal/errtax"
@@ -117,7 +118,7 @@ func writeJQ(w io.Writer, doc any) error {
 			// Cancellation is the command's deadline or the user's signal,
 			// not a filter failure — surface the bare context error so it
 			// maps to the canceled/timeout exit codes.
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			if xerrors.IsAny(err, context.Canceled, context.DeadlineExceeded) {
 				return err
 			}
 			return &JQEvalError{Err: err}

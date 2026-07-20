@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	xos "github.com/gechr/x/os"
+	xstrings "github.com/gechr/x/strings"
 )
 
 // The keyring index is the small persisted record of every {host, profile}
@@ -53,7 +54,7 @@ func keyringIndexPath() string {
 func sanitizeIndexSegment(s string) string {
 	return strings.Map(func(r rune) rune {
 		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_', r == '.':
+		case xstrings.IsAlphanumericChar(r), r == '-', r == '_', r == '.':
 			return r
 		default:
 			return '-'

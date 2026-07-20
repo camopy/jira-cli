@@ -2,7 +2,8 @@ package adfmode
 
 import (
 	"fmt"
-	"strings"
+
+	xstrings "github.com/gechr/x/strings"
 )
 
 // Mode is the resolved ADF processing mode for a single invocation.
@@ -117,10 +118,10 @@ func Resolve(in Inputs) (Mode, error) {
 // parseBoolish accepts the truthy/falsy set: 1/true/yes/on vs
 // 0/false/no/off. Case-insensitive. Anything else is an error.
 func parseBoolish(s string) (bool, error) {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "1", "true", "yes", "on":
+	switch {
+	case xstrings.IsTruthy(s):
 		return true, nil
-	case "0", "false", "no", "off":
+	case xstrings.IsFalsy(s):
 		return false, nil
 	default:
 		return false, fmt.Errorf("not a boolish value (expected 1/true/yes/on or 0/false/no/off)")

@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	xstrings "github.com/gechr/x/strings"
+
 	"github.com/matcra587/jira-cli/internal/cli/adfmode"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/spf13/cobra"
@@ -151,11 +153,5 @@ func clampNonNegative(d time.Duration) time.Duration {
 // envReadOnlyEnabled reports whether the JIRA_READ_ONLY env var is set to a
 // truthy value.
 func envReadOnlyEnabled() bool {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv("JIRA_READ_ONLY")))
-	switch v {
-	case "1", "true", "yes", "on":
-		return true
-	default:
-		return false
-	}
+	return xstrings.IsTruthy(os.Getenv("JIRA_READ_ONLY"))
 }

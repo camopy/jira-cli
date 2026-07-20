@@ -812,9 +812,8 @@ func redactJSONValue(key string, value any) any {
 }
 
 func sensitiveJSONKey(key string) bool {
-	lower := strings.ToLower(key)
 	for _, token := range []string{"authorization", "cookie", "password", "secret", "token", "api_key", "apikey", "private_key"} {
-		if strings.Contains(lower, token) {
+		if xstrings.ContainsFold(key, token) {
 			return true
 		}
 	}
@@ -823,7 +822,7 @@ func sensitiveJSONKey(key string) bool {
 
 func redactSensitiveText(text string) string {
 	for _, marker := range []string{"authorization", "password", "secret", "token", "api_key", "apikey", "private_key"} {
-		if strings.Contains(strings.ToLower(text), marker) {
+		if xstrings.ContainsFold(text, marker) {
 			return "REDACTED"
 		}
 	}

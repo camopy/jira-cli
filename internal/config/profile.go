@@ -62,8 +62,7 @@ func ValidateCloudID(id string) error {
 	}
 	for _, r := range id {
 		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9',
-			r == '-', r == '_', r == '.':
+		case xstrings.IsAlphanumericChar(r), r == '-', r == '_', r == '.':
 		default:
 			return fmt.Errorf("cloud_id %q contains an invalid character %q; expected a UUID-like identifier", id, string(r))
 		}
