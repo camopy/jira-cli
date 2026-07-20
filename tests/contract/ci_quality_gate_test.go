@@ -65,7 +65,7 @@ func TestCIQualityGateRunsRequiredGoChecks(t *testing.T) {
 		// Workflow linting moved local (hk's actionlint/zizmor builtins,
 		// asserted below); the remote side is the shared security workflow,
 		// pinned by SHA with SARIF uploads to code scanning.
-		"matcra587/github-actions/.github/workflows/security.yml@3e61d37c312b21e008fa58eda8844a70b6a24f9d",
+		"matcra587/github-actions/.github/workflows/security.yml@1f771927fa94bbb42fee46581c0cf6676080519e",
 		"security-events: write",
 		"sarif: true",
 		"lockfile = true",

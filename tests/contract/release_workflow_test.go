@@ -17,15 +17,15 @@ func TestReleaseWorkflowUsesPinnedGoReleaserAndHomebrewPublisher(t *testing.T) {
 	}
 	combined := string(release) + "\n" + string(goreleaser)
 	for _, want := range []string{
-		"actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd",
-		"sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003",
-		"jdx/mise-action@1648a7812b9aeae629881980618f079932869151",
+		"actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10",
+		"sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6",
+		"jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea",
 		"install_args: --locked",
 		"id: release-state",
 		"gh release view",
 		"gh release download",
-		"goreleaser/goreleaser-action@1a80836c5c9d9e5755a25cb59ec6f45a3b5f41a8",
-		"actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3",
+		"goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94",
+		"actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
 		"vars.APP_CLIENT_ID",
 		"secrets.APP_PRIVATE_KEY",
 		"matcra587/github-actions/packages/homebrew-publish-formula@6e3053f35d4ec31adc4f82c04a2c43209f3b36e6",
