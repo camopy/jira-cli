@@ -169,7 +169,7 @@ func tabNameComplete(m *Model) *form.Autocomplete {
 		Fetch: func(query string) []form.Suggestion {
 			var out []form.Suggestion
 			for _, name := range known {
-				if strings.HasPrefix(strings.ToLower(name), strings.ToLower(query)) {
+				if xstrings.HasPrefixFold(name, query) {
 					// A tab name is its own value and label.
 					out = append(out, form.Suggestion{Value: name, Label: name})
 				}

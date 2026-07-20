@@ -262,7 +262,7 @@ func completionLines(input string, c jqlContext, candidates []string) []string {
 	}
 	var out []string
 	for _, cand := range candidates {
-		if len(cand) <= len(c.prefix) || !strings.HasPrefix(strings.ToLower(cand), strings.ToLower(c.prefix)) {
+		if len(cand) <= len(c.prefix) || !xstrings.HasPrefixFold(cand, c.prefix) {
 			continue
 		}
 		if c.kind == wantValue {
