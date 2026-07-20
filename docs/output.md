@@ -26,7 +26,7 @@ jira issue list -o compact
 | `compact` | The envelope's `data` payload only, no wrapper, with null-valued keys dropped. |
 
 Under `auto`, jira emits compact JSON when it detects an agent (e.g.
-`CLAUDECODE`, `CURSOR_TERMINAL`, `AGENT=amp`), the full JSON envelope on any
+`CLAUDECODE`, `CURSOR_AGENT`, `AGENT=1`), the full JSON envelope on any
 other non-TTY stream (a pipe, CI), and human output on an interactive terminal.
 
 `compact` is the lean, token-economical view for agents: it emits only the

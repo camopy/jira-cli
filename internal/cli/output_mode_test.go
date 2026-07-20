@@ -38,7 +38,7 @@ func TestParseOutputModeRejectsRemovedAndUnknownValues(t *testing.T) {
 func TestResolveOutputModeAutoFollowsDetection(t *testing.T) {
 	tty := Detection{Mode: ModePlain, IsTTY: true}
 	nonTTY := Detection{Mode: ModeJSON}
-	agent := Detection{Mode: ModeCompact, Agent: true, AgentName: "claude-code"}
+	agent := Detection{Mode: ModeCompact, Agent: true, AgentName: "claude"}
 
 	if got := ResolveOutputMode(OutputAuto, tty); got != ModePlain {
 		t.Fatalf("auto+TTY = %q, want plain", got)

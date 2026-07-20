@@ -21,7 +21,7 @@ func TestJSONFlagForcesEnvelopeEvenForDetectedAgents(t *testing.T) {
 
 	bin := buildJiraBinary(t)
 	cmd := exec.Command(bin, "--config", jiraConfig(t, srv.URL), "--output=json", "search", "jql", "project = PROJ")
-	cmd.Env = append(cmd.Environ(), "CLAUDE_CODE=1")
+	cmd.Env = append(cmd.Environ(), "CLAUDECODE=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("agent --json command error = %v\n%s", err, out)

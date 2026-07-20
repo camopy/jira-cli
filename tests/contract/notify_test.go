@@ -40,7 +40,7 @@ func TestNotifyHintNeverLeaksIntoMachineOutput(t *testing.T) {
 	bin := buildJiraBinary(t)
 
 	for name, extraEnv := range map[string][]string{
-		"piped":     {"CLAUDECODE=", "CLAUDE_CODE=", "AI_AGENT=", "AGENT="},
+		"piped":     {"AGENT=", "AI_AGENT=", "CLAUDECODE=", "CLINE_ACTIVE=", "CODEX_SANDBOX=", "CURSOR_AGENT=", "GEMINI_CLI=", "OPENCODE=", "REPL_ID="},
 		"agent-env": {"CLAUDECODE=1"},
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -105,7 +105,7 @@ func TestAgentStructuredCommandsRenderJSONInHumanMode(t *testing.T) {
 
 func TestAgentDetectionDefaultsToCompactJSON(t *testing.T) {
 	cmd := exec.Command(buildJiraBinary(t), "--config", emptyBaseURLConfig(t), "search", "jql", "project = PROJ")
-	cmd.Env = append(cmd.Environ(), "CLAUDE_CODE=1")
+	cmd.Env = append(cmd.Environ(), "CLAUDECODE=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("agent compact command error = %v\n%s", err, out)

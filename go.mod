@@ -18,7 +18,7 @@ require (
 	github.com/gechr/clive v0.4.2
 	github.com/gechr/clog v0.13.1
 	github.com/gechr/primer v0.1.2
-	github.com/gechr/x v0.2.18
+	github.com/gechr/x v0.4.0
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/google/uuid v1.6.0
 	github.com/itchyny/gojq v0.12.19

@@ -1,0 +1,3 @@
+kind: changed
+body: Agent detection for --output=auto now follows the cross-tool AGENT/AI_AGENT convention (a falsy value opts out) and recognises Replit; the Aider, Windsurf, Amazon Q, Codeium, and Copilot markers no longer trigger compact output
+time: 2026-07-19T20:56:24.662055835-04:00

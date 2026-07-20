@@ -312,7 +312,7 @@ func TestI1HTMLServerResponseEnvelope(t *testing.T) {
 }
 
 // TestI1AgentDetectedModeEmitsEnvelopeOnError — I2 (review): agent env-var sessions.
-// When CLAUDE_CODE=1 is set the detector defaults to ModeCompact even without --json
+// When CLAUDECODE=1 is set the detector defaults to ModeCompact even without --json
 // or --compact flags. An early error (e.g. malformed --json-input) must still emit a
 // parseable envelope to stdout. Previously jsonEnvelopeRequested() only checked
 // PersistentFlags, missing the agent-mode path entirely.
@@ -323,10 +323,10 @@ func TestI1AgentDetectedModeEmitsEnvelopeOnError(t *testing.T) {
 	if err := os.WriteFile(badJSON, []byte("not json {["), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	// Set CLAUDE_CODE=1 — triggers agent detection → ModeCompact, no explicit flag.
+	// Set CLAUDECODE=1 — triggers agent detection → ModeCompact, no explicit flag.
 	env, runErr := requireEnvelopeOnStdoutWithEnv(
 		t, bin,
-		[]string{"CLAUDE_CODE=1"},
+		[]string{"CLAUDECODE=1"},
 		"issue", "create", "--json-input", badJSON,
 	)
 	if runErr == nil {

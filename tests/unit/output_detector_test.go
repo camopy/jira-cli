@@ -9,7 +9,7 @@ import (
 
 func TestOutputDetectorAgentAndNonTTY(t *testing.T) {
 	clearAgentEnv(t)
-	t.Setenv("CLAUDE_CODE", "1")
+	t.Setenv("CLAUDECODE", "1")
 	d := cli.Detect(os.Stdout)
 	if !d.Agent || d.Mode != cli.ModeCompact {
 		t.Fatalf("agent detection = %+v", d)
@@ -36,22 +36,15 @@ func TestOutputDetectorTTYUsesPlainCommandModeNotTUI(t *testing.T) {
 func clearAgentEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{
-		"AI_AGENT",
 		"AGENT",
-		"CODEX_SANDBOX",
-		"CODEX_CI",
-		"CODEX_THREAD_ID",
-		"CODEX",
-		"OPENAI_CODEX",
-		"GEMINI_CLI",
-		"COPILOT_CLI",
-		"COPILOT",
-		"GITHUB_COPILOT",
-		"OPENCODE",
-		"CURSOR_TERMINAL",
-		"CURSOR_AGENT",
+		"AI_AGENT",
 		"CLAUDECODE",
-		"CLAUDE_CODE",
+		"CLINE_ACTIVE",
+		"CODEX_SANDBOX",
+		"CURSOR_AGENT",
+		"GEMINI_CLI",
+		"OPENCODE",
+		"REPL_ID",
 	} {
 		t.Setenv(key, "")
 	}

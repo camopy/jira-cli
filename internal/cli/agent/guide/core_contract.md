@@ -89,7 +89,7 @@ When: anything about output mode, exit codes, pagination, read-only mode, or hea
   | Non-TTY (pipe)    | `json`  (full envelope)                                      |
   | Detected agent    | `compact`  (envelope `data` only, single line, jq-friendly)  |
 
-- Agent env detection (first match wins, fixed precedence amp → codex → gemini → copilot → opencode → cursor → claude): `AGENT=amp`, `CODEX_SANDBOX`, `CODEX_CI`, `CODEX_THREAD_ID`, `CODEX`, `OPENAI_CODEX`, `GEMINI_CLI`, `COPILOT_CLI`, `COPILOT`, `GITHUB_COPILOT`, `OPENCODE`, `CURSOR_TERMINAL`, `CURSOR_AGENT`, `CLAUDECODE`, `CLAUDE_CODE`. `AI_AGENT=<name>` is the explicit override.
+- Agent env detection: the cross-tool `AGENT` / `AI_AGENT` convention wins first — a name (`AGENT=claude`) or truthy token (`AGENT=1`) opts in, a falsy value (`AGENT=0`) is an explicit opt-out even when a marker variable is present. Otherwise the per-vendor markers, first match wins: `CLAUDECODE`, `CLINE_ACTIVE`, `CODEX_SANDBOX`, `CURSOR_AGENT`, `GEMINI_CLI`, `OPENCODE`, `REPL_ID`.
 - `--output=compact` strips `meta` and `errors` on success. **Error paths still emit the full envelope** so failures stay parseable regardless of mode flags.
 - Machine envelopes never carry `meta.profile` — a command that reports a profile puts it in command-specific `data`.
 - `--output` value table:

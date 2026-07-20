@@ -139,7 +139,7 @@ func TestAgentGuideRecipesMatchLiveCommandSurface(t *testing.T) {
 		"jira issue link delete KEY 9001 --force --output=json",
 		"Configured backend lookup",
 		"JIRA_TOKEN_<PROFILE>",
-		"`AGENT=amp`",
+		"`AGENT=0`",
 		"`CLAUDECODE`",
 	} {
 		if !strings.Contains(got, want) {
