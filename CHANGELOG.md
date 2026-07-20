@@ -1,6 +1,12 @@
 # Release Notes
 
 
+## [0.12.2](https://github.com/matcra587/jira-cli/releases/tag/v0.12.2) — 2026-07-19
+
+### Changed
+
+- Agent detection for --output=auto now follows the cross-tool AGENT/AI_AGENT convention (a falsy value opts out) and recognises Replit; the Aider, Windsurf, Amazon Q, Codeium, and Copilot markers no longer trigger compact output
+
 ## [0.12.1](https://github.com/matcra587/jira-cli/releases/tag/v0.12.1) — 2026-07-17
 
 ### Added
