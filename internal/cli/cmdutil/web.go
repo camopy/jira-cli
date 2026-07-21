@@ -15,9 +15,12 @@ import (
 //
 // extra may be nil; it is not mutated. The "url" and "opened" keys are added to
 // a fresh copy.
-func WriteWebEnvelope(cmd *cobra.Command, command, url string, extra map[string]any) error {
-	data := make(map[string]any, len(extra)+2)
-	maps.Copy(data, extra)
+func WriteWebEnvelope(cmd *cobra.Command, command, url string, extra any) error {
+	// extra is a typed Output struct (or legacy map); view it as a map so
+	// the url/opened fields fold in beside its fields.
+	base, _ := dataAsMap(extra)
+	data := make(map[string]any, len(base)+2)
+	maps.Copy(data, base)
 	data["url"] = url
 	opened, err := openInBrowser(cmd, url)
 	data["opened"] = opened

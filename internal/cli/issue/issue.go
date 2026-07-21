@@ -177,7 +177,7 @@ func openIssueWeb(cmd *cobra.Command, key, command string) error {
 	if u == "" {
 		return fmt.Errorf("validation: opening an issue in the browser requires a configured base URL")
 	}
-	return cmdutil.WriteWebEnvelope(cmd, command, u, map[string]any{"issue": cmdutil.IssueRef{Key: key}})
+	return cmdutil.WriteWebEnvelope(cmd, command, u, envelope.WebOpenIssueOutput{Issue: cmdutil.IssueRef{Key: key}})
 }
 
 // NewOpenCommand returns the top-level `jira open KEY` shortcut that opens an

@@ -64,7 +64,9 @@ type IssueCommentEditOutput struct {
 }
 
 var _ = register("issue.comment.edit", IssueCommentEditOutput{}, map[string]any{
-	"body_adf_summary": map[string]any{"type": "object"},
+	"properties": map[string]any{
+		"body_adf_summary": map[string]any{"type": "object", "description": "Dry-run only: the validated ADF document that would be submitted."},
+	},
 })
 
 // IssueCommentDeleteOutput is `issue comment delete`'s data. `deleted` rides

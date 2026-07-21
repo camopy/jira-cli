@@ -33,6 +33,11 @@ type WorklogAddOutput struct {
 	Issue   IssueRef `json:"issue"`
 	Worklog any      `json:"worklog"`
 	DryRun  bool     `json:"dry_run"`
+	// Warnings carries the command-wide ADF warnings on batch entries only:
+	// a multi-key add has no single envelope warnings[] home per resource,
+	// so each per-key result carries its own copy. Single-key adds leave it
+	// empty and use the envelope's warnings[].
+	Warnings []adf.Warning `json:"warnings,omitempty"`
 }
 
 var _ = register("worklog.add", WorklogAddOutput{}, map[string]any{

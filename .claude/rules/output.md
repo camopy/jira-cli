@@ -63,12 +63,20 @@ modes nothing else may write to stdout.
     op is hermetically producible (dry-run, local-only, or a simple
     stub). The identity invariant itself is pinned by
     `tests/contract/issue_ref_shape_test.go`.
-*   **Direction: typed Output structs.** Envelope `data` should migrate
-    from `map[string]any` literals to one exported struct per operation
-    (composed from shared parts — `IssueRef`, verification, an embedded
-    dry-run carrier) so builders cannot emit undeclared fields and
-    renderers switch on types. New ops should start typed; do not add a
-    new `map[string]any` data literal where a struct is straightforward.
+*   **Typed Output structs are the law, not a direction.** Every operation
+    has an exported Output struct in `internal/envelope`, registered beside
+    its definition; the published schema derives from the struct
+    (`envelope.SchemaOf`), prose rides the registration's doc overrides,
+    and builders emit the struct on every path. Enforced in layers: the
+    `untypedEnvelopeData` ruleguard rule bans map literals at envelope
+    write sites; `tests/guardrails/typed_outputs_test.go` requires a
+    registration for every verb-registry operation AND every op string a
+    source scan finds at a `cmdutil.Write*Envelope` call; the conformance
+    contract test validates emitted envelopes against the published
+    schemas. Genuinely shapeless payloads register `envelope.Dynamic` with
+    a reason; a builder that must keep map emission (issue.list's
+    `--detail` polymorphism) keeps its registered struct as the schema
+    template and is a reviewed, commented exception.
 
 *   Envelopes render through the clog printer path (`internal/cli/json.go`):
     `JSONFlat` for machine modes, `JSONPretty` retinted to the active theme

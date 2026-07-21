@@ -1,0 +1,3 @@
+kind: added
+body: jira agent schema publishes an output schema for every operation, derived from the same typed definitions the CLI emits — previously ~40 operations had no declared output shape
+time: 2026-07-21T01:24:18.939943111-04:00

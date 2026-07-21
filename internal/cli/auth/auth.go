@@ -1596,13 +1596,12 @@ $ jira --profile prod auth refresh --output=json`,
 			if err != nil {
 				return err
 			}
-			data := map[string]any{
-				"profile":   profile.Name,
-				"auth_type": string(profile.AuthType),
-				"refreshed": false,
-			}
-			data["reason"] = "selected auth type has no refresh flow"
-			return cmdutil.WriteEnvelope(cmd, "auth.refresh", data)
+			return cmdutil.WriteEnvelope(cmd, "auth.refresh", envelope.AuthRefreshOutput{
+				Profile:   profile.Name,
+				AuthType:  string(profile.AuthType),
+				Refreshed: false,
+				Reason:    "selected auth type has no refresh flow",
+			})
 		},
 	}
 }
@@ -1779,18 +1778,13 @@ $ jira auth migrate --profile work --backend keyring`,
 					return err
 				}
 			}
-			data := map[string]any{
-				"target_backend": string(target),
-				"dry_run":        dryRun,
-				"profiles":       ops,
-			}
-			if len(cleanupFailures) > 0 {
-				data["cleanup_failures"] = cleanupFailures
-			}
-			if len(cleanupNotes) > 0 {
-				data["cleanup_notes"] = cleanupNotes
-			}
-			return cmdutil.WriteEnvelope(cmd, "auth.migrate", data)
+			return cmdutil.WriteEnvelope(cmd, "auth.migrate", envelope.AuthMigrateOutput{
+				TargetBackend:   string(target),
+				DryRun:          dryRun,
+				Profiles:        ops,
+				CleanupFailures: cleanupFailures,
+				CleanupNotes:    cleanupNotes,
+			})
 		},
 	}
 	cmdutil.AddStringVar(cmd.Flags(), &backend, "backend", string(config.SecretBackendKeyring), "Target secret backend for the credential", clib.FlagExtra{Placeholder: "BACKEND", Terse: "secret backend", Enum: []string{"keyring", "1password"}, EnumTerse: []string{"OS keychain", "1Password CLI"}, EnumDefault: "keyring"})
@@ -1829,28 +1823,28 @@ $ jira --profile prod auth token --output=json`,
 				return refErr
 			}
 			status := config.CredentialStatus(cmd.Context(), cmdutil.CredentialStoreFor(profile.SecretBackend), ref)
-			data := map[string]any{
-				"profile":  profile.Name,
-				"source":   status.Source,
-				"backend":  string(profile.SecretBackend),
-				"valid":    status.Valid,
-				"redacted": status.Redacted,
-				"expiry":   nil,
-				"error":    status.Error,
+			data := envelope.AuthTokenOutput{
+				Profile:  profile.Name,
+				Source:   status.Source,
+				Backend:  string(profile.SecretBackend),
+				Valid:    status.Valid,
+				Redacted: status.Redacted,
+				Expiry:   nil,
+				Error:    status.Error,
 			}
 			// 1Password coordinates (account/vault/item) are meaningful
 			// only for a 1Password-backed profile. Populating them on a
 			// keyring profile prints fields irrelevant to the active
 			// backend, so scope them to the 1Password backend.
 			if profile.SecretBackend == config.SecretBackendOnePassword {
-				data["onepassword_account"] = profile.OnePasswordAccount
-				data["vault"] = profile.Vault
-				data["item"] = cmdutil.FirstNonEmpty(profile.Item, "jira-cli-"+profile.Name)
+				data.OnePasswordAccount = profile.OnePasswordAccount
+				data.Vault = profile.Vault
+				data.Item = cmdutil.FirstNonEmpty(profile.Item, "jira-cli-"+profile.Name)
 			}
 			// For the env backend the diagnostic that matters is which
 			// variable the credential is read from — name it explicitly.
 			if profile.SecretBackend == config.SecretBackendEnv {
-				data["credential_env"] = ref.EnvTokenKey()
+				data.CredentialEnv = ref.EnvTokenKey()
 			}
 			return cmdutil.WriteEnvelope(cmd, "auth.token", data)
 		},

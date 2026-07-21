@@ -318,7 +318,7 @@ func openSearchWeb(cmd *cobra.Command, jqlQuery string) error {
 	if u == "" {
 		return fmt.Errorf("validation: opening a query in the browser requires a configured base URL")
 	}
-	return cmdutil.WriteWebEnvelope(cmd, "search.jql", u, map[string]any{"source": "inline", "jql": jqlQuery})
+	return cmdutil.WriteWebEnvelope(cmd, "search.jql", u, envelope.WebOpenSearchOutput{Source: "inline", Jql: jqlQuery})
 }
 
 func searchOutputFields(opts searchOptions) ([]string, bool, error) {

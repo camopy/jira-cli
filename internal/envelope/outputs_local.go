@@ -1,6 +1,9 @@
 package envelope
 
-import "github.com/matcra587/jira-cli/internal/adf"
+import (
+	"github.com/matcra587/jira-cli/internal/adf"
+	"github.com/matcra587/jira-cli/internal/jira/customfield"
+)
 
 // Typed Output structs for the local/meta operation family: auth, cache,
 // adf, release notes, self-update, and the schema meta-command. Each struct
@@ -324,3 +327,63 @@ func registerDynamicCachePrimers() any {
 	}
 	return nil
 }
+
+// VersionOutput is `jira version`'s envelope data: the build metadata the
+// ldflags inject.
+type VersionOutput struct {
+	Version   string `json:"version"`
+	Commit    string `json:"commit"`
+	Branch    string `json:"branch"`
+	BuildTime string `json:"build_time"`
+	BuildBy   string `json:"build_by"`
+	Summary   string `json:"summary"`
+}
+
+// AuthRefreshOutput is `jira auth refresh`'s envelope data. Today no auth
+// type has a refresh flow, so refreshed is always false with the reason.
+type AuthRefreshOutput struct {
+	Profile   string `json:"profile"`
+	AuthType  string `json:"auth_type"`
+	Refreshed bool   `json:"refreshed"`
+	Reason    string `json:"reason"`
+}
+
+// AuthMigrateOutput is `jira auth migrate`'s envelope data: the per-profile
+// migration report plus any cleanup diagnostics. Profiles rows are built
+// per-backend with varying keys, so they stay dynamic.
+type AuthMigrateOutput struct {
+	TargetBackend   string           `json:"target_backend"`
+	DryRun          bool             `json:"dry_run"`
+	Profiles        []map[string]any `json:"profiles"`
+	CleanupFailures []string         `json:"cleanup_failures,omitempty"`
+	CleanupNotes    []string         `json:"cleanup_notes,omitempty"`
+}
+
+// AuthTokenOutput is `jira auth token`'s envelope data — the redaction
+// boundary: diagnostics only, never the credential. Expiry is a fixed null
+// today (no supported auth type exposes one). The 1Password coordinates
+// populate only for that backend; credential_env only for the env backend.
+type AuthTokenOutput struct {
+	Profile            string  `json:"profile"`
+	Source             string  `json:"source"`
+	Backend            string  `json:"backend"`
+	Valid              bool    `json:"valid"`
+	Redacted           string  `json:"redacted"`
+	Expiry             *string `json:"expiry"`
+	Error              string  `json:"error"`
+	OnePasswordAccount string  `json:"onepassword_account,omitempty"`
+	Vault              string  `json:"vault,omitempty"`
+	Item               string  `json:"item,omitempty"`
+	CredentialEnv      string  `json:"credential_env,omitempty"`
+}
+
+var (
+	_ = register("version", VersionOutput{}, nil)
+	_ = register("auth.refresh", AuthRefreshOutput{}, nil)
+	_ = register("auth.migrate", AuthMigrateOutput{}, nil)
+	_ = register("auth.token", AuthTokenOutput{}, nil)
+	// The agent registry dumps emit their packages' typed rows directly;
+	// the array item shape derives from the Entry structs.
+	_ = register("agent.adf-matrix", []adf.Entry{}, nil)
+	_ = register("agent.fieldtypes", []customfield.Entry{}, nil)
+)

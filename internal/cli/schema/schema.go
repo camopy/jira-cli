@@ -53,7 +53,7 @@ type flagSchema struct {
 // flag/field; minor for additive surface (new command, flag, field, or guide
 // section); patch for wording-only changes. Independent of the binary
 // version — a release with no contract change keeps the same value.
-const ContractVersion = "2.0.0"
+const ContractVersion = "2.1.0"
 
 // WriteSchema emits the CLI command schema. The envelope vs compact vs
 // human output shape is decided by the resolved --output mode.
@@ -691,7 +691,9 @@ func outputSchemas() map[string]any {
 				"truncated_reason": map[string]any{"type": "string"},
 			}, cacheStateProperties),
 		},
-		"issue.rank": envelope.SchemaOf(envelope.IssueRankOutput{}, map[string]any{
+		// issue.rank derives via withDerivedSchemas like every registered op;
+		// only its prose lives here for the harvest.
+		"issue.rank": map[string]any{
 			"properties": map[string]any{
 				"anchor":   map[string]any{"description": "The issue the ranked set was placed relative to."},
 				"position": map[string]any{"enum": []string{"before", "after"}},
@@ -699,7 +701,7 @@ func outputSchemas() map[string]any {
 				"chunks":   map[string]any{"description": "How many 50-issue requests the set was split into."},
 				"ranked":   map[string]any{"description": "false only on the no-profile degraded path."},
 			},
-		}),
+		},
 		"cache.issuekeys": map[string]any{
 			"type":     "object",
 			"required": []string{"profile", "issue_keys", "count"},

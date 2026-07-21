@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/version"
 )
 
@@ -43,13 +44,13 @@ $ jira version --output=json`,
 				_, err := fmt.Fprintln(cmd.OutOrStdout(), cliveversion.RemovePrefix(version.Version()))
 				return err
 			}
-			return cmdutil.WriteEnvelope(cmd, "version", map[string]any{
-				"version":    version.Version(),
-				"commit":     version.Commit(),
-				"branch":     version.Branch,
-				"build_time": version.BuildTime(),
-				"build_by":   version.BuildBy,
-				"summary":    version.String(),
+			return cmdutil.WriteEnvelope(cmd, "version", envelope.VersionOutput{
+				Version:   version.Version(),
+				Commit:    version.Commit(),
+				Branch:    version.Branch,
+				BuildTime: version.BuildTime(),
+				BuildBy:   version.BuildBy,
+				Summary:   version.String(),
 			})
 		},
 	}

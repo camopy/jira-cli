@@ -18,10 +18,34 @@ import (
 // form carries an ordered results set instead (a keyed exception the schema
 // documents as prose), so only the single-key shape is a fixed struct.
 type IssueViewOutput struct {
-	Issue *jira.Issue `json:"issue"`
+	// Issue is the single-key payload; the multi-key and --web variants
+	// carry the doc-declared fields below instead, so it is optional in
+	// the published union (always present on a single-key read).
+	Issue *jira.Issue `json:"issue,omitempty"`
 }
 
-var _ = register("issue.view", IssueViewOutput{}, nil)
+var _ = register("issue.view", IssueViewOutput{}, map[string]any{
+	"properties": map[string]any{
+		"results": map[string]any{
+			"type":        "array",
+			"description": "Multi-key form only: ordered per-key rows; single-key reads carry issue at the top level instead.",
+			"items": map[string]any{
+				"type":     "object",
+				"required": []string{"key", "ok"},
+				"properties": map[string]any{
+					"key":   map[string]any{"type": "string"},
+					"ok":    map[string]any{"type": "boolean"},
+					"issue": map[string]any{"type": "object", "description": "Present when ok is true; the full issue."},
+					"error": map[string]any{"type": "object", "description": "Present when ok is false; the standard error entry."},
+				},
+			},
+		},
+		"succeeded": map[string]any{"type": "integer", "description": "Multi-key form only: count of keys that resolved."},
+		"failed":    map[string]any{"type": "integer", "description": "Multi-key form only: count of keys that errored."},
+		"url":       map[string]any{"type": "string", "description": "--web form only: the browse URL that was opened."},
+		"opened":    map[string]any{"type": "boolean", "description": "--web form only: whether the browser launch succeeded."},
+	},
+})
 
 // IssueListOutput is the union `issue list` emits across its variants: the
 // paged/keyed listing (issue.list), the estimate (issue.list.count), and the

@@ -209,12 +209,7 @@ $ jira agent adf-matrix
 $ jira agent adf-matrix --output=json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			rows := adf.Registry().All()
-			data := make([]any, 0, len(rows))
-			for _, r := range rows {
-				data = append(data, r)
-			}
-			return cmdutil.WriteEnvelope(cmd, "agent.adf-matrix", data)
+			return cmdutil.WriteEnvelope(cmd, "agent.adf-matrix", adf.Registry().All())
 		},
 	}
 }
@@ -239,12 +234,7 @@ $ jira agent fieldtypes
 $ jira agent fieldtypes --output=json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			rows := customfield.Registry().All()
-			data := make([]any, 0, len(rows))
-			for _, r := range rows {
-				data = append(data, r)
-			}
-			return cmdutil.WriteEnvelope(cmd, "agent.fieldtypes", data)
+			return cmdutil.WriteEnvelope(cmd, "agent.fieldtypes", customfield.Registry().All())
 		},
 	}
 	return cmd

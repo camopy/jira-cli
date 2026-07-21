@@ -58,3 +58,33 @@ func rawPflagDeclaration(m dsl.Matcher) {
 		Where(m["method"].Text.Matches(`^(String|Bool|Int|Int8|Int16|Int32|Int64|Uint|Uint8|Uint16|Uint32|Uint64|Float32|Float64|Duration|Count|IP|IPNet|IPMask|BytesHex|BytesBase64|StringSlice|StringArray|IntSlice|Int32Slice|Int64Slice|UintSlice|BoolSlice|Float32Slice|Float64Slice|DurationSlice|IPSlice|StringToString|StringToInt|StringToInt64)(Var)?P$|^(String|Bool|Int|Int8|Int16|Int32|Int64|Uint|Uint8|Uint16|Uint32|Uint64|Float32|Float64|Duration|Count|IP|IPNet|IPMask|BytesHex|BytesBase64|StringSlice|StringArray|IntSlice|Int32Slice|Int64Slice|UintSlice|BoolSlice|Float32Slice|Float64Slice|DurationSlice|IPSlice|StringToString|StringToInt|StringToInt64)Var$|^VarP?$`)).
 		Report(`flag declared without clib metadata — use a cmdutil register-and-extend helper (cmdutil.AddStringVar/AddBoolVar/AddIntVar/AddStringSliceVar/AddStringArrayVar/AddString/AddStringP/AddBool/AddBoolP/AddInt/AddDuration) or a bundler so help and the docs reference get groups, placeholders and allowed values`)
 }
+
+// untypedEnvelopeData flags a map[string]any literal passed as the data
+// argument of a cmdutil envelope writer. Envelope data is built from the
+// typed Output structs in internal/envelope (registered per operation, the
+// published schema derives from them) so builders cannot emit undeclared
+// fields — the drift class the contract-v2 audit found. A map literal
+// bypasses the whole mechanism.
+//
+// Scope: literals at the call site only. A map built in a named helper and
+// passed as a variable escapes this rule — that is the documented template
+// pattern (issue.list's --detail polymorphism, auth.status's probe blocks,
+// the generated cache primers), reviewed case by case. The registration
+// guardrail (tests/guardrails/typed_outputs_test.go) and the conformance
+// contract test close the rest of the gap: every op must register a type,
+// and emitted envelopes must match the published schema. cmdutil itself
+// and tests are exempt via .golangci.yml.
+func untypedEnvelopeData(m dsl.Matcher) {
+	m.Match(
+		`cmdutil.WriteEnvelope($_, $_, map[string]any{$*_})`,
+		`cmdutil.WriteEnvelopeWithWarnings($_, $_, map[string]any{$*_}, $*_)`,
+		`cmdutil.WriteEnvelopeWithResponse($_, $_, map[string]any{$*_}, $*_)`,
+		`cmdutil.WriteEnvelopeWithResponseAndWarnings($_, $_, map[string]any{$*_}, $*_)`,
+		`cmdutil.WriteEnvelopeWithResponseAndErrors($_, $_, map[string]any{$*_}, $*_)`,
+		`cmdutil.WriteEnvelopeWithRawWarnings($_, $_, map[string]any{$*_}, $*_)`,
+		`cmdutil.WriteEnvelopeWithPaginationAndRawWarnings($_, $_, map[string]any{$*_}, $*_)`,
+		`cmdutil.WriteEnvelopeWithErrors($_, $_, map[string]any{$*_}, $*_)`,
+		`cmdutil.WriteWebEnvelope($_, $_, $_, map[string]any{$*_})`,
+	).
+		Report(`envelope data built as a map literal — emit the operation's typed Output struct from internal/envelope (register it if new) so the published schema derives from the same declaration; a reviewed exception takes //nolint:gocritic with its reason`)
+}

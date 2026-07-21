@@ -108,9 +108,14 @@ func collectStructFields(t reflect.Type, properties map[string]any, required *[]
 		}
 		omitempty := hasOpt(opts, "omitempty")
 		fieldSchema := schemaOfType(f.Type, visited)
-		if f.Type.Kind() == reflect.Pointer && !omitempty {
-			// Marshals as null when nil.
-			fieldSchema = nullable(fieldSchema)
+		switch f.Type.Kind() {
+		case reflect.Pointer, reflect.Slice, reflect.Map:
+			// Nil pointers, slices, and maps all marshal as null when the
+			// field lacks omitempty.
+			if !omitempty {
+				fieldSchema = nullable(fieldSchema)
+			}
+		default:
 		}
 		properties[name] = fieldSchema
 		if !omitempty {
@@ -145,17 +150,29 @@ func nullable(schema map[string]any) map[string]any {
 // value — the escape hatch for formats, enums, and hand-tuned types.
 //
 // Structural keys are guarded: an override's "properties" or "items" merges
-// only where the derived schema already carries that key. Prose annotates
-// fields the struct declares; it must never invent structure on a node the
-// derivation deliberately left opaque (a map field, a cycle cut) — a
-// partial invented properties map would turn "anything allowed" into
-// "only these keys", failing conformance for fields the code really emits.
+// where the derived schema already carries that key, or where the derived
+// node is a bare any ({}, no type) — the deliberate union escape hatch an
+// `any` field produces, whose shape the registration override supplies.
+// What stays forbidden is inventing structure on a node the derivation
+// typed as an opaque object (a map field, a cycle cut): a partial invented
+// properties map would turn "anything allowed" into "only these keys",
+// failing conformance for fields the code really emits. Opacity is judged
+// on the node as derived — before this loop applies any override keys — so
+// map iteration order cannot change the outcome.
 func mergeSchema(base, override map[string]any) map[string]any {
+	_, baseTyped := base["type"]
 	for key, ov := range override {
 		bm, baseIsMap := base[key].(map[string]any)
 		om, overrideIsMap := ov.(map[string]any)
 		if key == "properties" || key == "items" {
-			if !baseIsMap || !overrideIsMap {
+			if !overrideIsMap {
+				continue
+			}
+			if !baseIsMap {
+				if baseTyped {
+					continue // opaque by derivation: prose only
+				}
+				base[key] = ov // bare-any node: the override supplies the shape
 				continue
 			}
 		}

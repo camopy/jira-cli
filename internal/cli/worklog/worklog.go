@@ -202,24 +202,14 @@ type worklogAddInputs struct {
 	DryRun           bool
 }
 
-// worklogAddResult folds the command-wide ADF warnings into a per-key
-// worklog.add result. The single-key envelope carries these warnings at the
-// envelope's warnings[]; on the batch path each resource result carries its
-// own copy, since there is no single persisted resource to hang them on.
-type worklogAddResult struct {
-	envelope.WorklogAddOutput
-	Warnings []adf.Warning `json:"warnings,omitempty"`
-}
-
-// worklogAddKeyedData returns the per-key data mapper for the batch envelope:
-// the bare output when there are no warnings, or the output plus warnings when
-// there are.
+// worklogAddKeyedData returns the per-key data mapper for the batch
+// envelope: the registered output, carrying the command-wide ADF warnings
+// per resource (there is no single envelope warnings[] home on the batch
+// path). The field is schema-visible on WorklogAddOutput.
 func worklogAddKeyedData(warnings []adf.Warning) func(string, envelope.WorklogAddOutput) any {
 	return func(_ string, out envelope.WorklogAddOutput) any {
-		if len(warnings) == 0 {
-			return out
-		}
-		return worklogAddResult{WorklogAddOutput: out, Warnings: warnings}
+		out.Warnings = warnings
+		return out
 	}
 }
 

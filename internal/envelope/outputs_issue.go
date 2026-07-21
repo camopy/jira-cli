@@ -20,3 +20,17 @@ type IssueRankOutput struct {
 }
 
 var _ = register("issue.rank", IssueRankOutput{}, nil)
+
+// WebOpenIssueOutput is the data payload of a --web browser open scoped to
+// one issue (issue view --web, jira open): the identity of what was opened;
+// the URL rides in the web envelope itself.
+type WebOpenIssueOutput struct {
+	Issue IssueRef `json:"issue"`
+}
+
+// WebOpenSearchOutput is the data payload of a --web browser open for a JQL
+// search: the query that was opened.
+type WebOpenSearchOutput struct {
+	Source string `json:"source"`
+	Jql    string `json:"jql"`
+}

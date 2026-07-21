@@ -47,7 +47,11 @@ func TestSearchJQLCompactCarriesPagination(t *testing.T) {
 	if !ok {
 		t.Fatalf("compact search jql did not fold pagination into the data payload:\n%s", out)
 	}
-	if isLast, _ := pagination["isLast"].(bool); isLast {
+	isLast, ok := pagination["isLast"].(bool)
+	if !ok {
+		t.Fatalf("pagination.isLast is missing or not boolean:\n%s", out)
+	}
+	if isLast {
 		t.Fatalf("pagination.isLast = true, want false for a response with a nextPageToken:\n%s", out)
 	}
 	if got, _ := pagination["nextCursor"].(string); got != "CURSOR2" {

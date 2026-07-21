@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -42,6 +43,7 @@ func TestEmittedEnvelopesConformToDeclaredSchemas(t *testing.T) {
 		{"worklog.add", []string{"worklog", "add", "PROJ-1", "--dry-run", "--time-spent", "1h"}, false},
 		{"cache.clear", []string{"cache", "clear", "--dry-run"}, false},
 		{"issue.view", []string{"issue", "view", "PROJ-1"}, true},
+		{"issue.view", []string{"issue", "view", "PROJ-1", "PROJ-2"}, true},
 		{"issue.list", []string{"issue", "list", "--jql", "project = PROJ"}, true},
 		{"issue.comment.list", []string{"issue", "comment", "list", "PROJ-1"}, true},
 		{"issue.attachment.list", []string{"issue", "attachment", "list", "PROJ-1"}, true},
@@ -98,6 +100,9 @@ func stubReadServer(t *testing.T) *httptest.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /rest/api/3/issue/PROJ-1", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(issueJSON))
+	})
+	mux.HandleFunc("GET /rest/api/3/issue/PROJ-2", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(strings.ReplaceAll(issueJSON, "PROJ-1", "PROJ-2")))
 	})
 	mux.HandleFunc("GET /rest/api/3/issue/PROJ-1/comment", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"comments":[{"id":"10042","body":{"type":"doc","version":1,"content":[]},` +

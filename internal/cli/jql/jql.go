@@ -126,9 +126,15 @@ $ jira jql reference --output=json`,
 			fields := xslices.Map(ref.Fields, func(f jira.JQLField) envelope.JQLReferenceField {
 				return envelope.JQLReferenceField{Value: f.Value, DisplayName: f.DisplayName, CustomFieldID: f.CustomFieldID}
 			})
+			if fields == nil {
+				fields = []envelope.JQLReferenceField{}
+			}
 			functions := xslices.Map(ref.Functions, func(fn jira.JQLFunction) envelope.JQLReferenceFunction {
 				return envelope.JQLReferenceFunction{Value: fn.Value, DisplayName: fn.DisplayName}
 			})
+			if functions == nil {
+				functions = []envelope.JQLReferenceFunction{}
+			}
 			reserved := ref.ReservedWords
 			if reserved == nil {
 				reserved = []string{}
