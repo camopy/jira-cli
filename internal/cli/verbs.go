@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"sort"
 	"strings"
 	"unicode"
 )
@@ -94,6 +95,18 @@ func (v OperationVerb) GerundPlural() string { return phrase(v.Gerund, v.NounPlu
 // PastPlural returns the success batch phrase, "viewed issues" — the plural
 // counterpart of Pastf for multi-key summaries.
 func (v OperationVerb) PastPlural() string { return phrase(v.Past, v.NounPlural()) }
+
+// OperationNames returns every registered operation name, sorted — the
+// inventory the typed-output exhaustiveness guardrail walks so an operation
+// cannot exist without a typed envelope output.
+func OperationNames() []string {
+	names := make([]string, 0, len(operationVerbs))
+	for name := range operationVerbs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
 
 // operationVerbs is the single source of truth for operation verbs, keyed by
 // the command/envelope name. The spinner, the debug lifecycle, and the plain

@@ -12,6 +12,7 @@ import (
 
 	"github.com/gechr/clog"
 	clogtheme "github.com/gechr/clog/theme"
+	"github.com/matcra587/jira-cli/internal/envelope"
 )
 
 // Envelope is the machine-readable JSON output contract. ok is always
@@ -53,13 +54,7 @@ type Meta struct {
 // signals; total appears only when the endpoint reports a real total —
 // token-paged endpoints (enhanced search) never do, so a fabricated 0 is
 // never emitted.
-type Pagination struct {
-	StartAt    int    `json:"startAt"` //nolint:revive // pagination-exempt
-	MaxResults int    `json:"maxResults"`
-	Total      *int   `json:"total,omitempty"`
-	IsLast     bool   `json:"isLast"`
-	NextCursor string `json:"nextCursor,omitempty"`
-}
+type Pagination = envelope.Pagination
 
 // KnownTotal wraps an authoritative total for Pagination.Total. Only call
 // it with a value the endpoint actually reported.

@@ -525,6 +525,18 @@ func plainFields(data any) []plainField {
 		if m, ok := stringKeyedMap(data); ok {
 			return plainFields(m)
 		}
+		// A typed Output struct (internal/envelope) renders one field per
+		// marshaled key, via a JSON round-trip so tags, omitempty, and
+		// embedding behave exactly as the wire envelope does.
+		rv := reflect.ValueOf(data)
+		for rv.IsValid() && rv.Kind() == reflect.Pointer && !rv.IsNil() {
+			rv = rv.Elem()
+		}
+		if rv.IsValid() && rv.Kind() == reflect.Struct {
+			if m := mapFromAny(data); m != nil {
+				return plainFields(m)
+			}
+		}
 		writePlainField(&fields, "value", v)
 	}
 	return fields

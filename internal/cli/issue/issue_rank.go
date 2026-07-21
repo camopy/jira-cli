@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
@@ -52,24 +53,24 @@ $ jira issue rank PROJ-7 PROJ-9 --before PROJ-3 --dry-run --output=json`,
 				return err
 			}
 			cmdutil.RecordIssueKeys(cmd, append(append([]string{}, keys...), anchor)...)
-			data := map[string]any{
-				"anchor":   anchor,
-				"position": position,
-				"order":    keys,
-				"chunks":   (len(keys) + jira.RankChunkLimit - 1) / jira.RankChunkLimit,
+			out := envelope.IssueRankOutput{
+				Anchor:   anchor,
+				Position: position,
+				Order:    keys,
+				Chunks:   (len(keys) + jira.RankChunkLimit - 1) / jira.RankChunkLimit,
 			}
 			if dryRun {
-				data["dry_run"] = true
-				return cmdutil.WriteEnvelope(cmd, "issue.rank", data)
+				out.DryRun = true
+				return cmdutil.WriteEnvelope(cmd, "issue.rank", out)
 			}
 			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
 			if !ok {
-				data["ranked"] = false
-				data["dry_run"] = false
-				return cmdutil.WriteEnvelope(cmd, "issue.rank", data)
+				notRanked := false
+				out.Ranked = &notRanked
+				return cmdutil.WriteEnvelope(cmd, "issue.rank", out)
 			}
 			service := cmdutil.ServicesForClient(client).Rank()
 			if err := cmdutil.Spin(cmd, "issue.rank", func(ctx context.Context) error {
@@ -77,8 +78,7 @@ $ jira issue rank PROJ-7 PROJ-9 --before PROJ-3 --dry-run --output=json`,
 			}); err != nil {
 				return err
 			}
-			data["dry_run"] = false
-			return cmdutil.WriteEnvelope(cmd, "issue.rank", data)
+			return cmdutil.WriteEnvelope(cmd, "issue.rank", out)
 		},
 	}
 	cmdutil.AddStringVar(cmd.Flags(), &before, "before", "",

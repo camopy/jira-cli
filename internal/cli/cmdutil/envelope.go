@@ -1,34 +1,23 @@
 package cmdutil
 
 import (
+	"encoding/json"
 	"io"
+	"reflect"
 	"time"
 
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/spf13/cobra"
 )
 
-// IssueRef is the envelope contract's issue identity: every issue-scoped
-// envelope carries `data.issue` as an object with at least `key`, never a
-// bare string, so `.data.issue.key` reads identically across create, edit,
-// view, transition, comment, worklog, and epic envelopes. Richer payloads
-// (create's POST response, view's full issue) satisfy the same minimum by
-// carrying key at the same place. Introduced in contract v2 — v1 let
-// mutation envelopes ship the key as a bare string, which made `.data.issue`
-// change type between commands.
-type IssueRef struct {
-	ID   string `json:"id,omitempty"`
-	Key  string `json:"key"`
-	Self string `json:"self,omitempty"`
-}
-
-// String renders the ref as its key so human/plain output shows the issue
-// key where machine output carries the identity object.
-func (r IssueRef) String() string {
-	return r.Key
-}
+// IssueRef aliases the canonical issue-identity type, which moved to the
+// leaf package internal/envelope so renderers and command packages can
+// share it without an import cycle. The alias keeps the many existing
+// cmdutil.IssueRef call sites compiling; new code may use either name.
+type IssueRef = envelope.IssueRef
 
 // WriteEnvelope emits the standard envelope shape for a command with no
 // warnings.
@@ -162,8 +151,9 @@ func writeRawWarningEnvelope(cmd *cobra.Command, command string, data any, warni
 		// Pagination folds in the same way, matching the
 		// WriteEnvelopeWithResponse compact path.
 		if pagination != nil {
-			if m, ok := data.(map[string]any); ok {
+			if m, ok := dataAsMap(data); ok {
 				m["pagination"] = pagination
+				data = m
 			}
 		}
 		return cli.WriteCompact(cmd.OutOrStdout(), FoldRawWarningsIntoData(data, warnings))
@@ -211,12 +201,39 @@ func foldWarnings[T any](data any, warnings []T) any {
 	if len(warnings) == 0 {
 		return data
 	}
-	if m, ok := data.(map[string]any); ok {
+	if m, ok := dataAsMap(data); ok {
 		out := CopyAnyMap(m)
 		out["warnings"] = warnings
 		return out
 	}
 	return map[string]any{"data": data, "warnings": warnings}
+}
+
+// dataAsMap views an envelope data payload as a string-keyed map so compact
+// folds (warnings, pagination) can merge keys in. Maps pass through; a typed
+// Output struct (internal/envelope) round-trips through JSON so tags,
+// omitempty, and embedding fold exactly as the wire shape does. Non-object
+// payloads (arrays, scalars) report false.
+func dataAsMap(data any) (map[string]any, bool) {
+	if m, ok := data.(map[string]any); ok {
+		return m, true
+	}
+	rv := reflect.ValueOf(data)
+	for rv.IsValid() && rv.Kind() == reflect.Pointer && !rv.IsNil() {
+		rv = rv.Elem()
+	}
+	if !rv.IsValid() || rv.Kind() != reflect.Struct {
+		return nil, false
+	}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return nil, false
+	}
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // FoldRawWarningsIntoData folds a raw map-shaped warning slice into a
@@ -331,7 +348,7 @@ func WriteEnvelopeWithResponseAndWarnings(cmd *cobra.Command, command string, da
 	}
 	cliWarnings = append(cliWarnings, collectedCommandWarnings(cmd)...)
 	if UseCompactOutput(cmd) {
-		if m, ok := data.(map[string]any); ok {
+		if m, ok := dataAsMap(data); ok {
 			if pagination := paginationFromResponse(resp); pagination != nil {
 				m["pagination"] = pagination
 			}

@@ -10,6 +10,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cache/registry"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -265,7 +266,7 @@ func outputSchemas() map[string]any {
 			"upstream_request_id": map[string]any{"type": "string", "description": "Jira's own trace id (Atl-Traceid / X-ARequestId) for the failed exchange — quote it to Atlassian support. meta.request_id is local and has no server-side meaning."},
 		},
 	}
-	envelope := map[string]any{
+	envelopeSchema := map[string]any{
 		"type":     "object",
 		"required": []string{"ok", "meta", "data", "errors", "warnings"},
 		"properties": map[string]any{
@@ -396,7 +397,7 @@ func outputSchemas() map[string]any {
 		},
 	}
 	out := map[string]any{
-		"envelope":      envelope,
+		"envelope":      envelopeSchema,
 		"error":         errorSchema,
 		"keyed_results": keyedResults,
 		"issue.view": map[string]any{
@@ -690,18 +691,15 @@ func outputSchemas() map[string]any {
 				"truncated_reason": map[string]any{"type": "string"},
 			}, cacheStateProperties),
 		},
-		"issue.rank": map[string]any{
-			"type":     "object",
-			"required": []string{"anchor", "position", "order", "chunks"},
+		"issue.rank": envelope.SchemaOf(envelope.IssueRankOutput{}, map[string]any{
 			"properties": map[string]any{
-				"anchor":   map[string]any{"type": "string", "description": "The issue the ranked set was placed relative to."},
-				"position": map[string]any{"type": "string", "enum": []string{"before", "after"}},
-				"order":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "The submitted issue order, preserved end-to-end across chunks."},
-				"chunks":   map[string]any{"type": "integer", "description": "How many 50-issue requests the set was split into."},
-				"dry_run":  map[string]any{"type": "boolean"},
-				"ranked":   map[string]any{"type": "boolean", "description": "false only on the no-profile degraded path."},
+				"anchor":   map[string]any{"description": "The issue the ranked set was placed relative to."},
+				"position": map[string]any{"enum": []string{"before", "after"}},
+				"order":    map[string]any{"description": "The submitted issue order, preserved end-to-end across chunks."},
+				"chunks":   map[string]any{"description": "How many 50-issue requests the set was split into."},
+				"ranked":   map[string]any{"description": "false only on the no-profile degraded path."},
 			},
-		},
+		}),
 		"cache.issuekeys": map[string]any{
 			"type":     "object",
 			"required": []string{"profile", "issue_keys", "count"},
@@ -741,7 +739,7 @@ func outputSchemas() map[string]any {
 			}, cacheStateProperties),
 		}
 	}
-	return out
+	return withDerivedSchemas(out)
 }
 
 // mergeProperties combines a schema's own properties with a shared
@@ -848,4 +846,79 @@ func inputSchemas() map[string]any {
 			},
 		},
 	}
+}
+
+// withDerivedSchemas swaps every hand-written entry whose operation has a
+// typed Output registered (internal/envelope) for a schema derived from the
+// struct itself, carrying the literal's prose (descriptions, enums, formats)
+// forward as overrides. Family conversions therefore never edit this file:
+// registering the struct is the whole schema change, and the shape can no
+// longer disagree with what the builder emits.
+func withDerivedSchemas(schemas map[string]any) map[string]any {
+	for op, v := range envelope.Outputs() {
+		if _, dynamic := v.(envelope.Dynamic); dynamic {
+			continue // shape is hand-written by documented exception
+		}
+		overrides, _ := proseOverrides(schemas[op]).(map[string]any)
+		if overrides == nil {
+			overrides = map[string]any{}
+		}
+		if doc := envelope.Doc(op); doc != nil {
+			overrides = mergeAnyMaps(overrides, doc)
+		}
+		schemas[op] = envelope.SchemaOf(v, overrides)
+	}
+	return schemas
+}
+
+// mergeAnyMaps deep-merges b onto a and returns a; map values merge
+// recursively, anything else in b replaces a's value.
+func mergeAnyMaps(a, b map[string]any) map[string]any {
+	for k, bv := range b {
+		if am, aIsMap := a[k].(map[string]any); aIsMap {
+			if bm, bIsMap := bv.(map[string]any); bIsMap {
+				a[k] = mergeAnyMaps(am, bm)
+				continue
+			}
+		}
+		a[k] = bv
+	}
+	return a
+}
+
+// proseOverrides strips a hand-written schema down to the keys the type
+// system cannot express — description, enum, format — preserving the
+// properties/items nesting so the prose lands on the right derived field.
+// Shape keys (type, required) are dropped: the struct owns them now.
+func proseOverrides(v any) any {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return nil
+	}
+	out := map[string]any{}
+	for _, key := range []string{"description", "enum", "format"} {
+		if val, present := m[key]; present {
+			out[key] = val
+		}
+	}
+	if props, isMap := m["properties"].(map[string]any); isMap {
+		sub := map[string]any{}
+		for name, ps := range props {
+			if p := proseOverrides(ps); p != nil {
+				sub[name] = p
+			}
+		}
+		if len(sub) > 0 {
+			out["properties"] = sub
+		}
+	}
+	if items, present := m["items"]; present {
+		if nested := proseOverrides(items); nested != nil {
+			out["items"] = nested
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
