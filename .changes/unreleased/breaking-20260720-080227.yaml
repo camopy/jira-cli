@@ -1,3 +1,0 @@
-kind: breaking
-body: Attachment, link, and watcher envelopes now carry the issue identity as data.issue objects (link create reports inward_issue/outward_issue as objects); alias list wraps the map under data.aliases with a count; live delete, download, and watcher envelopes gained the issue identity and dry_run their dry-run counterparts already carried; worklog add --dry-run renames time_spent_seconds to the native timeSpentSeconds
-time: 2026-07-20T08:02:27.696623482-04:00

@@ -1,3 +1,0 @@
-kind: breaking
-body: data.issue is now always an identity object carrying at least key — across issue edit, transition, comment, worklog, epic, weblink, and delete envelopes — where mutation envelopes previously returned the bare key string; read .data.issue.key everywhere; the identity and dry_run invariants are documented in the core contract guide and enforced by contract tests
-time: 2026-07-20T07:35:33.796663398-04:00

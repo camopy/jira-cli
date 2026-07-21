@@ -1,6 +1,18 @@
 # Release Notes
 
 
+## [0.13.0](https://github.com/matcra587/jira-cli/releases/tag/v0.13.0) — 2026-07-20
+
+### Breaking Changes
+
+- data.issue is now always an identity object carrying at least key — across issue edit, transition, comment, worklog, epic, weblink, and delete envelopes — where mutation envelopes previously returned the bare key string; read .data.issue.key everywhere; the identity and dry_run invariants are documented in the core contract guide and enforced by contract tests
+- Attachment, link, and watcher envelopes now carry the issue identity as data.issue objects (link create reports inward_issue/outward_issue as objects); alias list wraps the map under data.aliases with a count; live delete, download, and watcher envelopes gained the issue identity and dry_run their dry-run counterparts already carried; worklog add --dry-run renames time_spent_seconds to the native timeSpentSeconds
+
+### Fixed
+
+- issue edit --verify reports an ADF description as unverified instead of returning an empty verification block that implied the field was checked
+- auth logout reports the credential backend on live removals, update envelopes carry a managed discriminator on both shapes, and issue rank without a profile reports dry_run
+
 ## [0.12.2](https://github.com/matcra587/jira-cli/releases/tag/v0.12.2) — 2026-07-19
 
 ### Changed

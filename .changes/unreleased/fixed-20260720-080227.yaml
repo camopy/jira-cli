@@ -1,3 +1,0 @@
-kind: fixed
-body: auth logout reports the credential backend on live removals, update envelopes carry a managed discriminator on both shapes, and issue rank without a profile reports dry_run
-time: 2026-07-20T08:02:27.701298962-04:00
