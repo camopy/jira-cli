@@ -11,6 +11,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/pipeline"
@@ -168,18 +169,18 @@ $ jira worklog add PROJ-123 --json-input worklog.json --dry-run --output=json`,
 					if err != nil {
 						return err
 					}
-					return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "worklog.add", map[string]any{"issue": cmdutil.IssueRef{Key: key}, "worklog": worklog, "dry_run": false}, resp, pipeOut.Warnings)
+					return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "worklog.add", envelope.WorklogAddOutput{Issue: cmdutil.IssueRef{Key: key}, Worklog: worklog, DryRun: false}, resp, pipeOut.Warnings)
 				}
 				return fmt.Errorf("jira base URL is required for worklog.add")
 			}
-			return cmdutil.WriteEnvelopeWithWarnings(cmd, "worklog.add", map[string]any{
-				"issue": cmdutil.IssueRef{Key: key},
-				"worklog": map[string]any{
-					"timeSpentSeconds": seconds,
-					"started":          started,
-					"comment":          comment,
+			return cmdutil.WriteEnvelopeWithWarnings(cmd, "worklog.add", envelope.WorklogAddOutput{
+				Issue: cmdutil.IssueRef{Key: key},
+				Worklog: &envelope.WorklogDraft{
+					TimeSpentSeconds: seconds,
+					Started:          started,
+					Comment:          comment,
 				},
-				"dry_run": dryRun,
+				DryRun: dryRun,
 			}, pipeOut.Warnings)
 		},
 	}
@@ -201,23 +202,44 @@ type worklogAddInputs struct {
 	DryRun           bool
 }
 
+// worklogAddResult folds the command-wide ADF warnings into a per-key
+// worklog.add result. The single-key envelope carries these warnings at the
+// envelope's warnings[]; on the batch path each resource result carries its
+// own copy, since there is no single persisted resource to hang them on.
+type worklogAddResult struct {
+	envelope.WorklogAddOutput
+	Warnings []adf.Warning `json:"warnings,omitempty"`
+}
+
+// worklogAddKeyedData returns the per-key data mapper for the batch envelope:
+// the bare output when there are no warnings, or the output plus warnings when
+// there are.
+func worklogAddKeyedData(warnings []adf.Warning) func(string, envelope.WorklogAddOutput) any {
+	return func(_ string, out envelope.WorklogAddOutput) any {
+		if len(warnings) == 0 {
+			return out
+		}
+		return worklogAddResult{WorklogAddOutput: out, Warnings: warnings}
+	}
+}
+
 func runWorklogAddMany(cmd *cobra.Command, keys []string, parallelism int, in worklogAddInputs) error {
 	if in.DryRun {
-		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[map[string]any] {
-			return cmdutil.KeyResult[map[string]any]{
+		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[envelope.WorklogAddOutput] {
+			return cmdutil.KeyResult[envelope.WorklogAddOutput]{
 				Key: key,
-				Value: map[string]any{
-					"issue": cmdutil.IssueRef{Key: key},
-					"worklog": map[string]any{
-						"timeSpentSeconds": in.TimeSpentSeconds,
-						"started":          in.Started,
-						"comment":          in.Comment,
+				Value: envelope.WorklogAddOutput{
+					Issue: cmdutil.IssueRef{Key: key},
+					Worklog: &envelope.WorklogDraft{
+						TimeSpentSeconds: in.TimeSpentSeconds,
+						Started:          in.Started,
+						Comment:          in.Comment,
 					},
-					"dry_run": true,
+					DryRun: true,
 				},
 			}
 		})
-		return cmdutil.WriteKeyedResultsEnvelope(cmd, "worklog.add", results, cmdutil.KeyedDataWithWarnings(in.Warnings))
+		return cmdutil.WriteKeyedResultsEnvelope(cmd, "worklog.add", results, worklogAddKeyedData(in.Warnings))
 	}
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
@@ -227,21 +249,21 @@ func runWorklogAddMany(cmd *cobra.Command, keys []string, parallelism int, in wo
 		return fmt.Errorf("jira base URL is required for worklog.add")
 	}
 	service := cmdutil.ServicesForClient(client).Worklog()
-	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (envelope.WorklogAddOutput, error) {
 		worklog, _, err := service.Add(ctx, key, &jira.WorklogAddRequest{
 			TimeSpentSeconds: in.TimeSpentSeconds,
 			Started:          in.Started,
 			Comment:          in.Comment,
 		})
 		if err != nil {
-			return nil, err
+			return envelope.WorklogAddOutput{}, err
 		}
-		return map[string]any{"issue": cmdutil.IssueRef{Key: key}, "worklog": worklog, "dry_run": false}, nil
+		return envelope.WorklogAddOutput{Issue: cmdutil.IssueRef{Key: key}, Worklog: worklog, DryRun: false}, nil
 	})
 	if err != nil {
 		return err
 	}
-	return cmdutil.WriteKeyedResultsEnvelope(cmd, "worklog.add", results, cmdutil.KeyedDataWithWarnings(in.Warnings))
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, "worklog.add", results, worklogAddKeyedData(in.Warnings))
 }
 
 // NewCommand returns the `worklog` command group for managing issue worklogs.
@@ -314,13 +336,13 @@ $ jira worklog list PROJ-123 --output=json`,
 				})
 			}
 			if len(keys) == 1 {
-				return cmdutil.WriteEnvelope(cmd, "worklog.list", worklogListData(keys[0], []any{}))
+				return cmdutil.WriteEnvelope(cmd, "worklog.list", worklogListData(keys[0], []*jira.Worklog{}))
 			}
-			results := make([]cmdutil.KeyResult[any], 0, len(keys))
+			results := make([]cmdutil.KeyResult[[]*jira.Worklog], 0, len(keys))
 			for _, key := range keys {
-				results = append(results, cmdutil.KeyResult[any]{Key: key, Value: []any{}})
+				results = append(results, cmdutil.KeyResult[[]*jira.Worklog]{Key: key, Value: []*jira.Worklog{}})
 			}
-			return cmdutil.WriteKeyedResultsEnvelope(cmd, "worklog.list", results, func(key string, worklogs any) any {
+			return cmdutil.WriteKeyedResultsEnvelope(cmd, "worklog.list", results, func(key string, worklogs []*jira.Worklog) any {
 				return worklogListData(key, worklogs)
 			})
 		},
@@ -329,10 +351,10 @@ $ jira worklog list PROJ-123 --output=json`,
 	return cmd
 }
 
-func worklogListData(key string, worklogs any) map[string]any {
-	return map[string]any{
-		"issue":    cmdutil.IssueRef{Key: key},
-		"worklogs": worklogs,
+func worklogListData(key string, worklogs []*jira.Worklog) envelope.WorklogListOutput {
+	return envelope.WorklogListOutput{
+		Issue:    cmdutil.IssueRef{Key: key},
+		Worklogs: worklogs,
 	}
 }
 

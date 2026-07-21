@@ -11,6 +11,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cache"
 	"github.com/matcra587/jira-cli/internal/cli/boardscope"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/jql"
 	"github.com/spf13/cobra"
@@ -66,11 +67,11 @@ $ jira jql build --project PROJ --status Done --output=json`,
 			if profile, perr := cmdutil.ProfileForCommand(cmd); perr == nil {
 				url = browser.SearchURL(profile.BaseURL, query)
 			}
-			data := map[string]any{
-				"jql":         query,
-				"url":         url,
-				"precedence":  precedence,
-				"board_scope": boardscope.EnvelopeData(scope),
+			data := envelope.JQLBuildOutput{
+				JQL:        query,
+				URL:        url,
+				Precedence: precedence,
+				BoardScope: boardscope.EnvelopeData(scope),
 			}
 			return cmdutil.WriteEnvelope(cmd, "jql.build", data)
 		},
@@ -122,24 +123,20 @@ $ jira jql reference --output=json`,
 			}); err != nil {
 				return err
 			}
-			fields := xslices.Map(ref.Fields, func(f jira.JQLField) map[string]any {
-				entry := map[string]any{"value": f.Value, "display_name": f.DisplayName}
-				if f.CustomFieldID != "" {
-					entry["custom_field_id"] = f.CustomFieldID
-				}
-				return entry
+			fields := xslices.Map(ref.Fields, func(f jira.JQLField) envelope.JQLReferenceField {
+				return envelope.JQLReferenceField{Value: f.Value, DisplayName: f.DisplayName, CustomFieldID: f.CustomFieldID}
 			})
-			functions := xslices.Map(ref.Functions, func(fn jira.JQLFunction) map[string]any {
-				return map[string]any{"value": fn.Value, "display_name": fn.DisplayName}
+			functions := xslices.Map(ref.Functions, func(fn jira.JQLFunction) envelope.JQLReferenceFunction {
+				return envelope.JQLReferenceFunction{Value: fn.Value, DisplayName: fn.DisplayName}
 			})
 			reserved := ref.ReservedWords
 			if reserved == nil {
 				reserved = []string{}
 			}
-			data := map[string]any{
-				"fields":         fields,
-				"functions":      functions,
-				"reserved_words": reserved,
+			data := envelope.JQLReferenceOutput{
+				Fields:        fields,
+				Functions:     functions,
+				ReservedWords: reserved,
 			}
 			return cmdutil.WriteEnvelopeWithResponse(cmd, "jql.reference", data, resp)
 		},
@@ -192,17 +189,15 @@ $ jira jql validate "project = PROJ AND status = Done" --output=json`,
 			if err != nil {
 				return err
 			}
-			out := xslices.Map(results, func(r jira.ParsedQuery) map[string]any {
-				entry := map[string]any{"query": r.Query, "valid": len(r.Errors) == 0}
-				if len(r.Errors) > 0 {
-					entry["errors"] = r.Errors
+			out := xslices.Map(results, func(r jira.ParsedQuery) envelope.JQLValidateEntry {
+				return envelope.JQLValidateEntry{
+					Query:    r.Query,
+					Valid:    len(r.Errors) == 0,
+					Errors:   r.Errors,
+					Warnings: r.Warnings,
 				}
-				if len(r.Warnings) > 0 {
-					entry["warnings"] = r.Warnings
-				}
-				return entry
 			})
-			return cmdutil.WriteEnvelopeWithResponse(cmd, "jql.validate", map[string]any{"queries": out}, resp)
+			return cmdutil.WriteEnvelopeWithResponse(cmd, "jql.validate", envelope.JQLValidateOutput{Queries: out}, resp)
 		},
 	}
 	cmdutil.AddStringVar(cmd.Flags(), &mode, "mode", "strict", "Validation strictness", clib.FlagExtra{

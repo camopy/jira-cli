@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -44,12 +45,12 @@ $ jira --profile prod me --output=json`,
 			if err != nil {
 				return err
 			}
-			return cmdutil.WriteEnvelope(cmd, "me", map[string]any{
-				"profile":       profile.Name,
-				"account_id":    user.AccountID,
-				"display_name":  user.DisplayName,
-				"email_address": user.EmailAddress,
-				"time_zone":     user.TimeZone,
+			return cmdutil.WriteEnvelope(cmd, "me", envelope.MeOutput{
+				Profile:      profile.Name,
+				AccountID:    user.AccountID,
+				DisplayName:  user.DisplayName,
+				EmailAddress: user.EmailAddress,
+				TimeZone:     user.TimeZone,
 			})
 		},
 	}

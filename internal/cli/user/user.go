@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -66,21 +67,21 @@ $ jira user search "Sam" --output=json`,
 			if err != nil {
 				return err
 			}
-			matches := make([]map[string]any, 0, len(users))
+			matches := make([]envelope.UserSearchMatch, 0, len(users))
 			for _, u := range users {
 				if u == nil || !ptr.Deref(u.Active) || ptr.Deref(u.Deleted) {
 					continue
 				}
-				matches = append(matches, map[string]any{
-					"account_id":    ptr.Deref(u.AccountID),
-					"display_name":  ptr.Deref(u.DisplayName),
-					"email_address": ptr.Deref(u.EmailAddress),
+				matches = append(matches, envelope.UserSearchMatch{
+					AccountID:    ptr.Deref(u.AccountID),
+					DisplayName:  ptr.Deref(u.DisplayName),
+					EmailAddress: ptr.Deref(u.EmailAddress),
 				})
 			}
-			return cmdutil.WriteEnvelope(cmd, "user.search", map[string]any{
-				"query": args[0],
-				"users": matches,
-				"count": len(matches),
+			return cmdutil.WriteEnvelope(cmd, "user.search", envelope.UserSearchOutput{
+				Query: args[0],
+				Users: matches,
+				Count: len(matches),
 			})
 		},
 	}

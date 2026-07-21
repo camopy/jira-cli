@@ -11,6 +11,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/jql"
 	"github.com/spf13/cobra"
@@ -108,7 +109,7 @@ $ jira search jql "project = PROJ AND status != Done" --fields key,summary,statu
 						return err
 					}
 					cmdutil.RecordIssuesSeen(cmd, issues)
-					data := map[string]any{"source": "inline", "jql": args[0], "issues": searchIssueOutput(issues, fields, detail)}
+					data := envelope.SearchJQLOutput{Source: "inline", JQL: args[0], Issues: searchIssueOutput(issues, fields, detail)}
 					// The drain knows its terminal state: the result set is
 					// complete unless a bound truncated it. /search/jql has no
 					// reliable total, so report the count we actually hold —
@@ -135,12 +136,12 @@ $ jira search jql "project = PROJ AND status != Done" --fields key,summary,statu
 					return err
 				}
 				cmdutil.RecordIssuesSeen(cmd, found2)
-				return cmdutil.WriteEnvelopeWithResponse(cmd, "search.jql", map[string]any{"source": "inline", "jql": args[0], "issues": searchIssueOutput(found2, fields, detail)}, resp)
+				return cmdutil.WriteEnvelopeWithResponse(cmd, "search.jql", envelope.SearchJQLOutput{Source: "inline", JQL: args[0], Issues: searchIssueOutput(found2, fields, detail)}, resp)
 			}
-			return cmdutil.WriteEnvelope(cmd, "search.jql", map[string]any{
-				"source": "inline",
-				"jql":    args[0],
-				"issues": []any{},
+			return cmdutil.WriteEnvelope(cmd, "search.jql", envelope.SearchJQLOutput{
+				Source: "inline",
+				JQL:    args[0],
+				Issues: []any{},
 			})
 		},
 	}
@@ -215,14 +216,14 @@ $ jira search saved my-open-bugs --output=json`,
 				cmdutil.RecordIssuesSeen(cmd, found)
 				issues = searchIssueOutput(found, fields, detail)
 			}
-			data := map[string]any{
-				"source":      "saved",
-				"key":         args[0],
-				"name":        query.Name,
-				"description": query.Description,
-				"project":     query.Project,
-				"jql":         query.JQL,
-				"issues":      issues,
+			data := envelope.SearchSavedOutput{
+				Source:      "saved",
+				Key:         args[0],
+				Name:        query.Name,
+				Description: query.Description,
+				Project:     query.Project,
+				JQL:         query.JQL,
+				Issues:      issues,
 			}
 			return cmdutil.WriteEnvelopeWithResponse(cmd, "search.saved", data, resp)
 		},
@@ -298,10 +299,10 @@ func runSearchCount(cmd *cobra.Command, jqlStr string) error {
 	if err != nil {
 		return err
 	}
-	return cmdutil.WriteEnvelopeWithResponse(cmd, "search.count", map[string]any{
-		"source": "inline",
-		"jql":    jqlStr,
-		"count":  count,
+	return cmdutil.WriteEnvelopeWithResponse(cmd, "search.count", envelope.SearchCountOutput{
+		Source: "inline",
+		JQL:    jqlStr,
+		Count:  count,
 	}, resp)
 }
 

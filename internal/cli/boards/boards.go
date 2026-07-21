@@ -15,6 +15,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli"
 	cachereg "github.com/matcra587/jira-cli/internal/cli/cache/registry"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -106,16 +107,18 @@ $ jira boards list --refresh --unbounded --output=json`,
 				Total:      cli.KnownTotal(len(file.Items)),
 				IsLast:     all || len(file.Items) <= pageSize,
 			}
-			envelopeData := map[string]any{
-				"boards":           boards,
-				"from_cache":       fromCache,
-				"fetched_at":       fetchedAt.UTC().Format(time.RFC3339),
-				"truncated":        file.Truncated,
-				"truncated_reason": file.TruncatedReason,
+			out := envelope.BoardsListOutput{
+				Boards:           boards,
+				FromCache:        fromCache,
+				FetchedAt:        fetchedAt.UTC().Format(time.RFC3339),
+				Truncated:        file.Truncated,
+				TruncatedReason:  file.TruncatedReason,
+				CacheState:       cmdutil.CacheStateForCount(cacheSourceState, len(file.Items)),
+				CacheSourceState: cacheSourceState,
+				CacheEmpty:       len(file.Items) == 0,
 			}
-			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(file.Items))
 			warnings := boardsTruncationWarnings(file)
-			return cmdutil.WriteEnvelopeWithPaginationAndRawWarnings(cmd, "boards.list", envelopeData, pagination, warnings)
+			return cmdutil.WriteEnvelopeWithPaginationAndRawWarnings(cmd, "boards.list", out, pagination, warnings)
 		},
 	}
 	cmdutil.AddBoolVar(cmd.Flags(), &refresh, "refresh", false, "Force a re-prime even when the cache is fresh", clib.FlagExtra{Group: "Cache", Terse: "force re-prime"})
@@ -239,29 +242,21 @@ func boardsTruncationWarnings(file jira.BoardsCacheFile) []map[string]any {
 // documented in contracts/envelope-shapes.md > boards list. The
 // pointer-typed fields collapse to their zero values when absent so
 // agents don't need null-handling for the common board case.
-func boardsListEnvelope(items []jira.Board) []map[string]any {
-	out := make([]map[string]any, 0, len(items))
+func boardsListEnvelope(items []jira.Board) []envelope.BoardRow {
+	out := make([]envelope.BoardRow, 0, len(items))
 	for _, b := range items {
-		row := map[string]any{}
+		row := envelope.BoardRow{ProjectKeys: []string{}}
 		if b.ID != nil {
-			row["id"] = *b.ID
-		} else {
-			row["id"] = 0
+			row.ID = *b.ID
 		}
 		if b.Name != nil {
-			row["name"] = *b.Name
-		} else {
-			row["name"] = ""
+			row.Name = *b.Name
 		}
 		if b.Type != nil {
-			row["type"] = *b.Type
-		} else {
-			row["type"] = ""
+			row.Type = *b.Type
 		}
-		if b.ProjectKeys == nil {
-			row["project_keys"] = []string{}
-		} else {
-			row["project_keys"] = b.ProjectKeys
+		if b.ProjectKeys != nil {
+			row.ProjectKeys = b.ProjectKeys
 		}
 		out = append(out, row)
 	}

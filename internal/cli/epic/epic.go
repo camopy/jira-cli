@@ -6,6 +6,7 @@ import (
 
 	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/jql"
@@ -65,12 +66,11 @@ $ jira epic list --output=json`,
 				if err != nil {
 					return err
 				}
-				return cmdutil.WriteEnvelopeWithResponse(cmd, "epic.list", map[string]any{"jql": jql.EpicListJQL, "epics": epics, "detail": false}, resp)
+				return cmdutil.WriteEnvelopeWithResponse(cmd, "epic.list", envelope.EpicListOutput{JQL: jql.EpicListJQL, Epics: epics, Detail: false}, resp)
 			}
-			return cmdutil.WriteEnvelope(cmd, "epic.list", map[string]any{
-				"jql":    jql.EpicListJQL,
-				"epics":  []any{},
-				"detail": false,
+			return cmdutil.WriteEnvelope(cmd, "epic.list", envelope.EpicListOutput{
+				JQL:   jql.EpicListJQL,
+				Epics: []*jira.Issue{},
 			})
 		},
 	}
@@ -97,9 +97,9 @@ $ jira epic board --output=json`,
 				return err
 			}
 			if !ok {
-				return cmdutil.WriteEnvelope(cmd, "epic.board", map[string]any{
-					"epics":  []any{},
-					"totals": emptyEpicCounts(),
+				return cmdutil.WriteEnvelope(cmd, "epic.board", envelope.EpicBoardOutput{
+					Epics:  []envelope.EpicBoardRow{},
+					Totals: emptyEpicCounts(),
 				})
 			}
 			service := cmdutil.ServicesForClient(client).Epic()
@@ -112,7 +112,7 @@ $ jira epic board --output=json`,
 			if err != nil {
 				return err
 			}
-			rows := make([]map[string]any, 0, len(epics))
+			rows := make([]envelope.EpicBoardRow, 0, len(epics))
 			totals := emptyEpicCounts()
 			for _, epic := range epics {
 				key := ""
@@ -142,16 +142,16 @@ $ jira epic board --output=json`,
 				for status, n := range counts {
 					totals[status] += n
 				}
-				rows = append(rows, map[string]any{
-					"key":     key,
-					"summary": summary,
-					"status":  status,
-					"counts":  counts,
+				rows = append(rows, envelope.EpicBoardRow{
+					Key:     key,
+					Summary: summary,
+					Status:  status,
+					Counts:  counts,
 				})
 			}
-			return cmdutil.WriteEnvelope(cmd, "epic.board", map[string]any{
-				"epics":  rows,
-				"totals": totals,
+			return cmdutil.WriteEnvelope(cmd, "epic.board", envelope.EpicBoardOutput{
+				Epics:  rows,
+				Totals: totals,
 			})
 		},
 	}
@@ -219,10 +219,10 @@ $ jira epic add PROJ-123 PROJ-100 --dry-run`,
 
 func runEpicAddMany(cmd *cobra.Command, keys []string, epicKey string, parallelism int, dryRun bool) error {
 	if dryRun {
-		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[map[string]any] {
-			return cmdutil.KeyResult[map[string]any]{Key: key, Value: epicAddData(key, epicKey, true)}
+		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[envelope.EpicAddOutput] {
+			return cmdutil.KeyResult[envelope.EpicAddOutput]{Key: key, Value: epicAddData(key, epicKey, true)}
 		})
-		return cmdutil.WriteKeyedResultsEnvelope(cmd, "epic.add", results, func(_ string, data map[string]any) any { return data })
+		return cmdutil.WriteKeyedResultsEnvelope(cmd, "epic.add", results, func(_ string, data envelope.EpicAddOutput) any { return data })
 	}
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
@@ -232,24 +232,24 @@ func runEpicAddMany(cmd *cobra.Command, keys []string, epicKey string, paralleli
 		return fmt.Errorf("jira base URL is required for epic.add")
 	}
 	service := cmdutil.ServicesForClient(client).Epic()
-	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (envelope.EpicAddOutput, error) {
 		if _, err := service.AddIssue(ctx, epicKey, key); err != nil {
-			return nil, err
+			return envelope.EpicAddOutput{}, err
 		}
 		return epicAddData(key, epicKey, false), nil
 	})
 	if err != nil {
 		return err
 	}
-	return cmdutil.WriteKeyedResultsEnvelope(cmd, "epic.add", results, func(_ string, data map[string]any) any { return data })
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, "epic.add", results, func(_ string, data envelope.EpicAddOutput) any { return data })
 }
 
-func epicAddData(issueKey, epicKey string, dryRun bool) map[string]any {
-	return map[string]any{
-		"issue":   cmdutil.IssueRef{Key: issueKey},
-		"epic":    epicKey,
-		"dry_run": dryRun,
-		"added":   !dryRun,
+func epicAddData(issueKey, epicKey string, dryRun bool) envelope.EpicAddOutput {
+	return envelope.EpicAddOutput{
+		Issue:  cmdutil.IssueRef{Key: issueKey},
+		Epic:   epicKey,
+		DryRun: dryRun,
+		Added:  !dryRun,
 	}
 }
 
@@ -309,10 +309,10 @@ $ jira epic remove PROJ-123 --dry-run`,
 
 func runEpicRemoveMany(cmd *cobra.Command, keys []string, parallelism int, dryRun bool) error {
 	if dryRun {
-		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[map[string]any] {
-			return cmdutil.KeyResult[map[string]any]{Key: key, Value: epicRemoveData(key, true)}
+		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[envelope.EpicRemoveOutput] {
+			return cmdutil.KeyResult[envelope.EpicRemoveOutput]{Key: key, Value: epicRemoveData(key, true)}
 		})
-		return cmdutil.WriteKeyedResultsEnvelope(cmd, "epic.remove", results, func(_ string, data map[string]any) any { return data })
+		return cmdutil.WriteKeyedResultsEnvelope(cmd, "epic.remove", results, func(_ string, data envelope.EpicRemoveOutput) any { return data })
 	}
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
@@ -322,22 +322,22 @@ func runEpicRemoveMany(cmd *cobra.Command, keys []string, parallelism int, dryRu
 		return fmt.Errorf("jira base URL is required for epic.remove")
 	}
 	service := cmdutil.ServicesForClient(client).Epic()
-	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (envelope.EpicRemoveOutput, error) {
 		if _, err := service.RemoveIssue(ctx, key); err != nil {
-			return nil, err
+			return envelope.EpicRemoveOutput{}, err
 		}
 		return epicRemoveData(key, false), nil
 	})
 	if err != nil {
 		return err
 	}
-	return cmdutil.WriteKeyedResultsEnvelope(cmd, "epic.remove", results, func(_ string, data map[string]any) any { return data })
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, "epic.remove", results, func(_ string, data envelope.EpicRemoveOutput) any { return data })
 }
 
-func epicRemoveData(issueKey string, dryRun bool) map[string]any {
-	return map[string]any{
-		"issue":   cmdutil.IssueRef{Key: issueKey},
-		"dry_run": dryRun,
-		"removed": !dryRun,
+func epicRemoveData(issueKey string, dryRun bool) envelope.EpicRemoveOutput {
+	return envelope.EpicRemoveOutput{
+		Issue:   cmdutil.IssueRef{Key: issueKey},
+		DryRun:  dryRun,
+		Removed: !dryRun,
 	}
 }
