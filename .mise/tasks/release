@@ -88,7 +88,11 @@ if ((dry_run)); then
 fi
 
 git tag -a "$tag" "$target_sha" -m "$tag"
-git push origin "$tag"
+# --no-verify: hk's pre-push hook feeds the annotated tag OBJECT id into
+# git2 merge_base, which rejects non-commit ids (jdx/hk files_between_refs,
+# fixed upstream eventually). The tagged commit is already on origin/main
+# and fully linted, so skipping the hook on the tag push loses nothing.
+git push --no-verify origin "$tag"
 
 echo "release tag pushed: ${tag}"
 echo "GitHub Actions release workflow will run for ${tag}."
