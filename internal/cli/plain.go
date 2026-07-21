@@ -665,8 +665,12 @@ func writeIssueListPlain(logger *clog.Logger, data any, cfg plainConfig) error {
 // hyperlink to the Jira search URL (degrading to plain text off a TTY), and
 // --debug restores the operational diagnostics for troubleshooting.
 func writeJQLPreviewPlain(logger *clog.Logger, data any, cfg plainConfig) error {
-	m, ok := data.(map[string]any)
-	if !ok {
+	// mapFromAny accepts both the typed JQLBuildOutput struct (the default,
+	// single-command path) and a raw map (a keyed child, or a legacy caller):
+	// a map passes through untouched, a struct round-trips to the same
+	// diagnostic fields this preview reads.
+	m := mapFromAny(data)
+	if m == nil {
 		return writeGenericPlain(logger, cfg, "", data)
 	}
 	query, _ := m["jql"].(string)
@@ -698,8 +702,10 @@ func writeJQLPreviewPlain(logger *clog.Logger, data any, cfg plainConfig) error 
 // else, so it pipes cleanly into a shell. The query that was counted is a
 // diagnostic, restored under --debug like the JQL preview.
 func writeCountPlain(logger *clog.Logger, data any, cfg plainConfig) error {
-	m, ok := data.(map[string]any)
-	if !ok {
+	// mapFromAny accepts the typed SearchCountOutput struct and a raw map
+	// alike (see writeJQLPreviewPlain).
+	m := mapFromAny(data)
+	if m == nil {
 		return writeGenericPlain(logger, cfg, "", data)
 	}
 	if cfg.debug {
@@ -717,8 +723,11 @@ func writeCountPlain(logger *clog.Logger, data any, cfg plainConfig) error {
 // whether it is valid, with the parse errors (or warnings) appended. The query
 // text is included so a multi-query run is legible.
 func writeValidatePlain(logger *clog.Logger, data any, cfg plainConfig) error {
-	m, ok := data.(map[string]any)
-	if !ok {
+	// mapFromAny accepts the typed JQLValidateOutput struct and a raw map
+	// alike (see writeJQLPreviewPlain); normalizeMapList then reads the
+	// per-query entries whichever way they arrived.
+	m := mapFromAny(data)
+	if m == nil {
 		return writeGenericPlain(logger, cfg, "", data)
 	}
 	queries := normalizeMapList(m["queries"])
@@ -746,8 +755,10 @@ func writeValidatePlain(logger *clog.Logger, data any, cfg plainConfig) error {
 // person's profile on a supporting terminal. Zero matches states so
 // plainly instead of printing an empty count line.
 func writeUserSearchPlain(logger *clog.Logger, data any, cfg plainConfig) error {
-	m, ok := data.(map[string]any)
-	if !ok {
+	// mapFromAny accepts the typed UserSearchOutput struct and a raw map
+	// alike (see writeJQLPreviewPlain).
+	m := mapFromAny(data)
+	if m == nil {
 		return writeGenericPlain(logger, cfg, "", data)
 	}
 	users := normalizeMapList(m["users"])
@@ -777,8 +788,10 @@ func writeUserSearchPlain(logger *clog.Logger, data any, cfg plainConfig) error 
 // "value — displayName", so the field set (including custom fields) is legible
 // and greppable. Functions and reserved words ride along in --output=json.
 func writeReferencePlain(logger *clog.Logger, data any, cfg plainConfig) error {
-	m, ok := data.(map[string]any)
-	if !ok {
+	// mapFromAny accepts the typed JQLReferenceOutput struct and a raw map
+	// alike (see writeJQLPreviewPlain).
+	m := mapFromAny(data)
+	if m == nil {
 		return writeGenericPlain(logger, cfg, "", data)
 	}
 	fields := normalizeMapList(m["fields"])

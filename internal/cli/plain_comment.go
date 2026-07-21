@@ -9,6 +9,7 @@ import (
 	"github.com/gechr/x/human"
 	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
+	"github.com/matcra587/jira-cli/internal/envelope"
 )
 
 // WriteCommentListPlain renders the `data` payload from `comment list` as
@@ -48,11 +49,25 @@ func WriteCommentListPlain(w io.Writer, command string, data any, opts ...PlainO
 	}
 	logger := newPlainLogger(w)
 
-	m, ok := data.(map[string]any)
-	if !ok {
-		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
+	// Read the typed IssueCommentListOutput directly so comment bodies keep
+	// their native adf.Document type — a mapFromAny round-trip would marshal
+	// each body to a JSON map, which commentBodyText renders from too but only
+	// after a redundant re-parse. A keyed child arrives as a raw map (its body
+	// already a JSON map, folded by the parent's keyedResultRows walk) and a
+	// legacy caller may pass a map as well, so both fall to normalizeMapList.
+	var comments []map[string]any
+	switch d := data.(type) {
+	case envelope.IssueCommentListOutput:
+		comments = d.Comments
+	case map[string]any:
+		comments = normalizeMapList(d["comments"])
+	default:
+		if m := mapFromAny(data); m != nil {
+			comments = normalizeMapList(m["comments"])
+		} else {
+			return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
+		}
 	}
-	comments := normalizeMapList(m["comments"])
 	style := authPlainStyle{tty: cfg.tty, theme: cfg.theme}
 
 	title := "Comments"
@@ -112,8 +127,10 @@ func commentPlainLine(c map[string]any, style authPlainStyle) string {
 }
 
 // commentBodyText flattens a comment body for the one-line preview. Bodies
-// arrive as native ADF documents (machine-mode parity with issue view);
-// strings pass through for any legacy shape.
+// arrive as native ADF documents on the single-key path (machine-mode parity
+// with issue view). On a keyed child the parent's JSON walk has already
+// marshaled the body to a map[string]any, so that shape is reconstructed and
+// rendered too; strings pass through for any legacy shape.
 func commentBodyText(v any) string {
 	switch b := v.(type) {
 	case string:
@@ -123,6 +140,10 @@ func commentBodyText(v any) string {
 	case *adf.Document:
 		if b != nil {
 			return adf.ToMarkdown(*b)
+		}
+	case map[string]any:
+		if doc, ok := adfDocumentFromMap(b); ok {
+			return adf.ToMarkdown(doc)
 		}
 	}
 	return ""

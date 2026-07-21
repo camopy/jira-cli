@@ -25,8 +25,12 @@ func WriteAttachmentListPlain(w io.Writer, command string, data any, opts ...Pla
 	}
 	logger := newPlainLogger(w)
 
-	m, ok := data.(map[string]any)
-	if !ok {
+	// mapFromAny accepts both the typed IssueAttachmentListOutput struct (the
+	// single-command path) and a raw map (a keyed child, or a legacy caller).
+	// The attachment rows and the pagination block survive the JSON round-trip
+	// as the same shapes this renderer reads below.
+	m := mapFromAny(data)
+	if m == nil {
 		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
 	}
 	rows := normalizeMapList(m["attachments"])

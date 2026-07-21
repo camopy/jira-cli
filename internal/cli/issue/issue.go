@@ -530,7 +530,10 @@ func runIssueList(cmd *cobra.Command, opts issueListOptions) error {
 		}); err != nil {
 			return err
 		}
-		return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.list.count", map[string]any{"count": count, "jql": query}, resp)
+		// issue.list.count carries only the estimate and the query; the shared
+		// IssueListOutput's issues/detail/board fields stay nil and omitempty
+		// drops them, reproducing the {count, jql} shape byte-for-byte.
+		return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.list.count", envelope.IssueListOutput{Jql: query, Count: &count}, resp)
 	}
 	if !ok {
 		return cmdutil.WriteEnvelope(cmd, "issue.list", boardScopedListData(cmd, []map[string]any{}, opts.detail, query, scope, precedence))
@@ -1896,7 +1899,7 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 					return err
 				}
 				return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.transitions", results, func(key string, transitions []*jira.Transition) any {
-					return map[string]any{"issue": cmdutil.IssueRef{Key: key}, "transitions": transitions}
+					return envelope.IssueTransitionsOutput{Issue: cmdutil.IssueRef{Key: key}, Transitions: transitions}
 				})
 			}
 			key := keys[0]
@@ -1979,7 +1982,7 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 				}); err != nil {
 					return err
 				}
-				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transitions", map[string]any{"issue": cmdutil.IssueRef{Key: key}, "transitions": transitions}, resp, pipeOut.Warnings)
+				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transitions", envelope.IssueTransitionsOutput{Issue: cmdutil.IssueRef{Key: key}, Transitions: transitions}, resp, pipeOut.Warnings)
 			}
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.transition")

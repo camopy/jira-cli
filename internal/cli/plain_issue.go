@@ -252,8 +252,12 @@ func WriteIssueTransitionsPlain(w io.Writer, command string, data any, opts ...P
 	}
 	logger := newPlainLogger(w)
 
-	m, ok := data.(map[string]any)
-	if !ok {
+	// mapFromAny accepts both the typed IssueTransitionsOutput struct (the
+	// single-command path) and a raw map (a keyed child, or a legacy caller).
+	// The []*jira.Transition slice flattens through normalizeMapList's JSON
+	// path either way, so a struct needs no bespoke handling here.
+	m := mapFromAny(data)
+	if m == nil {
 		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
 	}
 	transitions := normalizeMapList(m["transitions"])

@@ -32,8 +32,13 @@ func WriteBoardListPlain(w io.Writer, command string, data any, opts ...PlainOpt
 	}
 	logger := newPlainLogger(w)
 
-	m, ok := data.(map[string]any)
-	if !ok {
+	// mapFromAny accepts both the typed BoardsListOutput struct (the
+	// single-command path) and a raw map (a keyed child, or a legacy caller):
+	// a map passes through untouched, a struct round-trips to the same
+	// {boards, from_cache, fetched_at} fields this renderer reads.
+	// normalizeMapList then flattens the board rows whichever way they came.
+	m := mapFromAny(data)
+	if m == nil {
 		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
 	}
 	rows := normalizeMapList(m["boards"])

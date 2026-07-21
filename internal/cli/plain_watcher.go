@@ -24,8 +24,12 @@ func WriteWatcherListPlain(w io.Writer, command string, data any, opts ...PlainO
 	}
 	logger := newPlainLogger(w)
 
-	m, ok := data.(map[string]any)
-	if !ok {
+	// mapFromAny accepts both the typed IssueWatchersListOutput struct (the
+	// single-command path) and a raw map (a keyed child, or a legacy caller).
+	// watch_count survives as a JSON number the extractor below already
+	// tolerates, so a struct needs no bespoke handling here.
+	m := mapFromAny(data)
+	if m == nil {
 		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
 	}
 	watchers := normalizeMapList(m["watchers"])

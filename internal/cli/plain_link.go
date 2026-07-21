@@ -20,8 +20,12 @@ func WriteLinkListPlain(w io.Writer, command string, data any, opts ...PlainOpti
 	}
 	logger := newPlainLogger(w)
 
-	m, ok := data.(map[string]any)
-	if !ok {
+	// mapFromAny accepts both the typed IssueLinkListOutput struct (the
+	// single-command path) and a raw map (a keyed child, or a legacy caller).
+	// The []jira.IssueLinkView slice flattens through normalizeMapList's JSON
+	// path either way, so a struct needs no bespoke handling here.
+	m := mapFromAny(data)
+	if m == nil {
 		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
 	}
 	links := normalizeMapList(m["links"])
@@ -110,8 +114,10 @@ func WriteLinkTypesPlain(w io.Writer, command string, data any, opts ...PlainOpt
 	}
 	logger := newPlainLogger(w)
 
-	m, ok := data.(map[string]any)
-	if !ok {
+	// mapFromAny accepts the typed IssueLinkTypesOutput struct and a raw map
+	// alike (see WriteLinkListPlain).
+	m := mapFromAny(data)
+	if m == nil {
 		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
 	}
 	types := normalizeMapList(m["link_types"])
