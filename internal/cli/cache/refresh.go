@@ -15,6 +15,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli/cache/registry"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -110,13 +111,13 @@ $ jira cache refresh --force --output=json`,
 			// failure — identical to the multi-key issue commands.
 			return cmdutil.WriteKeyedResultsEnvelope(cmd, "cache.refresh", results,
 				func(_ string, o refreshOutcome) any {
-					return map[string]any{
-						"status":      o.status,
-						"from_cache":  o.fromCache,
-						"count":       o.count,
-						"fetched_at":  o.fetchedAt.UTC().Format(time.RFC3339),
-						"duration_ms": o.durationMS,
-						"dry_run":     dryRun,
+					return envelope.CacheRefreshRow{
+						Status:     o.status,
+						FromCache:  o.fromCache,
+						Count:      o.count,
+						FetchedAt:  o.fetchedAt.UTC().Format(time.RFC3339),
+						DurationMS: o.durationMS,
+						DryRun:     dryRun,
 					}
 				})
 		},

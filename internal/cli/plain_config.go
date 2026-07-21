@@ -6,6 +6,8 @@ import (
 
 	clibtheme "github.com/gechr/clib/theme"
 	clogtheme "github.com/gechr/clog/theme"
+
+	"github.com/matcra587/jira-cli/internal/envelope"
 )
 
 // printThemeFor maps the resolved clib table theme onto the clog print
@@ -35,9 +37,19 @@ func printThemeFor(theme *clibtheme.Theme) *clogtheme.Theme {
 // A payload that does not carry the expected key/value shape falls back to
 // the generic renderer rather than printing an empty document.
 func writeConfigGetPlain(w io.Writer, data any, cfg plainConfig) error {
-	m, _ := data.(map[string]any)
-	key, _ := m["key"].(string)
-	value, hasValue := m["value"]
+	// The value keeps its native Go type (int stays int, not JSON's float64),
+	// so read the typed Output struct directly rather than round-tripping it
+	// through a map; a legacy map payload still works for the fallback callers.
+	var key string
+	var value any
+	var hasValue bool
+	switch d := data.(type) {
+	case envelope.ConfigGetOutput:
+		key, value, hasValue = d.Key, d.Value, true
+	case map[string]any:
+		key, _ = d["key"].(string)
+		value, hasValue = d["value"]
+	}
 	if key == "" || !hasValue || value == nil {
 		return writeGenericPlain(newPlainLogger(w), cfg, "result", data)
 	}
@@ -55,8 +67,11 @@ func writeConfigGetPlain(w io.Writer, data any, cfg plainConfig) error {
 // metadata-only by design, so nothing credential-shaped can transit this
 // surface. An unexpected payload falls back to the generic renderer.
 func writeConfigProfilePlain(w io.Writer, data any, cfg plainConfig) error {
-	m, ok := data.(map[string]any)
-	if !ok {
+	// The typed Output struct round-trips to the same {active_profile,
+	// profiles[]} map WriteHumanTOML expects — the fields are all strings and
+	// booleans, so nothing is lost through JSON — while a raw map still works.
+	m := mapFromAny(data)
+	if m == nil {
 		return writeGenericPlain(newPlainLogger(w), cfg, "result", data)
 	}
 	return WriteHumanTOML(w, m, printThemeFor(cfg.theme))

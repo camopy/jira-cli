@@ -10,6 +10,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/spf13/cobra"
 )
 
@@ -85,11 +86,11 @@ $ jira config theme --path ./my-theme.toml`,
 					}
 				}
 			}
-			return cmdutil.WriteEnvelope(cmd, "config.theme", map[string]any{
-				"name":    cfg.Theme.Name,
-				"path":    cfg.Theme.Path,
-				"changed": changed,
-				"dry_run": dryRun,
+			return cmdutil.WriteEnvelope(cmd, "config.theme", envelope.ConfigThemeOutput{
+				Name:    cfg.Theme.Name,
+				Path:    cfg.Theme.Path,
+				Changed: changed,
+				DryRun:  dryRun,
 			})
 		},
 	}
@@ -161,12 +162,12 @@ $ jira --config ./jira.toml config init --base-url https://acme.atlassian.net --
 					return err
 				}
 			}
-			return cmdutil.WriteEnvelope(cmd, "config.init", map[string]any{
-				"profile":     profile,
-				"base_url":    baseURL,
-				"auth_type":   string(config.AuthTypeToken),
-				"stored_auth": false,
-				"dry_run":     dryRun,
+			return cmdutil.WriteEnvelope(cmd, "config.init", envelope.ConfigInitOutput{
+				Profile:    profile,
+				BaseURL:    baseURL,
+				AuthType:   string(config.AuthTypeToken),
+				StoredAuth: false,
+				DryRun:     dryRun,
 			})
 		},
 	}
@@ -216,16 +217,16 @@ $ jira config profile --output=json`,
 			if err != nil {
 				return err
 			}
-			profiles := make([]map[string]any, 0, len(cfg.Profiles))
+			profiles := make([]envelope.ConfigProfileEntry, 0, len(cfg.Profiles))
 			for _, p := range cfg.Profiles {
-				profiles = append(profiles, map[string]any{
-					"name":   p.Name,
-					"active": p.Name == cfg.DefaultProfile,
+				profiles = append(profiles, envelope.ConfigProfileEntry{
+					Name:   p.Name,
+					Active: p.Name == cfg.DefaultProfile,
 				})
 			}
-			return cmdutil.WriteEnvelope(cmd, "config.profile", map[string]any{
-				"active_profile": cfg.DefaultProfile,
-				"profiles":       profiles,
+			return cmdutil.WriteEnvelope(cmd, "config.profile", envelope.ConfigProfileOutput{
+				ActiveProfile: cfg.DefaultProfile,
+				Profiles:      profiles,
 			})
 		},
 	}
@@ -255,7 +256,7 @@ $ jira config get profiles.default.base_url`,
 			if !ok {
 				return fmt.Errorf("unknown config key %q", args[0])
 			}
-			return cmdutil.WriteEnvelope(cmd, "config.get", map[string]any{"key": args[0], "value": val})
+			return cmdutil.WriteEnvelope(cmd, "config.get", envelope.ConfigGetOutput{Key: args[0], Value: val})
 		},
 	}
 }
@@ -295,11 +296,11 @@ $ jira config set theme.name dracula --dry-run --output=json`,
 			if err := cfg.Validate(); err != nil {
 				return err
 			}
-			data := map[string]any{
-				"key":            args[0],
-				"value":          args[1],
-				"previous_value": previous,
-				"dry_run":        dryRun,
+			data := envelope.ConfigSetOutput{
+				Key:           args[0],
+				Value:         args[1],
+				PreviousValue: previous,
+				DryRun:        dryRun,
 			}
 			if dryRun {
 				return cmdutil.WriteEnvelope(cmd, "config.set", data)

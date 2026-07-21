@@ -12,6 +12,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli/adfmode"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/cli/stdin"
+	"github.com/matcra587/jira-cli/internal/envelope"
 )
 
 // NewCommand returns the `adf` command group.
@@ -130,10 +131,10 @@ $ jira issue view PROJ-123 --output=compact | jq '.issue.fields.description' | j
 				return fmt.Errorf("validation: parse ADF input: %w", err)
 			}
 			res := adf.ToMarkdownLossy(doc)
-			data := map[string]any{
-				"markdown":         res.Markdown,
-				"lossy":            len(res.LossyConstructs) > 0,
-				"lossy_constructs": res.LossyConstructs,
+			data := envelope.ADFRenderOutput{
+				Markdown:        res.Markdown,
+				Lossy:           len(res.LossyConstructs) > 0,
+				LossyConstructs: res.LossyConstructs,
 			}
 			return cmdutil.WriteEnvelopeWithWarnings(cmd, "adf.render", data, warnings)
 		},

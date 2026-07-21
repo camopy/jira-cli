@@ -16,6 +16,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli/cache/registry"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
@@ -96,10 +97,10 @@ $ jira cache issuekeys --output=json`,
 			if keys == nil {
 				keys = []string{}
 			}
-			return cmdutil.WriteEnvelope(cmd, "cache.issuekeys", map[string]any{
-				"profile":    profile.Name,
-				"issue_keys": keys,
-				"count":      len(keys),
+			return cmdutil.WriteEnvelope(cmd, "cache.issuekeys", envelope.CacheIssueKeysOutput{
+				Profile:   profile.Name,
+				IssueKeys: keys,
+				Count:     len(keys),
 			})
 		},
 	}
@@ -276,17 +277,7 @@ $ jira cache boards --unbounded`,
 			if err != nil {
 				return err
 			}
-			data := map[string]any{
-				"profile":          profile.Name,
-				"primed":           true,
-				"from_cache":       false,
-				"boards_count":     len(file.Items),
-				"fetched_at":       entry.FetchedAt.UTC().Format(time.RFC3339),
-				"ttl_seconds":      file.TTLSeconds,
-				"truncated":        file.Truncated,
-				"truncated_reason": file.TruncatedReason,
-			}
-			cmdutil.AddCacheStateFields(data, cacheSourceState, len(file.Items))
+			data := boardsOutput(profile.Name, true, false, file, entry.FetchedAt, cacheSourceState)
 			return cmdutil.WriteEnvelopeWithRawWarnings(cmd, "cache.boards", data, warnings)
 		},
 	}
@@ -340,18 +331,29 @@ func emitCachedBoardsEnvelope(cmd *cobra.Command, profileName string, entry cach
 			})
 		}
 	}
-	data := map[string]any{
-		"profile":          profileName,
-		"primed":           false,
-		"from_cache":       fromCache,
-		"boards_count":     len(file.Items),
-		"fetched_at":       entry.FetchedAt.UTC().Format(time.RFC3339),
-		"ttl_seconds":      file.TTLSeconds,
-		"truncated":        file.Truncated,
-		"truncated_reason": file.TruncatedReason,
-	}
-	cmdutil.AddCacheStateFields(data, cacheSourceState, len(file.Items))
+	data := boardsOutput(profileName, false, fromCache, file, entry.FetchedAt, cacheSourceState)
 	return cmdutil.WriteEnvelopeWithRawWarnings(cmd, "cache.boards", data, warnings)
+}
+
+// boardsOutput assembles the `cache boards` envelope data shared by the
+// fresh-prime and cache-hit paths: the two differ only in profile, primed,
+// and from_cache. The cache-state trio is computed the same way
+// cmdutil.AddCacheStateFields does for the map-backed cache reads.
+func boardsOutput(profileName string, primed, fromCache bool, file jira.BoardsCacheFile, fetchedAt time.Time, sourceState string) envelope.CacheBoardsOutput {
+	count := len(file.Items)
+	return envelope.CacheBoardsOutput{
+		Profile:          profileName,
+		Primed:           primed,
+		FromCache:        fromCache,
+		BoardsCount:      count,
+		FetchedAt:        fetchedAt.UTC().Format(time.RFC3339),
+		TTLSeconds:       file.TTLSeconds,
+		Truncated:        file.Truncated,
+		TruncatedReason:  file.TruncatedReason,
+		CacheState:       cmdutil.CacheStateForCount(sourceState, count),
+		CacheSourceState: sourceState,
+		CacheEmpty:       count == 0,
+	}
 }
 
 func cacheClearCommand() *cobra.Command {
@@ -421,10 +423,10 @@ $ jira cache clear labels --force --output=json`,
 				if err != nil {
 					return err
 				}
-				return cmdutil.WriteEnvelope(cmd, "cache.clear", map[string]any{
-					"profile": profile.Name,
-					"removed": n,
-					"dry_run": dryRun,
+				return cmdutil.WriteEnvelope(cmd, "cache.clear", envelope.CacheClearOutput{
+					Profile: profile.Name,
+					Removed: n,
+					DryRun:  dryRun,
 				})
 			}
 			var ok bool
@@ -436,11 +438,11 @@ $ jira cache clear labels --force --output=json`,
 			if err != nil {
 				return err
 			}
-			return cmdutil.WriteEnvelope(cmd, "cache.clear", map[string]any{
-				"profile":  profile.Name,
-				"resource": args[0],
-				"removed":  ok,
-				"dry_run":  dryRun,
+			return cmdutil.WriteEnvelope(cmd, "cache.clear", envelope.CacheClearOutput{
+				Profile:  profile.Name,
+				Resource: args[0],
+				Removed:  ok,
+				DryRun:   dryRun,
 			})
 		},
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/selfupdate"
 	"github.com/matcra587/jira-cli/internal/version"
 )
@@ -110,21 +111,21 @@ func run(cmd *cobra.Command, dryRun, force bool) error {
 	}
 	available := selfupdate.UpdateAvailable(current, latest)
 
-	data := map[string]any{
-		"channel":          string(channel),
-		"current":          current,
-		"latest":           latest,
-		"update_available": available,
-		// The discriminator between the two update shapes: false here (jira
-		// replaces its own binary), true on the managed-channel envelope
-		// (the installer owns updates and data carries hint instead of
-		// latest/update_available).
-		"managed": false,
-		"updated": false,
-		"dry_run": dryRun,
+	out := envelope.UpdateOutput{
+		Channel:         string(channel),
+		Current:         current,
+		Latest:          latest,
+		UpdateAvailable: &available,
+		// managed is the discriminator between the two update shapes: false
+		// here (jira replaces its own binary), true on the managed-channel
+		// envelope (the installer owns updates and data carries hint instead
+		// of latest/update_available).
+		Managed: false,
+		Updated: false,
+		DryRun:  dryRun,
 	}
 	if dryRun || !available {
-		return cmdutil.WriteEnvelope(cmd, "update", data)
+		return cmdutil.WriteEnvelope(cmd, "update", out)
 	}
 
 	// No confirmation prompt for a TTY human: invoking `update` is itself the
@@ -137,19 +138,19 @@ func run(cmd *cobra.Command, dryRun, force bool) error {
 	if err := up.Update(cmd.Context()); err != nil { //nolint:gocritic // not a Jira call; clive renders its own spinner
 		return err
 	}
-	data["updated"] = true
-	return cmdutil.WriteEnvelope(cmd, "update", data)
+	out.Updated = true
+	return cmdutil.WriteEnvelope(cmd, "update", out)
 }
 
 // writeManaged emits the envelope for a channel whose installer owns updates:
 // jira reports the command to run and changes nothing.
 func writeManaged(cmd *cobra.Command, channel selfupdate.Channel, current, hint string, dryRun bool) error {
-	return cmdutil.WriteEnvelope(cmd, "update", map[string]any{
-		"channel": string(channel),
-		"current": current,
-		"managed": true,
-		"hint":    hint,
-		"updated": false,
-		"dry_run": dryRun,
+	return cmdutil.WriteEnvelope(cmd, "update", envelope.UpdateOutput{
+		Channel: string(channel),
+		Current: current,
+		Managed: true,
+		Hint:    hint,
+		Updated: false,
+		DryRun:  dryRun,
 	})
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/cli/startup"
 	"github.com/matcra587/jira-cli/internal/config"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -62,9 +63,9 @@ $ jira alias list --output=json`,
 			}
 			// An object wrapper, not the bare map: every other alias envelope
 			// is an object, and a count spares consumers a keys-length dance.
-			return cmdutil.WriteEnvelope(cmd, "alias.list", map[string]any{
-				"aliases": cfg.Aliases,
-				"count":   len(cfg.Aliases),
+			return cmdutil.WriteEnvelope(cmd, "alias.list", envelope.AliasListOutput{
+				Aliases: cfg.Aliases,
+				Count:   len(cfg.Aliases),
 			})
 		},
 	}
@@ -109,7 +110,7 @@ $ jira alias set mybugs "issue list --assignee me --output=json"`,
 			}
 			previous := cfg.Aliases[name]
 			cfg.Aliases[name] = expansion
-			data := map[string]any{"name": name, "expansion": expansion, "previous": previous, "dry_run": dryRun}
+			data := envelope.AliasSetOutput{Name: name, Expansion: expansion, Previous: previous, DryRun: dryRun}
 			if dryRun {
 				return cmdutil.WriteEnvelope(cmd, "alias.set", data)
 			}
@@ -162,7 +163,7 @@ $ jira alias delete mine --force`,
 				return err
 			}
 			_, existed := cfg.Aliases[args[0]]
-			data := map[string]any{"name": args[0], "deleted": existed, "dry_run": dryRun}
+			data := envelope.AliasDeleteOutput{Name: args[0], Deleted: existed, DryRun: dryRun}
 			if dryRun {
 				return cmdutil.WriteEnvelope(cmd, "alias.delete", data)
 			}
@@ -235,11 +236,11 @@ $ jira --config team-jira.yaml alias import aliases.yaml`,
 				cfg.Aliases[name] = expansion
 				imported = append(imported, name)
 			}
-			data := map[string]any{
-				"imported": len(imported),
-				"aliases":  imported,
-				"skipped":  skipped,
-				"dry_run":  dryRun,
+			data := envelope.AliasImportOutput{
+				Imported: len(imported),
+				Aliases:  imported,
+				Skipped:  skipped,
+				DryRun:   dryRun,
 			}
 			if dryRun {
 				return cmdutil.WriteEnvelope(cmd, "alias.import", data)

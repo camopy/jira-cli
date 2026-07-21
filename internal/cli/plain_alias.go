@@ -10,6 +10,8 @@ import (
 	"github.com/gechr/clog"
 	termansi "github.com/gechr/x/ansi"
 	xmaps "github.com/gechr/x/maps"
+
+	"github.com/matcra587/jira-cli/internal/envelope"
 )
 
 // WriteAliasListPlain renders the `alias.list` envelope data — the config's
@@ -22,14 +24,21 @@ func WriteAliasListPlain(w io.Writer, command string, data any, opts ...PlainOpt
 	}
 	logger := newPlainLogger(w)
 
-	// alias.list data wraps the map: {aliases, count}. Unwrap; anything
-	// else falls back to the generic renderer.
-	wrapper, ok := data.(map[string]any)
-	if !ok {
-		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
-	}
-	aliases, ok := wrapper["aliases"].(map[string]string)
-	if !ok {
+	// alias.list data wraps the name→expansion map: {aliases, count}. Read
+	// the typed Output struct directly so the map keeps its native
+	// map[string]string type (no JSON round-trip); a legacy map payload
+	// still works. Anything else falls back to the generic renderer.
+	var aliases map[string]string
+	switch d := data.(type) {
+	case envelope.AliasListOutput:
+		aliases = d.Aliases
+	case map[string]any:
+		a, ok := d["aliases"].(map[string]string)
+		if !ok {
+			return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
+		}
+		aliases = a
+	default:
 		return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
 	}
 	style := authPlainStyle{tty: cfg.tty, theme: cfg.theme}

@@ -19,6 +19,7 @@ import (
 	cachereg "github.com/matcra587/jira-cli/internal/cli/cache/registry"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/config"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/spf13/cobra"
 )
@@ -128,14 +129,13 @@ $ jira --profile prod auth whoami --output=json`,
 			}); err != nil {
 				return err
 			}
-			data := map[string]any{
-				"profile":       profile.Name,
-				"account_id":    user.AccountID,
-				"account_type":  user.AccountType,
-				"display_name":  user.DisplayName,
-				"email_address": user.EmailAddress,
-				"time_zone":     user.TimeZone,
-				"saved":         false,
+			out := envelope.AuthWhoamiOutput{
+				Profile:      profile.Name,
+				AccountID:    user.AccountID,
+				AccountType:  user.AccountType,
+				DisplayName:  user.DisplayName,
+				EmailAddress: user.EmailAddress,
+				TimeZone:     user.TimeZone,
 			}
 			if save {
 				saved := false
@@ -155,9 +155,9 @@ $ jira --profile prod auth whoami --output=json`,
 				if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
 					return err
 				}
-				data["saved"] = true
+				out.Saved = true
 			}
-			return cmdutil.WriteEnvelope(cmd, "auth.whoami", data)
+			return cmdutil.WriteEnvelope(cmd, "auth.whoami", out)
 		},
 	}
 	cmdutil.AddBoolVar(cmd.Flags(), &save, "save", false, "Persist the resolved `account_id` (and email if blank) to the active profile", clib.FlagExtra{Group: "Configuration", Terse: "persist account id"})
@@ -642,31 +642,31 @@ $ printf '%s' "$TOKEN" | jira auth login --no-input --profile-name work --base-u
 					clog.Info().Parts(clog.PartMessage).Msg(msg)
 				}
 			}
-			data := map[string]any{
-				"profile":             profileName,
-				"auth_type":           string(config.AuthTypeToken),
-				"token_type":          tokenType(profile),
-				"scoped":              profile.Scoped(),
-				"secret_backend":      string(profile.SecretBackend),
-				"onepassword_account": onePasswordAccount,
-				"stored_secret":       credential != "",
-				"verified":            verifiedUser != nil,
-				"skip_verify":         skipVerify,
+			out := envelope.AuthLoginOutput{
+				Profile:            profileName,
+				AuthType:           string(config.AuthTypeToken),
+				TokenType:          tokenType(profile),
+				Scoped:             profile.Scoped(),
+				SecretBackend:      string(profile.SecretBackend),
+				OnePasswordAccount: onePasswordAccount,
+				StoredSecret:       credential != "",
+				Verified:           verifiedUser != nil,
+				SkipVerify:         skipVerify,
 			}
 			if usingEnvBackend {
-				data["credential_env"] = envTokenKey
+				out.CredentialEnv = envTokenKey
 			}
 			if profile.CloudID != "" {
-				data["cloud_id"] = profile.CloudID
+				out.CloudID = profile.CloudID
 			}
 			if verifiedUser != nil {
-				data["account_id"] = verifiedUser.AccountID
-				data["display_name"] = verifiedUser.DisplayName
+				out.AccountID = &verifiedUser.AccountID
+				out.DisplayName = &verifiedUser.DisplayName
 			}
 			if boardsCached >= 0 {
-				data["boards_cached"] = boardsCached
+				out.BoardsCached = &boardsCached
 			}
-			return cmdutil.WriteEnvelope(cmd, "auth.login", data)
+			return cmdutil.WriteEnvelope(cmd, "auth.login", out)
 		},
 	}
 	cmdutil.AddStringVar(cmd.Flags(), &profileName, "profile-name", "default", "Profile name to configure", clib.FlagExtra{Group: "Configuration", Placeholder: "NAME", Complete: "predictor=profile"})
@@ -1483,11 +1483,11 @@ $ jira auth logout old-work --base-url acme.atlassian.net`,
 			if dryRun {
 				// Preview names the credential a live run would revoke
 				// without opening the secret backend at all.
-				return cmdutil.WriteEnvelope(cmd, "auth.logout", map[string]any{
-					"profile": profile.Name,
-					"backend": string(profile.SecretBackend),
-					"removed": false,
-					"dry_run": true,
+				return cmdutil.WriteEnvelope(cmd, "auth.logout", envelope.AuthLogoutOutput{
+					Profile: profile.Name,
+					Backend: string(profile.SecretBackend),
+					Removed: false,
+					DryRun:  true,
 				})
 			}
 			// Destructive op safety: recovering a revoked credential means
@@ -1510,11 +1510,11 @@ $ jira auth logout old-work --base-url acme.atlassian.net`,
 			if note != "" {
 				cmdutil.RecordCredentialWarnings(cmd, []string{note})
 			}
-			return cmdutil.WriteEnvelope(cmd, "auth.logout", map[string]any{
-				"profile": profile.Name,
-				"backend": string(profile.SecretBackend),
-				"removed": removed,
-				"dry_run": false,
+			return cmdutil.WriteEnvelope(cmd, "auth.logout", envelope.AuthLogoutOutput{
+				Profile: profile.Name,
+				Backend: string(profile.SecretBackend),
+				Removed: removed,
+				DryRun:  false,
 			})
 		},
 	}
@@ -1554,19 +1554,19 @@ $ jira auth switch work --dry-run --output=json`,
 			if err != nil {
 				return err
 			}
-			data := map[string]any{
-				"active":   profile.Name,
-				"previous": cfg.DefaultProfile,
-				"dry_run":  dryRun,
+			out := envelope.AuthSwitchOutput{
+				Active:   profile.Name,
+				Previous: cfg.DefaultProfile,
+				DryRun:   dryRun,
 			}
 			if dryRun {
-				return cmdutil.WriteEnvelope(cmd, "auth.switch", data)
+				return cmdutil.WriteEnvelope(cmd, "auth.switch", out)
 			}
 			cfg.DefaultProfile = profile.Name
 			if err := config.Save(cmdutil.ConfigPath(cmd), cfg); err != nil {
 				return err
 			}
-			return cmdutil.WriteEnvelope(cmd, "auth.switch", data)
+			return cmdutil.WriteEnvelope(cmd, "auth.switch", out)
 		},
 	}
 	cmdutil.AddDryRunFlag(cmd.Flags(), &dryRun, "Resolve and preview the switch without writing config")
