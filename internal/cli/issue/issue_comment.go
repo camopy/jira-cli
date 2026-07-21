@@ -11,6 +11,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/pipeline"
@@ -117,15 +118,15 @@ $ jira issue comment list PROJ-123 --output=json`,
 				return err
 			}
 			return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.comment.list", results, func(_ string, result commentListReadResult) any {
-				data := cmdutil.CopyAnyMap(result.Data)
+				out := result.Data
 				// Keyed results have no per-key meta, so the canonical
 				// pagination block rides inside each result's data with
 				// the same camelCase shape.
-				data["pagination"] = result.Pagination
+				out.Pagination = result.Pagination
 				if len(result.Warnings) > 0 {
-					data["warnings"] = result.Warnings
+					out.Warnings = result.Warnings
 				}
-				return data
+				return out
 			})
 		},
 	}
@@ -159,7 +160,7 @@ func runCommentList(cmd *cobra.Command, key string, limit int, all bool) error {
 }
 
 type commentListReadResult struct {
-	Data       map[string]any
+	Data       envelope.IssueCommentListOutput
 	Pagination *cli.Pagination
 	Warnings   []map[string]any
 }
@@ -199,8 +200,8 @@ func commentListEnvelopeData(ctx context.Context, svc jira.CommentService, key s
 
 	pagination := commentListPagination(lastResp, all, rateLimitHit)
 	commentsOut := commentListData(collected)
-	data := map[string]any{
-		"comments": commentsOut,
+	data := envelope.IssueCommentListOutput{
+		Comments: commentsOut,
 	}
 
 	warnings := commentListWarnings(collected, rateLimitHit, pagesFetched)
@@ -414,10 +415,10 @@ func runCommentAddKeys(cmd *cobra.Command, keys []string, flags commentAddFlags)
 	}
 	key := keys[0]
 	if flags.dryRun {
-		return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.comment.add", map[string]any{
-			"issue":   cmdutil.IssueRef{Key: key},
-			"comment": map[string]any{"body": submitDoc},
-			"dry_run": true,
+		return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.comment.add", envelope.IssueCommentAddOutput{
+			Issue:   cmdutil.IssueRef{Key: key},
+			Comment: map[string]any{"body": submitDoc},
+			DryRun:  true,
 		}, pipeOut.Warnings)
 	}
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
@@ -444,10 +445,10 @@ func runCommentAddKeys(cmd *cobra.Command, keys []string, flags commentAddFlags)
 	}); err != nil {
 		return err
 	}
-	return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.comment.add", map[string]any{
-		"issue":   cmdutil.IssueRef{Key: key},
-		"comment": commentToMap(comment),
-		"dry_run": false,
+	return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.comment.add", envelope.IssueCommentAddOutput{
+		Issue:   cmdutil.IssueRef{Key: key},
+		Comment: commentToMap(comment),
+		DryRun:  false,
 	}, resp, pipeOut.Warnings)
 }
 
@@ -461,17 +462,17 @@ func runCommentAddMany(
 	dryRun bool,
 ) error {
 	if dryRun {
-		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[map[string]any] {
-			return cmdutil.KeyResult[map[string]any]{
+		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[envelope.IssueCommentAddOutput] {
+			return cmdutil.KeyResult[envelope.IssueCommentAddOutput]{
 				Key: key,
-				Value: map[string]any{
-					"issue":   cmdutil.IssueRef{Key: key},
-					"comment": map[string]any{"body": submitDoc},
-					"dry_run": true,
+				Value: envelope.IssueCommentAddOutput{
+					Issue:   cmdutil.IssueRef{Key: key},
+					Comment: map[string]any{"body": submitDoc},
+					DryRun:  true,
 				},
 			}
 		})
-		return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.comment.add", results, cmdutil.KeyedDataWithWarnings(warnings))
+		return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.comment.add", results, commentAddWarningsFor(warnings))
 	}
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
@@ -482,7 +483,7 @@ func runCommentAddMany(
 	}
 	body := &jira.CommentBody{ADF: submitDoc}
 	svc := cmdutil.ServicesForClient(client).Comment()
-	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (envelope.IssueCommentAddOutput, error) {
 		var (
 			comment *jira.Comment
 			addErr  error
@@ -493,18 +494,31 @@ func runCommentAddMany(
 			comment, _, addErr = svc.Add(ctx, key, body)
 		}
 		if addErr != nil {
-			return nil, addErr
+			return envelope.IssueCommentAddOutput{}, addErr
 		}
-		return map[string]any{
-			"issue":   cmdutil.IssueRef{Key: key},
-			"comment": commentToMap(comment),
-			"dry_run": false,
+		return envelope.IssueCommentAddOutput{
+			Issue:   cmdutil.IssueRef{Key: key},
+			Comment: commentToMap(comment),
+			DryRun:  false,
 		}, nil
 	})
 	if err != nil {
 		return err
 	}
-	return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.comment.add", results, cmdutil.KeyedDataWithWarnings(warnings))
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.comment.add", results, commentAddWarningsFor(warnings))
+}
+
+// commentAddWarningsFor folds command-wide markdown/ADF warnings into each
+// per-key comment-add result, mirroring cmdutil.KeyedDataWithWarnings for the
+// typed output: batch mutations have no single persisted resource, so the
+// warning travels with each result.
+func commentAddWarningsFor(warnings []adf.Warning) func(string, envelope.IssueCommentAddOutput) any {
+	return func(_ string, data envelope.IssueCommentAddOutput) any {
+		if len(warnings) > 0 {
+			data.Warnings = warnings
+		}
+		return data
+	}
 }
 
 // buildCommentBody parses --markdown / --json-input into an ADF doc.
@@ -640,12 +654,12 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 	// non-nil above, so the pipeline always sets SubmitADF.
 	submitDoc := pipeOut.SubmitADF
 	if flags.dryRun {
-		return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.comment.edit", map[string]any{
-			"issue":             cmdutil.IssueRef{Key: key},
-			"comment_id":        commentID,
-			"body_adf_summary":  submitDoc,
-			"visibility_change": describeVisibilityChange(vis),
-			"dry_run":           true,
+		return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.comment.edit", envelope.IssueCommentEditOutput{
+			Issue:            cmdutil.IssueRef{Key: key},
+			CommentID:        commentID,
+			BodyADFSummary:   submitDoc,
+			VisibilityChange: describeVisibilityChange(vis),
+			DryRun:           true,
 		}, pipeOut.Warnings)
 	}
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
@@ -666,10 +680,10 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 	}); err != nil {
 		return err
 	}
-	return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.comment.edit", map[string]any{
-		"issue":   cmdutil.IssueRef{Key: key},
-		"comment": commentToMap(comment),
-		"dry_run": false,
+	return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.comment.edit", envelope.IssueCommentEditOutput{
+		Issue:   cmdutil.IssueRef{Key: key},
+		Comment: commentToMap(comment),
+		DryRun:  false,
 	}, resp, pipeOut.Warnings)
 }
 
@@ -706,10 +720,10 @@ $ jira issue comment delete PROJ-123 10042 --force`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			noInput := cmdutil.NoInputRequested(cmd)
 			if dryRun {
-				return cmdutil.WriteEnvelope(cmd, "issue.comment.delete", map[string]any{
-					"issue":      cmdutil.IssueRef{Key: args[0]},
-					"comment_id": args[1],
-					"dry_run":    true,
+				return cmdutil.WriteEnvelope(cmd, "issue.comment.delete", envelope.IssueCommentDeleteOutput{
+					Issue:     cmdutil.IssueRef{Key: args[0]},
+					CommentID: args[1],
+					DryRun:    true,
 				})
 			}
 			// Destructive op safety — same shape as `attachment delete`,
@@ -742,11 +756,11 @@ $ jira issue comment delete PROJ-123 10042 --force`,
 			}); err != nil {
 				return err
 			}
-			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.comment.delete", map[string]any{
-				"issue":      cmdutil.IssueRef{Key: args[0]},
-				"comment_id": args[1],
-				"deleted":    true,
-				"dry_run":    false,
+			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.comment.delete", envelope.IssueCommentDeleteOutput{
+				Issue:     cmdutil.IssueRef{Key: args[0]},
+				CommentID: args[1],
+				Deleted:   true,
+				DryRun:    false,
 			}, resp)
 		},
 	}

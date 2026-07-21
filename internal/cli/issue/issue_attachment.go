@@ -22,6 +22,7 @@ import (
 	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/spf13/cobra"
@@ -126,7 +127,7 @@ $ jira issue attachment list PROJ-123 --output=json`,
 			}
 			return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.attachment.list", results, func(_ string, attachments []jira.Attachment) any {
 				data, pagination := attachmentListEnvelopeData(attachments, limit, all)
-				data["pagination"] = pagination
+				data.Pagination = pagination
 				return data
 			})
 		},
@@ -137,7 +138,7 @@ $ jira issue attachment list PROJ-123 --output=json`,
 	return cmd
 }
 
-func attachmentListEnvelopeData(attachments []jira.Attachment, limit int, all bool) (map[string]any, *cli.Pagination) {
+func attachmentListEnvelopeData(attachments []jira.Attachment, limit int, all bool) (envelope.IssueAttachmentListOutput, *cli.Pagination) {
 	// Atlassian returns attachments oldest-first natively. Apply the requested
 	// page slice client-side: there is no dedicated /attachments list endpoint.
 	windowed := attachments
@@ -161,7 +162,7 @@ func attachmentListEnvelopeData(attachments []jira.Attachment, limit int, all bo
 		Total:      cli.KnownTotal(len(attachments)),
 		IsLast:     all || len(attachments) <= pageSize,
 	}
-	return map[string]any{"attachments": rows}, pagination
+	return envelope.IssueAttachmentListOutput{Attachments: rows}, pagination
 }
 
 func issueAttachmentAddCommand() *cobra.Command {
@@ -213,10 +214,10 @@ $ jira issue attachment add PROJ-123 ./report.pdf --dry-run`,
 				if len(keys) > 1 {
 					return runAttachmentAddManyDryRun(cmd, keys, previews)
 				}
-				return cmdutil.WriteEnvelope(cmd, "issue.attachment.add", map[string]any{
-					"issue":   cmdutil.IssueRef{Key: keys[0]},
-					"files":   previews,
-					"dry_run": true,
+				return cmdutil.WriteEnvelope(cmd, "issue.attachment.add", envelope.IssueAttachmentAddOutput{
+					Issue:  cmdutil.IssueRef{Key: keys[0]},
+					Files:  previews,
+					DryRun: true,
 				})
 			}
 			service, ok, err := attachmentClient(cmd)
@@ -246,10 +247,10 @@ $ jira issue attachment add PROJ-123 ./report.pdf --dry-run`,
 			for _, a := range uploaded {
 				rows = append(rows, attachmentToOutput(a))
 			}
-			return cmdutil.WriteEnvelope(cmd, "issue.attachment.add", map[string]any{
-				"issue":       cmdutil.IssueRef{Key: keys[0]},
-				"attachments": rows,
-				"dry_run":     false,
+			return cmdutil.WriteEnvelope(cmd, "issue.attachment.add", envelope.IssueAttachmentAddOutput{
+				Issue:       cmdutil.IssueRef{Key: keys[0]},
+				Attachments: rows,
+				DryRun:      false,
 			})
 		},
 	}
@@ -295,17 +296,17 @@ func attachmentAddKeysAndPaths(args, files []string) ([]string, []string, error)
 }
 
 func runAttachmentAddManyDryRun(cmd *cobra.Command, keys []string, previews []map[string]any) error {
-	results := xslices.Map(keys, func(key string) cmdutil.KeyResult[map[string]any] {
-		return cmdutil.KeyResult[map[string]any]{
+	results := xslices.Map(keys, func(key string) cmdutil.KeyResult[envelope.IssueAttachmentAddOutput] {
+		return cmdutil.KeyResult[envelope.IssueAttachmentAddOutput]{
 			Key: key,
-			Value: map[string]any{
-				"issue":   cmdutil.IssueRef{Key: key},
-				"files":   previews,
-				"dry_run": true,
+			Value: envelope.IssueAttachmentAddOutput{
+				Issue:  cmdutil.IssueRef{Key: key},
+				Files:  previews,
+				DryRun: true,
 			},
 		}
 	})
-	return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.attachment.add", results, func(_ string, data map[string]any) any { return data })
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.attachment.add", results, func(_ string, data envelope.IssueAttachmentAddOutput) any { return data })
 }
 
 func runAttachmentAddMany(
@@ -315,30 +316,30 @@ func runAttachmentAddMany(
 	sources []attachmentFileSource,
 	parallelism int,
 ) error {
-	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (envelope.IssueAttachmentAddOutput, error) {
 		fileSources, closeFiles, err := openAttachmentFileSources(sources)
 		if err != nil {
-			return nil, err
+			return envelope.IssueAttachmentAddOutput{}, err
 		}
 		defer closeFiles()
 		uploaded, _, err := service.Add(ctx, key, fileSources)
 		if err != nil {
-			return nil, err
+			return envelope.IssueAttachmentAddOutput{}, err
 		}
 		rows := make([]map[string]any, 0, len(uploaded))
 		for _, a := range uploaded {
 			rows = append(rows, attachmentToOutput(a))
 		}
-		return map[string]any{
-			"issue":       cmdutil.IssueRef{Key: key},
-			"attachments": rows,
-			"dry_run":     false,
+		return envelope.IssueAttachmentAddOutput{
+			Issue:       cmdutil.IssueRef{Key: key},
+			Attachments: rows,
+			DryRun:      false,
 		}, nil
 	})
 	if err != nil {
 		return err
 	}
-	return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.attachment.add", results, func(_ string, data map[string]any) any { return data })
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.attachment.add", results, func(_ string, data envelope.IssueAttachmentAddOutput) any { return data })
 }
 
 func openAttachmentFileSources(sources []attachmentFileSource) ([]jira.FileSource, func(), error) {
@@ -421,10 +422,10 @@ $ jira issue attachment delete PROJ-123 10500 --force`,
 			}
 			attachmentID := args[1]
 			if dryRun {
-				return cmdutil.WriteEnvelope(cmd, "issue.attachment.delete", map[string]any{
-					"issue":         cmdutil.IssueRef{Key: key},
-					"attachment_id": attachmentID,
-					"dry_run":       true,
+				return cmdutil.WriteEnvelope(cmd, "issue.attachment.delete", envelope.IssueAttachmentDeleteOutput{
+					Issue:        cmdutil.IssueRef{Key: key},
+					AttachmentID: attachmentID,
+					DryRun:       true,
 				})
 			}
 			det := cmdutil.DetectorFromContext(cmd)
@@ -455,11 +456,11 @@ $ jira issue attachment delete PROJ-123 10500 --force`,
 			}); err != nil {
 				return err
 			}
-			return cmdutil.WriteEnvelope(cmd, "issue.attachment.delete", map[string]any{
-				"issue":         cmdutil.IssueRef{Key: key},
-				"attachment_id": attachmentID,
-				"deleted":       true,
-				"dry_run":       false,
+			return cmdutil.WriteEnvelope(cmd, "issue.attachment.delete", envelope.IssueAttachmentDeleteOutput{
+				Issue:        cmdutil.IssueRef{Key: key},
+				AttachmentID: attachmentID,
+				Deleted:      true,
+				DryRun:       false,
 			})
 		},
 	}
@@ -513,12 +514,12 @@ $ jira issue attachment download PROJ-123 10500 --to ./report.pdf --dry-run`,
 				}
 			}
 			if dryRun {
-				return cmdutil.WriteEnvelope(cmd, "issue.attachment.download", map[string]any{
-					"issue":         cmdutil.IssueRef{Key: key},
-					"attachment_id": attachmentID,
-					"mode":          string(mode),
-					"target":        target,
-					"dry_run":       true,
+				return cmdutil.WriteEnvelope(cmd, "issue.attachment.download", envelope.IssueAttachmentDownloadOutput{
+					Issue:        cmdutil.IssueRef{Key: key},
+					AttachmentID: attachmentID,
+					Mode:         string(mode),
+					Target:       &target,
+					DryRun:       true,
 				})
 			}
 			service, ok, err := attachmentClient(cmd)
@@ -562,13 +563,13 @@ $ jira issue attachment download PROJ-123 10500 --to ./report.pdf --dry-run`,
 			if err != nil {
 				return err
 			}
-			return cmdutil.WriteEnvelope(cmd, "issue.attachment.download", map[string]any{
-				"issue":         cmdutil.IssueRef{Key: key},
-				"attachment_id": attachmentID,
-				"written_to":    target,
-				"bytes":         wrote,
-				"mode":          string(mode),
-				"dry_run":       false,
+			return cmdutil.WriteEnvelope(cmd, "issue.attachment.download", envelope.IssueAttachmentDownloadOutput{
+				Issue:        cmdutil.IssueRef{Key: key},
+				AttachmentID: attachmentID,
+				WrittenTo:    target,
+				Bytes:        &wrote,
+				Mode:         string(mode),
+				DryRun:       false,
 			})
 		},
 	}

@@ -11,6 +11,7 @@ import (
 	xslices "github.com/gechr/x/slices"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/spf13/cobra"
@@ -212,18 +213,18 @@ $ jira issue watchers list PROJ-123 PROJ-124 --output=json`,
 	return cmd
 }
 
-func watcherListEnvelopeData(watchers *jira.WatchersResponse) map[string]any {
+func watcherListEnvelopeData(watchers *jira.WatchersResponse) envelope.IssueWatchersListOutput {
 	if watchers == nil {
-		return map[string]any{
-			"watchers":    []map[string]any{},
-			"is_watching": false,
-			"watch_count": 0,
+		return envelope.IssueWatchersListOutput{
+			Watchers:   []map[string]any{},
+			IsWatching: false,
+			WatchCount: 0,
 		}
 	}
-	return map[string]any{
-		"watchers":    watcherListData(watchers.Watchers),
-		"is_watching": watchers.IsWatching,
-		"watch_count": watchers.WatchCount,
+	return envelope.IssueWatchersListOutput{
+		Watchers:   watcherListData(watchers.Watchers),
+		IsWatching: watchers.IsWatching,
+		WatchCount: watchers.WatchCount,
 	}
 }
 
@@ -377,7 +378,7 @@ func runWatcherMutationMany(
 		return handleResolveErr(cmd, command, err)
 	}
 	watcherSvc := cmdutil.ServicesForClient(client).Watcher()
-	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (envelope.IssueWatcherMutationOutput, error) {
 		perKey := args
 		perKey.Key = key
 		switch kind {
@@ -386,13 +387,13 @@ func runWatcherMutationMany(
 		case watcherMutationRemove:
 			return watcherRemoveData(ctx, watcherSvc, accountID, perKey)
 		default:
-			return nil, fmt.Errorf("unknown watcher mutation kind")
+			return envelope.IssueWatcherMutationOutput{}, fmt.Errorf("unknown watcher mutation kind")
 		}
 	})
 	if err != nil {
 		return err
 	}
-	return cmdutil.WriteKeyedResultsEnvelope(cmd, command, results, func(_ string, data map[string]any) any {
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, command, results, func(_ string, data envelope.IssueWatcherMutationOutput) any {
 		return data
 	})
 }
@@ -430,19 +431,20 @@ func watcherDryRunPreviewMany(cmd *cobra.Command, command string, keys []string,
 		accountID = id
 		userResolved = true
 	}
-	results := xslices.Map(keys, func(key string) cmdutil.KeyResult[map[string]any] {
-		data := map[string]any{
-			"issue":         cmdutil.IssueRef{Key: key},
-			"user":          args.UserIdent,
-			"dry_run":       true,
-			"user_resolved": userResolved,
+	results := xslices.Map(keys, func(key string) cmdutil.KeyResult[envelope.IssueWatcherMutationOutput] {
+		resolved := userResolved
+		data := envelope.IssueWatcherMutationOutput{
+			Issue:        cmdutil.IssueRef{Key: key},
+			User:         args.UserIdent,
+			DryRun:       true,
+			UserResolved: &resolved,
 		}
 		if accountID != "" {
-			data["account_id_resolved"] = accountID
+			data.AccountIDResolved = accountID
 		}
-		return cmdutil.KeyResult[map[string]any]{Key: key, Value: data}
+		return cmdutil.KeyResult[envelope.IssueWatcherMutationOutput]{Key: key, Value: data}
 	})
-	return cmdutil.WriteKeyedResultsEnvelope(cmd, command, results, func(_ string, data map[string]any) any {
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, command, results, func(_ string, data envelope.IssueWatcherMutationOutput) any {
 		return data
 	})
 }
@@ -476,7 +478,7 @@ func runWatcherAdd(cmd *cobra.Command, args watcherMutationArgs) error {
 	// Capture pre-state when readback is requested so we can populate
 	// `was_already_watching` in the envelope .
 	watcherSvc := cmdutil.ServicesForClient(client).Watcher()
-	var data map[string]any
+	var data envelope.IssueWatcherMutationOutput
 	if err := cmdutil.Spin(cmd, "issue.watchers.add", func(ctx context.Context) error {
 		var e error
 		data, e = watcherAddData(ctx, watcherSvc, accountID, args)
@@ -487,37 +489,38 @@ func runWatcherAdd(cmd *cobra.Command, args watcherMutationArgs) error {
 	return cmdutil.WriteEnvelope(cmd, "issue.watchers.add", data)
 }
 
-func watcherAddData(ctx context.Context, watcherSvc jira.WatcherService, accountID string, args watcherMutationArgs) (map[string]any, error) {
+func watcherAddData(ctx context.Context, watcherSvc jira.WatcherService, accountID string, args watcherMutationArgs) (envelope.IssueWatcherMutationOutput, error) {
 	var preState *jira.WatchersResponse
 	if !args.NoReadback {
 		preState, _, _ = watcherSvc.List(ctx, args.Key)
 	}
 
 	if _, err := watcherSvc.Add(ctx, args.Key, accountID); err != nil {
-		return nil, err
+		return envelope.IssueWatcherMutationOutput{}, err
 	}
 
 	if args.NoReadback {
-		return map[string]any{
-			"issue":      cmdutil.IssueRef{Key: args.Key},
-			"account_id": accountID,
-			"attempted":  true,
-			"dry_run":    false,
+		return envelope.IssueWatcherMutationOutput{
+			Issue:     cmdutil.IssueRef{Key: args.Key},
+			AccountID: accountID,
+			Attempted: true,
+			DryRun:    false,
 		}, nil
 	}
 
 	post, _, err := watcherSvc.List(ctx, args.Key)
 	if err != nil {
-		return nil, err
+		return envelope.IssueWatcherMutationOutput{}, err
 	}
 	wasAlready := containsAccount(preState, accountID)
-	return map[string]any{
-		"issue":                cmdutil.IssueRef{Key: args.Key},
-		"watchers":             watcherListData(post.Watchers),
-		"is_watching":          post.IsWatching,
-		"watch_count":          post.WatchCount,
-		"was_already_watching": wasAlready,
-		"dry_run":              false,
+	watchers := watcherListData(post.Watchers)
+	return envelope.IssueWatcherMutationOutput{
+		Issue:              cmdutil.IssueRef{Key: args.Key},
+		Watchers:           &watchers,
+		IsWatching:         &post.IsWatching,
+		WatchCount:         &post.WatchCount,
+		WasAlreadyWatching: &wasAlready,
+		DryRun:             false,
 	}, nil
 }
 
@@ -545,7 +548,7 @@ func runWatcherRemove(cmd *cobra.Command, args watcherMutationArgs) error {
 	}
 
 	watcherSvc := cmdutil.ServicesForClient(client).Watcher()
-	var data map[string]any
+	var data envelope.IssueWatcherMutationOutput
 	if err := cmdutil.Spin(cmd, "issue.watchers.remove", func(ctx context.Context) error {
 		var e error
 		data, e = watcherRemoveData(ctx, watcherSvc, accountID, args)
@@ -556,37 +559,38 @@ func runWatcherRemove(cmd *cobra.Command, args watcherMutationArgs) error {
 	return cmdutil.WriteEnvelope(cmd, "issue.watchers.remove", data)
 }
 
-func watcherRemoveData(ctx context.Context, watcherSvc jira.WatcherService, accountID string, args watcherMutationArgs) (map[string]any, error) {
+func watcherRemoveData(ctx context.Context, watcherSvc jira.WatcherService, accountID string, args watcherMutationArgs) (envelope.IssueWatcherMutationOutput, error) {
 	var preState *jira.WatchersResponse
 	if !args.NoReadback {
 		preState, _, _ = watcherSvc.List(ctx, args.Key)
 	}
 
 	if _, err := watcherSvc.Remove(ctx, args.Key, accountID); err != nil {
-		return nil, err
+		return envelope.IssueWatcherMutationOutput{}, err
 	}
 
 	if args.NoReadback {
-		return map[string]any{
-			"issue":      cmdutil.IssueRef{Key: args.Key},
-			"account_id": accountID,
-			"attempted":  true,
-			"dry_run":    false,
+		return envelope.IssueWatcherMutationOutput{
+			Issue:     cmdutil.IssueRef{Key: args.Key},
+			AccountID: accountID,
+			Attempted: true,
+			DryRun:    false,
 		}, nil
 	}
 
 	post, _, err := watcherSvc.List(ctx, args.Key)
 	if err != nil {
-		return nil, err
+		return envelope.IssueWatcherMutationOutput{}, err
 	}
 	wasAlready := containsAccount(preState, accountID)
-	return map[string]any{
-		"issue":                cmdutil.IssueRef{Key: args.Key},
-		"watchers":             watcherListData(post.Watchers),
-		"is_watching":          post.IsWatching,
-		"watch_count":          post.WatchCount,
-		"was_already_watching": wasAlready,
-		"dry_run":              false,
+	watchers := watcherListData(post.Watchers)
+	return envelope.IssueWatcherMutationOutput{
+		Issue:              cmdutil.IssueRef{Key: args.Key},
+		Watchers:           &watchers,
+		IsWatching:         &post.IsWatching,
+		WatchCount:         &post.WatchCount,
+		WasAlreadyWatching: &wasAlready,
+		DryRun:             false,
 	}, nil
 }
 
@@ -630,16 +634,17 @@ func localResolveUser(cmd *cobra.Command, ident string) (string, bool) {
 // watcher POST/DELETE. The `user_resolved` flag keeps the preview honest
 // about whether resolution actually ran.
 func watcherDryRunPreview(cmd *cobra.Command, command string, args watcherMutationArgs) error {
-	data := map[string]any{
-		"issue":         cmdutil.IssueRef{Key: args.Key},
-		"user":          args.UserIdent,
-		"dry_run":       true,
-		"user_resolved": false,
+	userResolved := false
+	data := envelope.IssueWatcherMutationOutput{
+		Issue:        cmdutil.IssueRef{Key: args.Key},
+		User:         args.UserIdent,
+		DryRun:       true,
+		UserResolved: &userResolved,
 	}
 	if !args.ValidateRemote {
 		if id, ok := localResolveUser(cmd, args.UserIdent); ok {
-			data["account_id_resolved"] = id
-			data["user_resolved"] = true
+			data.AccountIDResolved = id
+			userResolved = true
 		}
 		return cmdutil.WriteEnvelope(cmd, command, data)
 	}
@@ -666,8 +671,8 @@ func watcherDryRunPreview(cmd *cobra.Command, command string, args watcherMutati
 	if rerr != nil {
 		return handleResolveErr(cmd, command, rerr)
 	}
-	data["account_id_resolved"] = accountID
-	data["user_resolved"] = true
+	data.AccountIDResolved = accountID
+	userResolved = true
 	return cmdutil.WriteEnvelope(cmd, command, data)
 }
 

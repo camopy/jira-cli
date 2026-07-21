@@ -26,6 +26,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli"
 	cachereg "github.com/matcra587/jira-cli/internal/cli/cache/registry"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
 )
@@ -245,10 +246,10 @@ func issueLinkEndpointKey(raw any) string {
 
 func runIssueLinkCreateMany(cmd *cobra.Command, keys []string, parallelism int, in issueLinkCreateInput) error {
 	if in.DryRun {
-		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[map[string]any] {
-			return cmdutil.KeyResult[map[string]any]{Key: key, Value: issueLinkCreateData(key, in, true)}
+		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[envelope.IssueLinkCreateOutput] {
+			return cmdutil.KeyResult[envelope.IssueLinkCreateOutput]{Key: key, Value: issueLinkCreateData(key, in, true)}
 		})
-		return cmdutil.WriteKeyedResultsEnvelope(cmd, in.Command, results, func(_ string, data map[string]any) any { return data })
+		return cmdutil.WriteKeyedResultsEnvelope(cmd, in.Command, results, func(_ string, data envelope.IssueLinkCreateOutput) any { return data })
 	}
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
@@ -258,30 +259,30 @@ func runIssueLinkCreateMany(cmd *cobra.Command, keys []string, parallelism int, 
 		return fmt.Errorf("jira base URL is required for %s", in.Command)
 	}
 	service := cmdutil.ServicesForClient(client).IssueLink()
-	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (map[string]any, error) {
+	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (envelope.IssueLinkCreateOutput, error) {
 		if _, err := service.Create(ctx, issueLinkRequestFor(key, in)); err != nil {
-			return nil, err
+			return envelope.IssueLinkCreateOutput{}, err
 		}
 		return issueLinkCreateData(key, in, false), nil
 	})
 	if err != nil {
 		return err
 	}
-	return cmdutil.WriteKeyedResultsEnvelope(cmd, in.Command, results, func(_ string, data map[string]any) any { return data })
+	return cmdutil.WriteKeyedResultsEnvelope(cmd, in.Command, results, func(_ string, data envelope.IssueLinkCreateOutput) any { return data })
 }
 
-func issueLinkCreateData(key string, in issueLinkCreateInput, dryRun bool) map[string]any {
-	data := map[string]any{
-		"inward_issue":  cmdutil.IssueRef{Key: key},
-		"outward_issue": cmdutil.IssueRef{Key: in.To},
-		"type":          in.Type,
-		"dry_run":       dryRun,
+func issueLinkCreateData(key string, in issueLinkCreateInput, dryRun bool) envelope.IssueLinkCreateOutput {
+	data := envelope.IssueLinkCreateOutput{
+		InwardIssue:  cmdutil.IssueRef{Key: key},
+		OutwardIssue: cmdutil.IssueRef{Key: in.To},
+		Type:         in.Type,
+		DryRun:       dryRun,
 	}
 	if in.TypeID != "" {
-		data["type_id"] = in.TypeID
+		data.TypeID = in.TypeID
 	}
 	if len(in.Comment) > 0 {
-		data["comment"] = in.Comment
+		data.Comment = in.Comment
 	}
 	return data
 }
@@ -349,11 +350,11 @@ $ jira issue link list PROJ-123 PROJ-124 --output=json`,
 	return cmd
 }
 
-func issueLinkListData(key string, links []jira.IssueLinkView) map[string]any {
-	return map[string]any{
-		"issue": cmdutil.IssueRef{Key: key},
-		"links": links,
-		"count": len(links),
+func issueLinkListData(key string, links []jira.IssueLinkView) envelope.IssueLinkListOutput {
+	return envelope.IssueLinkListOutput{
+		Issue: cmdutil.IssueRef{Key: key},
+		Links: links,
+		Count: len(links),
 	}
 }
 
@@ -384,10 +385,10 @@ $ jira issue link delete PROJ-123 10001 --force`,
 			noInput := cmdutil.NoInputRequested(cmd)
 			key, linkID := args[0], args[1]
 			if dryRun {
-				return cmdutil.WriteEnvelope(cmd, "issue.link.delete", map[string]any{
-					"issue":   cmdutil.IssueRef{Key: key},
-					"link_id": linkID,
-					"dry_run": true,
+				return cmdutil.WriteEnvelope(cmd, "issue.link.delete", envelope.IssueLinkDeleteOutput{
+					Issue:  cmdutil.IssueRef{Key: key},
+					LinkID: linkID,
+					DryRun: true,
 				})
 			}
 			det := cmdutil.DetectorFromContext(cmd)
@@ -419,11 +420,11 @@ $ jira issue link delete PROJ-123 10001 --force`,
 			// data.link_id MUST echo the supplied id verbatim
 			// regardless of the source KEY — links are global; the
 			// CLI is explicit about which id was removed.
-			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.link.delete", map[string]any{
-				"issue":   cmdutil.IssueRef{Key: key},
-				"link_id": linkID,
-				"deleted": true,
-				"dry_run": false,
+			return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.link.delete", envelope.IssueLinkDeleteOutput{
+				Issue:   cmdutil.IssueRef{Key: key},
+				LinkID:  linkID,
+				Deleted: true,
+				DryRun:  false,
 			}, resp)
 		},
 	}
@@ -480,13 +481,15 @@ $ jira issue link types --output=json`,
 			if err := json.Unmarshal(data, &types); err != nil {
 				return fmt.Errorf("issue.link.types: decode cached payload: %w", err)
 			}
-			envelopeData := map[string]any{
-				"link_types": types,
-				"count":      len(types),
-				"from_cache": fromCache,
-				"fetched_at": fetchedAt.UTC().Format(time.RFC3339),
+			envelopeData := envelope.IssueLinkTypesOutput{
+				LinkTypes:        types,
+				Count:            len(types),
+				FromCache:        fromCache,
+				FetchedAt:        fetchedAt.UTC().Format(time.RFC3339),
+				CacheState:       cmdutil.CacheStateForCount(cacheSourceState, len(types)),
+				CacheSourceState: cacheSourceState,
+				CacheEmpty:       len(types) == 0,
 			}
-			cmdutil.AddCacheStateFields(envelopeData, cacheSourceState, len(types))
 			return cmdutil.WriteEnvelope(cmd, "issue.link.types", envelopeData)
 		},
 	}
