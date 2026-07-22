@@ -19,6 +19,10 @@ Three ways in, in order of effort:
 *   Content Markdown cannot express (panels, mentions, complex tables) →
     write native ADF and pass it with `--json-input`.
 
+Pasted Jira wiki markup is accepted too: the converter detects and
+normalizes it, recording a `markdown_dialect_normalized` warning so you
+know the input was not CommonMark.
+
 Conversion is lossy by design. Two modes decide what happens to content
 that does not survive: strict fails the command, best-effort keeps going
 and records a warning. Mutations default to strict, reads to best-effort —

@@ -75,8 +75,10 @@ The envelope, on stdout for success and failure alike:
     never a bare string.
 *   Every mutation carries `data.dry_run`: `true` on preview, `false` on the
     live write.
-*   Multi-key commands return ordered `data.results[]` with per-key errors;
-    successful keys are never discarded by one failure.
+*   Multi-key commands take key lists and ranges as positional arguments
+    (`PROJ-1 PROJ-3`, `PROJ-1..PROJ-10`), expand them transparently, and
+    return ordered `data.results[]` with per-key errors; successful keys
+    are never discarded by one failure.
 *   `warnings[]` carries coded, non-fatal signals — act on the code, not
     the text: `rate_limit_near` means throttle before the 429,
     `lossy_adf_conversion` means content was flattened.

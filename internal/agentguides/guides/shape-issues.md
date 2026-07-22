@@ -20,7 +20,9 @@ Pick the body source first:
 
 A subtask is `jira issue create --parent KEY` with a subtask type; an epic
 child is the same flag with an epic parent. For transitions, resolve the
-legal target names from the issue itself before executing.
+legal target names from the issue itself before executing; resolve/close
+transitions often require a `resolution` field (`jira cache resolutions`
+lists the names).
 
 ## Run
 
@@ -56,9 +58,18 @@ preview discipline from `safe-mutation`.
 ## Recover
 
 *   Unknown type or field (exit 3) → names are tenant-specific; refresh
-    with `jira cache refresh --force` and match exactly.
+    with `jira cache refresh --force` and match exactly. If the type is
+    valid instance-wide but still refused, it is missing from that
+    project's create screen — `--dry-run --validate-remote` shows what
+    the screen accepts.
 *   Transition refused → the workflow forbids that hop from the current
     status; the validate-remote preview lists what is legal.
+*   Transition with a comment or fields refused (exit 3) → that
+    transition has no screen (the norm in team-managed projects), so it
+    cannot carry a payload. Transition bare, then
+    `jira issue comment add`.
+*   `--assignee <email>` refused under `--dry-run` → resolving an email
+    needs a live lookup; pass `accountId:<id>` to preview.
 *   Editing with no field flags opens `$EDITOR` on a TTY and refuses
     headless (exit 3) — always pass explicit fields when scripting.
 

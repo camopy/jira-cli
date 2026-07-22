@@ -22,9 +22,12 @@ Three tiers, cheapest first:
 *   Anything the flags cannot express → hand-written JQL via
     `jira search jql`.
 
-Narrow the payload deliberately: default fields are the working set,
-`--fields summary,status,assignee` trims further, `--full` fetches
-everything. `--count` answers "how many" without fetching any issue.
+On `jira search jql`, narrow the payload deliberately: default fields
+are the working set, `--fields summary,status,assignee` trims further,
+`--full` fetches everything, and `--count` answers "how many" without
+fetching any issue. `jira issue view` and `jira issue list` take none of
+those — `issue list` narrows what is *displayed* with `--columns`, not
+the payload.
 
 ## Run
 

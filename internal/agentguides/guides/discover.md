@@ -29,9 +29,11 @@ Prefer the cache for names and ids; go live (`jira issue view`,
 ```sh
 # Refresh whatever is stale, then read what you need
 jira cache refresh
-jira cache issuetypes    # exact type names for --type
+jira cache issuetypes    # exact type names for --type (instance-wide)
 jira cache fields        # field ids for JSON payloads
 jira cache statuses      # status names for transitions and filters
+jira agent fieldtypes    # how each custom-field type is encoded
+jira jql reference       # queryable fields and functions, live
 
 # Boards and the people space are their own lookups
 jira boards list
@@ -55,6 +57,9 @@ mutates it.
 
 *   A mutation rejected for an unknown type, field, or status usually means
     a stale cache — `jira cache refresh --force` refetches everything.
+    One exception: the issuetypes cache is instance-wide, so a type can
+    be valid there yet missing from one project's create screen —
+    `--dry-run --validate-remote` sees the real screen.
 *   `jira cache refresh --dry-run` reports staleness without contacting
     Jira.
 *   Multiple user matches → the envelope lists candidates; narrow the query

@@ -65,7 +65,12 @@ and schema discovery work before any of this exists.
     there means a bad token or email, not a storage problem
     (`--skip-verify` defers that check).
 *   Wrong tenant or account → `jira auth switch` changes the active
-    profile; `-P <name>` overrides per invocation.
+    profile; `-P <name>` overrides per invocation. `JIRA_PROFILE` is
+    deliberately not read — config and flags are the only sources.
+*   Scoped token rejected at login (site 401, gateway never reached) →
+    auto-detection needs `<base_url>/_edge/tenant_info`; if that is
+    blocked, set the id yourself:
+    `jira config set profiles.<name>.cloud_id <id>`.
 
 ## Next
 

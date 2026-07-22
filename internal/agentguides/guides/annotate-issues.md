@@ -42,6 +42,8 @@ jira worklog add PROJ-123 --time-spent 2h30m --markdown "Debugging" --no-input
 ## Save
 
 *   Comment and worklog ids — edits and deletes need them later.
+*   `comment list` returns oldest-first: the latest comment is the last
+    entry of the last page, not the first.
 *   The link's `inward_issue` / `outward_issue` objects — proof the
     direction landed the way you meant.
 
@@ -59,8 +61,9 @@ The issue key exists and the profile can edit it. Watcher adds need an
     native REST body).
 *   Comment or attachment deletes are destructive: headless runs need
     `--force` on top of `--no-input`.
-*   Worklog rejected → Jira parses durations by its own workday rules; try
-    the explicit form (`1d` may not be `24h` on this tenant).
+*   Worklog duration surprises → `1d` resolves via the profile's
+    `workday_seconds` (default 28,800 = 8h), not 24h; use explicit
+    hours/minutes when in doubt.
 *   Attachment downloads never overwrite an existing file, and `--to` is
     confined to the working directory — absolute paths and `..` exit 3.
 
