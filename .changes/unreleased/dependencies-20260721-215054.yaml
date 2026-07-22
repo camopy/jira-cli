@@ -1,0 +1,3 @@
+kind: dependencies
+body: golang.org/x/text 0.39.0 fixes GO-2026-5970 (infinite loop on invalid input)
+time: 2026-07-21T21:50:54.989929678-04:00
