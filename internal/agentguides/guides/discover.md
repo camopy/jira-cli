@@ -12,8 +12,10 @@ order: 3
 Two different questions, two different sources:
 
 *   *What can the CLI do?* — the runtime schema. `jira agent schema` prints
-    the full command tree with flags and output shapes; `--path` subsets one
-    subtree. It is derived from the live binary and cannot go stale.
+    the full command tree with flags; payload shapes are marked
+    (`has_input_schema`) and fetched per command with `--path`, or all at
+    once with `--shapes`. Derived from the live binary, it cannot go
+    stale.
 *   *What does this tenant contain?* — the metadata cache. Projects, issue
     types, fields, statuses, priorities, labels, and link types are
     per-tenant data; exact names matter because mutation flags match on

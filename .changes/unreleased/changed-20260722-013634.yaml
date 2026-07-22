@@ -1,0 +1,3 @@
+kind: changed
+body: 'Emit the agent schema structure-first via docent v0.3.0: the full tree carries shape markers, `--path` returns a command''s embedded schemas, and `--shapes` captures everything with repeated bodies pooled into $defs. In model-token terms the guide corpus is 87% smaller than the pre-docent surface and the full discovery contract half the size, with no behavior claim lost'
+time: 2026-07-22T01:36:34.851588444-04:00

@@ -71,7 +71,7 @@ func TestADFInputShape_WorklogRejectsInvalidComment(t *testing.T) {
 // leaf that accepts a rich-text body, so each inlining site is checked —
 // one drifting leaf must fail, not hide behind the others.
 func TestADFInputShape_AgentSchemaDescribesCanonicalShape(t *testing.T) {
-	root := loadAgentSchema(t)
+	root := loadAgentSchemaShapes(t)
 	// path → property chain from the input schema root to the ADF
 	// document node ("" means the input schema itself is the document).
 	for path, prop := range map[string]string{

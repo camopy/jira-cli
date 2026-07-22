@@ -2,7 +2,6 @@ package root
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -71,9 +70,6 @@ func mountAgentSurface(root *cobra.Command) {
 			agent.NewADFMatrixCommand(),
 			agent.NewFieldTypesCommand(),
 		),
-		// The schema is an agent surface: whitespace is pure token cost, so
-		// the pretty default is compacted before emission.
-		docentcobra.WithSchemaTransform(compactJSON),
 	)
 	agentCmd.Hidden = true
 	agentCmd.GroupID = "agent"
@@ -81,25 +77,11 @@ func mountAgentSurface(root *cobra.Command) {
 	root.AddCommand(agentCmd, newHumanGuideCommand(cfg))
 }
 
-// compactJSON is the schema transform: strip insignificant whitespace and
-// restore the artifact trailing newline the untransformed path would add.
-func compactJSON(data []byte) ([]byte, error) {
-	var buf bytes.Buffer
-	if err := json.Compact(&buf, data); err != nil {
-		return nil, err
-	}
-	buf.WriteByte('\n')
-	return buf.Bytes(), nil
-}
-
-// pruneHiddenFlags drops hidden flags from the docent schema IR and thins
-// each remaining flag's clib extension entry to its non-zero fields.
-// Hidden flags are deliberately unadvertised surface — deprecated Markdown
+// pruneHiddenFlags drops hidden flags from the docent schema IR. Hidden
+// flags are deliberately unadvertised surface — deprecated Markdown
 // aliases keep working for old scripts, but no discovery output may teach
-// a new caller to use one. The clib thinning is token economics: the
-// adapter emits every clib field on every flag, and a dozen empty strings
-// per flag across hundreds of flags is real context-window cost for the
-// agents this schema exists to serve.
+// a new caller to use one. Docent's tree walker carries every flag, so
+// the filtering is this host's decision, made here.
 func pruneHiddenFlags(cmd *cobra.Command, tree docent.Command) docent.Command {
 	hidden := map[string]bool{}
 	cmd.LocalFlags().VisitAll(func(f *pflag.Flag) {
@@ -112,15 +94,15 @@ func pruneHiddenFlags(cmd *cobra.Command, tree docent.Command) docent.Command {
 			hidden[f.Name] = true
 		}
 	})
-	kept := tree.Flags[:0:0]
-	for _, flag := range tree.Flags {
-		if hidden[flag.Name] {
-			continue
+	if len(hidden) > 0 {
+		kept := tree.Flags[:0:0]
+		for _, flag := range tree.Flags {
+			if !hidden[flag.Name] {
+				kept = append(kept, flag)
+			}
 		}
-		flag.Extensions = thinExtensions(flag.Extensions)
-		kept = append(kept, flag)
+		tree.Flags = kept
 	}
-	tree.Flags = kept
 	byName := map[string]*cobra.Command{}
 	for _, child := range cmd.Commands() {
 		byName[child.Name()] = child
@@ -131,47 +113,6 @@ func pruneHiddenFlags(cmd *cobra.Command, tree docent.Command) docent.Command {
 		}
 	}
 	return tree
-}
-
-// thinExtensions returns a copy of a flag's extensions with zero-valued
-// entries removed, recursing into the per-namespace maps. An empty string,
-// false, nil, or empty collection says nothing an absent key doesn't.
-func thinExtensions(ext map[string]any) map[string]any {
-	if ext == nil {
-		return nil
-	}
-	out := make(map[string]any, len(ext))
-	for key, value := range ext {
-		switch v := value.(type) {
-		case map[string]any:
-			if thinned := thinExtensions(v); len(thinned) > 0 {
-				out[key] = thinned
-			}
-		case string:
-			if v != "" {
-				out[key] = v
-			}
-		case bool:
-			if v {
-				out[key] = v
-			}
-		case nil:
-		case []string:
-			if len(v) > 0 {
-				out[key] = v
-			}
-		case []any:
-			if len(v) > 0 {
-				out[key] = v
-			}
-		default:
-			out[key] = v
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
 }
 
 // newHumanGuideCommand mounts the human door on the same guide set. Docent

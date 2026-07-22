@@ -139,7 +139,7 @@ func stubReadServer(t *testing.T) *httptest.Server {
 // op form ("issue.create"); each maps onto its command path's node.
 func declaredOutputSchemas(t *testing.T) map[string]any {
 	t.Helper()
-	root := loadAgentSchema(t)
+	root := loadAgentSchemaShapes(t)
 	schemas := map[string]any{}
 	var walk func(cmd docentSchema)
 	walk = func(cmd docentSchema) {

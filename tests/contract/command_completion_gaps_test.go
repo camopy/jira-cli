@@ -126,7 +126,7 @@ func TestJSONErrorsUseStdoutEnvelopeAndExitCodes(t *testing.T) {
 }
 
 func TestSchemaIncludesFlagsAndOutputSchemas(t *testing.T) {
-	root := loadAgentSchema(t)
+	root := loadAgentSchemaShapes(t)
 	for _, path := range []string{"jira issue list", "jira issue create", "jira worklog add"} {
 		cmd := findSchemaCommand(root, path)
 		if cmd == nil {

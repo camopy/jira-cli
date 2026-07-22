@@ -6,7 +6,7 @@ import (
 )
 
 func TestOutputSchemasDescribeNestedEnvelopeAndIssueShapes(t *testing.T) {
-	root := loadAgentSchema(t)
+	root := loadAgentSchemaShapes(t)
 
 	// The tool-wide envelope and error shapes ride the schema root's
 	// output_contract extension — they describe every response, not one

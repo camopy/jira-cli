@@ -11,15 +11,18 @@ import (
 // docentSchema mirrors the docent Command JSON `jira agent schema` emits —
 // only the fields these tests assert on.
 type docentSchema struct {
-	Name         string             `json:"name"`
-	Path         string             `json:"path"`
-	Description  string             `json:"description"`
-	Flags        []docentSchemaFlag `json:"flags"`
-	FlagGroups   []docentFlagGroup  `json:"flag_groups"`
-	Children     []docentSchema     `json:"children"`
-	InputSchema  map[string]any     `json:"input_schema"`
-	OutputSchema map[string]any     `json:"output_schema"`
-	Extensions   map[string]any     `json:"extensions"`
+	Name            string             `json:"name"`
+	Path            string             `json:"path"`
+	Description     string             `json:"description"`
+	Flags           []docentSchemaFlag `json:"flags"`
+	FlagGroups      []docentFlagGroup  `json:"flag_groups"`
+	Children        []docentSchema     `json:"children"`
+	InputSchema     map[string]any     `json:"input_schema"`
+	OutputSchema    map[string]any     `json:"output_schema"`
+	HasInputSchema  bool               `json:"has_input_schema"`
+	HasOutputSchema bool               `json:"has_output_schema"`
+	Extensions      map[string]any     `json:"extensions"`
+	Defs            map[string]any     `json:"$defs"`
 }
 
 type docentSchemaFlag struct {
@@ -38,9 +41,9 @@ type docentFlagGroup struct {
 	Flags []string `json:"flags"`
 }
 
-func loadAgentSchema(t *testing.T) docentSchema {
+func loadAgentSchema(t *testing.T, args ...string) docentSchema {
 	t.Helper()
-	out, err := exec.Command(buildJiraBinary(t), "agent", "schema").CombinedOutput()
+	out, err := exec.Command(buildJiraBinary(t), append([]string{"agent", "schema"}, args...)...).CombinedOutput()
 	if err != nil {
 		t.Fatalf("agent schema error = %v\n%s", err, out)
 	}
@@ -49,6 +52,52 @@ func loadAgentSchema(t *testing.T) docentSchema {
 		t.Fatalf("schema output is not JSON: %v\n%s", err, out)
 	}
 	return root
+}
+
+// loadAgentSchemaShapes loads the full tree with every schema body
+// embedded (`--shapes`) and materializes the root $defs pool back into
+// the bodies, so shape assertions read plain objects regardless of which
+// bodies docent chose to pool.
+func loadAgentSchemaShapes(t *testing.T) docentSchema {
+	t.Helper()
+	root := loadAgentSchema(t, "--shapes")
+	materializeSchemaRefs(&root, root.Defs)
+	return root
+}
+
+// materializeSchemaRefs substitutes {"$ref": "#/$defs/<name>"} objects
+// with their pooled bodies, recursing through the whole tree.
+func materializeSchemaRefs(cmd *docentSchema, defs map[string]any) {
+	cmd.InputSchema, _ = resolveSchemaRefs(cmd.InputSchema, defs).(map[string]any)
+	cmd.OutputSchema, _ = resolveSchemaRefs(cmd.OutputSchema, defs).(map[string]any)
+	for i := range cmd.Children {
+		materializeSchemaRefs(&cmd.Children[i], defs)
+	}
+}
+
+func resolveSchemaRefs(v any, defs map[string]any) any {
+	switch val := v.(type) {
+	case map[string]any:
+		if ref, ok := val["$ref"].(string); ok && len(val) == 1 {
+			name := strings.TrimPrefix(ref, "#/$defs/")
+			if body, ok := defs[name]; ok {
+				return resolveSchemaRefs(body, defs)
+			}
+		}
+		out := make(map[string]any, len(val))
+		for k, child := range val {
+			out[k] = resolveSchemaRefs(child, defs)
+		}
+		return out
+	case []any:
+		out := make([]any, len(val))
+		for i, child := range val {
+			out[i] = resolveSchemaRefs(child, defs)
+		}
+		return out
+	default:
+		return v
+	}
 }
 
 func findSchemaCommand(cmd docentSchema, path string) *docentSchema {
@@ -196,7 +245,7 @@ func TestSchemaCommandIncludesDetailedFlagSignatures(t *testing.T) {
 }
 
 func TestAgentSchemaPublishesLiveLeafPathsAndFlagGroups(t *testing.T) {
-	root := loadAgentSchema(t)
+	root := loadAgentSchemaShapes(t)
 
 	outputClib := clibExtension(findSchemaFlag(root.Flags, "output"))
 	if outputClib == nil {
@@ -302,7 +351,16 @@ func TestAgentSchemaPublishesLiveLeafPathsAndFlagGroups(t *testing.T) {
 // schema so the response shape is discoverable from the schema surface
 // alone.
 func TestAgentSchemaBindsLeafInputAndOutputSchemas(t *testing.T) {
-	root := loadAgentSchema(t)
+	// The default tree is structure-only: shape markers, no bodies. Pin
+	// that policy once here, then assert the bodies on the --shapes form.
+	structure := loadAgentSchema(t)
+	marker := findSchemaCommand(structure, "jira issue comment add")
+	if marker == nil || !marker.HasInputSchema || !marker.HasOutputSchema ||
+		marker.InputSchema != nil || marker.OutputSchema != nil {
+		t.Fatalf("default tree must carry both shape markers without bodies: %+v", marker)
+	}
+
+	root := loadAgentSchemaShapes(t)
 	for _, path := range []string{
 		"jira issue comment",
 		"jira issue comment add",

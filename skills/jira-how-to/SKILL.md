@@ -49,9 +49,10 @@ Flags, argument shapes, per-command input/output JSON schemas:
 jira agent schema --path "issue create"
 ```
 
-The full tree is `jira agent schema`; each command node embeds its
-schemas. `jira agent adf-matrix` and `jira agent fieldtypes` cover the
-rich-text and custom-field registries.
+The full tree (`jira agent schema`) is structure only — nodes carry
+`has_input_schema`/`has_output_schema` markers; fetch a command's bodies
+with `--path`, or everything with `--shapes`. `jira agent adf-matrix` and
+`jira agent fieldtypes` cover the rich-text and custom-field registries.
 
 ## Ground rules that never change
 
