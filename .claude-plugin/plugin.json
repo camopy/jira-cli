@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "jira-cli",
+  "description": "Skills for driving jira-cli: the jira-how-to router that steers any Jira task to the CLI's embedded guides and runtime schema.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": {
+    "name": "matcra587",
+    "url": "https://github.com/matcra587"
+  },
+  "homepage": "https://matcra587.github.io/jira-cli/",
+  "keywords": [],
+  "repository": "https://github.com/matcra587/jira-cli"
+}
