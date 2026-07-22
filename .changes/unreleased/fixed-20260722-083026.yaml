@@ -1,3 +1,0 @@
-kind: fixed
-body: Close twelve behavior gaps the old agent guide covered and the rewrite lost — screenless-transition recovery, create-screen vs instance-wide issue types, search-only field selectors, worklog workday semantics, wiki-markup normalization, rank chunk resume, scoped-token cloud_id recovery, positional key ranges, and more — and document that `issue move` cannot change project or type on Jira Cloud today (the edit API silently ignores those fields); clone and delete instead
-time: 2026-07-22T08:30:26.670052249-04:00

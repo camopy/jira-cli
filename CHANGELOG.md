@@ -1,6 +1,13 @@
 # Release Notes
 
 
+## [0.14.1](https://github.com/matcra587/jira-cli/releases/tag/v0.14.1) — 2026-07-22
+
+### Fixed
+
+- Route ADF and custom-field registry lookups from the jira-how-to skill, pre-approve its discovery commands in full, and pin its hard-won never-list; the stale in-repo jira-cli router skill is gone (plugin 0.1.1)
+- Close twelve behavior gaps the old agent guide covered and the rewrite lost — screenless-transition recovery, create-screen vs instance-wide issue types, search-only field selectors, worklog workday semantics, wiki-markup normalization, rank chunk resume, scoped-token cloud_id recovery, positional key ranges, and more — and document that `issue move` cannot change project or type on Jira Cloud today (the edit API silently ignores those fields); clone and delete instead
+
 ## [0.14.0](https://github.com/matcra587/jira-cli/releases/tag/v0.14.0) — 2026-07-22
 
 ### Added
