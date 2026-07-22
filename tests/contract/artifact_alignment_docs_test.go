@@ -136,8 +136,7 @@ func TestReadmeScopeDocsMatchCurrentCommands(t *testing.T) {
 func TestAgentGuideRecipesMatchLiveCommandSurface(t *testing.T) {
 	got := readAgentGuide(t)
 	for _, want := range []string{
-		"jira issue link delete KEY 9001 --force --output=json",
-		"Configured backend lookup",
+		"jira issue link delete PROJ-123 9001 --no-input --force",
 		"JIRA_TOKEN_<PROFILE>",
 		"`AGENT=0`",
 		"`CLAUDECODE`",
@@ -241,6 +240,8 @@ func TestOnePasswordDocsExplainDesktopIntegrationPrerequisite(t *testing.T) {
 			}
 			return string(b)
 		},
+		// The agent guides deliberately don't restate backend internals —
+		// docs/auth.md and the README own the 1Password prerequisite.
 		"../../docs/auth.md": func() string {
 			b, err := os.ReadFile("../../docs/auth.md")
 			if err != nil {
@@ -248,7 +249,6 @@ func TestOnePasswordDocsExplainDesktopIntegrationPrerequisite(t *testing.T) {
 			}
 			return string(b)
 		},
-		"agent guide": func() string { return readAgentGuide(t) },
 	}
 	for label, read := range sources {
 		got := read()

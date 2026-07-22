@@ -12,7 +12,9 @@ order: 2
 Pick the secret backend before logging in: `keyring` (OS keyring, the
 default), `1password`, or `env` (credential read from an environment
 variable at run time — nothing stored). Agents on shared or ephemeral
-machines usually want `env`.
+machines usually want `env`. The `JIRA_TOKEN_<PROFILE>` variable is
+checked first for every backend; for the env backend it is the source
+(`--credential-env` names a different variable).
 
 The token itself is a Jira Cloud API token tied to an account email.
 Classic and scoped (granular) tokens both work — the flavor is detected

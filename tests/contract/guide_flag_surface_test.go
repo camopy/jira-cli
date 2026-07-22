@@ -13,10 +13,10 @@ import (
 )
 
 // agentGuideDir is the repo-relative directory of the embedded agent
-// guide. The guide is split into one `<slug>.md` file per workflow plus
-// `_preamble.md`. Several contract tests read these files; the helper
-// readAgentGuide (in the docs_alignment-tagged tests) concatenates them.
-const agentGuideDir = "../../internal/cli/agent/guide"
+// guides — one `<slug>.md` file per workflow, served through docent.
+// Several contract tests read these files; the helper readAgentGuide (in
+// the docs_alignment-tagged tests) concatenates them.
+const agentGuideDir = "../../internal/agentguides/guides"
 
 func TestAgentGuideCommandFlagsExistOnHelpSurface(t *testing.T) {
 	bin := buildJiraBinary(t)
@@ -72,42 +72,34 @@ func TestAgentGuideCommandFlagsExistOnHelpSurface(t *testing.T) {
 	}
 }
 
-type guideSchema struct {
-	Commands    []guideSchemaCommand `json:"commands"`
-	GlobalFlags []guideSchemaFlag    `json:"global_flags"`
-}
-
 type guideSchemaCommand struct {
-	CommandPath string               `json:"command_path"`
-	Flags       []guideSchemaFlag    `json:"flags"`
-	Subcommands []guideSchemaCommand `json:"subcommands"`
+	Path     string               `json:"path"`
+	Flags    []docentSchemaFlag   `json:"flags"`
+	Children []guideSchemaCommand `json:"children"`
 }
 
-type guideSchemaFlag struct {
-	Name      string `json:"name"`
-	Shorthand string `json:"shorthand"`
-}
-
-func loadCommandSurfaceSchema(t *testing.T, bin string) guideSchema {
+func loadCommandSurfaceSchema(t *testing.T, bin string) guideSchemaCommand {
 	t.Helper()
-	cmd := exec.Command(bin, "agent", "schema", "--output=compact")
+	cmd := exec.Command(bin, "agent", "schema")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("agent schema error = %v\nstdout=%s\nstderr=%s", err, stdout.String(), stderr.String())
 	}
-	var schema guideSchema
+	var schema guideSchemaCommand
 	if err := json.Unmarshal(stdout.Bytes(), &schema); err != nil {
 		t.Fatalf("agent schema JSON error = %v\nstdout=%s", err, stdout.String())
 	}
 	return schema
 }
 
-func schemaGlobalFlags(schema guideSchema) map[string]struct{} {
-	out := make(map[string]struct{}, len(schema.GlobalFlags)*2)
-	for _, flag := range schema.GlobalFlags {
-		out[flag.Name] = struct{}{}
+// schemaGlobalFlags collects the root's persistent flags — the set every
+// command inherits, which docent emits once at the defining command.
+func schemaGlobalFlags(schema guideSchemaCommand) map[string]struct{} {
+	out := make(map[string]struct{}, len(schema.Flags)*2)
+	for _, flag := range schema.Flags {
+		out["--"+flag.Name] = struct{}{}
 		if flag.Shorthand != "" {
 			out["-"+flag.Shorthand] = struct{}{}
 		}
@@ -115,21 +107,19 @@ func schemaGlobalFlags(schema guideSchema) map[string]struct{} {
 	return out
 }
 
-func schemaCommandsByPath(schema guideSchema) map[string]guideSchemaCommand {
+func schemaCommandsByPath(schema guideSchemaCommand) map[string]guideSchemaCommand {
 	out := map[string]guideSchemaCommand{}
 	var visit func(guideSchemaCommand)
 	visit = func(cmd guideSchemaCommand) {
-		path := strings.TrimSpace(strings.TrimPrefix(cmd.CommandPath, "jira"))
+		path := strings.TrimSpace(strings.TrimPrefix(cmd.Path, "jira"))
 		if path != "" {
 			out[path] = cmd
 		}
-		for _, child := range cmd.Subcommands {
+		for _, child := range cmd.Children {
 			visit(child)
 		}
 	}
-	for _, cmd := range schema.Commands {
-		visit(cmd)
-	}
+	visit(schema)
 	return out
 }
 
@@ -146,7 +136,7 @@ func sortedCommandPaths(commands map[string]guideSchemaCommand) []string {
 
 func commandSchemaHasFlag(cmd guideSchemaCommand, want string) bool {
 	for _, flag := range cmd.Flags {
-		if flag.Name == want {
+		if "--"+flag.Name == want {
 			return true
 		}
 		if flag.Shorthand != "" && want == "-"+flag.Shorthand {

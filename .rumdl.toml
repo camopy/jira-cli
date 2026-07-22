@@ -5,14 +5,9 @@
 # Markdown style guide base, same project-specific exclusions.
 # https://google.github.io/styleguide/docguide/style.html
 #
-# `internal/cli/agent/guide/**` is excluded entirely: it's the embedded
-# LLM-facing runbook, split into one `<slug>.md` file per workflow plus
-# `_preamble.md`, structurally modelled after slack-cli's
-# `internal/agenthelp/guide.go` (a Go-string-embedded guide that bypasses
-# markdown lint by living inside a `.go` file). The format uses `# subgroup`
-# headings inside `**Decide**` blocks and dense prose lines that intentionally
-# clash with several rules — the audience is an LLM reading raw markdown, not
-# a human in an 80-col terminal.
+# The embedded agent guides (internal/agentguides/guides/**) are linted
+# like any other markdown: docent's Agent Guide Standard wants
+# line-oriented ~80-col prose, which the Google style base here matches.
 
 [global]
 flavor = "gfm"
@@ -33,7 +28,6 @@ exclude = [
     "CLAUDE.md",
     "LICENSE.md",
     "testdata/**",
-    "internal/cli/agent/guide/**",
 ]
 
 disable = [

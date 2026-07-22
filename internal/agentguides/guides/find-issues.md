@@ -32,7 +32,7 @@ everything. `--count` answers "how many" without fetching any issue.
 jira issue view PROJ-123
 
 # Flag-driven filtering; --jql escapes the flag grammar entirely
-jira issue list --project PROJ --status '<Done' --assignee me --updated -7d
+jira issue list --project PROJ --status '<Done' --assignee me --updated=-7d
 
 # Preview the JQL a filter set produces — no Jira call
 jira jql build --project PROJ --status '!Abandoned' --order-by updated --desc

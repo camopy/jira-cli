@@ -355,7 +355,7 @@ type outputField struct {
 }
 
 // writeOutputFields renders the command's JSON output shape as a table, driven
-// by the schema registry that `jira schema` emits (internal/cli/schema). Only
+// by the schema registry that `jira agent schema` emits (internal/cli/schema). Only
 // commands with a registered command-specific schema get a table; the rest
 // return the standard envelope and render nothing here. Generating the table
 // from the registry keeps it in lockstep with the real output — it cannot drift.
@@ -370,7 +370,7 @@ func writeOutputFields(b *bytes.Buffer, cmd *cobra.Command) {
 		return
 	}
 	b.WriteString("## Output fields\n\n")
-	b.WriteString("With `--output json`, the response envelope's `data` object carries these fields. Run `jira schema` for the full machine-readable schema.\n\n")
+	b.WriteString("With `--output json`, the response envelope's `data` object carries these fields. Run `jira agent schema` for the full machine-readable schema.\n\n")
 	b.WriteString("| Field | Type | Description |\n")
 	b.WriteString("| --- | --- | --- |\n")
 	for _, r := range rows {

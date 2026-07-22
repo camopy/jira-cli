@@ -52,8 +52,9 @@ The issue key exists and the profile can edit it. Watcher adds need an
 
 ## Recover
 
-*   Link reads backwards → delete it by id (`jira issue link delete`) and
-    recreate with `KEY` and `--to` swapped, or use the opposite type name.
+*   Link reads backwards → delete it by id and recreate with `KEY` and
+    `--to` swapped, or use the opposite type name:
+    `jira issue link delete PROJ-123 9001 --no-input --force`.
     A link *with a comment* is only expressible via `--json-input` (the
     native REST body).
 *   Comment or attachment deletes are destructive: headless runs need

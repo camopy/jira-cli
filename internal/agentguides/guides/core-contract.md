@@ -18,6 +18,8 @@ Pick an output mode once and parse accordingly:
 *   `--output json` — the full envelope described under Save.
 *   `auto` (the default) resolves per context: detected agent environment →
     `compact`, non-TTY stdout → `json`, interactive terminal → `human`.
+    Detection reads the cross-tool `AGENT` convention first (`AGENT=0`
+    opts out), then harness markers such as `CLAUDECODE`.
 
 Human mode is prose for people. Never parse it.
 
@@ -63,7 +65,12 @@ The envelope, on stdout for success and failure alike:
 
 *   `ok: false` → read `errors[]`. Each error carries `type`, a stable
     snake_case `code`, `message`, `hint` (the recommended next action), and
-    `retryable`.
+    `retryable`. Context fields appear when they apply: `flag`, `field`,
+    `path`, `suggestions` (valid values for a miss), `candidates`
+    (structured matches on an ambiguous lookup), and on Jira failures
+    `http_status`, `retry_after_seconds`, `rate_limit_remaining`,
+    `provider`, `upstream_code`, `upstream_status`,
+    `upstream_request_id`, `upstream_messages`, `upstream_field_errors`.
 *   Issue identity is always an object — `{"key": …, "id": …, "self": …}` —
     never a bare string.
 *   Every mutation carries `data.dry_run`: `true` on preview, `false` on the
@@ -89,7 +96,9 @@ exists.
 ## Recover
 
 Exit codes are a published contract: `0` ok, `1` auth, `2` not-found, `3`
-validation, `4` rate-limit, `5` server, `6` canceled, `7` timeout.
+validation, `4` rate-limit, `5` server, `6` canceled (`code=canceled`),
+`7` timeout (`code=timeout`). A write refused by read-only mode reports
+`code=read_only`.
 
 On failure act on `errors[0].hint`; it names the command or flag that fixes
 the problem. Retry only when `retryable` is true. For wire-level detail,

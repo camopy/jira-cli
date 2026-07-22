@@ -19,10 +19,10 @@ import (
 
 func coreContractText(t *testing.T) string {
 	t.Helper()
-	path := filepath.Join("..", "..", "internal", "cli", "agent", "guide", "core_contract.md")
+	path := filepath.Join("..", "..", "internal", "agentguides", "guides", "core-contract.md")
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("read core_contract.md: %v", err)
+		t.Fatalf("read core-contract.md: %v", err)
 	}
 	return string(raw)
 }
@@ -31,11 +31,9 @@ func coreContractText(t *testing.T) string {
 // 0-7 set the code emits (canceled=6 and timeout=7 included).
 func TestCoreContractDocumentsEveryExitCode(t *testing.T) {
 	doc := coreContractText(t)
-	for _, row := range []string{
-		"| 0 ", "| 1 ", "| 2 ", "| 3 ", "| 4 ", "| 5 ", "| 6 ", "| 7 ",
-	} {
-		if !strings.Contains(doc, row) {
-			t.Errorf("exit table is missing the %q row", strings.TrimSpace(row))
+	for _, code := range []string{"`0`", "`1`", "`2`", "`3`", "`4`", "`5`", "`6`", "`7`"} {
+		if !strings.Contains(doc, code) {
+			t.Errorf("exit-code list is missing %s", code)
 		}
 	}
 	for _, marker := range []string{"`code=canceled`", "`code=timeout`", "`code=read_only`"} {
@@ -58,7 +56,7 @@ func TestCoreContractDocumentsEveryErrorField(t *testing.T) {
 			continue
 		}
 		if !strings.Contains(doc, "`"+name+"`") {
-			t.Errorf("error field %q is emitted by cli.Error but not documented in core_contract.md", name)
+			t.Errorf("error field %q is emitted by cli.Error but not documented in core-contract.md", name)
 		}
 	}
 }

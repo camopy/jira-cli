@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"maps"
 	"os"
 	"strings"
 
@@ -25,11 +24,6 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli/schema"
 	"github.com/matcra587/jira-cli/internal/config"
 )
-
-// agentSurfaceConfig is the docent integration surface built once at tree
-// assembly. Bare `jira` in a non-TTY context reuses it so the discovery
-// output cannot drift from `jira agent schema`.
-var agentSurfaceConfig docent.Config
 
 // mountAgentSurface builds the docent config from the fully assembled
 // command tree and mounts the agent command group (hidden — it exists for
@@ -70,7 +64,6 @@ func mountAgentSurface(root *cobra.Command) {
 		Command:         tree,
 		ContractVersion: agentguides.ContractVersion,
 	}
-	agentSurfaceConfig = cfg
 
 	agentCmd := docentcobra.NewCommand(
 		cfg,
@@ -295,22 +288,16 @@ func guideIndexToMarkdown(index string) string {
 	return b.String()
 }
 
-// writeDiscoverySchema emits the same schema JSON `jira agent schema`
-// prints, for the bare-`jira` non-TTY contract. The contract version is
-// stamped as a root extensions entry, matching docent's own emission.
+// writeDiscoverySchema emits the schema for the bare-`jira` non-TTY
+// contract by dispatching to this root's own mounted `agent schema`
+// command — byte-identical by construction, with no shared state between
+// root instances (each root carries its own mount).
 func writeDiscoverySchema(cmd *cobra.Command) error {
-	tree := agentSurfaceConfig.Command
-	ext := map[string]any{"contract_version": agentguides.ContractVersion}
-	maps.Copy(ext, tree.Extensions)
-	tree.Extensions = ext
-	data, err := docent.MarshalSchema(tree)
+	schemaCmd, _, err := cmd.Root().Find([]string{"agent", "schema"})
 	if err != nil {
-		return err
+		return fmt.Errorf("locate agent schema command: %w", err)
 	}
-	data, err = compactJSON(data)
-	if err != nil {
-		return err
-	}
-	_, err = cmd.OutOrStdout().Write(data)
-	return err
+	schemaCmd.SetOut(cmd.OutOrStdout())
+	schemaCmd.SetErr(cmd.ErrOrStderr())
+	return schemaCmd.RunE(schemaCmd, nil)
 }
