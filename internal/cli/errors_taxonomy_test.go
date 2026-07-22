@@ -8,6 +8,8 @@ import (
 	"testing"
 	"unicode"
 
+	docentcobra "github.com/matcra587/docent/cobra"
+
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/errtax"
@@ -33,6 +35,7 @@ var taxonomyRegistry = map[string]struct {
 	"arg_count_invalid":         {"validation", 3},
 	"arg_value_invalid":         {"validation", 3},
 	"issue_type_unknown":        {"validation", 3},
+	"agent_topic_unknown":       {"validation", 3},
 	"saved_query_unknown":       {"validation", 3},
 	"jq_expression_invalid":     {"validation", 3},
 	"jq_output_conflict":        {"validation", 3},
@@ -162,6 +165,7 @@ func taxonomyCases() []struct {
 		{"arg value invalid", NewCLIInputError(InputArgValueInvalid, `invalid argument "x"`), "arg_value_invalid", "That isn't one of the accepted values — run the command with `--help` to see the choices.", true},
 		{"issue type unknown", &jira.IssueTypeUnknownError{IssueType: "Buug", ProjectKey: "KAN", Available: []string{"Task", "Bug"}}, "issue_type_unknown", "Pass one of the project's issue types.", false},
 		{"saved query unknown", NewCLIInputError(InputSavedQueryUnknown, `saved query "nope" not found`), "saved_query_unknown", "Pass one of your saved query names — they live in the queries_path directory.", true},
+		{"agent topic unknown", &agentTopicError{err: fmt.Errorf("%w: %q", docentcobra.ErrGuideNotFound, "nope")}, "agent_topic_unknown", "List the valid names first: `jira agent guide` for guide slugs and sections, `jira agent schema` for command paths.", true},
 		{"jq expression invalid", NewCLIInputError(InputJQExpressionInvalid, "invalid --jq expression: unexpected EOF"), "jq_expression_invalid", "Fix the jq expression — the message carries the parser's position and token.", true},
 		{"jq output conflict", NewCLIInputError(InputJQOutputConflict, "--jq filters JSON output and cannot combine with --output=human"), "jq_output_conflict", "Remove `--jq` or the conflicting human-output flag; the filter runs over the JSON output.", true},
 		{"jq eval failed", &JQEvalError{Err: errors.New("boom")}, "jq_eval_failed", "The expression failed against this output's shape — inspect it first with `--output=json` and no filter.", false},

@@ -66,33 +66,36 @@ func TestADFInputShape_WorklogRejectsInvalidComment(t *testing.T) {
 }
 
 // agent schema must publish the canonical ADF input shape so dry-run,
-// live submit, and the schema surface describe the same fields.
+// live submit, and the schema surface describe the same fields. Docent
+// inlines the shared adf_document shape separately at every --json-input
+// leaf that accepts a rich-text body, so each inlining site is checked —
+// one drifting leaf must fail, not hide behind the others.
 func TestADFInputShape_AgentSchemaDescribesCanonicalShape(t *testing.T) {
-	cmd := exec.Command(buildJiraBinary(t), "--output=json", "agent", "schema")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("agent schema error = %v\n%s", err, out)
+	root := loadAgentSchema(t)
+	// path → property chain from the input schema root to the ADF
+	// document node ("" means the input schema itself is the document).
+	for path, prop := range map[string]string{
+		"jira issue comment":      "",
+		"jira issue comment add":  "",
+		"jira issue comment edit": "",
+		"jira issue create":       "description",
+		"jira issue transition":   "comment",
+		"jira worklog add":        "comment",
+	} {
+		cmd := findSchemaCommand(root, path)
+		if cmd == nil {
+			t.Fatalf("agent schema missing path %q", path)
+		}
+		doc := cmd.InputSchema
+		if prop != "" {
+			props, _ := doc["properties"].(map[string]any)
+			doc, _ = props[prop].(map[string]any)
+		}
+		props, _ := doc["properties"].(map[string]any)
+		typeProp, _ := props["type"].(map[string]any)
+		enum, _ := typeProp["enum"].([]any)
+		if len(enum) != 1 || enum[0] != "doc" {
+			t.Errorf("%s: ADF document shape not inlined at %q: %v", path, prop, doc)
+		}
 	}
-	var env struct {
-		Data struct {
-			InputSchemas map[string]any `json:"input_schemas"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(out, &env); err != nil {
-		t.Fatalf("agent schema output not JSON: %v\n%s", err, out)
-	}
-	if env.Data.InputSchemas == nil {
-		t.Fatalf("agent schema must publish input_schemas describing the canonical ADF shape\n%s", out)
-	}
-	if _, ok := env.Data.InputSchemas["adf_document"]; !ok {
-		t.Fatalf("input_schemas must include the canonical adf_document shape; got keys %v", keysOfAny(env.Data.InputSchemas))
-	}
-}
-
-func keysOfAny(m map[string]any) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
 }

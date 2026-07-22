@@ -8,17 +8,17 @@ import (
 )
 
 func TestJSONEnvelopeAndOutputModeConflicts(t *testing.T) {
-	cmd := exec.Command(buildJiraBinary(t), "--output=json", "agent", "schema")
+	cmd := exec.Command(buildJiraBinary(t), "--output=json", "agent", "adf-matrix")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("schema error = %v\n%s", err, out)
+		t.Fatalf("adf-matrix error = %v\n%s", err, out)
 	}
 	var env map[string]any
 	if err := json.Unmarshal(out, &env); err != nil {
-		t.Fatalf("schema output is not JSON: %v\n%s", err, out)
+		t.Fatalf("adf-matrix output is not JSON: %v\n%s", err, out)
 	}
 	if env["meta"] == nil || env["errors"] == nil {
-		t.Fatalf("schema envelope missing fields: %+v", env)
+		t.Fatalf("adf-matrix envelope missing fields: %+v", env)
 	}
 
 	// The removed legacy boolean flags must be rejected as unknown
@@ -37,6 +37,8 @@ func TestJSONEnvelopeAndOutputModeConflicts(t *testing.T) {
 }
 
 func TestOutputModesApplyToGenericCommands(t *testing.T) {
+	// The docent schema surface is mode-independent raw JSON: --output
+	// changes nothing and never wraps an envelope around it.
 	cmd := exec.Command(buildJiraBinary(t), "--output=compact", "agent", "schema")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -46,7 +48,7 @@ func TestOutputModesApplyToGenericCommands(t *testing.T) {
 	if err := json.Unmarshal(out, &compact); err != nil {
 		t.Fatalf("schema --compact output is not JSON: %v\n%s", err, out)
 	}
-	if compact["meta"] != nil || compact["commands"] == nil {
+	if compact["meta"] != nil || compact["name"] != "jira" {
 		t.Fatalf("schema --compact output = %+v", compact)
 	}
 
@@ -73,12 +75,16 @@ func TestOutputModesApplyToGenericCommands(t *testing.T) {
 func TestAgentStructuredCommandsRenderJSONInHumanMode(t *testing.T) {
 	bin := buildJiraBinary(t)
 	for _, tc := range []struct {
-		name string
-		args []string
+		name     string
+		args     []string
+		envelope bool
 	}{
+		// The docent schema is compact raw JSON in every mode; the
+		// registry commands keep the host envelope and pretty-print for
+		// humans.
 		{name: "schema", args: []string{"agent", "schema"}},
-		{name: "adf-matrix", args: []string{"agent", "adf-matrix"}},
-		{name: "fieldtypes", args: []string{"agent", "fieldtypes"}},
+		{name: "adf-matrix", args: []string{"agent", "adf-matrix"}, envelope: true},
+		{name: "fieldtypes", args: []string{"agent", "fieldtypes"}, envelope: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			args := append([]string{"--output=human"}, tc.args...)
@@ -89,14 +95,14 @@ func TestAgentStructuredCommandsRenderJSONInHumanMode(t *testing.T) {
 			if strings.Contains(string(out), "INF") {
 				t.Fatalf("agent command used clog key-value output instead of JSON:\n%s", out)
 			}
-			if !strings.Contains(string(out), "\n  \"") {
+			if tc.envelope && !strings.Contains(string(out), "\n  \"") {
 				t.Fatalf("agent command human JSON was not pretty-printed:\n%s", out)
 			}
 			var env map[string]any
 			if err := json.Unmarshal(out, &env); err != nil {
 				t.Fatalf("agent command human output is not JSON: %v\n%s", err, out)
 			}
-			if env["meta"] == nil || env["data"] == nil || env["errors"] == nil {
+			if tc.envelope && (env["meta"] == nil || env["data"] == nil || env["errors"] == nil) {
 				t.Fatalf("agent command human JSON is not an envelope: %+v", env)
 			}
 		})

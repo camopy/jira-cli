@@ -133,25 +133,29 @@ func stubReadServer(t *testing.T) *httptest.Server {
 	return srv
 }
 
-// declaredOutputSchemas reads output_schemas from the built binary's own
-// `agent schema` output, so the test pins the published contract rather
-// than an internal package view.
+// declaredOutputSchemas reads the embedded output schemas from the built
+// binary's own `agent schema` output, so the test pins the published
+// contract rather than an internal package view. Keys keep the legacy
+// op form ("issue.create"); each maps onto its command path's node.
 func declaredOutputSchemas(t *testing.T) map[string]any {
 	t.Helper()
-	stdout, stderr, code := runJira(t, "--output=compact", "agent", "schema")
-	if code != 0 {
-		t.Fatalf("agent schema exit = %d\nstderr=%s", code, stderr)
+	root := loadAgentSchema(t)
+	schemas := map[string]any{}
+	var walk func(cmd docentSchema)
+	walk = func(cmd docentSchema) {
+		if cmd.OutputSchema != nil {
+			op := strings.ReplaceAll(strings.TrimPrefix(cmd.Path, "jira "), " ", ".")
+			schemas[op] = map[string]any(cmd.OutputSchema)
+		}
+		for _, child := range cmd.Children {
+			walk(child)
+		}
 	}
-	var data struct {
-		OutputSchemas map[string]any `json:"output_schemas"`
+	walk(root)
+	if len(schemas) == 0 {
+		t.Fatal("agent schema published no embedded output schemas")
 	}
-	if err := json.Unmarshal([]byte(stdout), &data); err != nil {
-		t.Fatalf("agent schema decode: %v", err)
-	}
-	if len(data.OutputSchemas) == 0 {
-		t.Fatal("agent schema published no output_schemas")
-	}
-	return data.OutputSchemas
+	return schemas
 }
 
 // conformanceErrors walks a decoded JSON value against the declared schema

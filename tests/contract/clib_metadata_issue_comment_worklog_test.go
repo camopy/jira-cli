@@ -1,34 +1,9 @@
 package contract
 
 import (
-	"encoding/json"
-	"os/exec"
 	"slices"
 	"testing"
 )
-
-type issueCommentWorklogMetadataEnvelope struct {
-	Data struct {
-		Commands []issueCommentWorklogMetadataCommand `json:"commands"`
-	} `json:"data"`
-}
-
-type issueCommentWorklogMetadataCommand struct {
-	CommandPath string                               `json:"command_path"`
-	Flags       []issueCommentWorklogMetadataFlag    `json:"flags"`
-	Subcommands []issueCommentWorklogMetadataCommand `json:"subcommands"`
-}
-
-type issueCommentWorklogMetadataFlag struct {
-	Name        string   `json:"name"`
-	Group       string   `json:"group"`
-	Placeholder string   `json:"placeholder"`
-	Completion  string   `json:"completion"`
-	ValueHint   string   `json:"value_hint"`
-	Enum        []string `json:"enum"`
-	EnumTerse   []string `json:"enum_terse"`
-	Terse       string   `json:"terse"`
-}
 
 type issueCommentWorklogMetadataWant struct {
 	commandPath  string
@@ -43,7 +18,7 @@ type issueCommentWorklogMetadataWant struct {
 }
 
 func TestIssueCommentAndWorklogFlagsPublishClibMetadata(t *testing.T) {
-	schema := loadIssueCommentWorklogMetadataSchema(t)
+	root := loadAgentSchema(t)
 
 	for _, want := range []issueCommentWorklogMetadataWant{
 		{commandPath: "jira issue mine", flagName: "--detail", group: "Output"},
@@ -138,65 +113,48 @@ func TestIssueCommentAndWorklogFlagsPublishClibMetadata(t *testing.T) {
 		{commandPath: "jira worklog add", flagName: "--json-input", group: "Input", placeholder: "FILE", valueHint: "file"},
 		{commandPath: "jira worklog add", flagName: "--dry-run", group: "Safety"},
 	} {
-		requireClibMetadata(t, schema, want)
+		requireClibMetadata(t, root, want)
 	}
 }
 
-func loadIssueCommentWorklogMetadataSchema(t *testing.T) issueCommentWorklogMetadataEnvelope {
+func requireClibMetadata(t *testing.T, root docentSchema, want issueCommentWorklogMetadataWant) {
 	t.Helper()
-	bin := buildJiraBinary(t)
-	out, err := exec.Command(bin, "--output=json", "agent", "schema").CombinedOutput()
-	if err != nil {
-		t.Fatalf("agent schema error = %v\n%s", err, out)
+	cmd := findSchemaCommand(root, want.commandPath)
+	if cmd == nil {
+		t.Fatalf("schema missing path %q", want.commandPath)
 	}
-	var schema issueCommentWorklogMetadataEnvelope
-	if err := json.Unmarshal(out, &schema); err != nil {
-		t.Fatalf("schema output is not JSON: %v\n%s", err, out)
+	flag := findClibView(cmd.Flags, want.flagName)
+	if flag == nil {
+		t.Fatalf("schema missing flag %s on %s", want.flagName, want.commandPath)
 	}
-	return schema
-}
-
-func requireClibMetadata(t *testing.T, schema issueCommentWorklogMetadataEnvelope, want issueCommentWorklogMetadataWant) {
-	t.Helper()
-	cmd, ok := findIssueCommentWorklogMetadataCommand(schema.Data.Commands, want.commandPath)
-	if !ok {
-		t.Fatalf("schema missing command_path %q", want.commandPath)
+	if flag.Group != want.group {
+		t.Fatalf("%s %s group = %q, want %q", want.commandPath, want.flagName, flag.Group, want.group)
 	}
-	for _, flag := range cmd.Flags {
-		if flag.Name != want.flagName {
-			continue
-		}
-		if flag.Group != want.group {
-			t.Fatalf("%s %s group = %q, want %q", want.commandPath, want.flagName, flag.Group, want.group)
-		}
-		if flag.Placeholder != want.placeholder {
-			t.Fatalf("%s %s placeholder = %q, want %q", want.commandPath, want.flagName, flag.Placeholder, want.placeholder)
-		}
-		if flag.Completion != want.completion {
-			t.Fatalf("%s %s completion = %q, want %q", want.commandPath, want.flagName, flag.Completion, want.completion)
-		}
-		if flag.ValueHint != want.valueHint {
-			t.Fatalf("%s %s value_hint = %q, want %q", want.commandPath, want.flagName, flag.ValueHint, want.valueHint)
-		}
-		for _, value := range want.enumContains {
-			if !slices.Contains(flag.Enum, value) {
-				t.Fatalf("%s %s enum = %v, want value %q", want.commandPath, want.flagName, flag.Enum, value)
-			}
-		}
-		if want.terse != "" && flag.Terse != want.terse {
-			t.Fatalf("%s %s terse = %q, want %q", want.commandPath, want.flagName, flag.Terse, want.terse)
-		}
-		if want.enumTerse != nil {
-			if !slices.Equal(flag.EnumTerse, want.enumTerse) {
-				t.Fatalf("%s %s enum_terse = %v, want %v", want.commandPath, want.flagName, flag.EnumTerse, want.enumTerse)
-			}
-			if len(flag.EnumTerse) != len(flag.Enum) {
-				t.Fatalf("%s %s enum_terse len %d != enum len %d (a value would fall back to the flag usage)", want.commandPath, want.flagName, len(flag.EnumTerse), len(flag.Enum))
-			}
-		}
-		return
+	if flag.Placeholder != want.placeholder {
+		t.Fatalf("%s %s placeholder = %q, want %q", want.commandPath, want.flagName, flag.Placeholder, want.placeholder)
 	}
-	t.Fatalf("schema missing flag %s on %s: %+v", want.flagName, want.commandPath, cmd.Flags)
+	if flag.Completion != want.completion {
+		t.Fatalf("%s %s completion = %q, want %q", want.commandPath, want.flagName, flag.Completion, want.completion)
+	}
+	if flag.ValueHint != want.valueHint {
+		t.Fatalf("%s %s value_hint = %q, want %q", want.commandPath, want.flagName, flag.ValueHint, want.valueHint)
+	}
+	for _, value := range want.enumContains {
+		if !slices.Contains(flag.Enum, value) {
+			t.Fatalf("%s %s enum = %v, want value %q", want.commandPath, want.flagName, flag.Enum, value)
+		}
+	}
+	if want.terse != "" && flag.Terse != want.terse {
+		t.Fatalf("%s %s terse = %q, want %q", want.commandPath, want.flagName, flag.Terse, want.terse)
+	}
+	if want.enumTerse != nil {
+		if !slices.Equal(flag.EnumTerse, want.enumTerse) {
+			t.Fatalf("%s %s enum_terse = %v, want %v", want.commandPath, want.flagName, flag.EnumTerse, want.enumTerse)
+		}
+		if len(flag.EnumTerse) != len(flag.Enum) {
+			t.Fatalf("%s %s enum_terse len %d != enum len %d (a value would fall back to the flag usage)", want.commandPath, want.flagName, len(flag.EnumTerse), len(flag.Enum))
+		}
+	}
 }
 
 // TestEnumTerseMatchesEnumLength walks every command in the schema and asserts
@@ -206,30 +164,19 @@ func requireClibMetadata(t *testing.T, schema issueCommentWorklogMetadataEnvelop
 // reintroduce the flag-usage noise on every value. This guard fires for any
 // enum flag — including ones nobody remembered to add a per-flag want row for.
 func TestEnumTerseMatchesEnumLength(t *testing.T) {
-	schema := loadIssueCommentWorklogMetadataSchema(t)
+	root := loadAgentSchema(t)
 
-	var walk func(cmds []issueCommentWorklogMetadataCommand)
-	walk = func(cmds []issueCommentWorklogMetadataCommand) {
-		for _, cmd := range cmds {
-			for _, flag := range cmd.Flags {
-				if len(flag.EnumTerse) > 0 && len(flag.EnumTerse) != len(flag.Enum) {
-					t.Errorf("%s %s: enum_terse len %d != enum len %d — every value would fall back to the flag usage", cmd.CommandPath, flag.Name, len(flag.EnumTerse), len(flag.Enum))
-				}
+	var walk func(cmd docentSchema)
+	walk = func(cmd docentSchema) {
+		for _, flag := range cmd.Flags {
+			view := clibViewOf(flag)
+			if len(view.EnumTerse) > 0 && len(view.EnumTerse) != len(view.Enum) {
+				t.Errorf("%s %s: enum_terse len %d != enum len %d — every value would fall back to the flag usage", cmd.Path, flag.Name, len(view.EnumTerse), len(view.Enum))
 			}
-			walk(cmd.Subcommands)
+		}
+		for _, child := range cmd.Children {
+			walk(child)
 		}
 	}
-	walk(schema.Data.Commands)
-}
-
-func findIssueCommentWorklogMetadataCommand(commands []issueCommentWorklogMetadataCommand, path string) (issueCommentWorklogMetadataCommand, bool) {
-	for _, cmd := range commands {
-		if cmd.CommandPath == path {
-			return cmd, true
-		}
-		if found, ok := findIssueCommentWorklogMetadataCommand(cmd.Subcommands, path); ok {
-			return found, true
-		}
-	}
-	return issueCommentWorklogMetadataCommand{}, false
+	walk(root)
 }

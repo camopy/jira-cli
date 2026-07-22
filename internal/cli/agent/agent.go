@@ -180,6 +180,18 @@ $ jira agent guide safe_mutation`,
 	return cmd
 }
 
+// NewADFMatrixCommand exposes the ADF support matrix command for mounting
+// under the docent agent group.
+func NewADFMatrixCommand() *cobra.Command {
+	return agentADFMatrixCommand()
+}
+
+// NewFieldTypesCommand exposes the customfield registry command for
+// mounting under the docent agent group.
+func NewFieldTypesCommand() *cobra.Command {
+	return agentFieldTypesCommand()
+}
+
 // agentADFMatrixCommand emits the ADF support matrix as JSON — the set
 // of nodes and marks the CLI handles, for agents that want the support
 // set without parsing prose.

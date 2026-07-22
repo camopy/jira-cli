@@ -71,16 +71,23 @@ func TestMarkdownAliasesHiddenFromHelpAndSchema(t *testing.T) {
 		})
 	}
 
-	out, err := exec.Command(buildJiraBinary(t), "agent", "schema", "--output=compact").Output()
-	if err != nil {
-		t.Fatalf("agent schema error = %v", err)
+	root := loadAgentSchema(t)
+	names := map[string]bool{}
+	var walk func(cmd docentSchema)
+	walk = func(cmd docentSchema) {
+		for _, flag := range cmd.Flags {
+			names[flag.Name] = true
+		}
+		for _, child := range cmd.Children {
+			walk(child)
+		}
 	}
-	got := string(out)
-	if !strings.Contains(got, "--markdown") {
+	walk(root)
+	if !names["markdown"] {
 		t.Fatalf("schema must carry the canonical --markdown flag")
 	}
 	for _, alias := range []string{"body-markdown", "comment-markdown", "description-markdown"} {
-		if strings.Contains(got, alias) {
+		if names[alias] {
 			t.Fatalf("schema must not expose the deprecated alias %q", alias)
 		}
 	}

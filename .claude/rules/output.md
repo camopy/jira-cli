@@ -14,7 +14,7 @@ The authoritative implementation rules for the output machinery. Sibling
 files link here: [commands.md](commands.md) (command-side usage),
 [style.md](style.md) (the lint bans backing this file),
 [project.md](project.md) (architecture map). The user-facing contract itself
-is specified in the embedded guide (`jira agent guide core_contract`) — do
+is specified in the embedded guide (`jira agent guide core-contract`) — do
 not duplicate it here; change it there in the same PR.
 
 ## Libraries

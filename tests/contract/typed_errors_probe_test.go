@@ -183,7 +183,7 @@ func TestCommandErrorsAreTypedNotSubstringClassified(t *testing.T) {
 		// Unknown guide section / saved query name: bad CLI argument
 		// values, must be validation / 3 — NOT not_found / 2 (nothing was
 		// looked up in Jira).
-		{"agent-guide-unknown-section", []string{"agent", "guide", "no_such_section"}, nil, "arg_value_invalid", 3},
+		{"agent-guide-unknown-section", []string{"agent", "guide", "no_such_section"}, nil, "agent_topic_unknown", 3},
 		{
 			"search-saved-unknown-query",
 			[]string{"search", "saved", "no-such-query"},

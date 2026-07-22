@@ -26,9 +26,12 @@ alpha full-screen dashboard.
     parse/validate/render.
 *   **Mutations** route through the validate-and-encode pipeline; `--dry-run`
     is a local-only preview and never contacts Jira.
-*   The embedded agent guide and schema (`jira agent guide`,
-    `jira agent schema`) are the authoritative CLI behavior spec — update
-    them with any behavior change; do not restate them elsewhere.
+*   The embedded agent guides and schema (`jira agent guide`,
+    `jira agent schema`, served through docent per the Agent Guide
+    Standard) are the authoritative CLI behavior spec — update them with
+    any behavior change; do not restate them elsewhere. Guides live in
+    `internal/agentguides/guides/`; the schema derives from the live
+    command tree plus the typed envelope registry.
 
 Area-specific conventions auto-load from `.claude/rules/`.
 

@@ -4,133 +4,236 @@ import (
 	"encoding/json"
 	"os/exec"
 	"regexp"
+	"strings"
 	"testing"
 )
 
-func TestSchemaCommandIncludesCommandTree(t *testing.T) {
-	cmd := exec.Command(buildJiraBinary(t), "--output=json", "agent", "schema")
-	out, err := cmd.CombinedOutput()
+// docentSchema mirrors the docent Command JSON `jira agent schema` emits —
+// only the fields these tests assert on.
+type docentSchema struct {
+	Name         string             `json:"name"`
+	Path         string             `json:"path"`
+	Description  string             `json:"description"`
+	Flags        []docentSchemaFlag `json:"flags"`
+	FlagGroups   []docentFlagGroup  `json:"flag_groups"`
+	Children     []docentSchema     `json:"children"`
+	InputSchema  map[string]any     `json:"input_schema"`
+	OutputSchema map[string]any     `json:"output_schema"`
+	Extensions   map[string]any     `json:"extensions"`
+}
+
+type docentSchemaFlag struct {
+	Name        string         `json:"name"`
+	Shorthand   string         `json:"shorthand"`
+	Description string         `json:"description"`
+	Type        string         `json:"type"`
+	Default     string         `json:"default"`
+	Enum        []string       `json:"enum"`
+	Persistent  bool           `json:"persistent"`
+	Extensions  map[string]any `json:"extensions"`
+}
+
+type docentFlagGroup struct {
+	Kind  string   `json:"kind"`
+	Flags []string `json:"flags"`
+}
+
+func loadAgentSchema(t *testing.T) docentSchema {
+	t.Helper()
+	out, err := exec.Command(buildJiraBinary(t), "agent", "schema").CombinedOutput()
 	if err != nil {
-		t.Fatalf("schema error = %v\n%s", err, out)
+		t.Fatalf("agent schema error = %v\n%s", err, out)
 	}
-	var env map[string]any
-	if err := json.Unmarshal(out, &env); err != nil {
+	var root docentSchema
+	if err := json.Unmarshal(out, &root); err != nil {
 		t.Fatalf("schema output is not JSON: %v\n%s", err, out)
 	}
-	if env["data"] == nil {
-		t.Fatalf("schema missing data: %+v", env)
+	return root
+}
+
+func findSchemaCommand(cmd docentSchema, path string) *docentSchema {
+	if cmd.Path == path {
+		return &cmd
+	}
+	for _, child := range cmd.Children {
+		if found := findSchemaCommand(child, path); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+func findSchemaFlag(flags []docentSchemaFlag, name string) *docentSchemaFlag {
+	for i := range flags {
+		if flags[i].Name == name {
+			return &flags[i]
+		}
+	}
+	return nil
+}
+
+func hasSchemaFlagGroup(groups []docentFlagGroup, kind string, want ...string) bool {
+	for _, group := range groups {
+		if group.Kind != kind || len(group.Flags) != len(want) {
+			continue
+		}
+		seen := make(map[string]bool, len(group.Flags))
+		for _, flag := range group.Flags {
+			seen[flag] = true
+		}
+		ok := true
+		for _, flag := range want {
+			if !seen[flag] {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return true
+		}
+	}
+	return false
+}
+
+// clibExtension digs the clib per-flag extension map out of a flag's
+// extensions entry.
+func clibExtension(flag *docentSchemaFlag) map[string]any {
+	if flag == nil {
+		return nil
+	}
+	clib, _ := flag.Extensions["clib"].(map[string]any)
+	return clib
+}
+
+// clibFlagView flattens a docent flag and its clib extension entry into
+// the fields the metadata contract tests assert on, so the per-family
+// want tables read the same as they did against the legacy schema.
+type clibFlagView struct {
+	Name        string
+	Group       string
+	Placeholder string
+	Completion  string
+	ValueHint   string
+	Terse       string
+	EnumDefault string
+	Enum        []string
+	EnumTerse   []string
+}
+
+func clibViewOf(flag docentSchemaFlag) clibFlagView {
+	view := clibFlagView{Name: flag.Name}
+	ext := clibExtension(&flag)
+	str := func(key string) string {
+		s, _ := ext[key].(string)
+		return s
+	}
+	strs := func(key string) []string {
+		raw, _ := ext[key].([]any)
+		if raw == nil {
+			return nil
+		}
+		out := make([]string, 0, len(raw))
+		for _, v := range raw {
+			s, _ := v.(string)
+			out = append(out, s)
+		}
+		return out
+	}
+	view.Group = str("group")
+	view.Placeholder = str("placeholder")
+	view.Completion = str("complete")
+	view.ValueHint = str("hint")
+	view.Terse = str("terse")
+	view.EnumDefault = str("enumDefault")
+	view.EnumTerse = strs("enumTerse")
+	view.Enum = enumOf(flag)
+	return view
+}
+
+// enumOf reads the flag's top-level enum list from the raw schema flag.
+func enumOf(flag docentSchemaFlag) []string {
+	return flag.Enum
+}
+
+// findClibView resolves one named flag (leading dashes tolerated) on a
+// command into its flattened clib view.
+func findClibView(flags []docentSchemaFlag, name string) *clibFlagView {
+	flag := findSchemaFlag(flags, strings.TrimLeft(name, "-"))
+	if flag == nil {
+		return nil
+	}
+	view := clibViewOf(*flag)
+	return &view
+}
+
+func TestSchemaCommandIncludesCommandTree(t *testing.T) {
+	root := loadAgentSchema(t)
+	if root.Name != "jira" || len(root.Children) == 0 {
+		t.Fatalf("schema missing command tree: name=%q children=%d", root.Name, len(root.Children))
 	}
 }
 
-// The schema payload must carry the contract revision so an agent can
-// detect a breaking change before reusing saved recipes.
+// The schema root must carry the contract revision so an agent can detect
+// a breaking change before reusing saved recipes.
 func TestSchemaCommandReportsContractVersion(t *testing.T) {
-	cmd := exec.Command(buildJiraBinary(t), "--output=json", "agent", "schema")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("schema error = %v\n%s", err, out)
-	}
-	var env struct {
-		Data struct {
-			SchemaVersion string `json:"schema_version"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(out, &env); err != nil {
-		t.Fatalf("schema output is not JSON: %v\n%s", err, out)
-	}
+	root := loadAgentSchema(t)
+	version, _ := root.Extensions["contract_version"].(string)
 	semver := regexp.MustCompile(`^\d+\.\d+\.\d+$`)
-	if !semver.MatchString(env.Data.SchemaVersion) {
-		t.Fatalf("data.schema_version = %q, want MAJOR.MINOR.PATCH semver", env.Data.SchemaVersion)
+	if !semver.MatchString(version) {
+		t.Fatalf("extensions.contract_version = %q, want MAJOR.MINOR.PATCH semver", version)
 	}
 }
 
 func TestSchemaCommandIncludesDetailedFlagSignatures(t *testing.T) {
-	cmd := exec.Command(buildJiraBinary(t), "--output=json", "agent", "schema")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("schema error = %v\n%s", err, out)
+	root := loadAgentSchema(t)
+	profile := findSchemaFlag(root.Flags, "profile")
+	if profile == nil {
+		t.Fatalf("schema missing root --profile flag: %+v", root.Flags)
 	}
-	var env struct {
-		Data struct {
-			Commands []struct {
-				Flags []struct {
-					Name      string `json:"name"`
-					Type      string `json:"type"`
-					Usage     string `json:"usage"`
-					Shorthand string `json:"shorthand"`
-					Default   string `json:"default"`
-				} `json:"flags"`
-			} `json:"commands"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(out, &env); err != nil {
-		t.Fatalf("schema output is not JSON: %v\n%s", err, out)
-	}
-	if len(env.Data.Commands) == 0 {
-		t.Fatalf("schema missing root command:\n%s", out)
-	}
-	var found bool
-	for _, flag := range env.Data.Commands[0].Flags {
-		if flag.Name == "--profile" {
-			found = true
-			if flag.Type != "string" || flag.Shorthand != "P" || flag.Usage == "" {
-				t.Fatalf("profile flag signature incomplete: %+v\n%s", flag, out)
-			}
-		}
-	}
-	if !found {
-		t.Fatalf("schema missing --profile flag signature:\n%s", out)
+	if profile.Type != "string" || profile.Shorthand != "P" || profile.Description == "" || !profile.Persistent {
+		t.Fatalf("profile flag signature incomplete: %+v", *profile)
 	}
 }
 
 func TestAgentSchemaPublishesLiveLeafPathsAndFlagGroups(t *testing.T) {
-	bin := buildJiraBinary(t)
-	out, err := exec.Command(bin, "--output=json", "agent", "schema").CombinedOutput()
-	if err != nil {
-		t.Fatalf("agent schema error = %v\n%s", err, out)
+	root := loadAgentSchema(t)
+
+	outputClib := clibExtension(findSchemaFlag(root.Flags, "output"))
+	if outputClib == nil {
+		t.Fatalf("agent schema missing global --output flag with clib extension")
 	}
-	var env struct {
-		Data struct {
-			GlobalFlags []agentSchemaFlag    `json:"global_flags"`
-			Commands    []agentSchemaCommand `json:"commands"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(out, &env); err != nil {
-		t.Fatalf("schema output is not JSON: %v\n%s", err, out)
-	}
-	outputFlag := findAgentSchemaFlag(env.Data.GlobalFlags, "--output")
-	if outputFlag == nil {
-		t.Fatalf("agent schema missing global --output flag: %+v", env.Data.GlobalFlags)
-	}
-	if outputFlag.EnumDefault != "auto" || len(outputFlag.EnumTerse) != 4 {
-		t.Fatalf("agent schema dropped --output enum metadata: %+v", *outputFlag)
+	enumTerse, _ := outputClib["enumTerse"].([]any)
+	if outputClib["enumDefault"] != "auto" || len(enumTerse) != 4 {
+		t.Fatalf("agent schema dropped --output enum metadata: %+v", outputClib)
 	}
 
-	issueList := findAgentSchemaCommand(env.Data.Commands, "jira issue list")
+	issueList := findSchemaCommand(root, "jira issue list")
 	if issueList == nil {
-		t.Fatalf("agent schema missing leaf command_path %q", "jira issue list")
+		t.Fatalf("agent schema missing leaf path %q", "jira issue list")
 	}
-	for _, want := range []string{"--board", "--board-id", "--key", "--parallelism"} {
-		if !hasAgentSchemaFlag(issueList.Flags, want) {
-			t.Fatalf("jira issue list schema missing local flag %s: %+v", want, issueList.Flags)
+	for _, want := range []string{"board", "board-id", "key", "parallelism"} {
+		if findSchemaFlag(issueList.Flags, want) == nil {
+			t.Fatalf("jira issue list schema missing local flag --%s", want)
 		}
 	}
-	if hasAgentSchemaFlag(issueList.Flags, "--output") {
-		t.Fatalf("jira issue list duplicated global --output in local flags: %+v", issueList.Flags)
+	if findSchemaFlag(issueList.Flags, "output") != nil {
+		t.Fatalf("jira issue list duplicated global --output in local flags")
 	}
-	if !hasFlagGroup(issueList.MutuallyExclusiveFlags, "--board", "--board-id") {
-		t.Fatalf("jira issue list missing board mutex group: %+v", issueList.MutuallyExclusiveFlags)
+	if !hasSchemaFlagGroup(issueList.FlagGroups, "mutually_exclusive", "board", "board-id") {
+		t.Fatalf("jira issue list missing board mutex group: %+v", issueList.FlagGroups)
 	}
-	issueView := findAgentSchemaCommand(env.Data.Commands, "jira issue view")
+
+	issueView := findSchemaCommand(root, "jira issue view")
 	if issueView == nil {
-		t.Fatalf("agent schema missing leaf command_path %q", "jira issue view")
+		t.Fatalf("agent schema missing leaf path %q", "jira issue view")
 	}
-	if !hasAgentSchemaFlag(issueView.Flags, "--parallelism") {
-		t.Fatalf("jira issue view schema missing local flag --parallelism: %+v", issueView.Flags)
+	if findSchemaFlag(issueView.Flags, "parallelism") == nil {
+		t.Fatalf("jira issue view schema missing local flag --parallelism")
 	}
-	if issueView.OutputSchema != "issue.view" {
-		t.Fatalf("jira issue view output schema = %q, want issue.view", issueView.OutputSchema)
+	if _, ok := issueView.OutputSchema["properties"]; !ok {
+		t.Fatalf("jira issue view output schema missing or stub: %+v", issueView.OutputSchema)
 	}
+
 	for _, path := range []string{
 		"jira epic add",
 		"jira epic remove",
@@ -155,174 +258,94 @@ func TestAgentSchemaPublishesLiveLeafPathsAndFlagGroups(t *testing.T) {
 		"jira worklog add",
 		"jira worklog list",
 	} {
-		cmd := findAgentSchemaCommand(env.Data.Commands, path)
+		cmd := findSchemaCommand(root, path)
 		if cmd == nil {
-			t.Fatalf("agent schema missing leaf command_path %q", path)
+			t.Fatalf("agent schema missing leaf path %q", path)
 		}
-		if !hasAgentSchemaFlag(cmd.Flags, "--parallelism") {
-			t.Fatalf("%s schema missing local flag --parallelism: %+v", path, cmd.Flags)
+		if findSchemaFlag(cmd.Flags, "parallelism") == nil {
+			t.Fatalf("%s schema missing local flag --parallelism", path)
 		}
 	}
 
-	jqlBuild := findAgentSchemaCommand(env.Data.Commands, "jira jql build")
+	jqlBuild := findSchemaCommand(root, "jira jql build")
 	if jqlBuild == nil {
-		t.Fatalf("agent schema missing leaf command_path %q", "jira jql build")
+		t.Fatalf("agent schema missing leaf path %q", "jira jql build")
 	}
-	if !hasAgentSchemaFlag(jqlBuild.Flags, "--key") {
-		t.Fatalf("jira jql build schema missing local flag --key: %+v", jqlBuild.Flags)
+	if findSchemaFlag(jqlBuild.Flags, "key") == nil {
+		t.Fatalf("jira jql build schema missing local flag --key")
 	}
 
-	issueLink := findAgentSchemaCommand(env.Data.Commands, "jira issue link")
+	issueLink := findSchemaCommand(root, "jira issue link")
 	if issueLink == nil {
-		t.Fatalf("agent schema missing leaf command_path %q", "jira issue link")
+		t.Fatalf("agent schema missing leaf path %q", "jira issue link")
 	}
-	if !hasFlagGroup(issueLink.RequiredTogetherFlags, "--to", "--type") {
-		t.Fatalf("jira issue link missing required-together --to/--type group: %+v", issueLink.RequiredTogetherFlags)
+	if !hasSchemaFlagGroup(issueLink.FlagGroups, "required_together", "to", "type") {
+		t.Fatalf("jira issue link missing required-together to/type group: %+v", issueLink.FlagGroups)
 	}
 
-	issueCreate := findAgentSchemaCommand(env.Data.Commands, "jira issue create")
+	issueCreate := findSchemaCommand(root, "jira issue create")
 	if issueCreate == nil {
-		t.Fatalf("agent schema missing leaf command_path %q", "jira issue create")
+		t.Fatalf("agent schema missing leaf path %q", "jira issue create")
 	}
-	if issueCreate.InputSchema != "issue.create" || issueCreate.OutputSchema != "issue.create" {
-		t.Fatalf("jira issue create schema links = input %q output %q", issueCreate.InputSchema, issueCreate.OutputSchema)
+	inProps, _ := issueCreate.InputSchema["properties"].(map[string]any)
+	outProps, _ := issueCreate.OutputSchema["properties"].(map[string]any)
+	if inProps["project_key"] == nil || outProps["issue"] == nil {
+		t.Fatalf("jira issue create schema bindings look mis-keyed: input has project_key=%v, output has issue=%v",
+			inProps["project_key"] != nil, outProps["issue"] != nil)
 	}
 }
 
 // TestAgentSchemaBindsLeafInputAndOutputSchemas pins the leaf bindings an
 // agent introspects: the comment add/edit leaves (the commands that
-// actually take --json-input) must carry an input schema — not just the
-// runnable group alias — and the read/list verbs must publish an output
+// actually take --json-input) must embed an input schema — not just the
+// runnable group alias — and the read/list verbs must embed an output
 // schema so the response shape is discoverable from the schema surface
 // alone.
 func TestAgentSchemaBindsLeafInputAndOutputSchemas(t *testing.T) {
-	bin := buildJiraBinary(t)
-	out, err := exec.Command(bin, "--output=json", "agent", "schema").CombinedOutput()
-	if err != nil {
-		t.Fatalf("agent schema error = %v\n%s", err, out)
-	}
-	var env struct {
-		Data struct {
-			Commands      []agentSchemaCommand `json:"commands"`
-			InputSchemas  map[string]any       `json:"input_schemas"`
-			OutputSchemas map[string]any       `json:"output_schemas"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(out, &env); err != nil {
-		t.Fatalf("schema output is not JSON: %v\n%s", err, out)
-	}
-	for path, want := range map[string]string{
-		"jira issue comment":      "issue.comment",
-		"jira issue comment add":  "issue.comment.add",
-		"jira issue comment edit": "issue.comment.edit",
+	root := loadAgentSchema(t)
+	for _, path := range []string{
+		"jira issue comment",
+		"jira issue comment add",
+		"jira issue comment edit",
 	} {
-		cmd := findAgentSchemaCommand(env.Data.Commands, path)
+		cmd := findSchemaCommand(root, path)
 		if cmd == nil {
-			t.Fatalf("agent schema missing command_path %q", path)
+			t.Fatalf("agent schema missing path %q", path)
 		}
-		if cmd.InputSchema != want {
-			t.Errorf("%s input schema = %q, want %q", path, cmd.InputSchema, want)
-		}
-		if env.Data.InputSchemas[want] == nil {
-			t.Errorf("data.input_schemas missing key %q", want)
+		if cmd.InputSchema == nil {
+			t.Errorf("%s missing embedded input schema", path)
 		}
 	}
-	for path, want := range map[string]string{
-		"jira issue comment list":    "issue.comment.list",
-		"jira issue attachment list": "issue.attachment.list",
-		"jira issue link list":       "issue.link.list",
-		"jira issue link types":      "issue.link.types",
-		"jira issue transition":      "issue.transition",
-		"jira worklog list":          "worklog.list",
-		"jira worklog add":           "worklog.add",
-		"jira boards list":           "boards.list",
-		"jira cache labels":          "cache.labels",
-		"jira cache linktypes":       "cache.linktypes",
-		"jira cache boards":          "cache.boards",
-		"jira cache refresh":         "cache.refresh",
-		"jira cache clear":           "cache.clear",
+	// Each leaf must embed the *right* schema, not just any schema: the
+	// named property is distinctive to that operation's Output struct, so
+	// a mis-keyed registry entry fails here instead of passing on
+	// presence alone.
+	for path, distinctive := range map[string]string{
+		"jira issue comment list":    "comments",
+		"jira issue attachment list": "attachments",
+		"jira issue link list":       "links",
+		"jira issue link types":      "count",
+		"jira issue transition":      "transition",
+		"jira worklog list":          "worklogs",
+		"jira worklog add":           "worklog",
+		"jira boards list":           "boards",
+		"jira cache labels":          "cache_state",
+		"jira cache linktypes":       "cache_state",
+		"jira cache boards":          "boards_count",
+		"jira cache refresh":         "results",
+		"jira cache clear":           "removed",
 	} {
-		cmd := findAgentSchemaCommand(env.Data.Commands, path)
+		cmd := findSchemaCommand(root, path)
 		if cmd == nil {
-			t.Fatalf("agent schema missing command_path %q", path)
+			t.Fatalf("agent schema missing path %q", path)
 		}
-		if cmd.OutputSchema != want {
-			t.Errorf("%s output schema = %q, want %q", path, cmd.OutputSchema, want)
-		}
-		schema, ok := env.Data.OutputSchemas[want].(map[string]any)
+		props, ok := cmd.OutputSchema["properties"].(map[string]any)
 		if !ok {
-			t.Fatalf("data.output_schemas missing key %q", want)
-		}
-		if _, ok := schema["properties"]; !ok {
-			t.Errorf("output schema %q is a stub with no properties", want)
-		}
-	}
-}
-
-type agentSchemaCommand struct {
-	Name                   string               `json:"name"`
-	CommandPath            string               `json:"command_path"`
-	Flags                  []agentSchemaFlag    `json:"flags"`
-	Subcommands            []agentSchemaCommand `json:"subcommands"`
-	MutuallyExclusiveFlags []stringSet          `json:"mutually_exclusive_flags"`
-	RequiredTogetherFlags  []stringSet          `json:"required_together_flags"`
-	InputSchema            string               `json:"input_schema"`
-	OutputSchema           string               `json:"output_schema"`
-}
-
-type agentSchemaFlag struct {
-	Name        string   `json:"name"`
-	EnumDefault string   `json:"enum_default"`
-	EnumTerse   []string `json:"enum_terse"`
-}
-
-type stringSet []string
-
-func findAgentSchemaCommand(commands []agentSchemaCommand, path string) *agentSchemaCommand {
-	for i := range commands {
-		cmd := &commands[i]
-		if cmd.CommandPath == path {
-			return cmd
-		}
-		if found := findAgentSchemaCommand(cmd.Subcommands, path); found != nil {
-			return found
-		}
-	}
-	return nil
-}
-
-func hasAgentSchemaFlag(flags []agentSchemaFlag, name string) bool {
-	return findAgentSchemaFlag(flags, name) != nil
-}
-
-func findAgentSchemaFlag(flags []agentSchemaFlag, name string) *agentSchemaFlag {
-	for _, flag := range flags {
-		if flag.Name == name {
-			return &flag
-		}
-	}
-	return nil
-}
-
-func hasFlagGroup(groups []stringSet, want ...string) bool {
-	for _, group := range groups {
-		if len(group) != len(want) {
+			t.Errorf("%s output schema missing or stub: %+v", path, cmd.OutputSchema)
 			continue
 		}
-		seen := make(map[string]bool, len(group))
-		for _, value := range group {
-			seen[value] = true
-		}
-		ok := true
-		for _, value := range want {
-			if !seen[value] {
-				ok = false
-				break
-			}
-		}
-		if ok {
-			return true
+		if props[distinctive] == nil {
+			t.Errorf("%s output schema lacks its distinctive property %q — wrong schema bound?", path, distinctive)
 		}
 	}
-	return false
 }

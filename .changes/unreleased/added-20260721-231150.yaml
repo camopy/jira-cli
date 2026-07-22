@@ -1,0 +1,3 @@
+kind: added
+body: Browse the embedded agent guides as a human with the new top-level `jira guide` command — themed Markdown rendering on a terminal, raw Markdown for pipes — and export them as agent skills with `jira agent export`
+time: 2026-07-21T23:11:50.617935908-04:00

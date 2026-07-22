@@ -2,27 +2,18 @@ package contract
 
 import (
 	"encoding/json"
-	"os/exec"
 	"testing"
 )
 
 func TestOutputSchemasDescribeNestedEnvelopeAndIssueShapes(t *testing.T) {
-	cmd := exec.Command(buildJiraBinary(t), "--output=json", "agent", "schema")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("schema error = %v\n%s", err, out)
-	}
+	root := loadAgentSchema(t)
 
-	var env struct {
-		Data struct {
-			OutputSchemas map[string]schemaObject `json:"output_schemas"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(out, &env); err != nil {
-		t.Fatalf("schema output is not JSON: %v\n%s", err, out)
-	}
+	// The tool-wide envelope and error shapes ride the schema root's
+	// output_contract extension — they describe every response, not one
+	// command.
+	contract := decodeSchemaObjectMap(t, root.Extensions["output_contract"])
 
-	envelope := env.Data.OutputSchemas["envelope"]
+	envelope := contract["envelope"]
 	// The envelope is lean: ok, meta, data, errors, warnings.
 	for _, required := range []string{"ok", "meta", "data", "errors", "warnings"} {
 		if !containsString(envelope.Required, required) {
@@ -41,14 +32,14 @@ func TestOutputSchemasDescribeNestedEnvelopeAndIssueShapes(t *testing.T) {
 		t.Fatalf("envelope meta schema must not require profile: %+v", meta)
 	}
 	// The error schema carries the lean structured-error fields.
-	errSchema := env.Data.OutputSchemas["error"]
+	errSchema := contract["error"]
 	for _, required := range []string{"type", "code", "message", "hint", "retryable"} {
 		if !containsString(errSchema.Required, required) {
 			t.Fatalf("error schema missing required %q: %+v", required, errSchema)
 		}
 	}
 
-	issueList := env.Data.OutputSchemas["issue.list"]
+	issueList := decodeSchemaObject(t, findSchemaCommand(root, "jira issue list").OutputSchema)
 	issues := issueList.Properties["issues"]
 	item := issues.Items
 	for _, required := range []string{"key", "summary", "status", "updated"} {
@@ -69,7 +60,7 @@ func TestOutputSchemasDescribeNestedEnvelopeAndIssueShapes(t *testing.T) {
 		}
 	}
 
-	issueEdit := env.Data.OutputSchemas["issue.edit"]
+	issueEdit := decodeSchemaObject(t, findSchemaCommand(root, "jira issue edit").OutputSchema)
 	if !containsString(issueEdit.Required, "fields") {
 		t.Fatalf("issue.edit schema missing fields requirement: %+v", issueEdit)
 	}
@@ -81,6 +72,34 @@ type schemaObject struct {
 	Required   []string                `json:"required"`
 	Properties map[string]schemaObject `json:"properties"`
 	Items      *schemaObject           `json:"items"`
+}
+
+// decodeSchemaObject round-trips a decoded map[string]any schema value
+// into the typed schemaObject shape the assertions use.
+func decodeSchemaObject(t *testing.T, value any) schemaObject {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal schema value: %v", err)
+	}
+	var out schemaObject
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("decode schema value: %v", err)
+	}
+	return out
+}
+
+func decodeSchemaObjectMap(t *testing.T, value any) map[string]schemaObject {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal schema map: %v", err)
+	}
+	var out map[string]schemaObject
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("decode schema map: %v", err)
+	}
+	return out
 }
 
 func containsString(values []string, want string) bool {

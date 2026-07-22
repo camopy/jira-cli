@@ -1,22 +1,11 @@
 package contract
 
 import (
-	"encoding/json"
-	"os/exec"
 	"testing"
 )
 
 func TestClibMetadataForRemainingCommandFamilies(t *testing.T) {
-	bin := buildJiraBinary(t)
-	out, err := exec.Command(bin, "--output=json", "agent", "schema").CombinedOutput()
-	if err != nil {
-		t.Fatalf("agent schema error = %v\n%s", err, out)
-	}
-
-	var env remainingMetadataEnvelope
-	if err := json.Unmarshal(out, &env); err != nil {
-		t.Fatalf("schema output is not JSON: %v\n%s", err, out)
-	}
+	root := loadAgentSchema(t)
 
 	for _, want := range []remainingFlagWant{
 		{path: "jira cache labels", name: "--refresh", group: "Cache"},
@@ -70,28 +59,8 @@ func TestClibMetadataForRemainingCommandFamilies(t *testing.T) {
 		{path: "jira epic remove", name: "--dry-run", group: "Safety"},
 		{path: "jira alias import", name: "--clobber", group: "Safety"},
 	} {
-		requireRemainingFlag(t, env.Data.Commands, want)
+		requireRemainingFlag(t, root, want)
 	}
-}
-
-type remainingMetadataEnvelope struct {
-	Data struct {
-		Commands []remainingMetadataCommand `json:"commands"`
-	} `json:"data"`
-}
-
-type remainingMetadataCommand struct {
-	CommandPath string                     `json:"command_path"`
-	Flags       []remainingMetadataFlag    `json:"flags"`
-	Subcommands []remainingMetadataCommand `json:"subcommands"`
-}
-
-type remainingMetadataFlag struct {
-	Name        string `json:"name"`
-	Group       string `json:"group"`
-	Placeholder string `json:"placeholder"`
-	Completion  string `json:"completion"`
-	ValueHint   string `json:"value_hint"`
 }
 
 type remainingFlagWant struct {
@@ -103,41 +72,26 @@ type remainingFlagWant struct {
 	valueHint   string
 }
 
-func requireRemainingFlag(t *testing.T, commands []remainingMetadataCommand, want remainingFlagWant) {
+func requireRemainingFlag(t *testing.T, root docentSchema, want remainingFlagWant) {
 	t.Helper()
-	cmd, ok := findRemainingCommand(commands, want.path)
-	if !ok {
-		t.Fatalf("schema missing command_path %q", want.path)
+	cmd := findSchemaCommand(root, want.path)
+	if cmd == nil {
+		t.Fatalf("schema missing path %q", want.path)
 	}
-	for _, flag := range cmd.Flags {
-		if flag.Name != want.name {
-			continue
-		}
-		if flag.Group != want.group {
-			t.Fatalf("%s %s group = %q, want %q", want.path, want.name, flag.Group, want.group)
-		}
-		if want.placeholder != "" && flag.Placeholder != want.placeholder {
-			t.Fatalf("%s %s placeholder = %q, want %q", want.path, want.name, flag.Placeholder, want.placeholder)
-		}
-		if want.completion != "" && flag.Completion != want.completion {
-			t.Fatalf("%s %s completion = %q, want %q", want.path, want.name, flag.Completion, want.completion)
-		}
-		if want.valueHint != "" && flag.ValueHint != want.valueHint {
-			t.Fatalf("%s %s value_hint = %q, want %q", want.path, want.name, flag.ValueHint, want.valueHint)
-		}
-		return
+	flag := findClibView(cmd.Flags, want.name)
+	if flag == nil {
+		t.Fatalf("%s missing flag %s", want.path, want.name)
 	}
-	t.Fatalf("%s missing flag %s: %+v", want.path, want.name, cmd.Flags)
-}
-
-func findRemainingCommand(commands []remainingMetadataCommand, path string) (remainingMetadataCommand, bool) {
-	for _, cmd := range commands {
-		if cmd.CommandPath == path {
-			return cmd, true
-		}
-		if found, ok := findRemainingCommand(cmd.Subcommands, path); ok {
-			return found, true
-		}
+	if flag.Group != want.group {
+		t.Fatalf("%s %s group = %q, want %q", want.path, want.name, flag.Group, want.group)
 	}
-	return remainingMetadataCommand{}, false
+	if want.placeholder != "" && flag.Placeholder != want.placeholder {
+		t.Fatalf("%s %s placeholder = %q, want %q", want.path, want.name, flag.Placeholder, want.placeholder)
+	}
+	if want.completion != "" && flag.Completion != want.completion {
+		t.Fatalf("%s %s completion = %q, want %q", want.path, want.name, flag.Completion, want.completion)
+	}
+	if want.valueHint != "" && flag.ValueHint != want.valueHint {
+		t.Fatalf("%s %s value_hint = %q, want %q", want.path, want.name, flag.ValueHint, want.valueHint)
+	}
 }

@@ -10,19 +10,18 @@ import (
 // schemaCommand mirrors the `agent schema` command-tree node shape. Only
 // the fields the inventory contract depends on are decoded.
 type schemaCommand struct {
-	Name        string          `json:"name"`
-	Subcommands []schemaCommand `json:"subcommands"`
+	Name     string          `json:"name"`
+	Children []schemaCommand `json:"children"`
 }
 
 // expectedTopLevelCommands is the locked set of top-level command names
 // the CLI's `agent schema` output must report. The per-instance root
 // factory must produce exactly this surface: a behavior-preserving
-// root/runtime refactor cannot drop or rename a command. `schema` is the
-// backward-compatible top-level alias of `agent schema`. The shell
-// `completion` command is intentionally excluded — it is not an
-// available command in the schema tree.
+// root/runtime refactor cannot drop or rename a command. The shell
+// `completion` command is excluded by cobra, and the agent group and
+// human guide door are excluded by design: the schema represents the host
+// CLI without the discovery surface itself.
 var expectedTopLevelCommands = []string{
-	"agent",
 	"alias",
 	"auth",
 	"boards",
@@ -48,18 +47,14 @@ func runSchema(t *testing.T) schemaCommand {
 	if err != nil {
 		t.Fatalf("agent schema error = %v\n%s", err, out)
 	}
-	var env struct {
-		Data struct {
-			Commands []schemaCommand `json:"commands"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(out, &env); err != nil {
+	var root schemaCommand
+	if err := json.Unmarshal(out, &root); err != nil {
 		t.Fatalf("schema output is not JSON: %v\n%s", err, out)
 	}
-	if len(env.Data.Commands) == 0 {
-		t.Fatalf("schema reported no root command:\n%s", out)
+	if len(root.Children) == 0 {
+		t.Fatalf("schema reported no command tree:\n%s", out)
 	}
-	return env.Data.Commands[0]
+	return root
 }
 
 // TestCommandInventoryIsStable asserts every promised top-level command
@@ -71,7 +66,7 @@ func TestCommandInventoryIsStable(t *testing.T) {
 
 	have := map[string]bool{}
 	var names []string
-	for _, sub := range root.Subcommands {
+	for _, sub := range root.Children {
 		have[sub.Name] = true
 		names = append(names, sub.Name)
 	}
@@ -91,7 +86,7 @@ func TestCommandInventoryHasNoDuplicateTopLevelNames(t *testing.T) {
 	root := runSchema(t)
 
 	seen := map[string]int{}
-	for _, sub := range root.Subcommands {
+	for _, sub := range root.Children {
 		seen[sub.Name]++
 	}
 	for name, count := range seen {

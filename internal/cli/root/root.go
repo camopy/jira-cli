@@ -20,7 +20,6 @@ import (
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/cli/completion"
 	"github.com/matcra587/jira-cli/internal/cli/runtime"
-	"github.com/matcra587/jira-cli/internal/cli/schema"
 	"github.com/matcra587/jira-cli/internal/cli/startup"
 	"github.com/matcra587/jira-cli/internal/cli/tui"
 	"github.com/matcra587/jira-cli/internal/selfupdate"
@@ -273,7 +272,7 @@ func rootRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	if det.IsTTY && det.Mode == cli.ModePlain {
 		return cmd.Help()
 	}
-	return schema.WriteSchema(cmd)
+	return writeDiscoverySchema(cmd)
 }
 
 // detectOutput resolves the output detection for the runtime's stdout
@@ -316,6 +315,9 @@ func New(rt *runtime.Runtime) *cobra.Command {
 		return completionGenerator(root)
 	}))
 	registerCommands(root)
+	// The agent surface mounts last on purpose: its schema is a walk of
+	// the live tree, so every command must already be registered.
+	mountAgentSurface(root)
 	// Wrap every command's positional-argument validator so a count
 	// failure surfaces as a typed *cli.CLIInputError. Done after the tree
 	// is fully assembled so it reaches every command.

@@ -1,0 +1,316 @@
+package root
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"maps"
+	"os"
+	"strings"
+
+	"charm.land/glamour/v2"
+	"charm.land/glamour/v2/styles"
+	clogtheme "github.com/gechr/clog/theme"
+	"github.com/matcra587/docent"
+	docentcobra "github.com/matcra587/docent/cobra"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"golang.org/x/term"
+
+	"github.com/matcra587/jira-cli/internal/agentguides"
+	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/matcra587/jira-cli/internal/cli/agent"
+	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/cli/schema"
+	"github.com/matcra587/jira-cli/internal/config"
+)
+
+// agentSurfaceConfig is the docent integration surface built once at tree
+// assembly. Bare `jira` in a non-TTY context reuses it so the discovery
+// output cannot drift from `jira agent schema`.
+var agentSurfaceConfig docent.Config
+
+// mountAgentSurface builds the docent config from the fully assembled
+// command tree and mounts the agent command group (hidden — it exists for
+// agents and CI, not for humans browsing --help) plus the top-level
+// `jira guide` human door. Must run after every other command is
+// registered: the schema is a walk of the live tree, and anything mounted
+// later would be invisible to it.
+func mountAgentSurface(root *cobra.Command) {
+	guides, err := agentguides.Load()
+	if err != nil {
+		// Guide drift is a build invariant, not a runtime condition: the
+		// files are embedded and validated by contract tests, so a load
+		// failure means a broken build.
+		panic(fmt.Sprintf("root: load agent guides: %v", err))
+	}
+
+	tree := pruneHiddenFlags(root, docentcobra.Tree(root))
+	tree = schema.DocentRegistry().Apply(tree)
+	tree.Extensions = map[string]any{
+		"envelope": "Success and error envelopes, exit codes, and output modes " +
+			"are specified by the core-contract guide (`jira agent guide core-contract`).",
+		// The tool-wide envelope and error schemas describe every
+		// response, so they live on the root rather than any command.
+		"output_contract": schema.OutputContract(),
+		"exit_codes": map[string]any{
+			"ok": 0, "auth": 1, "not_found": 2, "validation": 3,
+			"rate_limit": 4, "server": 5, "canceled": 6, "timeout": 7,
+		},
+		"env": map[string]any{
+			"JIRA_READ_ONLY":      "Block all Jira writes at the HTTP transport.",
+			"JIRA_ADF_STRICT":     "Fail lossy ADF conversions instead of warning.",
+			"JIRA_MAX_RETRY_WAIT": "Default for --max-retry-wait.",
+		},
+	}
+
+	cfg := docent.Config{
+		Guides:          guides,
+		Command:         tree,
+		ContractVersion: agentguides.ContractVersion,
+	}
+	agentSurfaceConfig = cfg
+
+	agentCmd := docentcobra.NewCommand(
+		cfg,
+		docentcobra.WithExtraCommands(
+			agent.NewADFMatrixCommand(),
+			agent.NewFieldTypesCommand(),
+		),
+		// The schema is an agent surface: whitespace is pure token cost, so
+		// the pretty default is compacted before emission.
+		docentcobra.WithSchemaTransform(compactJSON),
+	)
+	agentCmd.Hidden = true
+	agentCmd.GroupID = "agent"
+
+	root.AddCommand(agentCmd, newHumanGuideCommand(cfg))
+}
+
+// compactJSON is the schema transform: strip insignificant whitespace and
+// restore the artifact trailing newline the untransformed path would add.
+func compactJSON(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, data); err != nil {
+		return nil, err
+	}
+	buf.WriteByte('\n')
+	return buf.Bytes(), nil
+}
+
+// pruneHiddenFlags drops hidden flags from the docent schema IR and thins
+// each remaining flag's clib extension entry to its non-zero fields.
+// Hidden flags are deliberately unadvertised surface — deprecated Markdown
+// aliases keep working for old scripts, but no discovery output may teach
+// a new caller to use one. The clib thinning is token economics: the
+// adapter emits every clib field on every flag, and a dozen empty strings
+// per flag across hundreds of flags is real context-window cost for the
+// agents this schema exists to serve.
+func pruneHiddenFlags(cmd *cobra.Command, tree docent.Command) docent.Command {
+	hidden := map[string]bool{}
+	cmd.LocalFlags().VisitAll(func(f *pflag.Flag) {
+		if f.Hidden {
+			hidden[f.Name] = true
+		}
+	})
+	cmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
+		if f.Hidden {
+			hidden[f.Name] = true
+		}
+	})
+	kept := tree.Flags[:0:0]
+	for _, flag := range tree.Flags {
+		if hidden[flag.Name] {
+			continue
+		}
+		flag.Extensions = thinExtensions(flag.Extensions)
+		kept = append(kept, flag)
+	}
+	tree.Flags = kept
+	byName := map[string]*cobra.Command{}
+	for _, child := range cmd.Commands() {
+		byName[child.Name()] = child
+	}
+	for i, child := range tree.Children {
+		if cobraChild, ok := byName[child.Name]; ok {
+			tree.Children[i] = pruneHiddenFlags(cobraChild, child)
+		}
+	}
+	return tree
+}
+
+// thinExtensions returns a copy of a flag's extensions with zero-valued
+// entries removed, recursing into the per-namespace maps. An empty string,
+// false, nil, or empty collection says nothing an absent key doesn't.
+func thinExtensions(ext map[string]any) map[string]any {
+	if ext == nil {
+		return nil
+	}
+	out := make(map[string]any, len(ext))
+	for key, value := range ext {
+		switch v := value.(type) {
+		case map[string]any:
+			if thinned := thinExtensions(v); len(thinned) > 0 {
+				out[key] = thinned
+			}
+		case string:
+			if v != "" {
+				out[key] = v
+			}
+		case bool:
+			if v {
+				out[key] = v
+			}
+		case nil:
+		case []string:
+			if len(v) > 0 {
+				out[key] = v
+			}
+		case []any:
+			if len(v) > 0 {
+				out[key] = v
+			}
+		default:
+			out[key] = v
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// newHumanGuideCommand mounts the human door on the same guide set. Docent
+// emits plain Markdown; styling is this host's job, and only an
+// interactive human terminal gets it — agents and pipes receive the raw
+// bytes byte-identical to `jira agent guide`. Glamour styles complete
+// documents, so the seam is buffer-then-render, never a streaming writer.
+func newHumanGuideCommand(cfg docent.Config) *cobra.Command {
+	var buf bytes.Buffer
+	cfg.Out = &buf
+	cmd := docentcobra.NewGuideCommand(cfg)
+	cmd.GroupID = "agent"
+	run := cmd.RunE
+	cmd.RunE = func(c *cobra.Command, args []string) error {
+		buf.Reset()
+		if err := run(c, args); err != nil {
+			return err
+		}
+		det := cmdutil.DetectorFromContext(c)
+		if !det.IsTTY || det.Mode != cli.ModePlain {
+			_, err := c.OutOrStdout().Write(buf.Bytes())
+			return err
+		}
+		_, err := io.WriteString(c.OutOrStdout(), styleGuideMarkdown(c, buf.String()))
+		return err
+	}
+	return cmd
+}
+
+// styleGuideMarkdown renders guide Markdown for an interactive terminal.
+// The no-slug index is key:value lines — an agent shape, not prose — so it
+// is reshaped into real Markdown first. Rendering failures fall back to
+// the raw bytes: a styling problem must never cost the content.
+func styleGuideMarkdown(cmd *cobra.Command, md string) string {
+	if strings.HasPrefix(md, "# Agent Guide Index") {
+		md = guideIndexToMarkdown(md)
+	}
+	// Wrap at min(terminal, 80): guide prose is authored at 80 columns and
+	// glamour preserves the hard breaks inside list items, so reflowing
+	// paragraphs any wider would give lists and paragraphs two different
+	// measures on a wide terminal.
+	wrap := 80
+	if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 && w < wrap {
+		wrap = w
+	}
+	opts := []glamour.TermRendererOption{
+		glamour.WithStandardStyle(glamourStyleName(cmd)),
+		glamour.WithWordWrap(wrap),
+	}
+	r, err := glamour.NewTermRenderer(opts...)
+	if err != nil {
+		return md
+	}
+	styled, err := r.Render(md)
+	if err != nil {
+		return md
+	}
+	return styled
+}
+
+// glamourStyleName maps the CLI's resolved theme onto a glamour style, so
+// the guide view follows the same JIRA_THEME / theme.name decision as
+// every other styled surface. A theme glamour also ships (dark, light,
+// dracula, tokyo-night) is used by name; anything else falls back to the
+// theme's light or dark background.
+func glamourStyleName(cmd *cobra.Command) string {
+	name := strings.TrimSpace(os.Getenv(config.EnvThemeName))
+	if name == "" {
+		if cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd))); err == nil {
+			name = strings.TrimSpace(cfg.Theme.Name)
+		}
+	}
+	name = strings.ToLower(name)
+	if _, ok := styles.DefaultStyles[name]; ok {
+		return name
+	}
+	if cmdutil.HumanJSONPrintTheme(cmd).Background == clogtheme.BackgroundLight {
+		return styles.LightStyle
+	}
+	return styles.DarkStyle
+}
+
+// guideIndexToMarkdown reshapes the frontmatter-style guide index into
+// Markdown a human can scan: each guide becomes a titled section naming
+// its `jira guide <slug>` invocation. The slug line precedes the title in
+// the index, so it is buffered until the title arrives.
+func guideIndexToMarkdown(index string) string {
+	var b strings.Builder
+	slug := ""
+	for line := range strings.Lines(index) {
+		line = strings.TrimSuffix(line, "\n")
+		key, value, isKV := strings.Cut(line, ": ")
+		switch {
+		case strings.HasPrefix(line, "# Agent Guide Index"), line == "", !isKV:
+			fmt.Fprintf(&b, "%s\n", line)
+		case key == "slug":
+			slug = value
+		case key == "title":
+			fmt.Fprintf(&b, "## %s\n\n`jira guide %s`\n\n", value, slug)
+		case key == "description":
+			fmt.Fprintf(&b, "%s\n\n", value)
+		case key == "when_to_use":
+			fmt.Fprintf(&b, "**When:** %s\n\n", value)
+		case key == "commands":
+			if value != "" {
+				fmt.Fprintf(&b, "**Commands:** `%s`\n", value)
+			}
+		case key == "order":
+			// Canonical-ordering metadata; the listing is already ordered.
+		default:
+			fmt.Fprintf(&b, "**%s:** %s\n", strings.ReplaceAll(key, "_", " "), value)
+		}
+	}
+	return b.String()
+}
+
+// writeDiscoverySchema emits the same schema JSON `jira agent schema`
+// prints, for the bare-`jira` non-TTY contract. The contract version is
+// stamped as a root extensions entry, matching docent's own emission.
+func writeDiscoverySchema(cmd *cobra.Command) error {
+	tree := agentSurfaceConfig.Command
+	ext := map[string]any{"contract_version": agentguides.ContractVersion}
+	maps.Copy(ext, tree.Extensions)
+	tree.Extensions = ext
+	data, err := docent.MarshalSchema(tree)
+	if err != nil {
+		return err
+	}
+	data, err = compactJSON(data)
+	if err != nil {
+		return err
+	}
+	_, err = cmd.OutOrStdout().Write(data)
+	return err
+}

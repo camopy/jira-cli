@@ -42,8 +42,9 @@ Every package lives under `internal/` — this module exports no public API.
 
 | Path | Role |
 |------|------|
-| `cmd/jira/` | entry point and the embedded agent guide |
-| `internal/cli/agent/` | `agent {schema,guide,adf-matrix,fieldtypes}` + the `//go:embed` guide (init() panics on embed/order drift — deliberate) |
+| `cmd/jira/` | entry point |
+| `internal/agentguides/` | the `//go:embed` docent guide set (`jira agent guide` / `jira guide`); contract-tested via `docenttest.Validate` |
+| `internal/cli/agent/` | the `agent adf-matrix` / `agent fieldtypes` registry commands, mounted under docent's agent group |
 | `internal/cli/cmdutil/` | flags+metadata helpers, gates, envelope, fanout, keyed results, help sections |
 | `internal/cli/registry.go`, `verbs.go`, `plain_*.go` | human-mode renderer registry and verb phrases |
 | `internal/cli/errors.go`, `json.go`, `detector.go` | error mapping, envelope machinery, output-mode detection |

@@ -14,14 +14,18 @@ func TestRootNonTTYJSONDiscovery(t *testing.T) {
 		t.Fatalf("root command error = %v\n%s", err, out)
 	}
 	var decoded struct {
-		Meta map[string]any `json:"meta"`
-		Data map[string]any `json:"data"`
+		Name       string           `json:"name"`
+		Children   []map[string]any `json:"children"`
+		Extensions map[string]any   `json:"extensions"`
 	}
 	if err := json.Unmarshal(out, &decoded); err != nil {
 		t.Fatalf("root output is not JSON: %v\n%s", err, out)
 	}
-	if decoded.Meta == nil || decoded.Data["commands"] == nil {
-		t.Fatalf("root JSON missing envelope commands: %+v", decoded)
+	if decoded.Name != "jira" || len(decoded.Children) == 0 {
+		t.Fatalf("root JSON missing discovery schema: %+v", decoded)
+	}
+	if decoded.Extensions["contract_version"] == nil {
+		t.Fatalf("root discovery schema missing contract_version extension")
 	}
 }
 

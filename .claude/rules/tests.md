@@ -61,8 +61,8 @@ then unmarshal stdout as the envelope:
 
 Invariants get guardrail tests (`tests/guardrails/`): every declared
 completion predictor is handled, error code/hint tables stay in lockstep,
-the embedded guide's sections match its declared order (backed by the
-`init()` panic), the contract suite never `go run`/`go build`s the CLI
+the embedded guides satisfy the Agent Guide Standard
+(`docenttest.Validate` in internal/cli/root), the contract suite never `go run`/`go build`s the CLI
 per test (`contract_compiles_once_test.go`). When a rule in `.claude/rules/`
 becomes mechanically checkable, add a guardrail for it.
 

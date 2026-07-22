@@ -126,15 +126,21 @@ func TestJSONErrorsUseStdoutEnvelopeAndExitCodes(t *testing.T) {
 }
 
 func TestSchemaIncludesFlagsAndOutputSchemas(t *testing.T) {
-	cmd := exec.Command(buildJiraBinary(t), "agent", "schema")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("schema error = %v\n%s", err, out)
-	}
-	for _, want := range []string{`"flags"`, `"output_schemas"`, `"issue.list"`, `"issue.create"`, `"worklog.add"`, `"--dry-run"`} {
-		if !strings.Contains(string(out), want) {
-			t.Fatalf("schema missing %q:\n%s", want, out)
+	root := loadAgentSchema(t)
+	for _, path := range []string{"jira issue list", "jira issue create", "jira worklog add"} {
+		cmd := findSchemaCommand(root, path)
+		if cmd == nil {
+			t.Fatalf("schema missing path %q", path)
 		}
+		if len(cmd.Flags) == 0 {
+			t.Fatalf("%s schema carries no flags", path)
+		}
+		if cmd.OutputSchema == nil {
+			t.Fatalf("%s schema missing embedded output schema", path)
+		}
+	}
+	if findSchemaFlag(findSchemaCommand(root, "jira issue create").Flags, "dry-run") == nil {
+		t.Fatalf("jira issue create schema missing --dry-run flag")
 	}
 }
 

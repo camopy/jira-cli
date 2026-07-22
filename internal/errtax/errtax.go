@@ -50,6 +50,12 @@ const (
 	// list in-code, so a miss is a bad input value (validation, exit 3), not a
 	// Jira 404 — the valid names ride the envelope's suggestions field.
 	CodeIssueTypeUnknown Code = "issue_type_unknown"
+	// CodeAgentTopicUnknown is an agent-surface lookup that matched
+	// nothing: a guide slug, guide section, schema --path, or export
+	// format the discovery surface does not carry. The surface lists its
+	// own valid names, so the hint routes there rather than to --help.
+	CodeAgentTopicUnknown Code = "agent_topic_unknown"
+
 	// CodeSavedQueryUnknown is a `search saved NAME` value that matches no
 	// saved query. The names live in the user's queries directory, not in
 	// --help, so this gets its own hint rather than reusing arg_value_invalid.
@@ -211,6 +217,7 @@ var registry = map[Code]Spec{
 	CodeArgCountInvalid:         {Type: TypeValidation, Exit: 3, Hint: "Check how many arguments the command takes; its usage line is in `--help`.", Retryable: false},
 	CodeArgValueInvalid:         {Type: TypeValidation, Exit: 3, Hint: "That isn't one of the accepted values — run the command with `--help` to see the choices.", Retryable: false},
 	CodeIssueTypeUnknown:        {Type: TypeValidation, Exit: 3, Hint: "Pass one of the project's issue types.", Retryable: false},
+	CodeAgentTopicUnknown:       {Type: TypeValidation, Exit: 3, Hint: "List the valid names first: `jira agent guide` for guide slugs and sections, `jira agent schema` for command paths.", Retryable: false},
 	CodeSavedQueryUnknown:       {Type: TypeValidation, Exit: 3, Hint: "Pass one of your saved query names — they live in the queries_path directory.", Retryable: false},
 	CodeJQExpressionInvalid:     {Type: TypeValidation, Exit: 3, Hint: "Fix the jq expression — the message carries the parser's position and token.", Retryable: false},
 	CodeJQOutputConflict:        {Type: TypeValidation, Exit: 3, Hint: "Remove `--jq` or the conflicting human-output flag; the filter runs over the JSON output.", Retryable: false},

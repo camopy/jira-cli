@@ -6,6 +6,9 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/matcra587/docent"
+	docentcobra "github.com/matcra587/docent/cobra"
+
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/errtax"
@@ -91,6 +94,9 @@ func MapError(err error) Error {
 	if out, ok := mapIssueTypeUnknown(err); ok {
 		return out
 	}
+	if out, ok := mapDocentDiscoveryErrors(err); ok {
+		return out
+	}
 	var coded errtax.Coded
 	if errors.As(err, &coded) {
 		return assemble(err, coded)
@@ -105,6 +111,38 @@ func MapError(err error) Error {
 // field. It runs before the generic Coded/untyped paths so the flag and
 // suggestions are attached instead of collapsing to the bare validation
 // fallback.
+// mapDocentDiscoveryErrors adapts docent's sentinel lookup failures on the
+// agent/guide surface — an unknown guide slug, section name, export format,
+// or schema --path — to the dedicated agent_topic_unknown code (validation,
+// exit 3). arg_value_invalid would be wrong here: its hint sends the caller
+// to --help, and none of these surfaces list their valid names there — the
+// discovery commands themselves do. Docent is a library and stays free of
+// this CLI's taxonomy, so the pairing happens at the mapping boundary,
+// mirroring rankCodedError below.
+func mapDocentDiscoveryErrors(err error) (Error, bool) {
+	for _, sentinel := range []error{
+		docentcobra.ErrGuideNotFound,
+		docentcobra.ErrSectionNotFound,
+		docentcobra.ErrUnsupportedFormat,
+		docent.ErrCommandNotFound,
+	} {
+		if errors.Is(err, sentinel) {
+			return assemble(err, &agentTopicError{err: err}), true
+		}
+	}
+	return Error{}, false
+}
+
+// agentTopicError attaches the agent_topic_unknown taxonomy code to a
+// docent sentinel at the mapping boundary.
+type agentTopicError struct {
+	err error
+}
+
+func (e *agentTopicError) Error() string     { return e.err.Error() }
+func (e *agentTopicError) Unwrap() error     { return e.err }
+func (e *agentTopicError) Code() errtax.Code { return errtax.CodeAgentTopicUnknown }
+
 // mapRankErrors adapts the agile rank endpoint's typed failures: a 400
 // (RankRejectedError) means Jira refused the rank itself — no Software
 // board, unusable anchor — and a 207 (RankPartialError) means some issues

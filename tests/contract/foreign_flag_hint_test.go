@@ -3,7 +3,6 @@ package contract
 import (
 	"encoding/json"
 	"os/exec"
-	"strings"
 	"testing"
 )
 
@@ -53,22 +52,27 @@ func TestUnknownForeignFlagProducesOrientationAndSuggestions(t *testing.T) {
 // added to either side without the other fails here or in the unit tests.
 func TestForeignFlagTableNamesNoRealFlags(t *testing.T) {
 	foreign := []string{"plain", "gjq", "template", "no-headers", "no-truncate", "paginate"}
-	out, err := exec.Command(buildJiraBinary(t),
-		"agent", "schema", "--output=compact").Output()
-	if err != nil {
-		t.Fatalf("agent schema: %v\n%s", err, out)
+	root := loadAgentSchema(t)
+	var walk func(cmd docentSchema, visit func(docentSchemaFlag))
+	walk = func(cmd docentSchema, visit func(docentSchemaFlag)) {
+		for _, flag := range cmd.Flags {
+			visit(flag)
+		}
+		for _, child := range cmd.Children {
+			walk(child, visit)
+		}
 	}
-	schema := string(out)
+	names := map[string]bool{}
+	walk(root, func(flag docentSchemaFlag) { names[flag.Name] = true })
 	for _, flag := range foreign {
-		if strings.Contains(schema, `"`+flag+`"`) {
+		if names[flag] {
 			t.Fatalf("flag %q exists in the live command surface; the foreign-flag orientation would lie about it", flag)
 		}
 	}
 	// And the offered equivalents must be real flags of this CLI, or the
-	// suggestion sends the caller to another dead end. The compact schema
-	// names flags with their dashes.
-	for _, equivalent := range []string{"--output", "--limit", "--all", "--cursor"} {
-		if !strings.Contains(schema, `"name":"`+equivalent+`"`) {
+	// suggestion sends the caller to another dead end.
+	for _, equivalent := range []string{"output", "limit", "all", "cursor"} {
+		if !names[equivalent] {
 			t.Fatalf("suggested equivalent flag %q is not in the live command surface", equivalent)
 		}
 	}
