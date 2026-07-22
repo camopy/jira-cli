@@ -1,3 +1,0 @@
-kind: added
-body: Ship the jira-how-to router skill under skills/ with a Claude plugin manifest — it steers any Jira task to the right embedded guide and the runtime schema, pre-approving the discovery commands it teaches
-time: 2026-07-22T00:11:12.148961346-04:00

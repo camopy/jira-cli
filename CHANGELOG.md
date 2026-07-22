@@ -1,6 +1,18 @@
 # Release Notes
 
 
+## [0.14.0](https://github.com/matcra587/jira-cli/releases/tag/v0.14.0) — 2026-07-22
+
+### Added
+
+- Browse the embedded agent guides as a human with the new top-level `jira guide` command — themed Markdown rendering on a terminal, raw Markdown for pipes — and export them as agent skills with `jira agent export`
+- Ship the jira-how-to router skill under skills/ with a Claude plugin manifest — it steers any Jira task to the right embedded guide and the runtime schema, pre-approving the discovery commands it teaches
+
+### Changed
+
+- Serve the agent surface through docent: nine rewritten workflow guides under `jira agent guide`, and a runtime-derived `jira agent schema` with per-command input/output schemas embedded in the command tree (agent contract 3.0.0; the previous envelope-wrapped schema shape is gone)
+- Emit the agent schema structure-first via docent v0.3.0: the full tree carries shape markers, `--path` returns a command's embedded schemas, and `--shapes` captures everything with repeated bodies pooled into $defs. In model-token terms the guide corpus is 87% smaller than the pre-docent surface and the full discovery contract half the size, with no behavior claim lost
+
 ## [0.13.1](https://github.com/matcra587/jira-cli/releases/tag/v0.13.1) — 2026-07-21
 
 ### Added

@@ -1,3 +1,0 @@
-kind: changed
-body: 'Serve the agent surface through docent: nine rewritten workflow guides under `jira agent guide`, and a runtime-derived `jira agent schema` with per-command input/output schemas embedded in the command tree. (agent contract 3.0.0; the previous envelope-wrapped schema shape is gone)'
-time: 2026-07-21T23:11:50.621519573-04:00
