@@ -1,6 +1,20 @@
 # Release Notes
 
 
+## [0.13.1](https://github.com/matcra587/jira-cli/releases/tag/v0.13.1) — 2026-07-21
+
+### Added
+
+- jira agent schema publishes an output schema for every operation, derived from the same typed definitions the CLI emits — previously ~40 operations had no declared output shape
+
+### Changed
+
+- issue delete no longer emits a meaningless result: null on live deletes; the key is simply absent, matching dry-run
+
+### Dependencies
+
+- golang.org/x/text 0.39.0 fixes GO-2026-5970 (infinite loop on invalid input)
+
 ## [0.13.0](https://github.com/matcra587/jira-cli/releases/tag/v0.13.0) — 2026-07-20
 
 ### Breaking Changes

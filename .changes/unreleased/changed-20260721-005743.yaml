@@ -1,3 +1,0 @@
-kind: changed
-body: 'issue delete no longer emits a meaningless result: null on live deletes; the key is simply absent, matching dry-run'
-time: 2026-07-21T00:57:43.211651481-04:00
