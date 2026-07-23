@@ -84,6 +84,10 @@ type MutationResult struct {
 	AbortedAt    Stage
 	Submitted    bool
 	PreviewReady bool
+	// SchemaValidatedRemotely is true only when a configured SchemaFetcher
+	// resolved Jira metadata and stage 3 validated at least one field against
+	// it. A skipped stage or best-effort fallback leaves it false.
+	SchemaValidatedRemotely bool
 
 	// SubmitFields is the post-validation, post-encoding fields map the
 	// caller should send to Jira. In strict-abort cases this is nil.
@@ -220,6 +224,7 @@ func RunMutation(in MutationInput) MutationResult {
 				res.Err = err
 				return res
 			}
+			res.SchemaValidatedRemotely = true
 			fields = mergeScreenValidationExemptFields(validated, exemptFields)
 		case errors.Is(err, ErrSchemaNotFound):
 			// A 404 / unknown project or issue type. This is a definite

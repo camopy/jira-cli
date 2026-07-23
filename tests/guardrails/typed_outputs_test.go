@@ -118,6 +118,7 @@ func TestRegisteredOutputsAreConcreteOrDocumentedDynamic(t *testing.T) {
 	}
 
 	var dynamic []string
+	var sliceOutputs []string
 	for _, op := range registered {
 		value, ok := outputs[op]
 		if !ok {
@@ -131,14 +132,22 @@ func TestRegisteredOutputsAreConcreteOrDocumentedDynamic(t *testing.T) {
 			continue
 		}
 		typ := reflect.TypeOf(value)
+		if typ.Kind() == reflect.Slice && typ.Name() != "" &&
+			typ.Elem().Kind() == reflect.Struct && typ.Elem().Name() != "" {
+			sliceOutputs = append(sliceOutputs, op)
+			continue
+		}
 		if typ.Kind() != reflect.Struct || typ.Name() == "" {
 			t.Fatalf("fixed output %q uses top-level %s; use a named struct or documented Dynamic", op, typ)
 		}
 	}
 
+	wantSliceOutputs := []string{"agent.adf-matrix", "agent.fieldtypes"}
+	if !slices.Equal(sliceOutputs, wantSliceOutputs) {
+		t.Fatalf("named slice carriers changed without updating the reviewed inventory:\n got: %v\nwant: %v", sliceOutputs, wantSliceOutputs)
+	}
+
 	wantDynamic := []string{
-		"agent.adf-matrix",
-		"agent.fieldtypes",
 		"auth.status",
 		"cache.epics",
 		"cache.fields",
@@ -155,6 +164,24 @@ func TestRegisteredOutputsAreConcreteOrDocumentedDynamic(t *testing.T) {
 	}
 	if !slices.Equal(dynamic, wantDynamic) {
 		t.Fatalf("dynamic exceptions changed without updating the reviewed inventory:\n got: %v\nwant: %v", dynamic, wantDynamic)
+	}
+}
+
+func TestNamedSliceOutputsKeepDerivedItemSchemas(t *testing.T) {
+	outputs := envelope.Outputs()
+	for _, operation := range []string{"agent.adf-matrix", "agent.fieldtypes"} {
+		schema := envelope.SchemaOf(outputs[operation], envelope.Doc(operation))
+		if schema["type"] != "array" {
+			t.Fatalf("%s schema type = %#v, want array: %+v", operation, schema["type"], schema)
+		}
+		items, ok := schema["items"].(map[string]any)
+		if !ok || items["type"] != "object" {
+			t.Fatalf("%s schema items = %#v, want typed objects", operation, schema["items"])
+		}
+		properties, ok := items["properties"].(map[string]any)
+		if !ok || len(properties) == 0 {
+			t.Fatalf("%s item schema has no properties: %+v", operation, items)
+		}
 	}
 }
 
@@ -225,6 +252,18 @@ func TestSemanticDynamicMembersStayReviewed(t *testing.T) {
 	}{
 		{"issue.comment.list", []string{"Comments", "[]", "Body"}, reflect.Interface},
 		{"issue.comment.list", []string{"Warnings", "[]"}, reflect.Map},
+		{"issue.create", []string{"Preview"}, reflect.Map},
+		{"issue.create", []string{"Verification"}, reflect.Interface},
+		{"issue.edit", []string{"Fields"}, reflect.Map},
+		{"issue.edit", []string{"Update"}, reflect.Map},
+		{"issue.edit", []string{"Verification"}, reflect.Interface},
+		{"issue.comment.edit", []string{"BodyADFSummary"}, reflect.Interface},
+		{"issue.transition", []string{"Fields"}, reflect.Map},
+		{"issue.transition", []string{"Comment"}, reflect.Interface},
+		{"issue.transition", []string{"Update"}, reflect.Map},
+		{"issue.clone", []string{"Payload", "Fields"}, reflect.Map},
+		{"issue.move", []string{"Payload", "Fields"}, reflect.Map},
+		{"issue.delete", []string{"Payload", "Fields"}, reflect.Map},
 	}
 	outputs := envelope.Outputs()
 	for _, check := range checks {

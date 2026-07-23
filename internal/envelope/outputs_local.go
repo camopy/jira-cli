@@ -2,6 +2,7 @@ package envelope
 
 import (
 	"github.com/matcra587/jira-cli/internal/adf"
+	"github.com/matcra587/jira-cli/internal/jira/customfield"
 )
 
 // Typed Output structs for the local/meta operation family: auth, cache,
@@ -376,14 +377,19 @@ type AuthTokenOutput struct {
 	CredentialEnv      string  `json:"credential_env,omitempty"`
 }
 
+// AgentADFMatrixOutput preserves the established top-level array while
+// keeping its row schema derivable from adf.Entry.
+type AgentADFMatrixOutput []adf.Entry
+
+// AgentFieldTypesOutput preserves the established top-level array while
+// keeping its row schema derivable from customfield.Entry.
+type AgentFieldTypesOutput []customfield.Entry
+
 var (
 	_ = register("version", VersionOutput{}, nil)
 	_ = register("auth.refresh", AuthRefreshOutput{}, nil)
 	_ = register("auth.migrate", AuthMigrateOutput{}, nil)
 	_ = register("auth.token", AuthTokenOutput{}, nil)
-	// The agent registry dumps are reviewed bare-array exceptions. Their item
-	// shapes remain typed at the source, but a named envelope struct cannot
-	// represent the established top-level array without changing its bytes.
-	_ = register("agent.adf-matrix", Dynamic{Reason: "bare array of typed adf.Entry registry rows"}, nil)
-	_ = register("agent.fieldtypes", Dynamic{Reason: "bare array of typed customfield.Entry registry rows"}, nil)
+	_ = register("agent.adf-matrix", AgentADFMatrixOutput{}, nil)
+	_ = register("agent.fieldtypes", AgentFieldTypesOutput{}, nil)
 )

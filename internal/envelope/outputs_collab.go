@@ -315,6 +315,11 @@ var (
 			"account_id":          map[string]any{"description": "Legacy no-readback outcome containing the attempted account ID."},
 			"attempted":           map[string]any{"description": "No-readback outcome confirming the mutation request was attempted."},
 			"watchers":            map[string]any{"description": "Watcher list returned by the optional post-mutation readback."},
+			"is_watching":         map[string]any{"description": "Watching state returned by the optional post-mutation readback."},
+			"watch_count":         map[string]any{"description": "Watcher count returned by the optional post-mutation readback."},
+			"was_already_watching": map[string]any{
+				"description": "Whether the requested state already held, when post-mutation readback can determine it.",
+			},
 		},
 	}
 	_ = register("issue.watchers.add", IssueWatcherMutationOutput{}, watcherMutationDoc)

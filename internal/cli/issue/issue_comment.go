@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	clib "github.com/gechr/clib/cli/cobra"
+	"github.com/gechr/x/ptr"
 	xslices "github.com/gechr/x/slices"
 	xstrings "github.com/gechr/x/strings"
 	"github.com/matcra587/jira-cli/internal/adf"
@@ -249,22 +250,15 @@ func commentToItem(c *jira.Comment) envelope.CommentItem {
 	if c.Body != nil {
 		body = *c.Body
 	}
-	item := envelope.CommentItem{
+	return envelope.CommentItem{
 		Author:       commentUser(c.Author),
 		Body:         body,
+		Created:      ptr.Deref(c.Created),
+		ID:           ptr.Deref(c.ID),
 		UpdateAuthor: commentUser(c.UpdateAuthor),
+		Updated:      ptr.Deref(c.Updated),
 		Visibility:   c.Visibility,
 	}
-	if c.ID != nil {
-		item.ID = *c.ID
-	}
-	if c.Created != nil {
-		item.Created = *c.Created
-	}
-	if c.Updated != nil {
-		item.Updated = *c.Updated
-	}
-	return item
 }
 
 func commentItemPtr(c *jira.Comment) *envelope.CommentItem {
@@ -279,17 +273,11 @@ func commentUser(u *jira.User) *envelope.CommentUser {
 	if u == nil {
 		return nil
 	}
-	out := &envelope.CommentUser{}
-	if u.AccountID != nil {
-		out.AccountID = *u.AccountID
+	return &envelope.CommentUser{
+		AccountID:    ptr.Deref(u.AccountID),
+		DisplayName:  ptr.Deref(u.DisplayName),
+		EmailAddress: ptr.Deref(u.EmailAddress),
 	}
-	if u.DisplayName != nil {
-		out.DisplayName = *u.DisplayName
-	}
-	if u.EmailAddress != nil {
-		out.EmailAddress = *u.EmailAddress
-	}
-	return out
 }
 
 func commentToMap(c *jira.Comment) map[string]any {

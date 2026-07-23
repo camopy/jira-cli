@@ -159,6 +159,11 @@ func TestSemanticContractTablesStayExplicit(t *testing.T) {
 			if schemaRequires(schema, field) {
 				t.Fatalf("%s outcome %q must stay conditional: %#v", outcome.Operation, field, schema)
 			}
+			fieldSchema, _ := properties[field].(map[string]any)
+			description, _ := fieldSchema["description"].(string)
+			if strings.TrimSpace(description) == "" {
+				t.Fatalf("%s conditional outcome %q needs a published description: %#v", outcome.Operation, field, fieldSchema)
+			}
 		}
 	}
 }
@@ -407,6 +412,38 @@ func TestEditStableContextMatchesDryRunAndLive(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEditUpdateOnlyDoesNotClaimRemoteFieldValidation(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/editmeta") {
+			t.Error("update-only edit fetched field schema")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if r.Method != http.MethodPut || r.URL.Path != "/rest/api/3/issue/PROJ-1" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"key":"PROJ-1"}`)
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
+	payload := writeJSON(t, "update-only.json", `{"update":{"labels":[{"add":"reviewed"}]}}`)
+	data := successfulData(
+		t,
+		"--config", jiraConfig(t, srv.URL),
+		"--output=json",
+		"issue", "edit", "PROJ-1",
+		"--no-input", "--json-input", payload,
+	)
+	if validated, ok := data["validated_remotely"].(bool); !ok || validated {
+		t.Fatalf("validated_remotely = %#v, want explicit false", data["validated_remotely"])
+	}
+	requireJSONType(t, data, "fields", "object")
+	requireJSONType(t, data, "update", "object")
 }
 
 func TestCommentEditStableContextMatchesDryRunAndLive(t *testing.T) {

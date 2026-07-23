@@ -157,7 +157,15 @@ type IssueEditOutput struct {
 	Warnings          []adf.Warning  `json:"warnings,omitempty"`
 }
 
-var _ = register("issue.edit", IssueEditOutput{}, nil)
+var _ = register("issue.edit", IssueEditOutput{}, map[string]any{
+	"properties": map[string]any{
+		"result":             map[string]any{"description": "The updated issue returned after a successful live write."},
+		"fields":             map[string]any{"description": "The validated field payload proposed by a dry-run or submitted by a live write."},
+		"update":             map[string]any{"description": "Native Jira update operations proposed by a dry-run or submitted by a live write."},
+		"validated_remotely": map[string]any{"description": "Whether resolved Jira edit-screen metadata validated at least one field."},
+		"verification":       map[string]any{"description": "The optional post-write verification result requested with --verify."},
+	},
+})
 
 // IssueTransitionOutput is `issue transition`'s envelope data when a target is
 // applied (or previewed). transition is the resolved id (or the requested
@@ -209,8 +217,15 @@ type IssueDestructiveOutput struct {
 	Warnings []adf.Warning      `json:"warnings,omitempty"`
 }
 
+var destructiveMutationDoc = map[string]any{
+	"properties": map[string]any{
+		"payload": map[string]any{"description": "The validated field payload proposed by a dry-run or submitted by a live write."},
+		"result":  map[string]any{"description": "The resulting issue returned by a successful live clone or move; absent for delete."},
+	},
+}
+
 var (
-	_ = register("issue.clone", IssueDestructiveOutput{}, nil)
-	_ = register("issue.move", IssueDestructiveOutput{}, nil)
-	_ = register("issue.delete", IssueDestructiveOutput{}, nil)
+	_ = register("issue.clone", IssueDestructiveOutput{}, destructiveMutationDoc)
+	_ = register("issue.move", IssueDestructiveOutput{}, destructiveMutationDoc)
+	_ = register("issue.delete", IssueDestructiveOutput{}, destructiveMutationDoc)
 )

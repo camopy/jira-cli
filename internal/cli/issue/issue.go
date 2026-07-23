@@ -1066,7 +1066,7 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 			data := envelope.IssueCreateOutput{
 				Preview:           preview,
 				DryRun:            dryRun,
-				ValidatedRemotely: validateRemote || !dryRun,
+				ValidatedRemotely: pipeOut.SchemaValidatedRemotely,
 			}
 			if dryRun {
 				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.create", data, pipeOut.Warnings)
@@ -1583,7 +1583,7 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 					Result:            issue,
 					DryRun:            false,
 					Fields:            submitFields,
-					ValidatedRemotely: true,
+					ValidatedRemotely: pipeOut.SchemaValidatedRemotely,
 				}
 				if len(updateSection) > 0 {
 					data.Update = updateSection
@@ -1602,7 +1602,7 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 				Issue:             cmdutil.IssueRef{Key: keys[0]},
 				DryRun:            true,
 				Fields:            submitFields,
-				ValidatedRemotely: validateRemote,
+				ValidatedRemotely: pipeOut.SchemaValidatedRemotely,
 			}
 			if len(updateSection) > 0 {
 				data.Update = updateSection
@@ -1699,7 +1699,7 @@ func runIssueEditMany(cmd *cobra.Command, keys []string, parallelism int, in iss
 			Issue:             cmdutil.IssueRef{Key: key},
 			DryRun:            in.DryRun,
 			Fields:            submitFields,
-			ValidatedRemotely: in.ValidateRemote || !in.DryRun,
+			ValidatedRemotely: pipeOut.SchemaValidatedRemotely,
 		}
 		if len(in.Update) > 0 {
 			data.Update = in.Update

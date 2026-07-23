@@ -69,4 +69,46 @@ func TestRunMutationBestEffortFallsBackOnTransientSchemaMiss(t *testing.T) {
 	if _, has := out.SubmitFields["customfield_30002"]; has {
 		t.Fatalf("a non-known-safe field must be stripped on best-effort fallback, got %v", out.SubmitFields)
 	}
+	if out.SchemaValidatedRemotely {
+		t.Fatal("best-effort fallback must not claim remote schema validation")
+	}
+}
+
+func TestRunMutationReportsSuccessfulRemoteSchemaValidation(t *testing.T) {
+	fetch := func() (pipeline.ScreenSchema, error) {
+		return pipeline.ScreenSchema{ValidFields: map[string]bool{"summary": true}}, nil
+	}
+	out := pipeline.RunMutation(pipeline.MutationInput{
+		Mode:          adfmode.ModeStrict,
+		Fields:        map[string]any{"summary": "validated"},
+		SchemaFetcher: fetch,
+	})
+	if out.Aborted {
+		t.Fatalf("remote schema validation aborted: %+v", out)
+	}
+	if !out.SchemaValidatedRemotely {
+		t.Fatal("successful fetched-schema validation must report its provenance")
+	}
+}
+
+func TestRunMutationDoesNotClaimRemoteValidationWhenThereAreNoSchemaFields(t *testing.T) {
+	fetchCalls := 0
+	fetch := func() (pipeline.ScreenSchema, error) {
+		fetchCalls++
+		return pipeline.ScreenSchema{ValidFields: map[string]bool{}}, nil
+	}
+	out := pipeline.RunMutation(pipeline.MutationInput{
+		Mode:          adfmode.ModeStrict,
+		Fields:        map[string]any{},
+		SchemaFetcher: fetch,
+	})
+	if out.Aborted {
+		t.Fatalf("empty-field mutation aborted: %+v", out)
+	}
+	if fetchCalls != 0 {
+		t.Fatalf("empty-field mutation fetched schema %d times, want 0", fetchCalls)
+	}
+	if out.SchemaValidatedRemotely {
+		t.Fatal("empty-field mutation must not claim remote schema validation")
+	}
 }
