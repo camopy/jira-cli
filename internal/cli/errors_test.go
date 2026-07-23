@@ -43,3 +43,25 @@ func TestMapErrorKeepsOutputTaxonomyForContextWriterFailures(t *testing.T) {
 		})
 	}
 }
+
+func TestMapErrorKeepsPrimaryTaxonomyForSecondaryOutputFailure(t *testing.T) {
+	primary := cli.NewNotFoundError("issue not found", errors.New("missing"))
+	writeErr := errors.New("stdout closed")
+	secondary := cli.NewOutputError(writeErr)
+
+	err := cli.PreservePrimaryError(primary, secondary)
+	if !errors.Is(err, primary) || !errors.Is(err, writeErr) {
+		t.Fatalf("PreservePrimaryError() = %v, want both causes", err)
+	}
+	var outputErr *cli.OutputError
+	if !errors.As(err, &outputErr) {
+		t.Fatalf("PreservePrimaryError() type = %T, want discoverable *cli.OutputError", err)
+	}
+	got := cli.MapError(err)
+	if got.Code != "not_found" || got.Type != "not_found" {
+		t.Fatalf("MapError() = %#v, want primary not-found taxonomy", got)
+	}
+	if exit := cli.ExitCode(got); exit != 2 {
+		t.Fatalf("ExitCode() = %d, want 2", exit)
+	}
+}

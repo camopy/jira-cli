@@ -326,6 +326,10 @@ func TestWatcherAmbiguityPreservesWriterFailureWithoutClaimingEnvelope(t *testin
 	if errors.As(err, &written) {
 		t.Fatalf("handleResolveErr() claimed a written envelope after writer failure: %v", err)
 	}
+	mapped := cli.MapError(err)
+	if mapped.Code != "user_ambiguous" || mapped.Type != "validation" || cli.ExitCode(mapped) != 3 {
+		t.Fatalf("MapError() = %#v, want primary user_ambiguous validation exit 3", mapped)
+	}
 	if stdout.writes != 1 {
 		t.Fatalf("stdout writes = %d, want one failed envelope attempt", stdout.writes)
 	}

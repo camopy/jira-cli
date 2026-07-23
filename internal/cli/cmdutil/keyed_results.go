@@ -49,7 +49,7 @@ func WriteKeyedResultsEnvelope[T any](
 		return WriteEnvelope(cmd, command, data)
 	}
 	if err := WriteEnvelopeWithErrors(cmd, command, data, errorsOut); err != nil {
-		return err
+		return cli.PreservePrimaryError(topErr, err)
 	}
 	err := EnvelopeWritten(topErr)
 	if UsePlainOutput(cmd) {

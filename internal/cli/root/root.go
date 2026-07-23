@@ -727,24 +727,8 @@ func writeCommandError(ctx context.Context, cmd *cobra.Command, err error) error
 	})
 }
 
-type commandOutputError struct {
-	command error
-	output  error
-}
-
-func (e *commandOutputError) Error() string {
-	return fmt.Sprintf("%v; reporting the error also failed: %v", e.command, e.output)
-}
-
-func (e *commandOutputError) Unwrap() []error {
-	return []error{e.command, e.output}
-}
-
 func preserveCommandError(commandErr, outputErr error) error {
-	if outputErr == nil {
-		return commandErr
-	}
-	return &commandOutputError{command: commandErr, output: outputErr}
+	return cli.PreservePrimaryError(commandErr, outputErr)
 }
 
 // jsonEnvelopeRequested returns true when the resolved output mode is a
@@ -804,9 +788,5 @@ func ExitCode(err error) int {
 // errtax.Coded interface). There is no command-local
 // special case: every error envelope is built one way.
 func outputErrorFor(err error) cli.Error {
-	var combined *commandOutputError
-	if errors.As(err, &combined) {
-		return cli.MapError(combined.command)
-	}
 	return cli.MapError(err)
 }

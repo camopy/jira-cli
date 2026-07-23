@@ -71,20 +71,22 @@ func WriteKeyedResultsFailureDiagnostics(w io.Writer, data any, errorsOut []Erro
 	if len(failures) == 0 || w == nil {
 		return nil
 	}
-	logger := newPlainLoggerAt(w, clog.LevelError)
-	shown, omitted := shownFailureKeys(failures)
-	total, succeeded, failed := keyedResultCounts(data, len(failures))
-	event := logger.Error().
-		Fraction("succeeded", succeeded, total).
-		Int("failed", failed).
-		Str("reason", plainFailureReason(errorsOut)).
-		Str("keys", strings.Join(shown, ", ")).
-		Int("shown", len(shown))
-	if omitted > 0 {
-		event = event.Int("omitted", omitted)
-	}
-	event.Str("hint", "use --output=json for full per-key errors").Msg(failedKeysSummary)
-	return nil
+	return withTrackedWriter(w, func(out io.Writer) error {
+		logger := newPlainLoggerAt(out, clog.LevelError)
+		shown, omitted := shownFailureKeys(failures)
+		total, succeeded, failed := keyedResultCounts(data, len(failures))
+		event := logger.Error().
+			Fraction("succeeded", succeeded, total).
+			Int("failed", failed).
+			Str("reason", plainFailureReason(errorsOut)).
+			Str("keys", strings.Join(shown, ", ")).
+			Int("shown", len(shown))
+		if omitted > 0 {
+			event = event.Int("omitted", omitted)
+		}
+		event.Str("hint", "use --output=json for full per-key errors").Msg(failedKeysSummary)
+		return nil
+	})
 }
 
 func keyedResultRows(data any) []map[string]any {

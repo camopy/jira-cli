@@ -716,7 +716,7 @@ func handleResolveErr(cmd *cobra.Command, command string, err error) error {
 		// as success, so a consumer parses one stream regardless of outcome.
 		ambiguityErr := fmt.Errorf("validation: %w", err)
 		if writeErr := cli.WriteEnvelope(cmd.OutOrStdout(), env); writeErr != nil {
-			return errors.Join(ambiguityErr, writeErr)
+			return cli.PreservePrimaryError(ambiguityErr, writeErr)
 		}
 		return cmdutil.EnvelopeWritten(ambiguityErr)
 	}

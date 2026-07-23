@@ -282,7 +282,7 @@ func runIssueViewMany(cmd *cobra.Command, keys []string, parallelism int) error 
 	data, errorsOut, topErr := issueViewManyEnvelopeData(results)
 	if len(errorsOut) > 0 {
 		if err := cmdutil.WriteEnvelopeWithErrors(cmd, "issue.view", data, errorsOut); err != nil {
-			return err
+			return cli.PreservePrimaryError(topErr, err)
 		}
 		err := cmdutil.EnvelopeWritten(topErr)
 		if cmdutil.UsePlainOutput(cmd) {
@@ -702,10 +702,11 @@ func runIssueListKeyChunks(cmd *cobra.Command, in issueListKeyChunkInputs) error
 		})
 		data["succeeded_key_chunks"] = len(results) - len(failures)
 		data["failed_key_chunks"] = failures
+		topErr := issueListKeyChunkPartialFailureError(len(results)-len(failures), len(failures), errorsOut[0])
 		if err := cmdutil.WriteEnvelopeWithResponseAndErrors(cmd, "issue.list", data, resp, errorsOut); err != nil {
-			return err
+			return cli.PreservePrimaryError(topErr, err)
 		}
-		return cmdutil.EnvelopeWritten(issueListKeyChunkPartialFailureError(len(results)-len(failures), len(failures), errorsOut[0]))
+		return cmdutil.EnvelopeWritten(topErr)
 	}
 	return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.list", data, resp)
 }

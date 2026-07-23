@@ -86,6 +86,10 @@ func MapError(err error) Error {
 	if err == nil {
 		return Error{}
 	}
+	var primaryErr *PrimaryError
+	if errors.As(err, &primaryErr) {
+		return MapError(primaryErr.primary)
+	}
 	if out, ok := mapPromptError(err); ok {
 		return out
 	}

@@ -69,7 +69,7 @@ Every package lives under `internal/` — this module exports no public API.
     work behind a spinner, and returns through
     `cmdutil.WriteEnvelope`.
 5.  Errors map through `internal/cli/errors.go` to stable codes and exit
-    codes 0–7 (see [output.md](output.md)).
+    codes 0–8 (see [output.md](output.md)).
 
 Bare `jira` is contract-aware: TTY → help, non-TTY/agent → JSON schema.
 

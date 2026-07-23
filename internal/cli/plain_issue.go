@@ -149,21 +149,23 @@ func WriteIssueViewFailureDiagnostics(w io.Writer, data any, errorsOut []Error) 
 	if len(failures) == 0 || w == nil {
 		return nil
 	}
-	logger := newPlainLoggerAt(w, clog.LevelError)
-	shown, omitted := issueViewShownFailureKeys(failures)
-	total, succeeded, failed := issueViewFailureCounts(data, len(failures))
-	event := logger.Error().
-		Fraction("succeeded", succeeded, total).
-		Int("failed", failed).
-		Str("reason", issueViewPlainFailureReason(errorsOut)).
-		Str("keys", strings.Join(shown, ", ")).
-		Int("shown", len(shown))
-	if omitted > 0 {
-		event = event.Int("omitted", omitted)
-	}
-	event = event.Str("hint", "use --output=json for full per-key errors")
-	event.Msg(failedKeysSummary)
-	return nil
+	return withTrackedWriter(w, func(out io.Writer) error {
+		logger := newPlainLoggerAt(out, clog.LevelError)
+		shown, omitted := issueViewShownFailureKeys(failures)
+		total, succeeded, failed := issueViewFailureCounts(data, len(failures))
+		event := logger.Error().
+			Fraction("succeeded", succeeded, total).
+			Int("failed", failed).
+			Str("reason", issueViewPlainFailureReason(errorsOut)).
+			Str("keys", strings.Join(shown, ", ")).
+			Int("shown", len(shown))
+		if omitted > 0 {
+			event = event.Int("omitted", omitted)
+		}
+		event = event.Str("hint", "use --output=json for full per-key errors")
+		event.Msg(failedKeysSummary)
+		return nil
+	})
 }
 
 func issueViewFailureCounts(data any, failureKeys int) (int, int, int) {
