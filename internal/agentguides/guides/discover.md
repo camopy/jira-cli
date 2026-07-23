@@ -50,8 +50,10 @@ jira user search "jane"  # account ids for assignee/watcher payloads
 
 ## Preconditions
 
-An authenticated profile (`bootstrap`); every command here reads Jira, none
-mutates it.
+An authenticated profile (`bootstrap`) for refreshes and live tenant
+lookups. Schema and field-type inspection are local; cache resource
+commands serve a fresh entry locally but fetch and rewrite it when missing,
+stale, or explicitly refreshed. None sends a Jira mutation.
 
 ## Recover
 

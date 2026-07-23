@@ -50,7 +50,8 @@ jira worklog add PROJ-123 --time-spent 2h30m --markdown "Debugging" --no-input
 ## Preconditions
 
 The issue key exists and the profile can edit it. Watcher adds need an
-`account_id` (`jira user search`). Every command here takes `--dry-run`.
+`account_id` (`jira user search`). Every mutation shown here takes
+`--dry-run`; the link-type lookup is read-only.
 
 ## Recover
 

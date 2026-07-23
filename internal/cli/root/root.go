@@ -329,8 +329,29 @@ func New(rt *runtime.Runtime) *cobra.Command {
 // command. Shared by the `completion` subcommand and the preflight path.
 func completionGenerator(root *cobra.Command) *complete.Generator {
 	gen := complete.NewGenerator("jira", complete.WithOrder(complete.OrderKeep)).FromFlags(rootCompletionFlagMeta(root))
-	gen.Subs = clib.Subcommands(root)
+	gen.Subs = completionSubcommands(root)
 	return gen
+}
+
+// completionSubcommands keeps the agent surface out of human help while still
+// making its flags usable from an interactive shell. clib excludes hidden
+// commands before building its completion tree, so temporarily exposing the
+// direct child is the only point where the two visibility policies diverge.
+func completionSubcommands(root *cobra.Command) []complete.SubSpec {
+	for _, child := range root.Commands() {
+		if child.Name() != "agent" || !child.Hidden {
+			continue
+		}
+
+		child.Hidden = false
+		defer func() {
+			child.Hidden = true
+		}()
+
+		break
+	}
+
+	return clib.Subcommands(root)
 }
 
 func rootCompletionFlagMeta(root *cobra.Command) []complete.FlagMeta {

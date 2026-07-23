@@ -1,0 +1,3 @@
+kind: fixed
+body: Shell completion offers values for the agent surface's guide-section, schema-path, export-format, and export-scope flags, which the clib-driven completion path previously left empty
+time: 2026-07-22T12:03:48.951027042-04:00

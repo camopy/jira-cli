@@ -16,12 +16,14 @@ have to undo.
 Know which gate applies before running:
 
 *   `--dry-run` — on every mutation, local-only, never contacts Jira. It
-    validates and encodes the full payload through the same pipeline as a
-    live write and prints what would be sent, with `data.dry_run: true`.
+    validates and encodes caller-supplied input through the same local
+    pipeline as a live write and prints the payload it can know, with
+    `data.dry_run: true`. It does not snapshot server-derived state such
+    as fields copied by clone or subtasks affected by delete.
 *   `--validate-remote` — with `--dry-run`, additionally resolves the
     payload against live Jira (create/edit screens, transition lists,
-    watcher targets). Read-only; still writes nothing. The schema shows
-    which commands carry it.
+    watcher targets) on commands that support the flag. Read-only; still
+    writes nothing. The schema shows which commands carry it.
 *   `--no-input` — required for any headless mutation (implied outside a
     TTY, but pass it explicitly).
 *   `--force` — additionally required for destructive commands: Jira ones
@@ -46,8 +48,9 @@ and warns about requested fields the server silently dropped.
 
 ## Save
 
-*   From the preview: the encoded payload — confirm fields resolved the way
-    you intended before submitting.
+*   From the preview: the encoded caller-supplied payload — confirm fields
+    resolved the way you intended before submitting. Fetch any existing
+    server state you may need separately.
 *   From the live write: `data.dry_run: false` plus the issue identity;
     multi-key runs return per-key `data.results[]`.
 *   From `--verify`: warnings naming any field Jira ignored.
@@ -63,8 +66,8 @@ An authenticated profile with write permission on the target project, and
     after confirming intent; the refusal is by design.
 *   Preview passed but the live write failed → the server rejected what the
     local pipeline could not know (permissions, screen config); the error
-    `hint` names the next step. Re-run with `--dry-run --validate-remote`
-    to see the server-side view.
+    `hint` names the next step. When the command supports it, re-run with
+    `--dry-run --validate-remote` to see the server-side view.
 *   Partial multi-key failure → successful keys are in `data.results[]`;
     fix and re-run only the failed keys.
 

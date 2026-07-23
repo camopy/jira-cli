@@ -26,7 +26,7 @@ require (
 	github.com/knadh/koanf/providers/confmap v1.0.0
 	github.com/knadh/koanf/providers/file v1.2.1
 	github.com/knadh/koanf/v2 v2.3.5
-	github.com/matcra587/docent v0.3.0
+	github.com/matcra587/docent v0.4.0
 	github.com/quasilyte/go-ruleguard/dsl v0.3.23
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10

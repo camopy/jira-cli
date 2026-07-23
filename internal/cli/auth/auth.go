@@ -1270,9 +1270,9 @@ func probeRemoteAuth(ctx context.Context, cmd *cobra.Command, profile config.Pro
 	// Route the probe through the same client constructor normal commands
 	// use, so the per-profile request timeout and an mTLS client certificate
 	// both apply to the probe's live calls rather than silently defaulting.
-	// JiraClientForProfile only builds the client; the probe ctx is applied to
-	// the live Myself / MyPermissions calls below, not to construction.
-	client, _, ok, err := cmdutil.JiraClientForProfile(cmd, profile) //nolint:contextcheck // constructor takes no request context; ctx drives the probe calls below
+	// Credential resolution and the live calls share the probe context, so a
+	// canceled status check cannot remain blocked in the credential backend.
+	client, _, ok, err := cmdutil.JiraClientForProfileContext(ctx, cmd, profile)
 	if err != nil {
 		out["error"] = config.SanitizeCredentialError(err)
 		return out

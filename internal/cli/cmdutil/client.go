@@ -1,6 +1,7 @@
 package cmdutil
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"time"
@@ -136,6 +137,14 @@ func JiraClientForCommand(cmd *cobra.Command) (*jira.Client, config.Profile, boo
 // tenant whose identity would then be written into the file profile.
 // Credential env sources (token/password env vars) are still honored.
 func JiraClientForProfile(cmd *cobra.Command, profile config.Profile) (*jira.Client, config.Profile, bool, error) {
+	return JiraClientForProfileContext(cmd.Context(), cmd, profile)
+}
+
+// JiraClientForProfileContext builds a Jira client targeting an explicit
+// profile while resolving its credential with ctx. Callers already operating
+// inside a bounded or cancellable task use this form so credential resolution
+// observes the same lifetime as the requests that follow.
+func JiraClientForProfileContext(ctx context.Context, cmd *cobra.Command, profile config.Profile) (*jira.Client, config.Profile, bool, error) {
 	if profile.BaseURL == "" {
 		return nil, profile, false, nil
 	}
@@ -169,7 +178,7 @@ func JiraClientForProfile(cmd *cobra.Command, profile config.Profile) (*jira.Cli
 	if refErr != nil {
 		return nil, profile, false, refErr
 	}
-	secret, secretErr := config.ResolveCredential(cmd.Context(), CredentialStoreFor(profile.SecretBackend), ref)
+	secret, secretErr := config.ResolveCredential(ctx, CredentialStoreFor(profile.SecretBackend), ref)
 	if secretErr != nil && !isLocalBaseURL(profile.BaseURL) {
 		return nil, profile, false, fmt.Errorf("credential for profile %q is required: %w", profile.Name, secretErr)
 	}

@@ -70,11 +70,142 @@ func mountAgentSurface(root *cobra.Command) {
 			agent.NewADFMatrixCommand(),
 			agent.NewFieldTypesCommand(),
 		),
+		docentcobra.WithSkillNameQualifier("jira"),
 	)
 	agentCmd.Hidden = true
 	agentCmd.GroupID = "agent"
 
-	root.AddCommand(agentCmd, newHumanGuideCommand(cfg))
+	humanGuide := newHumanGuideCommand(cfg)
+	root.AddCommand(agentCmd, humanGuide)
+
+	// Docent registers flag completions through cobra's
+	// RegisterFlagCompletionFunc, but jira-cli's completion is clib-driven and
+	// never invokes those callbacks — so bridge them into clib metadata.
+	pathDescriptions := commandPathDescriptions(tree)
+	bridgeDocentCompletions(agentCmd, pathDescriptions)
+	bridgeDocentCompletions(humanGuide, pathDescriptions)
+}
+
+// bridgeDocentCompletions walks cmd and its descendants and copies each flag's
+// cobra-registered completion values into clib enum metadata, so the
+// clib-driven completion path offers them. jira-cli never calls cobra's
+// completion callbacks, so docent's completions on --format, --scope,
+// --harness, --section, and --path would otherwise be silently dead.
+//
+// The completion functions are called once, here at mount time. Docent's
+// completion values are static per build — format names, scope and harness
+// values, guide section headings, and schema command paths are all fixed by
+// the loaded config, with no runtime input (args, toComplete) that would change
+// them — so a single snapshot captures the full value set. Each value also
+// receives clib EnumTerse metadata so Fish and other shells show a useful
+// value-specific description instead of repeating the flag's full help text.
+func bridgeDocentCompletions(cmd *cobra.Command, pathDescriptions map[string]string) {
+	cmd.LocalFlags().VisitAll(func(f *pflag.Flag) {
+		completer, ok := cmd.GetFlagCompletionFunc(f.Name)
+		if !ok {
+			return
+		}
+		values, _ := completer(cmd, nil, "")
+		enum, enumTerse := cleanCompletionValues(values)
+		if len(enum) > 0 {
+			fallback := docentCompletionTerse(cmd, f.Name, enum, pathDescriptions)
+			for i := range enumTerse {
+				if enumTerse[i] == "" && i < len(fallback) {
+					enumTerse[i] = fallback[i]
+				}
+			}
+			cmdutil.ExtendFlagEnum(f, enum, enumTerse)
+		}
+	})
+	for _, child := range cmd.Commands() {
+		bridgeDocentCompletions(child, pathDescriptions)
+	}
+}
+
+// cleanCompletionValues normalizes cobra's "choice<TAB>description" completion
+// strings into parallel clib Enum and EnumTerse slices, discarding empty
+// choices while retaining any description an upstream completer supplied.
+func cleanCompletionValues(values []string) (enum, enumTerse []string) {
+	enum = make([]string, 0, len(values))
+	enumTerse = make([]string, 0, len(values))
+	for _, v := range values {
+		choice, description, _ := strings.Cut(v, "\t")
+		if choice != "" {
+			enum = append(enum, choice)
+			enumTerse = append(enumTerse, description)
+		}
+	}
+	return enum, enumTerse
+}
+
+func docentCompletionTerse(
+	cmd *cobra.Command,
+	flag string,
+	enum []string,
+	pathDescriptions map[string]string,
+) []string {
+	descriptions := make([]string, len(enum))
+	for i, value := range enum {
+		switch {
+		case cmd.Name() == "export" && flag == "format":
+			descriptions[i] = map[string]string{
+				"agent-skill":  "portable Agent Skills format",
+				"claude-skill": "Claude Code skill format",
+			}[value]
+			if descriptions[i] == "" {
+				descriptions[i] = "export as " + value
+			}
+		case cmd.Name() == "export" && flag == "scope":
+			descriptions[i] = map[string]string{
+				"project": "project-local skills directory",
+				"user":    "user-level skills directory",
+			}[value]
+			if descriptions[i] == "" {
+				descriptions[i] = value + " skills directory"
+			}
+		case cmd.Name() == "export" && flag == "harness":
+			descriptions[i] = map[string]string{
+				"claude-code": "Claude Code conventions",
+				"codex":       "Codex conventions",
+			}[value]
+			if descriptions[i] == "" {
+				descriptions[i] = value + " conventions"
+			}
+		case cmd.Name() == "guide" && flag == "section":
+			descriptions[i] = map[string]string{
+				"Decide":        "choose the approach",
+				"Run":           "execute the workflow",
+				"Save":          "capture outputs and reusable state",
+				"Preconditions": "check required state",
+				"Recover":       "handle failures",
+				"Next":          "continue to related guidance",
+			}[value]
+			if descriptions[i] == "" {
+				descriptions[i] = "read the " + strings.ToLower(value) + " section"
+			}
+		case cmd.Name() == "schema" && flag == "path":
+			descriptions[i] = pathDescriptions[value]
+			if descriptions[i] == "" {
+				descriptions[i] = "schema for " + value
+			}
+		}
+	}
+	return descriptions
+}
+
+func commandPathDescriptions(tree docent.Command) map[string]string {
+	descriptions := map[string]string{}
+	var walk func(docent.Command)
+	walk = func(cmd docent.Command) {
+		if cmd.Path != "" {
+			descriptions[cmd.Path] = cmd.Description
+		}
+		for _, child := range cmd.Children {
+			walk(child)
+		}
+	}
+	walk(tree)
+	return descriptions
 }
 
 // pruneHiddenFlags drops hidden flags from the docent schema IR. Hidden

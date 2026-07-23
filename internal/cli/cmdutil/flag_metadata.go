@@ -1,6 +1,8 @@
 package cmdutil
 
 import (
+	"encoding/json"
+
 	clib "github.com/gechr/clib/cli/cobra"
 	"github.com/spf13/pflag"
 )
@@ -8,6 +10,40 @@ import (
 // ExtendFlag attaches clib display metadata to the named flag in flags.
 func ExtendFlag(flags *pflag.FlagSet, name string, extra clib.FlagExtra) {
 	clib.Extend(flags.Lookup(name), extra)
+}
+
+// clibExtraAnnotationKey mirrors the (unexported) annotation key clib's cobra
+// adapter stores a FlagExtra under. clib exposes Extend to write an extra but
+// no reader, so merging one field into an existing extra means reading the raw
+// annotation here. The key and its JSON payload are a stable interop contract:
+// clib's own help and completion parse this same annotation.
+const clibExtraAnnotationKey = "clib.extra"
+
+// ExtendFlagEnum attaches enum completion values and their parallel terse
+// descriptions to flag as clib metadata, preserving any FlagExtra already set
+// on it rather than overwriting it. It exists so a flag whose completion
+// originates outside the cmdutil.Add* helpers (a mounted third-party command)
+// can be taught to the clib-driven completion path, which never invokes
+// cobra's own completion callbacks. A nil flag or empty value set is a no-op;
+// a mismatched description set is omitted rather than handing invalid metadata
+// to clib.
+func ExtendFlagEnum(flag *pflag.Flag, enum, enumTerse []string) {
+	if flag == nil || len(enum) == 0 {
+		return
+	}
+	extra := clib.FlagExtra{Enum: enum}
+	if len(enumTerse) == len(enum) {
+		extra.EnumTerse = enumTerse
+	}
+	if raw := flag.Annotations[clibExtraAnnotationKey]; len(raw) > 0 {
+		var existing clib.FlagExtra
+		if err := json.Unmarshal([]byte(raw[0]), &existing); err == nil {
+			existing.Enum = enum
+			existing.EnumTerse = extra.EnumTerse
+			extra = existing
+		}
+	}
+	clib.Extend(flag, extra)
 }
 
 // ExtendFileFlag marks a flag as a file-path input with the given group and

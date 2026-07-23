@@ -17,7 +17,9 @@ Three ways in, in order of effort:
 *   Unsure what your Markdown becomes → convert it first with
     `jira adf convert` and inspect the JSON.
 *   Content Markdown cannot express (panels, mentions, complex tables) →
-    write native ADF and pass it with `--json-input`.
+    write native ADF and place it in the command's `--json-input` shape.
+    Comment add accepts the ADF document directly; create/edit,
+    transition, and worklog payloads embed it in their documented field.
 
 Pasted Jira wiki markup is accepted too: the converter detects and
 normalizes it, recording a `markdown_dialect_normalized` warning so you
@@ -47,7 +49,8 @@ or round-trip, when you need the support table itself.
 
 ## Save
 
-*   The converted ADF document — reusable as a `--json-input` body.
+*   The converted ADF document — reusable directly for comment add, or
+    embedded in another mutation's documented `--json-input` payload.
 *   `lossy_adf_conversion` warnings — each names the content that would be
     dropped or flattened.
 

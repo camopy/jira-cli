@@ -26,8 +26,8 @@ On `jira search jql`, narrow the payload deliberately: default fields
 are the working set, `--fields summary,status,assignee` trims further,
 `--full` fetches everything, and `--count` answers "how many" without
 fetching any issue. `jira issue view` and `jira issue list` take none of
-those — `issue list` narrows what is *displayed* with `--columns`, not
-the payload.
+the field-selection flags: `issue list` supports `--count`, but narrows
+what is *displayed* with `--columns`, not the fetched payload.
 
 ## Run
 
