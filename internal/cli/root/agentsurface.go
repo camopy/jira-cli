@@ -50,6 +50,7 @@ func mountAgentSurface(root *cobra.Command) {
 		"exit_codes": map[string]any{
 			"ok": 0, "auth": 1, "not_found": 2, "validation": 3,
 			"rate_limit": 4, "server": 5, "canceled": 6, "timeout": 7,
+			"io": 8,
 		},
 		"env": map[string]any{
 			"JIRA_READ_ONLY":      "Block all Jira writes at the HTTP transport.",
@@ -64,16 +65,22 @@ func mountAgentSurface(root *cobra.Command) {
 		ContractVersion: agentguides.ContractVersion,
 	}
 
+	adfMatrixCmd := agent.NewADFMatrixCommand()
+	fieldTypesCmd := agent.NewFieldTypesCommand()
 	agentCmd := docentcobra.NewCommand(
 		cfg,
 		docentcobra.WithExtraCommands(
-			agent.NewADFMatrixCommand(),
-			agent.NewFieldTypesCommand(),
+			adfMatrixCmd,
+			fieldTypesCmd,
 		),
 		docentcobra.WithSkillNameQualifier("jira"),
 	)
 	agentCmd.Hidden = true
 	agentCmd.GroupID = "agent"
+	trackDocentCommandOutput(agentCmd, map[*cobra.Command]bool{
+		adfMatrixCmd:  true,
+		fieldTypesCmd: true,
+	})
 
 	humanGuide := newHumanGuideCommand(cfg)
 	root.AddCommand(agentCmd, humanGuide)
@@ -84,6 +91,30 @@ func mountAgentSurface(root *cobra.Command) {
 	pathDescriptions := commandPathDescriptions(tree)
 	bridgeDocentCompletions(agentCmd, pathDescriptions)
 	bridgeDocentCompletions(humanGuide, pathDescriptions)
+}
+
+// trackDocentCommandOutput adds the host's typed writer boundary to Docent
+// commands while leaving extra commands that already use jira-cli's output
+// helpers untouched.
+// Docent correctly returns fmt write errors, but it cannot assign jira-cli's
+// OutputError taxonomy itself. Each leaf gets the writer it would otherwise
+// inherit, wrapped for the duration of its RunE.
+func trackDocentCommandOutput(cmd *cobra.Command, excluded map[*cobra.Command]bool) {
+	if excluded[cmd] {
+		return
+	}
+	if run := cmd.RunE; run != nil {
+		cmd.RunE = func(c *cobra.Command, args []string) error {
+			return cli.TrackWrites(c.OutOrStdout(), func(out io.Writer) error {
+				tracked := *c
+				tracked.SetOut(out)
+				return run(&tracked, args)
+			})
+		}
+	}
+	for _, child := range cmd.Commands() {
+		trackDocentCommandOutput(child, excluded)
+	}
 }
 
 // bridgeDocentCompletions walks cmd and its descendants and copies each flag's
@@ -263,12 +294,14 @@ func newHumanGuideCommand(cfg docent.Config) *cobra.Command {
 			return err
 		}
 		det := cmdutil.DetectorFromContext(c)
-		if !det.IsTTY || det.Mode != cli.ModePlain {
-			_, err := c.OutOrStdout().Write(buf.Bytes())
+		return cli.TrackWrites(c.OutOrStdout(), func(out io.Writer) error {
+			if !det.IsTTY || det.Mode != cli.ModePlain {
+				_, err := out.Write(buf.Bytes())
+				return err
+			}
+			_, err := io.WriteString(out, styleGuideMarkdown(c, buf.String()))
 			return err
-		}
-		_, err := io.WriteString(c.OutOrStdout(), styleGuideMarkdown(c, buf.String()))
-		return err
+		})
 	}
 	return cmd
 }

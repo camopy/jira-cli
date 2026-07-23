@@ -10,6 +10,7 @@ import (
 	"github.com/gechr/x/human"
 	"github.com/spf13/cobra"
 
+	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
 	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/version"
@@ -38,11 +39,13 @@ $ jira version --output=json`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if cmdutil.UsePlainOutput(cmd) {
-				if detailed {
-					return writeDetailed(cmd.OutOrStdout())
-				}
-				_, err := fmt.Fprintln(cmd.OutOrStdout(), cliveversion.RemovePrefix(version.Version()))
-				return err
+				return cli.TrackWrites(cmd.OutOrStdout(), func(out io.Writer) error {
+					if detailed {
+						return writeDetailed(out)
+					}
+					_, err := fmt.Fprintln(out, cliveversion.RemovePrefix(version.Version()))
+					return err
+				})
 			}
 			return cmdutil.WriteEnvelope(cmd, "version", envelope.VersionOutput{
 				Version:   version.Version(),

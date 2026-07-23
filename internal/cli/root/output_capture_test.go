@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -22,6 +23,15 @@ type countingErrorWriter struct {
 func (w *countingErrorWriter) Write([]byte) (int, error) {
 	w.writes++
 	return 0, w.err
+}
+
+type countingShortWriter struct {
+	writes int
+}
+
+func (w *countingShortWriter) Write(p []byte) (int, error) {
+	w.writes++
+	return len(p) - 1, nil
 }
 
 // TestCommandOutputCaptureUsesInjectedStreams asserts a root command
@@ -86,6 +96,125 @@ func TestSuccessfulCommandOutputFailureUsesLocalIOTaxonomy(t *testing.T) {
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("output failure wrote an unexpected diagnostic to stderr: %q", stderr.String())
+	}
+}
+
+func TestHumanCommandWritesUseLocalIOTaxonomy(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "version", args: []string{"version", "--output=human"}},
+		{name: "detailed version", args: []string{"version", "--detailed", "--output=human"}},
+		{name: "guide", args: []string{"guide", "core-contract", "--output=human"}},
+		{name: "agent guide", args: []string{"agent", "guide", "core-contract"}},
+		{name: "agent schema", args: []string{"agent", "schema"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			writeErr := errors.New("stdout closed")
+			stdout := &countingErrorWriter{err: writeErr}
+			stderr := &bytes.Buffer{}
+			root, _, err := NewRootCommandForTest(
+				runtime.WithStdout(stdout),
+				runtime.WithStderr(stderr),
+			)
+			if err != nil {
+				t.Fatalf("NewRootCommandForTest: %v", err)
+			}
+			root.SetArgs(tt.args)
+
+			_, execErr := root.ExecuteContextC(context.Background())
+			if !errors.Is(execErr, writeErr) {
+				t.Fatalf("ExecuteContextC() error = %v, want writer failure", execErr)
+			}
+			var outputErr *cli.OutputError
+			if !errors.As(execErr, &outputErr) {
+				t.Fatalf("ExecuteContextC() error type = %T, want *cli.OutputError", execErr)
+			}
+			mapped := cli.MapError(execErr)
+			if mapped.Code != "output_write_failed" || mapped.Type != "io" ||
+				mapped.Retryable || cli.ExitCode(mapped) != 8 {
+				t.Fatalf("MapError() = %#v, want output_write_failed exit 8", mapped)
+			}
+			if stdout.writes != 1 {
+				t.Fatalf("stdout writes = %d, want 1", stdout.writes)
+			}
+			if stderr.Len() != 0 {
+				t.Fatalf("stderr = %q, want empty", stderr.String())
+			}
+		})
+	}
+}
+
+func TestHumanCommandsNormalizeShortWrites(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "version", args: []string{"version", "--output=human"}},
+		{name: "guide", args: []string{"guide", "core-contract", "--output=human"}},
+		{name: "agent guide", args: []string{"agent", "guide", "core-contract"}},
+		{name: "agent schema", args: []string{"agent", "schema"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stdout := &countingShortWriter{}
+			root, _, err := NewRootCommandForTest(
+				runtime.WithStdout(stdout),
+				runtime.WithStderr(&bytes.Buffer{}),
+			)
+			if err != nil {
+				t.Fatalf("NewRootCommandForTest: %v", err)
+			}
+			root.SetArgs(tt.args)
+
+			_, execErr := root.ExecuteContextC(context.Background())
+			if !errors.Is(execErr, io.ErrShortWrite) {
+				t.Fatalf("ExecuteContextC() error = %v, want io.ErrShortWrite", execErr)
+			}
+			var outputErr *cli.OutputError
+			if !errors.As(execErr, &outputErr) {
+				t.Fatalf("ExecuteContextC() error type = %T, want *cli.OutputError", execErr)
+			}
+			if stdout.writes != 1 {
+				t.Fatalf("stdout writes = %d, want 1", stdout.writes)
+			}
+		})
+	}
+}
+
+func TestDocentOutputTrackingPreservesInheritedWriter(t *testing.T) {
+	var first, second bytes.Buffer
+	root, _, err := NewRootCommandForTest(
+		runtime.WithStdout(&first),
+		runtime.WithStderr(&bytes.Buffer{}),
+	)
+	if err != nil {
+		t.Fatalf("NewRootCommandForTest: %v", err)
+	}
+
+	root.SetArgs([]string{"agent", "guide", "core-contract"})
+	if _, err := root.ExecuteContextC(context.Background()); err != nil {
+		t.Fatalf("first ExecuteContextC() error = %v", err)
+	}
+	firstLen := first.Len()
+	if firstLen == 0 {
+		t.Fatal("first execution produced no output")
+	}
+
+	root.SetOut(&second)
+	root.SetArgs([]string{"agent", "guide", "core-contract"})
+	if _, err := root.ExecuteContextC(context.Background()); err != nil {
+		t.Fatalf("second ExecuteContextC() error = %v", err)
+	}
+	if second.Len() == 0 {
+		t.Fatal("second execution did not follow the replacement root writer")
+	}
+	if first.Len() != firstLen {
+		t.Fatal("second execution wrote to the stale inherited writer")
 	}
 }
 

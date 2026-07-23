@@ -149,6 +149,10 @@ func TestCommandPackagesPropagateOutputHelperErrors(t *testing.T) {
 				pos := fset.Position(call.Pos())
 				t.Errorf("%s:%d: command package internal/cli/%s discards %s; return or handle its error", path, pos.Line, dir, outputHelperName(call))
 			}
+			for _, call := range directCommandStreamWrites(file) {
+				pos := fset.Position(call.Pos())
+				t.Errorf("%s:%d: command package internal/cli/%s writes directly to a Cobra stream; use a tracked output helper", path, pos.Line, dir)
+			}
 		}
 	}
 }
@@ -215,6 +219,112 @@ func good() {
 			}
 		})
 	}
+}
+
+func TestOutputHelperGuardRejectsDirectCommandStreamWrites(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		source string
+	}{
+		{
+			name: "fmt print",
+			source: `package command
+import (
+	fmtalias "fmt"
+	"github.com/spf13/cobra"
+)
+func bad(cmd *cobra.Command) {
+	_, _ = fmtalias.Fprintln(cmd.OutOrStdout(), "data")
+}`,
+		},
+		{
+			name: "io string",
+			source: `package command
+import (
+	stream "io"
+	"github.com/spf13/cobra"
+)
+func bad(cmd *cobra.Command) {
+	_, _ = stream.WriteString(cmd.ErrOrStderr(), "diagnostic")
+}`,
+		},
+		{
+			name: "writer method",
+			source: `package command
+import "github.com/spf13/cobra"
+func bad(cmd *cobra.Command) {
+	_, _ = cmd.OutOrStdout().Write([]byte("data"))
+}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, file := parseGoSource(t, tc.source)
+			if got := len(directCommandStreamWrites(file)); got != 1 {
+				t.Fatalf("direct command-stream findings = %d, want 1", got)
+			}
+		})
+	}
+
+	_, file := parseGoSource(t, `package command
+import "fmt"
+type local struct{}
+func (local) OutOrStdout() io.Writer { return nil }
+func allowed(cmd local) {
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "data")
+}`)
+	if got := len(directCommandStreamWrites(file)); got != 0 {
+		t.Fatalf("direct command-stream findings = %d, want 0 for non-Cobra receiver", got)
+	}
+}
+
+func directCommandStreamWrites(file *ast.File) []*ast.CallExpr {
+	fmtNames := importedPackageNames(file, "fmt")
+	ioNames := importedPackageNames(file, "io")
+	cobraNames := importedPackageNames(file, "github.com/spf13/cobra")
+	cobraDotImported := dotImportsPackage(file, "github.com/spf13/cobra")
+	var findings []*ast.CallExpr
+	ast.Inspect(file, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		if sel.Sel.Name == "Write" && isCommandStreamCall(sel.X, cobraNames, cobraDotImported) {
+			findings = append(findings, call)
+			return true
+		}
+		pkg, ok := sel.X.(*ast.Ident)
+		if !ok || pkg.Obj != nil || len(call.Args) == 0 ||
+			!isCommandStreamCall(call.Args[0], cobraNames, cobraDotImported) {
+			return true
+		}
+		if fmtNames[pkg.Name] && strings.HasPrefix(sel.Sel.Name, "Fprint") {
+			findings = append(findings, call)
+		}
+		if ioNames[pkg.Name] && sel.Sel.Name == "WriteString" {
+			findings = append(findings, call)
+		}
+		return true
+	})
+	return findings
+}
+
+func isCommandStreamCall(
+	expr ast.Expr,
+	cobraNames map[string]bool,
+	cobraDotImported bool,
+) bool {
+	call, ok := expr.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	return ok &&
+		(sel.Sel.Name == "OutOrStdout" || sel.Sel.Name == "ErrOrStderr") &&
+		expressionIsCobraCommand(sel.X, cobraNames, cobraDotImported)
 }
 
 func discardedOutputHelperCalls(file *ast.File) []*ast.CallExpr {
