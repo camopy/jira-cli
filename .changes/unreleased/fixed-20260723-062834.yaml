@@ -1,3 +1,0 @@
-kind: fixed
-body: Return failed help and diagnostic writes as local output errors.
-time: 2026-07-23T06:28:34.411492399-04:00

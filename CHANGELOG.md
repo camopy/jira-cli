@@ -1,6 +1,14 @@
 # Release Notes
 
 
+## [0.15.0](https://github.com/matcra587/jira-cli/releases/tag/v0.15.0) — 2026-07-23
+
+### Fixed
+
+- Return output destination failures from machine and human renderers.
+- Report data, file, and terminal failures instead of silently continuing.
+- Return failed help and diagnostic writes as local output errors.
+
 ## [0.14.2](https://github.com/matcra587/jira-cli/releases/tag/v0.14.2) — 2026-07-22
 
 ### Fixed
