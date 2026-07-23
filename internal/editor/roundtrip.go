@@ -20,6 +20,8 @@ const nonBlockingSpawnThreshold = 500 * time.Millisecond
 // WriteTemp writes markdown to a new jira-edit-*.md temp file, prefixed with
 // an issue_key/field_name frontmatter block for context, and returns its path.
 // The caller owns cleanup — EditMarkdown deletes it, but preserves it on error.
+// A setup write or close failure removes the incomplete file because no editor
+// has opened it and it contains no user changes to recover.
 func WriteTemp(issueKey, fieldName, markdown string) (string, error) {
 	f, err := os.CreateTemp("", "jira-edit-*.md")
 	if err != nil {
@@ -27,10 +29,10 @@ func WriteTemp(issueKey, fieldName, markdown string) (string, error) {
 	}
 	name := f.Name()
 	if _, err = fmt.Fprintf(f, "---\nissue_key: %s\nfield_name: %s\n---\n\n%s\n", issueKey, fieldName, markdown); err != nil {
-		return "", errors.Join(err, f.Close())
+		return "", errors.Join(err, f.Close(), os.Remove(name))
 	}
 	if err := f.Close(); err != nil {
-		return "", err
+		return "", errors.Join(err, os.Remove(name))
 	}
 	return name, nil
 }

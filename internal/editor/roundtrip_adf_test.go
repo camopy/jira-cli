@@ -3,6 +3,7 @@ package editor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -126,6 +127,58 @@ func TestRoundTripADF_MalformedOpaqueFenceFailsAndPreservesFile(t *testing.T) {
 	defer func() { _ = os.Remove(preserved) }()
 	if _, statErr := os.Stat(preserved); statErr != nil {
 		t.Fatalf("temp file not preserved at %s: %v", preserved, statErr)
+	}
+}
+
+func TestRoundTripADFPreservesDraftWhenEditorFails(t *testing.T) {
+	editorErr := errors.New("editor failed")
+	var editedPath string
+
+	_, _, err := RoundTripADF(context.Background(), RoundTripADFOptions{
+		IssueKey:  "JCT-1",
+		FieldName: "description",
+		Document:  adf.Document{Type: "doc", Version: 1},
+		EditFn: func(_ context.Context, path string) error {
+			editedPath = path
+			t.Cleanup(func() { _ = os.Remove(path) })
+			return editorErr
+		},
+	})
+	if !errors.Is(err, editorErr) {
+		t.Fatalf("RoundTripADF() error = %v, want editor failure", err)
+	}
+	if editedPath == "" || !strings.Contains(err.Error(), editedPath) {
+		t.Fatalf("error does not name preserved draft %q: %v", editedPath, err)
+	}
+	if _, statErr := os.Stat(editedPath); statErr != nil {
+		t.Fatalf("draft was not preserved at %s: %v", editedPath, statErr)
+	}
+}
+
+func TestRoundTripADFPreservesDraftWhenReadingEditFails(t *testing.T) {
+	var editedPath string
+
+	_, _, err := RoundTripADF(context.Background(), RoundTripADFOptions{
+		IssueKey:  "JCT-1",
+		FieldName: "description",
+		Document:  adf.Document{Type: "doc", Version: 1},
+		EditFn: func(_ context.Context, path string) error {
+			editedPath = path
+			t.Cleanup(func() {
+				_ = os.Chmod(path, 0o600)
+				_ = os.Remove(path)
+			})
+			return os.Chmod(path, 0)
+		},
+	})
+	if err == nil {
+		t.Fatal("RoundTripADF() error = nil, want read failure")
+	}
+	if editedPath == "" || !strings.Contains(err.Error(), editedPath) {
+		t.Fatalf("error does not name preserved draft %q: %v", editedPath, err)
+	}
+	if _, statErr := os.Stat(editedPath); statErr != nil {
+		t.Fatalf("draft was not preserved at %s: %v", editedPath, statErr)
 	}
 }
 

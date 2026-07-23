@@ -54,17 +54,20 @@ func RoundTripADF(ctx context.Context, opts RoundTripADFOptions) (adf.Document, 
 	// production passes EditCmd.
 	if opts.EditFn != nil {
 		if err := opts.EditFn(ctx, path); err != nil {
-			return adf.Document{}, nil, err
+			cleanup = false
+			return adf.Document{}, nil, fmt.Errorf("%w; your edit is preserved at %s", err, path)
 		}
 	} else if opts.EditCmd != "" {
 		if err := Run(ctx, opts.EditCmd, path); err != nil {
-			return adf.Document{}, nil, err
+			cleanup = false
+			return adf.Document{}, nil, fmt.Errorf("%w; your edit is preserved at %s", err, path)
 		}
 	}
 
 	editedMD, err := ReadMarkdown(path)
 	if err != nil {
-		return adf.Document{}, nil, err
+		cleanup = false
+		return adf.Document{}, nil, fmt.Errorf("%w; your edit is preserved at %s", err, path)
 	}
 	doc, mdWarnings, err := buildDocFromMarkdownWithOpaques(editedMD, opaques)
 	if err != nil {
