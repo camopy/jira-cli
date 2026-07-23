@@ -575,9 +575,13 @@ func handleCompletionPreflight(root *cobra.Command) (bool, error) {
 			globals.Profile = forwarded.Profile
 		}
 	}
-	handled, err := flags.Handle(gen, completion.CompletionHandler(globals), complete.WithArgs(positional))
+	handler := completion.NewHandler(root.OutOrStdout(), globals)
+	handled, err := flags.Handle(gen, handler.Complete, complete.WithArgs(positional))
 	if err != nil {
 		return false, err
+	}
+	if err := handler.Err(); err != nil {
+		return handled, err
 	}
 	return handled, nil
 }

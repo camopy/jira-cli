@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -84,6 +85,68 @@ func TestSuccessfulCommandOutputFailureUsesLocalIOTaxonomy(t *testing.T) {
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("output failure wrote an unexpected diagnostic to stderr: %q", stderr.String())
+	}
+}
+
+func TestCompletionPreflightWritesCandidatesToRootOutputOnly(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	root, _, err := NewRootCommandForTest(
+		runtime.WithStdout(&stdout),
+		runtime.WithStderr(&stderr),
+	)
+	if err != nil {
+		t.Fatalf("NewRootCommandForTest: %v", err)
+	}
+	originalArgs := os.Args
+	os.Args = []string{"jira", "--@complete=cacheresource", "--@shell=fish"}
+	t.Cleanup(func() { os.Args = originalArgs })
+
+	handled, err := handleCompletionPreflight(root)
+	if err != nil {
+		t.Fatalf("handleCompletionPreflight() error = %v", err)
+	}
+	if !handled {
+		t.Fatal("handleCompletionPreflight() handled = false, want true")
+	}
+	if stdout.Len() == 0 {
+		t.Fatal("completion preflight emitted no candidates")
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("completion preflight polluted stderr: %q", stderr.String())
+	}
+}
+
+func TestCompletionPreflightReturnsCandidateWriteFailure(t *testing.T) {
+	writeErr := errors.New("stdout closed")
+	stdout := &countingErrorWriter{err: writeErr}
+	var stderr bytes.Buffer
+	root, _, err := NewRootCommandForTest(
+		runtime.WithStdout(stdout),
+		runtime.WithStderr(&stderr),
+	)
+	if err != nil {
+		t.Fatalf("NewRootCommandForTest: %v", err)
+	}
+	originalArgs := os.Args
+	os.Args = []string{"jira", "--@complete=cacheresource", "--@shell=fish"}
+	t.Cleanup(func() { os.Args = originalArgs })
+
+	handled, err := handleCompletionPreflight(root)
+	if !handled {
+		t.Fatal("handleCompletionPreflight() handled = false, want Clib action handled")
+	}
+	if !errors.Is(err, writeErr) {
+		t.Fatalf("handleCompletionPreflight() error = %v, want writer failure", err)
+	}
+	var outputErr *cli.OutputError
+	if !errors.As(err, &outputErr) {
+		t.Fatalf("handleCompletionPreflight() error type = %T, want *cli.OutputError", err)
+	}
+	if stdout.writes != 1 {
+		t.Fatalf("stdout writes = %d, want one failed candidate write", stdout.writes)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("completion preflight polluted stderr: %q", stderr.String())
 	}
 }
 
