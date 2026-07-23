@@ -63,26 +63,28 @@ func mirrorWarningsToStderr(w io.Writer, warnings []Warning) error {
 	if len(warnings) == 0 || w == nil {
 		return nil
 	}
-	logger := newPlainLoggerAt(w, clog.LevelWarn)
-	for _, warn := range warnings {
-		// Warning strings can carry Jira-controlled text — node_type/mark_type
-		// echo whatever type string the inbound ADF document declared — so
-		// every field crosses the terminal sanitizer at this stderr boundary.
-		event := logger.Warn().Str("type", SanitizeTerminalText(warn.Type))
-		if warn.Field != "" {
-			event = event.Str("field", SanitizeTerminalText(warn.Field))
+	return withTrackedWriter(w, func(out io.Writer) error {
+		logger := newPlainLoggerAt(out, clog.LevelWarn)
+		for _, warn := range warnings {
+			// Warning strings can carry Jira-controlled text — node_type/mark_type
+			// echo whatever type string the inbound ADF document declared — so
+			// every field crosses the terminal sanitizer at this stderr boundary.
+			event := logger.Warn().Str("type", SanitizeTerminalText(warn.Type))
+			if warn.Field != "" {
+				event = event.Str("field", SanitizeTerminalText(warn.Field))
+			}
+			if warn.Path != "" {
+				event = event.Str("path", SanitizeTerminalText(warn.Path))
+			}
+			if warn.NodeType != "" {
+				event = event.Str("node_type", SanitizeTerminalText(warn.NodeType))
+			}
+			if warn.MarkType != "" {
+				event = event.Str("mark_type", SanitizeTerminalText(warn.MarkType))
+			}
+			event = event.Bool("lossy", warn.Lossy)
+			event.Msg(SanitizeTerminalText(warn.Message))
 		}
-		if warn.Path != "" {
-			event = event.Str("path", SanitizeTerminalText(warn.Path))
-		}
-		if warn.NodeType != "" {
-			event = event.Str("node_type", SanitizeTerminalText(warn.NodeType))
-		}
-		if warn.MarkType != "" {
-			event = event.Str("mark_type", SanitizeTerminalText(warn.MarkType))
-		}
-		event = event.Bool("lossy", warn.Lossy)
-		event.Msg(SanitizeTerminalText(warn.Message))
-	}
-	return nil
+		return nil
+	})
 }

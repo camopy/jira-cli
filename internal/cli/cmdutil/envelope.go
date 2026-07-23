@@ -176,7 +176,7 @@ func writeRawWarningEnvelope(cmd *cobra.Command, command string, data any, warni
 	// structured fields (rate-limit retry seconds, drain cut reasons) the typed
 	// Warning struct does not model, so folding them into cli.Warning would
 	// drop data. Build the envelope document as a map and route it through the
-	// shared clog writer — same byte-shape as before, now with the errWriter
+	// shared clog writer — same byte-shape as before, now with the write tracker
 	// wrapper capturing broken-pipe / quota write failures.
 	body := map[string]any{
 		"ok":       true,

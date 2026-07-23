@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"errors"
+	"io"
 	"strings"
 	"testing"
 )
@@ -46,5 +48,34 @@ func TestWriteCommandPlainDropsCommandEchoMessage(t *testing.T) {
 	}
 	if !strings.Contains(got, "account=") {
 		t.Fatalf("data field must still render:\n%s", got)
+	}
+}
+
+func TestWriteCommandPlainReturnsWriterFailure(t *testing.T) {
+	writers := []struct {
+		name string
+		new  func() io.Writer
+	}{
+		{name: "always fail", new: func() io.Writer { return &alwaysFailWriter{} }},
+		{name: "fail after prefix", new: func() io.Writer { return &failAfterWriter{remaining: 4} }},
+	}
+	for _, writer := range writers {
+		t.Run(writer.name, func(t *testing.T) {
+			err := WriteCommandPlain(writer.new(), "auth.whoami", map[string]any{
+				"account": "u@example.com",
+			})
+			if !errors.Is(err, errWriteSentinel) {
+				t.Fatalf("WriteCommandPlain() error = %v, want sentinel", err)
+			}
+		})
+	}
+}
+
+func TestWriteCommandPlainReturnsShortWrite(t *testing.T) {
+	err := WriteCommandPlain(shortWriter{}, "auth.whoami", map[string]any{
+		"account": "u@example.com",
+	})
+	if !errors.Is(err, io.ErrShortWrite) {
+		t.Fatalf("WriteCommandPlain() error = %v, want io.ErrShortWrite", err)
 	}
 }

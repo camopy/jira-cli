@@ -245,7 +245,9 @@ func plainLoggerStyles() *clogstyle.Config {
 // fallback for internal payloads with no command-specific renderer in
 // WriteCommandPlain.
 func WritePlain(w io.Writer, data any) error {
-	return writeGenericPlain(newPlainLogger(w), defaultPlainConfig(), "result", data)
+	return withTrackedWriter(w, func(out io.Writer) error {
+		return writeGenericPlain(newPlainLogger(out), defaultPlainConfig(), "result", data)
+	})
 }
 
 // WriteCommandPlain routes a command's data to the plain renderer that
@@ -256,6 +258,12 @@ func WritePlain(w io.Writer, data any) error {
 // explicit switch is the whole dispatch — there is deliberately no
 // parallel renderer registry.
 func WriteCommandPlain(w io.Writer, command string, data any, opts ...PlainOption) error {
+	return withTrackedWriter(w, func(out io.Writer) error {
+		return writeCommandPlain(out, command, data, opts...)
+	})
+}
+
+func writeCommandPlain(w io.Writer, command string, data any, opts ...PlainOption) error {
 	// Human-mode render boundary: every renderer below pulls its display
 	// strings from this Jira-controlled payload, so string VALUES are
 	// sanitized once here — one systematic boundary instead of

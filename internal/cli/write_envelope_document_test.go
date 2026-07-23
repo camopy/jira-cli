@@ -13,7 +13,7 @@ func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("broken p
 
 // WriteEnvelopeDocument must surface a write failure rather than swallow it —
 // the whole reason the raw-warning path was moved off a bare json.Encoder onto
-// the clog errWriter path.
+// the clog write-tracker path.
 func TestWriteEnvelopeDocumentSurfacesWriteError(t *testing.T) {
 	err := WriteEnvelopeDocument(failingWriter{}, map[string]any{"ok": true})
 	if err == nil {

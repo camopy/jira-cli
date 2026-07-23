@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	"github.com/gechr/clog"
@@ -167,7 +166,7 @@ func WriteEnvelope(w io.Writer, env Envelope) error {
 // WriteEnvelopeDocument serializes a pre-built envelope document (a value that
 // already carries the ok/meta/data/errors/warnings shape — typically a map)
 // through the same clog flat path cli.WriteEnvelope uses, so a broken-pipe or
-// quota write failure surfaces via errWriter instead of being swallowed. It
+// quota write failure surfaces via writeTracker instead of being swallowed. It
 // exists for the raw-warning path, whose warnings carry arbitrary structured
 // fields the typed Warning struct does not model, so the document cannot be
 // funneled through the typed Envelope without dropping data.
@@ -289,55 +288,13 @@ func WriteHumanTOML(w io.Writer, data any, printTheme *clogtheme.Theme) error {
 // newPrintLogger builds the throwaway clog logger the printer paths share,
 // wrapping w so a Print() call that ignores its own write result still
 // surfaces a broken-pipe or quota failure to the caller.
-func newPrintLogger(w io.Writer, color clog.ColorMode, printTheme *clogtheme.Theme) (*clog.Logger, *errWriter) {
-	ew := &errWriter{w: w}
-	out := io.Writer(ew)
-	if _, ok := w.(interface{ Fd() uintptr }); ok {
-		out = fdErrFile{errWriter: ew}
-	}
+func newPrintLogger(w io.Writer, color clog.ColorMode, printTheme *clogtheme.Theme) (*clog.Logger, *writeTracker) {
+	tracker, out := newTrackedWriter(w)
 	logger := clog.New(clog.NewOutput(out, color))
 	if printTheme != nil {
 		logger.SetTheme(clogtheme.Single(printTheme))
 	}
-	return logger, ew
-}
-
-// errWriter wraps an io.Writer and captures the first write error so a
-// clog Print() call that ignores its own write result still surfaces a
-// broken-pipe or quota failure to the envelope caller.
-type errWriter struct {
-	w   io.Writer
-	err error
-}
-
-func (e *errWriter) Write(p []byte) (int, error) {
-	if e.err != nil {
-		return 0, e.err
-	}
-	n, err := e.w.Write(p)
-	if err != nil {
-		e.err = err
-	}
-	return n, err
-}
-
-type fdErrFile struct {
-	*errWriter
-}
-
-func (e fdErrFile) Fd() uintptr {
-	return e.w.(interface{ Fd() uintptr }).Fd()
-}
-
-func (e fdErrFile) Read(p []byte) (int, error) {
-	if r, ok := e.w.(io.Reader); ok {
-		return r.Read(p)
-	}
-	return 0, os.ErrInvalid
-}
-
-func (e fdErrFile) Close() error {
-	return nil
+	return logger, tracker
 }
 
 // NewRequestID returns a 32-character hex request id. crypto/rand is the
