@@ -115,7 +115,10 @@ func ParseDuration(input string, workdaySeconds int) (int, error) {
 		if start == i || i >= len(input) {
 			return 0, errors.New("invalid duration")
 		}
-		n, _ := strconv.Atoi(input[start:i])
+		n, err := strconv.Atoi(input[start:i])
+		if err != nil {
+			return 0, errors.New("invalid duration")
+		}
 		unit := input[i]
 		i++
 		switch unit {

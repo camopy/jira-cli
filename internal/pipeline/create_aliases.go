@@ -87,6 +87,9 @@ func wireIdentity(wire any, keys []string) string {
 // NormalizeCreateAliasesChecked to reject; this convenience form keeps
 // the explicit value and discards the alias.
 func NormalizeCreateAliases(fields map[string]any) map[string]any {
+	// The non-strict form resolves conflicts by keeping the explicit wire key,
+	// so its normalizer cannot return an error.
+
 	out, _ := normalizeCreateAliases(fields, false)
 	return out
 }

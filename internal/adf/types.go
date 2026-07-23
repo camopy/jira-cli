@@ -100,7 +100,10 @@ func (n Node) MarshalJSON() ([]byte, error) {
 			buf.WriteByte(',')
 		}
 		first = false
-		k, _ := json.Marshal(key)
+		k, err := json.Marshal(key)
+		if err != nil {
+			return err
+		}
 		buf.Write(k)
 		buf.WriteByte(':')
 		v, err := json.Marshal(value)
@@ -110,15 +113,19 @@ func (n Node) MarshalJSON() ([]byte, error) {
 		buf.Write(v)
 		return nil
 	}
-	emitRaw := func(key string, value json.RawMessage) {
+	emitRaw := func(key string, value json.RawMessage) error {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
-		k, _ := json.Marshal(key)
+		k, err := json.Marshal(key)
+		if err != nil {
+			return err
+		}
 		buf.Write(k)
 		buf.WriteByte(':')
 		buf.Write(value)
+		return nil
 	}
 	if err := emit("type", n.Type); err != nil {
 		return nil, err
@@ -145,7 +152,9 @@ func (n Node) MarshalJSON() ([]byte, error) {
 	}
 	if len(n.extra) > 0 {
 		for k, v := range xmaps.Sorted(n.extra) {
-			emitRaw(k, v)
+			if err := emitRaw(k, v); err != nil {
+				return nil, err
+			}
 		}
 	}
 	buf.WriteByte('}')
@@ -189,7 +198,10 @@ func (m Mark) MarshalJSON() ([]byte, error) {
 			buf.WriteByte(',')
 		}
 		first = false
-		k, _ := json.Marshal(key)
+		k, err := json.Marshal(key)
+		if err != nil {
+			return err
+		}
 		buf.Write(k)
 		buf.WriteByte(':')
 		v, err := json.Marshal(value)
@@ -199,15 +211,19 @@ func (m Mark) MarshalJSON() ([]byte, error) {
 		buf.Write(v)
 		return nil
 	}
-	emitRaw := func(key string, value json.RawMessage) {
+	emitRaw := func(key string, value json.RawMessage) error {
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
-		k, _ := json.Marshal(key)
+		k, err := json.Marshal(key)
+		if err != nil {
+			return err
+		}
 		buf.Write(k)
 		buf.WriteByte(':')
 		buf.Write(value)
+		return nil
 	}
 	if err := emit("type", m.Type); err != nil {
 		return nil, err
@@ -219,7 +235,9 @@ func (m Mark) MarshalJSON() ([]byte, error) {
 	}
 	if len(m.extra) > 0 {
 		for k, v := range xmaps.Sorted(m.extra) {
-			emitRaw(k, v)
+			if err := emitRaw(k, v); err != nil {
+				return nil, err
+			}
 		}
 	}
 	buf.WriteByte('}')

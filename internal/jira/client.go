@@ -123,7 +123,9 @@ func parseErrorCollection(body []byte) errorCollection {
 	if len(body) == 0 || !json.Valid(body) {
 		return ec
 	}
-	_ = json.Unmarshal(body, &ec)
+	if err := json.Unmarshal(body, &ec); err != nil {
+		return ec
+	}
 	return ec
 }
 
@@ -185,11 +187,18 @@ type RateObserver func(context.Context, Rate)
 // instead of panicking inside the option.
 type Option func(*Client)
 
-// NewClient builds a Client from opts, discarding any construction error. Use
-// it where the options are known-good (tests, internal wiring); prefer
-// NewClientE on any path fed by user config, where a bad base URL must surface.
+// NewClient builds a Client from opts and records any construction error for
+// the first request to return. Use it where the options are known-good (tests,
+// internal wiring); prefer NewClientE on any path fed by user config, where a
+// bad base URL must surface during construction.
 func NewClient(opts ...Option) *Client {
-	c, _ := newClient(opts...)
+	c, err := newClient(opts...)
+	if err == nil {
+		return c
+	}
+	if c == nil {
+		return &Client{initErr: err}
+	}
 	return c
 }
 
@@ -205,7 +214,10 @@ func NewClientE(opts ...Option) (*Client, error) {
 }
 
 func newClient(opts ...Option) (*Client, error) {
-	u, _ := url.Parse(defaultBaseURL)
+	u, err := url.Parse(defaultBaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse default Jira base URL: %w", err)
+	}
 	c := &Client{client: defaultHTTPClient(), baseURL: u}
 	for _, opt := range opts {
 		opt(c)
@@ -533,7 +545,7 @@ func (c *Client) Do(req *http.Request, out any) (*Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("jira request %s %s: %w", req.Method, req.URL.EscapedPath(), err)
 	}
-	defer func() { _ = res.Body.Close() }()
+	defer res.Body.Close() //nolint:errcheck // response body is fully consumed; close has no recovery action
 	if c.debug {
 		c.dumpResponseHead(ctx, res)
 	}
@@ -660,9 +672,13 @@ func (c *Client) dumpRequest(ctx context.Context, req *http.Request) {
 			// GetBody when the body is a *bytes.Reader.
 			body, err := req.GetBody()
 			if err == nil && body != nil {
-				data, _ := io.ReadAll(body)
-				_ = body.Close()
-				bodyText = string(redactSensitiveBytes(data))
+				data, readErr := io.ReadAll(body)
+				closeErr := body.Close()
+				if readErr == nil && closeErr == nil {
+					bodyText = string(redactSensitiveBytes(data))
+				} else {
+					bodyText = "(request body unavailable)"
+				}
 			}
 		} else {
 			bodyText = "(redacted non-json body)"
@@ -844,6 +860,9 @@ func upstreamRequestID(res *http.Response) string {
 }
 
 func parseRate(res *http.Response) Rate {
+	// Atoi returns zero for syntax errors and a clamped value for range errors;
+	// both are the established best-effort interpretation of this header.
+
 	remaining, _ := strconv.Atoi(res.Header.Get("X-RateLimit-Remaining"))
 	now := time.Now()
 	return Rate{
