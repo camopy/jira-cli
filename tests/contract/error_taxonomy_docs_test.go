@@ -28,15 +28,22 @@ func coreContractText(t *testing.T) string {
 }
 
 // TestCoreContractDocumentsEveryExitCode pins the exit table to the full
-// 0-7 set the code emits (canceled=6 and timeout=7 included).
+// 0-8 set the code emits, including the local-output failure contract.
 func TestCoreContractDocumentsEveryExitCode(t *testing.T) {
 	doc := coreContractText(t)
-	for _, code := range []string{"`0`", "`1`", "`2`", "`3`", "`4`", "`5`", "`6`", "`7`"} {
+	for _, code := range []string{"`0`", "`1`", "`2`", "`3`", "`4`", "`5`", "`6`", "`7`", "`8`"} {
 		if !strings.Contains(doc, code) {
 			t.Errorf("exit-code list is missing %s", code)
 		}
 	}
-	for _, marker := range []string{"`code=canceled`", "`code=timeout`", "`code=read_only`"} {
+	for _, marker := range []string{
+		"`code=canceled`",
+		"`code=output_write_failed`",
+		"`code=read_only`",
+		"`code=timeout`",
+		"`retryable=false`",
+		"`type=io`",
+	} {
 		if !strings.Contains(doc, marker) {
 			t.Errorf("contract does not document %s", marker)
 		}

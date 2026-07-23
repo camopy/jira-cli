@@ -14,7 +14,7 @@ import (
 // additive surface; patch for wording-only changes. Independent of the
 // binary version. The move from the hand-rolled surface to docent (new
 // schema shape, new guide set) is the 2.x → 3.0.0 break.
-const ContractVersion = "3.0.0"
+const ContractVersion = "3.1.0"
 
 //go:embed guides/*.md
 var guidesFS embed.FS

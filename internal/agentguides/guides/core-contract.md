@@ -29,6 +29,8 @@ Rules that hold for every command:
 
 *   Machine output goes to stdout; status, spinners, and diagnostics go to
     stderr. Read them separately.
+*   Treat stdout as unusable if the destination closes, fills, or accepts only
+    a prefix. The command exits 8; a mutation may already have reached Jira.
 *   `--jq <expr>` filters the JSON output in-process — no external jq
     needed; string results print raw. It implies `--output json` when no
     mode is set, filters failure envelopes too (exit code preserved), and
@@ -99,13 +101,18 @@ exists.
 
 Exit codes are a published contract: `0` ok, `1` auth, `2` not-found, `3`
 validation, `4` rate-limit, `5` server, `6` canceled (`code=canceled`),
-`7` timeout (`code=timeout`). A write refused by read-only mode reports
-`code=read_only`.
+`7` timeout (`code=timeout`), `8` local output failure
+(`code=output_write_failed`, `type=io`, `retryable=false`). A write refused
+by read-only mode reports `code=read_only`.
 
 On failure act on `errors[0].hint`; it names the command or flag that fixes
 the problem. Retry only when `retryable` is true. For wire-level detail,
 re-run with `--debug` — auth headers are redacted, so output stays safe to
 share.
+
+For exit 8, fix the pipe, file or terminal destination and discard any partial
+stdout. Do not automatically repeat a mutation: inspect Jira first because the
+remote write may have succeeded before local output failed.
 
 ## Next
 

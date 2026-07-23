@@ -41,6 +41,26 @@ IMPORTANT: JSON envelopes must be byte-clean. Machine output goes to stdout
 through `cli.WriteEnvelope`; never a raw `json.Encoder`. In `json`/`compact`
 modes nothing else may write to stdout.
 
+## Write ownership
+
+The output path is command → `cmdutil` → `cli` → Cobra's `io.Writer`.
+Commands use `RunE` and return every `cmdutil.Write*Envelope` result.
+`cmdutil` chooses the machine or human renderer and passes
+`cmd.OutOrStdout()`/`cmd.ErrOrStderr()` down. `cli` owns rendering and tracks
+the first destination failure across Clog's void finalisers. Never write
+command output through `os.Stdout` or `os.Stderr`.
+
+Dynamic completion candidates use the same injected root writer and report a
+failed candidate write after Clib dispatch. Clib's upstream
+`--print-completion` action remains the sole deliberate process-stdout
+boundary.
+
+Destination failures are `output_write_failed`, `type=io`, exit 8 and
+non-retryable. A Jira mutation may already have completed, so never retry it
+solely because its result could not be written. If a command error and its
+error renderer both fail, root keeps the command error primary and joins the
+write failure as secondary context; it does not try the failed stream again.
+
 ## Envelope data conventions (contract v2)
 
 *   **Issue identity is always an object.** Any issue-scoped `data.issue`
@@ -80,9 +100,9 @@ modes nothing else may write to stdout.
 
 *   Envelopes render through the clog printer path (`internal/cli/json.go`):
     `JSONFlat` for machine modes, `JSONPretty` retinted to the active theme
-    for human-mode JSON. The custom `errWriter` wrapper exists to capture
-    broken-pipe/quota write failures that would otherwise be swallowed —
-    the reason raw encoders are banned.
+    for human-mode JSON. The shared command-local write tracker captures
+    broken-pipe/quota failures and nil short writes that Clog finalisers would
+    otherwise hide — the reason raw encoders are banned.
 *   Error envelopes go to **stdout** (success and failure alike), even under
     `compact`; human diagnostics go to **stderr** through clog.
 *   Warnings carry a taxonomy (`unknown_adf_node`, `lossy_adf_conversion`,
@@ -168,8 +188,9 @@ All user-visible failures map through `internal/cli/errors.go`:
     its own code (`saved_query_unknown`, `issue_type_unknown`) with a hint that
     points at the real source, and offers the values via `suggestions[]`.
 *   Exit codes are a published contract: `0` ok, `1` auth, `2` not-found,
-    `3` validation, `4` rate-limit, `5` server, `6` canceled, `7` timeout.
-    `main.go` owns process exit and maps `ErrCompletionHandled` → 0.
+    `3` validation, `4` rate-limit, `5` server, `6` canceled, `7` timeout,
+    `8` local output failure. `main.go` owns process exit and maps
+    `ErrCompletionHandled` → 0.
 
 ## Keyed results (multi-key commands)
 
@@ -182,7 +203,9 @@ pattern for any new multi-key verb.
 ## Enforced vs advisory
 
 CI fails on: raw pflag declarations outside cmdutil (`rawPflagDeclaration`),
-unwrapped blocking Jira calls (`unwrappedBlockingCall`), and `log`/`log/slog`
-imports (depguard) — full tables in [style.md](style.md). Envelope
-byte-cleanliness and stream discipline are contract-test-enforced; the rest
-of this file is convention — reviewed, not machine-guaranteed.
+unwrapped blocking Jira calls (`unwrappedBlockingCall`), `log`/`log/slog`
+imports (depguard), direct process-stream references in command packages,
+discarded output-helper results and `Run` handlers that cannot return errors.
+The last three are path-aware AST guardrails rather than ruleguard rules;
+`errcheck` separately enforces returned-error handling. Full lint tables are
+in [style.md](style.md).

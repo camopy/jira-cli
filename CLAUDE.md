@@ -17,10 +17,13 @@ alpha full-screen dashboard.
 
 *   **`internal/cli/<domain>/`** — cobra commands (issue, epic, auth, config,
     …). Flags register through `cmdutil.Add*` so clib metadata is mandatory;
-    success output returns through `cmdutil.WriteEnvelope`.
+    handlers use `RunE` and return success output through
+    `cmdutil.WriteEnvelope`.
 *   **Output contract** — one `--output` flag (`auto|human|json|compact`);
     `auto` resolves agent env → compact, non-TTY → json. Envelopes on stdout
-    via `cli.WriteEnvelope` only; human status on stderr through clog.
+    via `cli.WriteEnvelope` only; human status on stderr through clog. The
+    ownership chain is command → cmdutil → cli → Cobra's `io.Writer`; every
+    layer returns destination failures.
 *   **`internal/jira/`** — REST client + typed services; read-only mode blocks
     writes at the transport. **`internal/adf/`** — registry-driven ADF
     parse/validate/render.

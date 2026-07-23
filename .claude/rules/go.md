@@ -65,6 +65,10 @@ version often trails the library; check what the pin actually provides.
     `internal/cli/errors.go` — add an `errors.As` adapter with a stable
     snake_case code and hint, never a substring match.
 *   Log or return, never both (the single-handling rule).
+*   Production code handles every returned error. `errcheck.check-blank` is
+    enabled; a deliberate best-effort cleanup or probe needs a narrow
+    `//nolint:errcheck` with the reason on that line. Tests stay linted, with
+    only explicit blank error assignments excluded.
 *   `panic` only for programmer/build invariants (e.g. embedded-guide
     drift), never on a path user input can reach.
 

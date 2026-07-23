@@ -42,7 +42,11 @@ func NewCommand() *cobra.Command {
     registered in `internal/cli/registry.go`, with the success line's verb from
     `internal/cli/verbs.go` (`VerbFor("issue.list").PastPlural()` → "Listed
     issues"). A new command registers its verb and (if it has rich human output)
-    its renderer.
+    its renderer. Always return or explicitly handle the helper's error; never
+    discard it.
+*   Every authored handler uses `RunE`, including a handler that is infallible
+    today. Output, cleanup and later command failures then retain a propagation
+    path to root. The AST guardrail rejects `Run`.
 *   Declare arity with a cobra `Args` validator (`cobra.NoArgs`,
     `cobra.MinimumNArgs(2)`, …); cobra rejects bad arity before `RunE`.
 *   Blocking Jira calls run behind a clog spinner/progress — the
@@ -101,6 +105,7 @@ Adding a predictor is one emitter func plus one map entry.
     yourself via `config.Load`, stay **null-safe** (emit nothing on a
     missing/broken cache, never block the shell), and **sanitize** every
     candidate through `cli.SanitizeCompletionField` (Jira text is untrusted).
+    Write only to the injected emitter writer and return write failures.
 *   **Enum flags self-complete** from `Enum`/`EnumTerse` — never wire a predictor
     for one. `FlagExtra.Hint` (`file`/`dir`/`user`/`host`/`url`/…) gives
     OS-level completion — `user`/`host` mean the OS's, not Jira's.
@@ -182,13 +187,16 @@ and fails on any authored command missing one. House style, by field:
     repeated inside the usage text: clib already renders
     `--query <text>  [table, json, yaml]`.
 
-## Review points (not lint-enforced)
+## Review points
 
 *   Verb registered in `verbs.go`; renderer in `registry.go` for rich output.
 *   Guide section + schema updated in the same PR as any behavior change.
 *   Contract test covers the envelope; guardrail test for any new invariant.
 *   Dry-run checked before expensive work and before early returns.
 *   New flag group added to `flagGroupRank`.
+
+`RunE`, command-stream ownership and output-helper propagation are AST
+guardrails. The remaining points require review.
 
 ## Gotchas
 

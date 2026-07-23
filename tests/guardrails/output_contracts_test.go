@@ -8,8 +8,10 @@ package guardrails
 import (
 	"bytes"
 	"encoding/json"
+	"go/ast"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/matcra587/jira-cli/internal/cli"
@@ -134,4 +136,142 @@ func TestLintChecksProductionBlankErrorsWithoutDisablingTestLint(t *testing.T) {
 	if testBlankRule.Source == "" || testBlankRule.Text == "" {
 		t.Fatalf("test errcheck exclusion is not limited by source and finding text: %#v", testBlankRule)
 	}
+}
+
+func TestCommandPackagesPropagateOutputHelperErrors(t *testing.T) {
+	for dir, paths := range cliGoFiles(t) {
+		if dir == "" || commandPackageExemptDirs[dir] {
+			continue
+		}
+		for _, path := range paths {
+			fset, file := parseGo(t, path)
+			for _, call := range discardedOutputHelperCalls(file) {
+				pos := fset.Position(call.Pos())
+				t.Errorf("%s:%d: command package internal/cli/%s discards %s; return or handle its error", path, pos.Line, dir, outputHelperName(call))
+			}
+		}
+	}
+}
+
+func TestOutputHelperGuardRejectsDiscardedResults(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		source string
+		want   int
+	}{
+		{
+			name: "bare command helper call",
+			source: `package command
+func bad(cmd *cobra.Command) {
+	cmdutil.WriteEnvelope(cmd, "example", nil)
+}`,
+			want: 1,
+		},
+		{
+			name: "blank direct renderer result",
+			source: `package command
+func bad(w io.Writer) {
+	_ = cli.WriteEnvelope(w, cli.Envelope{})
+}`,
+			want: 1,
+		},
+		{
+			name: "returned helper result",
+			source: `package command
+func good(cmd *cobra.Command) error {
+	return cmdutil.WriteEnvelope(cmd, "example", nil)
+}`,
+		},
+		{
+			name: "checked helper result",
+			source: `package command
+func good(cmd *cobra.Command) error {
+	if err := cmdutil.WriteEnvelope(cmd, "example", nil); err != nil {
+		return err
+	}
+	return nil
+}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, file := parseGoSource(t, tc.source)
+			if got := len(discardedOutputHelperCalls(file)); got != tc.want {
+				t.Fatalf("discarded output-helper findings = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func discardedOutputHelperCalls(file *ast.File) []*ast.CallExpr {
+	var findings []*ast.CallExpr
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch node := n.(type) {
+		case *ast.ExprStmt:
+			if call, ok := node.X.(*ast.CallExpr); ok && isOutputHelperCall(call) {
+				findings = append(findings, call)
+			}
+		case *ast.AssignStmt:
+			if len(node.Lhs) != 1 || len(node.Rhs) != 1 {
+				return true
+			}
+			blank, ok := node.Lhs[0].(*ast.Ident)
+			if !ok || blank.Name != "_" {
+				return true
+			}
+			if call, ok := node.Rhs[0].(*ast.CallExpr); ok && isOutputHelperCall(call) {
+				findings = append(findings, call)
+			}
+		case *ast.GoStmt:
+			if isOutputHelperCall(node.Call) {
+				findings = append(findings, node.Call)
+			}
+		case *ast.DeferStmt:
+			if isOutputHelperCall(node.Call) {
+				findings = append(findings, node.Call)
+			}
+		}
+		return true
+	})
+	return findings
+}
+
+func isOutputHelperCall(call *ast.CallExpr) bool {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	if !ok {
+		return false
+	}
+	switch pkg.Name {
+	case "cmdutil":
+		return strings.HasPrefix(sel.Sel.Name, "Write") &&
+			strings.Contains(sel.Sel.Name, "Envelope")
+	case "cli":
+		switch sel.Sel.Name {
+		case "RouteWarnings",
+			"WriteCommandPlain",
+			"WriteCompact",
+			"WriteEnvelope",
+			"WriteEnvelopeDocument",
+			"WriteHumanJSON",
+			"WriteHumanTOML",
+			"WritePlain":
+			return true
+		}
+	}
+	return false
+}
+
+func outputHelperName(call *ast.CallExpr) string {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return "<output helper>"
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	if !ok {
+		return sel.Sel.Name
+	}
+	return pkg.Name + "." + sel.Sel.Name
 }

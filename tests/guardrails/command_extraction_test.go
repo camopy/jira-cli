@@ -33,16 +33,6 @@ var commandPackageExemptDirs = map[string]bool{
 	// client/profile accessors, output-mode and gate helpers), not a
 	// command-domain package — it is a dependency boundary like runtime.
 	"cmdutil": true,
-	// completion emits the shell-completion protocol straight to the
-	// process stdout from the root completion preflight, which runs
-	// outside cobra's command dispatch — there is no command stream to
-	// render through, and the shell reads the process stdout directly.
-	"completion": true,
-	// tui launches the full-screen dashboard, which owns the real
-	// terminal rather than a capturable command stream; its only
-	// os.Stdout reference is the RequireTTY gate that checks the real
-	// descriptor before handing it to the dashboard.
-	"tui": true,
 }
 
 // commandStreamExemptDirs are command-domain packages that legitimately
@@ -56,6 +46,10 @@ var commandStreamExemptDirs = map[string]bool{
 	// resolve output mode before cobra dispatch. It writes nothing to
 	// os.Stdout, stores no context.Context, and never calls os.Exit.
 	"root": true,
+	// tui owns the real terminal. Its process-stream reference is a
+	// RequireTTY descriptor check before the dashboard takes over, not
+	// command output.
+	"tui": true,
 }
 
 // cliGoFiles returns every non-test .go file under internal/cli, keyed
@@ -100,6 +94,16 @@ func parseGo(t *testing.T, path string) (*token.FileSet, *ast.File) {
 	return fset, file
 }
 
+func parseGoSource(t *testing.T, source string) (*token.FileSet, *ast.File) {
+	t.Helper()
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "guard_fixture.go", source, parser.AllErrors)
+	if err != nil {
+		t.Fatalf("parse guard fixture: %v", err)
+	}
+	return fset, file
+}
+
 // TestCommandPackagesAvoidProcessExit asserts no package under
 // internal/cli calls os.Exit. Process termination is the binary shell's
 // job (cmd/jira/main.go); a command package that exits cannot be tested
@@ -135,23 +139,116 @@ func TestCommandPackagesUseCommandStreams(t *testing.T) {
 		}
 		for _, path := range paths {
 			fset, file := parseGo(t, path)
-			ast.Inspect(file, func(n ast.Node) bool {
-				sel, ok := n.(*ast.SelectorExpr)
-				if !ok {
-					return true
-				}
-				pkgIdent, ok := sel.X.(*ast.Ident)
-				if !ok || pkgIdent.Name != "os" {
-					return true
-				}
-				if sel.Sel.Name == "Stdout" || sel.Sel.Name == "Stderr" {
-					pos := fset.Position(sel.Pos())
-					t.Errorf("%s:%d: command package internal/cli/%s references os.%s; render through cmd.OutOrStdout()/cmd.ErrOrStderr() instead", path, pos.Line, dir, sel.Sel.Name)
-				}
-				return true
-			})
+			for _, sel := range processStreamReferences(file) {
+				pos := fset.Position(sel.Pos())
+				t.Errorf("%s:%d: command package internal/cli/%s references os.%s; render through cmd.OutOrStdout()/cmd.ErrOrStderr() instead", path, pos.Line, dir, sel.Sel.Name)
+			}
 		}
 	}
+}
+
+func TestCommandStreamGuardRejectsDirectProcessWrites(t *testing.T) {
+	_, file := parseGoSource(t, `package command
+
+import (
+	"fmt"
+	"os"
+)
+
+func bad() {
+	fmt.Fprintln(os.Stdout, "data")
+	os.Stderr.Write([]byte("diagnostic"))
+}
+`)
+	if got := len(processStreamReferences(file)); got != 2 {
+		t.Fatalf("process-stream findings = %d, want 2", got)
+	}
+}
+
+func processStreamReferences(file *ast.File) []*ast.SelectorExpr {
+	var findings []*ast.SelectorExpr
+	ast.Inspect(file, func(n ast.Node) bool {
+		sel, ok := n.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		pkgIdent, ok := sel.X.(*ast.Ident)
+		if !ok || pkgIdent.Name != "os" {
+			return true
+		}
+		if sel.Sel.Name == "Stdout" || sel.Sel.Name == "Stderr" {
+			findings = append(findings, sel)
+		}
+		return true
+	})
+	return findings
+}
+
+// TestCommandPackagesUseRunE keeps every authored cobra handler on the
+// error-returning seam. A Run callback cannot propagate a renderer or command
+// failure to root.
+func TestCommandPackagesUseRunE(t *testing.T) {
+	for dir, paths := range cliGoFiles(t) {
+		if dir == "" || commandPackageExemptDirs[dir] {
+			continue
+		}
+		for _, path := range paths {
+			fset, file := parseGo(t, path)
+			for _, handler := range runHandlers(file) {
+				pos := fset.Position(handler.Pos())
+				t.Errorf("%s:%d: command package internal/cli/%s defines Run; use RunE so command and output failures propagate", path, pos.Line, dir)
+			}
+		}
+	}
+}
+
+func TestRunEGuardRejectsRunHandler(t *testing.T) {
+	_, file := parseGoSource(t, `package command
+
+func newCommand() any {
+	cmd := &cobra.Command{
+		Run: func(cmd *cobra.Command, _ []string) {
+			cmdutil.WriteEnvelope(cmd, "example", nil)
+		},
+	}
+	cmd.Run = func(cmd *cobra.Command, _ []string) {
+		cmdutil.WriteEnvelope(cmd, "example", nil)
+	}
+	other := &cobra.Command{Run: runHandler}
+	other.Run = runHandler
+	return cmd
+}
+
+func runHandler(*cobra.Command, []string) {}
+`)
+	if got := len(runHandlers(file)); got != 4 {
+		t.Fatalf("Run handler findings = %d, want 4", got)
+	}
+}
+
+func runHandlers(file *ast.File) []ast.Node {
+	var findings []ast.Node
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch node := n.(type) {
+		case *ast.KeyValueExpr:
+			key, ok := node.Key.(*ast.Ident)
+			if !ok || key.Name != "Run" {
+				return true
+			}
+			findings = append(findings, node)
+		case *ast.AssignStmt:
+			if len(node.Lhs) != 1 || len(node.Rhs) != 1 {
+				return true
+			}
+			sel, ok := node.Lhs[0].(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "Run" {
+				return true
+			}
+			findings = append(findings, node)
+		}
+		return true
+	})
+	return findings
 }
 
 // TestCommandPackagesAvoidStoredContext asserts command-domain packages
