@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"io"
+	"os"
 	"testing"
 )
 
@@ -92,5 +93,31 @@ func TestWriteTrackerPreservesFailAfterError(t *testing.T) {
 	}
 	if !errors.Is(tracker.err, errWriteSentinel) {
 		t.Fatalf("tracked error = %v, want sentinel", tracker.err)
+	}
+}
+
+func TestFDTrackedWriterPreservesOriginalFileCapability(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "output")
+	if err != nil {
+		t.Fatalf("CreateTemp() error = %v", err)
+	}
+	t.Cleanup(func() { _ = f.Close() })
+
+	_, out := newTrackedWriter(f)
+	carrier, ok := out.(interface{ outputFile() *os.File })
+	if !ok {
+		t.Fatalf("tracked writer type = %T, want output-file capability", out)
+	}
+	if got := carrier.outputFile(); got != f {
+		t.Fatalf("tracked output file = %p, want %p", got, f)
+	}
+
+	_, nested := newTrackedWriter(out)
+	nestedCarrier, ok := nested.(interface{ outputFile() *os.File })
+	if !ok {
+		t.Fatalf("nested tracked writer type = %T, want output-file capability", nested)
+	}
+	if got := nestedCarrier.outputFile(); got != f {
+		t.Fatalf("nested tracked output file = %p, want %p", got, f)
 	}
 }

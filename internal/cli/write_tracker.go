@@ -63,6 +63,16 @@ func (w fdTrackedWriter) Fd() uintptr {
 	return w.w.(interface{ Fd() uintptr }).Fd()
 }
 
+func (w fdTrackedWriter) outputFile() *os.File {
+	if f, ok := w.w.(*os.File); ok {
+		return f
+	}
+	if carrier, ok := w.w.(interface{ outputFile() *os.File }); ok {
+		return carrier.outputFile()
+	}
+	return nil
+}
+
 func (w fdTrackedWriter) Read(p []byte) (int, error) {
 	if r, ok := w.w.(io.Reader); ok {
 		return r.Read(p)

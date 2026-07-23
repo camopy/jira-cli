@@ -70,12 +70,15 @@ func ExitCode(err Error) int {
 //
 //	tier 1: prompt identity beats a wrapped cancellation — a canceled
 //	        prompt is prompt_canceled, not canceled.
-//	tier 2: bare or wrapped stdlib context sentinels. errors.Is walks the
+//	tier 2: output destination failures. Their cause may itself be a context
+//	        sentinel from a stream implementation, but completed mutations
+//	        must retain the non-retryable output classification.
+//	tier 3: bare or wrapped stdlib context sentinels. errors.Is walks the
 //	        chain, so a Coded error wrapping a cancellation (an APIError
 //	        whose Cause is a canceled body read, a CredentialError whose
 //	        Wrapped is a keyring deadline) still classifies as
 //	        canceled/timeout, preserving the pre-registry adapter order.
-//	tier 3: every other Coded error; the outermost one in the chain wins.
+//	tier 4: every other Coded error; the outermost one in the chain wins.
 //
 // A bare error falls back to a best-effort substring classifier for
 // legacy untyped error strings; that tier is strictly terminal.
@@ -85,6 +88,10 @@ func MapError(err error) Error {
 	}
 	if out, ok := mapPromptError(err); ok {
 		return out
+	}
+	var outputErr *OutputError
+	if errors.As(err, &outputErr) {
+		return assemble(err, outputErr)
 	}
 	if out, ok := mapContextError(err); ok {
 		return out

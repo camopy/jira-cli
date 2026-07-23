@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -26,5 +27,19 @@ func TestMapErrorClassifiesOutputFailure(t *testing.T) {
 	}
 	if exit := cli.ExitCode(got); exit != 8 {
 		t.Fatalf("ExitCode() = %d, want 8", exit)
+	}
+}
+
+func TestMapErrorKeepsOutputTaxonomyForContextWriterFailures(t *testing.T) {
+	for _, cause := range []error{context.Canceled, context.DeadlineExceeded} {
+		t.Run(cause.Error(), func(t *testing.T) {
+			got := cli.MapError(cli.NewOutputError(cause))
+			if got.Code != "output_write_failed" || got.Type != "io" || got.Retryable {
+				t.Fatalf("MapError(OutputError(%v)) = %#v", cause, got)
+			}
+			if exit := cli.ExitCode(got); exit != 8 {
+				t.Fatalf("ExitCode() = %d, want 8", exit)
+			}
+		})
 	}
 }

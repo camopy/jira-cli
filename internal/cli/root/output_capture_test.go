@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gechr/clib/complete"
 	"github.com/gechr/clog"
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/runtime"
@@ -147,6 +148,78 @@ func TestCompletionPreflightReturnsCandidateWriteFailure(t *testing.T) {
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("completion preflight polluted stderr: %q", stderr.String())
+	}
+}
+
+func TestCompletionCommandReturnsScriptWriteFailure(t *testing.T) {
+	writeErr := errors.New("stdout closed")
+	stdout := &countingErrorWriter{err: writeErr}
+	var stderr bytes.Buffer
+	root, _, err := NewRootCommandForTest(
+		runtime.WithStdout(stdout),
+		runtime.WithStderr(&stderr),
+	)
+	if err != nil {
+		t.Fatalf("NewRootCommandForTest: %v", err)
+	}
+
+	root.SetArgs([]string{"completion", "fish"})
+	_, execErr := root.ExecuteContextC(context.Background())
+	if !errors.Is(execErr, writeErr) {
+		t.Fatalf("execute completion error = %v, want writer failure", execErr)
+	}
+	var outputErr *cli.OutputError
+	if !errors.As(execErr, &outputErr) {
+		t.Fatalf("execute completion error type = %T, want *cli.OutputError", execErr)
+	}
+	if stdout.writes != 1 {
+		t.Fatalf("stdout writes = %d, want one failed script write", stdout.writes)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("completion script failure polluted stderr: %q", stderr.String())
+	}
+}
+
+func TestCompletionPreflightClassifiesOnlyPrintDestinationFailures(t *testing.T) {
+	root, _, err := NewRootCommandForTest()
+	if err != nil {
+		t.Fatalf("NewRootCommandForTest: %v", err)
+	}
+	gen := completionGenerator(root)
+	writeErr := errors.New("stdout closed")
+
+	got := classifyCompletionPreflightError(
+		complete.CompletionFlags{PrintCompletion: true, Shell: "fish"},
+		gen,
+		writeErr,
+	)
+	var outputErr *cli.OutputError
+	if !errors.As(got, &outputErr) || !errors.Is(got, writeErr) {
+		t.Fatalf("classified print error = %v, want discoverable *cli.OutputError", got)
+	}
+
+	generationErr := errors.New("unsupported shell")
+	got = classifyCompletionPreflightError(
+		complete.CompletionFlags{PrintCompletion: true, Shell: "no-such-shell"},
+		gen,
+		generationErr,
+	)
+	if !errors.Is(got, generationErr) {
+		t.Fatalf("classified generation error = %v, want original %v", got, generationErr)
+	}
+
+	installErr := errors.New("install failed")
+	got = classifyCompletionPreflightError(
+		complete.CompletionFlags{
+			InstallCompletion: true,
+			PrintCompletion:   true,
+			Shell:             "fish",
+		},
+		gen,
+		installErr,
+	)
+	if !errors.Is(got, installErr) {
+		t.Fatalf("classified install error = %v, want original %v", got, installErr)
 	}
 }
 

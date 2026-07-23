@@ -14,7 +14,9 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	pathpkg "path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -152,12 +154,12 @@ func TestCommandStreamGuardRejectsDirectProcessWrites(t *testing.T) {
 
 import (
 	"fmt"
-	"os"
+	stdos "os"
 )
 
 func bad() {
-	fmt.Fprintln(os.Stdout, "data")
-	os.Stderr.Write([]byte("diagnostic"))
+	fmt.Fprintln(stdos.Stdout, "data")
+	stdos.Stderr.Write([]byte("diagnostic"))
 }
 `)
 	if got := len(processStreamReferences(file)); got != 2 {
@@ -166,6 +168,7 @@ func bad() {
 }
 
 func processStreamReferences(file *ast.File) []*ast.SelectorExpr {
+	osNames := importedPackageNames(file, "os")
 	var findings []*ast.SelectorExpr
 	ast.Inspect(file, func(n ast.Node) bool {
 		sel, ok := n.(*ast.SelectorExpr)
@@ -173,7 +176,7 @@ func processStreamReferences(file *ast.File) []*ast.SelectorExpr {
 			return true
 		}
 		pkgIdent, ok := sel.X.(*ast.Ident)
-		if !ok || pkgIdent.Name != "os" {
+		if !ok || pkgIdent.Obj != nil || !osNames[pkgIdent.Name] {
 			return true
 		}
 		if sel.Sel.Name == "Stdout" || sel.Sel.Name == "Stderr" {
@@ -205,37 +208,128 @@ func TestCommandPackagesUseRunE(t *testing.T) {
 func TestRunEGuardRejectsRunHandler(t *testing.T) {
 	_, file := parseGoSource(t, `package command
 
+import cobraalias "github.com/spf13/cobra"
+
 func newCommand() any {
-	cmd := &cobra.Command{
-		Run: func(cmd *cobra.Command, _ []string) {
+	cmd := &cobraalias.Command{
+		Run: func(cmd *cobraalias.Command, _ []string) {
 			cmdutil.WriteEnvelope(cmd, "example", nil)
 		},
 	}
-	cmd.Run = func(cmd *cobra.Command, _ []string) {
+	cmd.Run = func(cmd *cobraalias.Command, _ []string) {
 		cmdutil.WriteEnvelope(cmd, "example", nil)
 	}
-	other := &cobra.Command{Run: runHandler}
+	other := &cobraalias.Command{Run: runHandler}
 	other.Run = runHandler
 	return cmd
 }
 
-func runHandler(*cobra.Command, []string) {}
+func runHandler(*cobraalias.Command, []string) {}
 `)
 	if got := len(runHandlers(file)); got != 4 {
 		t.Fatalf("Run handler findings = %d, want 4", got)
 	}
 }
 
+func TestRunEGuardAllowsUnrelatedRunFields(t *testing.T) {
+	_, file := parseGoSource(t, `package command
+
+type options struct {
+	Run bool
+}
+
+func configure(worker *options) {
+	_ = options{Run: true}
+	worker.Run = false
+}
+`)
+	if got := len(runHandlers(file)); got != 0 {
+		t.Fatalf("Run handler findings = %d, want 0 for non-Cobra fields", got)
+	}
+}
+
+func TestRunEGuardRejectsCobraAssignmentsAcrossDeclarationShapes(t *testing.T) {
+	_, file := parseGoSource(t, `package command
+
+import cobraalias "github.com/spf13/cobra"
+
+type holder struct {
+	cmd *cobraalias.Command
+}
+
+func factory() *cobraalias.Command { return &cobraalias.Command{} }
+func handler(*cobraalias.Command, []string) {}
+
+func configure(h holder) {
+	var declared = &cobraalias.Command{}
+	declared.Run = handler
+	fromFactory := factory()
+	fromFactory.Run = handler
+	value := cobraalias.Command{}
+	value.Run = handler
+	h.cmd.Run = handler
+	fromFactory.Run = external.Handler
+}
+`)
+	if got := len(runHandlers(file)); got != 5 {
+		t.Fatalf("Run handler findings = %d, want 5 across Cobra declaration shapes", got)
+	}
+}
+
+func TestRunEGuardRejectsImplicitNestedCobraLiterals(t *testing.T) {
+	_, file := parseGoSource(t, `package command
+
+import cobraalias "github.com/spf13/cobra"
+
+func commands() {
+	_ = []*cobraalias.Command{{Run: handler}}
+	_ = map[string]*cobraalias.Command{"one": {Run: handler}}
+}
+
+func handler(*cobraalias.Command, []string) {}
+`)
+	if got := len(runHandlers(file)); got != 2 {
+		t.Fatalf("Run handler findings = %d, want 2 for implicit Cobra literals", got)
+	}
+}
+
+func TestRunEGuardRejectsCobraAliasesAndEmbedding(t *testing.T) {
+	_, file := parseGoSource(t, `package command
+
+import cobraalias "github.com/spf13/cobra"
+
+type commandAlias = cobraalias.Command
+type embeddedCommand struct {
+	cobraalias.Command
+}
+
+func configure() {
+	alias := commandAlias{Run: handler}
+	alias.Run = handler
+	embedded := embeddedCommand{Command: cobraalias.Command{Run: handler}}
+	embedded.Run = handler
+}
+
+func handler(*cobraalias.Command, []string) {}
+`)
+	if got := len(runHandlers(file)); got != 4 {
+		t.Fatalf("Run handler findings = %d, want 4 for Cobra aliases and embedding", got)
+	}
+}
+
 func runHandlers(file *ast.File) []ast.Node {
+	cobraNames := importedPackageNames(file, "github.com/spf13/cobra")
+	cobraDotImported := dotImportsPackage(file, "github.com/spf13/cobra")
 	var findings []ast.Node
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
-		case *ast.KeyValueExpr:
-			key, ok := node.Key.(*ast.Ident)
-			if !ok || key.Name != "Run" {
-				return true
+		case *ast.CompositeLit:
+			if isCobraCommandType(node.Type, cobraNames, cobraDotImported) {
+				findings = append(findings, cobraRunFields(node)...)
 			}
-			findings = append(findings, node)
+			if cobraCompositeElementType(node.Type, cobraNames, cobraDotImported) {
+				findings = append(findings, implicitCobraRunFields(node)...)
+			}
 		case *ast.AssignStmt:
 			if len(node.Lhs) != 1 || len(node.Rhs) != 1 {
 				return true
@@ -244,11 +338,177 @@ func runHandlers(file *ast.File) []ast.Node {
 			if !ok || sel.Sel.Name != "Run" {
 				return true
 			}
+			if receiverIsProvablyNonCobra(sel.X, cobraNames, cobraDotImported) {
+				return true
+			}
 			findings = append(findings, node)
 		}
 		return true
 	})
 	return findings
+}
+
+func cobraRunFields(lit *ast.CompositeLit) []ast.Node {
+	var findings []ast.Node
+	for _, elt := range lit.Elts {
+		field, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := field.Key.(*ast.Ident)
+		if ok && key.Name == "Run" {
+			findings = append(findings, field)
+		}
+	}
+	return findings
+}
+
+func implicitCobraRunFields(outer *ast.CompositeLit) []ast.Node {
+	var findings []ast.Node
+	for _, elt := range outer.Elts {
+		if keyed, ok := elt.(*ast.KeyValueExpr); ok {
+			elt = keyed.Value
+		}
+		if lit, ok := elt.(*ast.CompositeLit); ok && lit.Type == nil {
+			findings = append(findings, cobraRunFields(lit)...)
+		}
+	}
+	return findings
+}
+
+func isPointerToCobraCommand(expr ast.Expr, cobraNames map[string]bool, cobraDotImported bool) bool {
+	star, ok := expr.(*ast.StarExpr)
+	return ok && isCobraCommandType(star.X, cobraNames, cobraDotImported)
+}
+
+func isCobraCommandType(expr ast.Expr, cobraNames map[string]bool, cobraDotImported bool) bool {
+	if ident, ok := expr.(*ast.Ident); ok {
+		if cobraDotImported && ident.Obj == nil && ident.Name == "Command" {
+			return true
+		}
+		if ident.Obj != nil {
+			if spec, ok := ident.Obj.Decl.(*ast.TypeSpec); ok {
+				return isCobraCommandType(spec.Type, cobraNames, cobraDotImported)
+			}
+		}
+		return false
+	}
+	if structType, ok := expr.(*ast.StructType); ok {
+		for _, field := range structType.Fields.List {
+			if len(field.Names) == 0 &&
+				(isCobraCommandType(field.Type, cobraNames, cobraDotImported) ||
+					isPointerToCobraCommand(field.Type, cobraNames, cobraDotImported)) {
+				return true
+			}
+		}
+		return false
+	}
+	sel, ok := expr.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "Command" {
+		return false
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	return ok && pkg.Obj == nil && cobraNames[pkg.Name]
+}
+
+func cobraCompositeElementType(expr ast.Expr, cobraNames map[string]bool, cobraDotImported bool) bool {
+	switch container := expr.(type) {
+	case *ast.ArrayType:
+		return isPointerToCobraCommand(container.Elt, cobraNames, cobraDotImported) ||
+			isCobraCommandType(container.Elt, cobraNames, cobraDotImported)
+	case *ast.MapType:
+		return isPointerToCobraCommand(container.Value, cobraNames, cobraDotImported) ||
+			isCobraCommandType(container.Value, cobraNames, cobraDotImported)
+	}
+	return false
+}
+
+func receiverIsProvablyNonCobra(
+	expr ast.Expr,
+	cobraNames map[string]bool,
+	cobraDotImported bool,
+) bool {
+	receiver, ok := expr.(*ast.Ident)
+	if !ok || receiver.Obj == nil {
+		return false
+	}
+	switch decl := receiver.Obj.Decl.(type) {
+	case *ast.Field:
+		return isKnownNonCobraType(decl.Type, cobraNames, cobraDotImported)
+	case *ast.ValueSpec:
+		if decl.Type != nil {
+			return isKnownNonCobraType(decl.Type, cobraNames, cobraDotImported)
+		}
+		for i, ident := range decl.Names {
+			if ident.Obj == receiver.Obj && i < len(decl.Values) {
+				return isKnownNonCobraValue(decl.Values[i], cobraNames, cobraDotImported)
+			}
+		}
+	case *ast.AssignStmt:
+		for i, lhs := range decl.Lhs {
+			ident, ok := lhs.(*ast.Ident)
+			if ok && ident.Obj == receiver.Obj && i < len(decl.Rhs) {
+				return isKnownNonCobraValue(decl.Rhs[i], cobraNames, cobraDotImported)
+			}
+		}
+	}
+	return false
+}
+
+func isKnownNonCobraType(expr ast.Expr, cobraNames map[string]bool, cobraDotImported bool) bool {
+	if isCobraCommandType(expr, cobraNames, cobraDotImported) ||
+		isPointerToCobraCommand(expr, cobraNames, cobraDotImported) {
+		return false
+	}
+	switch typed := expr.(type) {
+	case *ast.StarExpr:
+		return isKnownNonCobraType(typed.X, cobraNames, cobraDotImported)
+	case *ast.Ident:
+		if typed.Obj == nil {
+			return true
+		}
+		spec, ok := typed.Obj.Decl.(*ast.TypeSpec)
+		return ok && isKnownNonCobraType(spec.Type, cobraNames, cobraDotImported)
+	case *ast.SelectorExpr, *ast.StructType:
+		return true
+	}
+	return false
+}
+
+func isKnownNonCobraValue(expr ast.Expr, cobraNames map[string]bool, cobraDotImported bool) bool {
+	if unary, ok := expr.(*ast.UnaryExpr); ok && unary.Op == token.AND {
+		expr = unary.X
+	}
+	lit, ok := expr.(*ast.CompositeLit)
+	return ok && isKnownNonCobraType(lit.Type, cobraNames, cobraDotImported)
+}
+
+func importedPackageNames(file *ast.File, importPath string) map[string]bool {
+	names := map[string]bool{}
+	for _, spec := range file.Imports {
+		path, err := strconv.Unquote(spec.Path.Value)
+		if err != nil || path != importPath {
+			continue
+		}
+		name := pathpkg.Base(path)
+		if spec.Name != nil {
+			name = spec.Name.Name
+		}
+		if name != "." && name != "_" {
+			names[name] = true
+		}
+	}
+	return names
+}
+
+func dotImportsPackage(file *ast.File, importPath string) bool {
+	for _, spec := range file.Imports {
+		path, err := strconv.Unquote(spec.Path.Value)
+		if err == nil && path == importPath && spec.Name != nil && spec.Name.Name == "." {
+			return true
+		}
+	}
+	return false
 }
 
 // TestCommandPackagesAvoidStoredContext asserts command-domain packages

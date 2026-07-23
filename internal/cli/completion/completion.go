@@ -109,9 +109,9 @@ func (h *Handler) Complete(_, kind string, args []string) {
 		return
 	}
 	if emit, ok := completionEmitters[kind]; ok {
-		if err := emit(h.w, h.globals, args); err != nil {
-			h.err = cli.NewOutputError(err)
-		}
+		h.err = cli.TrackWrites(h.w, func(out io.Writer) error {
+			return emit(out, h.globals, args)
+		})
 	}
 }
 

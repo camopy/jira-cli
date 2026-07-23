@@ -3,6 +3,7 @@ package completion
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -21,6 +22,15 @@ type completionErrorWriter struct {
 func (w *completionErrorWriter) Write([]byte) (int, error) {
 	w.writes++
 	return 0, w.err
+}
+
+type completionShortWriter struct{}
+
+func (completionShortWriter) Write(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	return len(p) - 1, nil
 }
 
 func TestUniqueCachedNames(t *testing.T) {
@@ -101,6 +111,19 @@ func TestHandlerReturnsFirstDynamicCandidateWriteFailure(t *testing.T) {
 	}
 	if stdout.writes != 1 {
 		t.Fatalf("stdout writes = %d, want one attempt after the first failure", stdout.writes)
+	}
+}
+
+func TestHandlerReturnsDynamicCandidateShortWrite(t *testing.T) {
+	handler := NewHandler(completionShortWriter{}, startup.Globals{})
+
+	handler.Complete("fish", "cacheresource", nil)
+	if !errors.Is(handler.Err(), io.ErrShortWrite) {
+		t.Fatalf("handler.Err() = %v, want io.ErrShortWrite", handler.Err())
+	}
+	var outputErr *cli.OutputError
+	if !errors.As(handler.Err(), &outputErr) {
+		t.Fatalf("handler.Err() type = %T, want *cli.OutputError", handler.Err())
 	}
 }
 

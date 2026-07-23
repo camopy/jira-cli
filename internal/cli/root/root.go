@@ -13,6 +13,7 @@ import (
 	"github.com/gechr/clib/complete"
 	"github.com/gechr/clive/notify"
 	"github.com/gechr/clog"
+	"github.com/gechr/x/shell"
 	xstrings "github.com/gechr/x/strings"
 	"github.com/gechr/x/terminal"
 	"github.com/matcra587/jira-cli/internal/cli"
@@ -311,9 +312,11 @@ func runtimeStdinIsTTY(rt *runtime.Runtime) bool {
 // command state.
 func New(rt *runtime.Runtime) *cobra.Command {
 	root := newRootCommand(rt)
-	root.AddCommand(clib.CompletionCommand(root, func() *complete.Generator {
+	completionCmd := clib.CompletionCommand(root, func() *complete.Generator {
 		return completionGenerator(root)
-	}))
+	})
+	trackCompletionCommandOutput(root, completionCmd)
+	root.AddCommand(completionCmd)
 	registerCommands(root)
 	// The agent surface mounts last on purpose: its schema is a walk of
 	// the live tree, so every command must already be registered.
@@ -323,6 +326,24 @@ func New(rt *runtime.Runtime) *cobra.Command {
 	// is fully assembled so it reaches every command.
 	retypeArgValidators(root)
 	return root
+}
+
+// trackCompletionCommandOutput preserves Clib's completion command while
+// routing its script write through the same destination-error boundary as
+// command renderers. Clib's RunE closes over root.OutOrStdout, so the parent
+// writer is replaced only for the duration of each shell subcommand.
+func trackCompletionCommandOutput(root, completionCmd *cobra.Command) {
+	for _, shellCmd := range completionCmd.Commands() {
+		runE := shellCmd.RunE
+		shellCmd.RunE = func(cmd *cobra.Command, args []string) error {
+			original := root.OutOrStdout()
+			return cli.TrackWrites(original, func(out io.Writer) error {
+				root.SetOut(out)
+				defer root.SetOut(original)
+				return runE(cmd, args)
+			})
+		}
+	}
 }
 
 // completionGenerator builds the clib completion generator for a root
@@ -578,12 +599,38 @@ func handleCompletionPreflight(root *cobra.Command) (bool, error) {
 	handler := completion.NewHandler(root.OutOrStdout(), globals)
 	handled, err := flags.Handle(gen, handler.Complete, complete.WithArgs(positional))
 	if err != nil {
-		return false, err
+		return false, classifyCompletionPreflightError(flags, gen, err)
 	}
 	if err := handler.Err(); err != nil {
 		return handled, err
 	}
 	return handled, nil
+}
+
+// classifyCompletionPreflightError distinguishes Clib's script-generation
+// errors from a failed process-stdout write. The approved upstream
+// --print-completion path continues writing to os.Stdout inside Clib; a
+// successful discard render proves a later error from that path is the
+// destination and gives it the stable local-output taxonomy.
+func classifyCompletionPreflightError(
+	flags complete.CompletionFlags,
+	gen *complete.Generator,
+	err error,
+) error {
+	if err == nil || !flags.PrintCompletion {
+		return err
+	}
+	if flags.Complete != "" || flags.InstallCompletion || flags.UninstallCompletion {
+		return err
+	}
+	sh := flags.Shell
+	if sh == "" {
+		sh = shell.Detect()
+	}
+	if generationErr := gen.Print(io.Discard, sh); generationErr != nil {
+		return err
+	}
+	return cli.NewOutputError(err)
 }
 
 // timeoutFromArgs extracts the --timeout duration from the resolved

@@ -162,6 +162,7 @@ func TestOutputHelperGuardRejectsDiscardedResults(t *testing.T) {
 		{
 			name: "bare command helper call",
 			source: `package command
+import "github.com/matcra587/jira-cli/internal/cli/cmdutil"
 func bad(cmd *cobra.Command) {
 	cmdutil.WriteEnvelope(cmd, "example", nil)
 }`,
@@ -170,14 +171,16 @@ func bad(cmd *cobra.Command) {
 		{
 			name: "blank direct renderer result",
 			source: `package command
+import out "github.com/matcra587/jira-cli/internal/cli"
 func bad(w io.Writer) {
-	_ = cli.WriteEnvelope(w, cli.Envelope{})
+	_ = out.WriteEnvelope(w, out.Envelope{})
 }`,
 			want: 1,
 		},
 		{
 			name: "returned helper result",
 			source: `package command
+import "github.com/matcra587/jira-cli/internal/cli/cmdutil"
 func good(cmd *cobra.Command) error {
 	return cmdutil.WriteEnvelope(cmd, "example", nil)
 }`,
@@ -185,11 +188,23 @@ func good(cmd *cobra.Command) error {
 		{
 			name: "checked helper result",
 			source: `package command
+import "github.com/matcra587/jira-cli/internal/cli/cmdutil"
 func good(cmd *cobra.Command) error {
 	if err := cmdutil.WriteEnvelope(cmd, "example", nil); err != nil {
 		return err
 	}
 	return nil
+}`,
+		},
+		{
+			name: "shadowed package name",
+			source: `package command
+import cli "github.com/matcra587/jira-cli/internal/cli"
+type local struct{}
+func (local) WriteEnvelope() {}
+func good() {
+	cli := local{}
+	cli.WriteEnvelope()
 }`,
 		},
 	} {
@@ -203,11 +218,18 @@ func good(cmd *cobra.Command) error {
 }
 
 func discardedOutputHelperCalls(file *ast.File) []*ast.CallExpr {
+	packages := map[string]string{}
+	for name := range importedPackageNames(file, "github.com/matcra587/jira-cli/internal/cli") {
+		packages[name] = "cli"
+	}
+	for name := range importedPackageNames(file, "github.com/matcra587/jira-cli/internal/cli/cmdutil") {
+		packages[name] = "cmdutil"
+	}
 	var findings []*ast.CallExpr
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.ExprStmt:
-			if call, ok := node.X.(*ast.CallExpr); ok && isOutputHelperCall(call) {
+			if call, ok := node.X.(*ast.CallExpr); ok && isOutputHelperCall(call, packages) {
 				findings = append(findings, call)
 			}
 		case *ast.AssignStmt:
@@ -218,15 +240,15 @@ func discardedOutputHelperCalls(file *ast.File) []*ast.CallExpr {
 			if !ok || blank.Name != "_" {
 				return true
 			}
-			if call, ok := node.Rhs[0].(*ast.CallExpr); ok && isOutputHelperCall(call) {
+			if call, ok := node.Rhs[0].(*ast.CallExpr); ok && isOutputHelperCall(call, packages) {
 				findings = append(findings, call)
 			}
 		case *ast.GoStmt:
-			if isOutputHelperCall(node.Call) {
+			if isOutputHelperCall(node.Call, packages) {
 				findings = append(findings, node.Call)
 			}
 		case *ast.DeferStmt:
-			if isOutputHelperCall(node.Call) {
+			if isOutputHelperCall(node.Call, packages) {
 				findings = append(findings, node.Call)
 			}
 		}
@@ -235,16 +257,16 @@ func discardedOutputHelperCalls(file *ast.File) []*ast.CallExpr {
 	return findings
 }
 
-func isOutputHelperCall(call *ast.CallExpr) bool {
+func isOutputHelperCall(call *ast.CallExpr, packages map[string]string) bool {
 	sel, ok := call.Fun.(*ast.SelectorExpr)
 	if !ok {
 		return false
 	}
 	pkg, ok := sel.X.(*ast.Ident)
-	if !ok {
+	if !ok || pkg.Obj != nil {
 		return false
 	}
-	switch pkg.Name {
+	switch packages[pkg.Name] {
 	case "cmdutil":
 		return strings.HasPrefix(sel.Sel.Name, "Write") &&
 			strings.Contains(sel.Sel.Name, "Envelope")

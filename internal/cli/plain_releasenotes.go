@@ -74,6 +74,12 @@ func pageDocument(w io.Writer, cfg plainConfig, content string) (bool, error) {
 		return false, nil
 	}
 	f, ok := w.(*os.File)
+	if !ok {
+		if carrier, carriesFile := w.(interface{ outputFile() *os.File }); carriesFile {
+			f = carrier.outputFile()
+			ok = f != nil
+		}
+	}
 	if !ok || !pager.Overflows(f, content) {
 		return false, nil
 	}
