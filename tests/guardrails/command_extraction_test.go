@@ -114,18 +114,47 @@ func TestCommandPackagesAvoidProcessExit(t *testing.T) {
 	for dir, paths := range cliGoFiles(t) {
 		for _, path := range paths {
 			fset, file := parseGo(t, path)
+			osNames := importedPackageNames(file, "os")
 			ast.Inspect(file, func(n ast.Node) bool {
 				call, ok := n.(*ast.CallExpr)
 				if !ok {
 					return true
 				}
-				if isSelectorCall(call, "os", "Exit") {
+				if isImportedSelectorCall(call, osNames, "Exit") {
 					pos := fset.Position(call.Pos())
 					t.Errorf("%s:%d: package internal/cli/%s calls os.Exit; only the binary shell may exit the process", path, pos.Line, dir)
 				}
 				return true
 			})
 		}
+	}
+}
+
+func TestProcessExitGuardResolvesAliasesAndShadowing(t *testing.T) {
+	_, file := parseGoSource(t, `package command
+
+import stdos "os"
+
+func bad() {
+	stdos.Exit(1)
+}
+
+func allowed() {
+	stdos := struct{ Exit func(int) }{}
+	stdos.Exit(1)
+}
+`)
+	osNames := importedPackageNames(file, "os")
+	var findings int
+	ast.Inspect(file, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if ok && isImportedSelectorCall(call, osNames, "Exit") {
+			findings++
+		}
+		return true
+	})
+	if findings != 1 {
+		t.Fatalf("process-exit findings = %d, want 1 aliased package call", findings)
 	}
 }
 
@@ -238,9 +267,18 @@ type options struct {
 	Run bool
 }
 
-func configure(worker *options) {
+type holder struct {
+	runner *options
+}
+
+func newRunner() *options { return &options{} }
+
+func configure(worker *options, h holder) {
 	_ = options{Run: true}
 	worker.Run = false
+	fromFactory := newRunner()
+	fromFactory.Run = false
+	h.runner.Run = false
 }
 `)
 	if got := len(runHandlers(file)); got != 0 {
@@ -302,18 +340,64 @@ type commandAlias = cobraalias.Command
 type embeddedCommand struct {
 	cobraalias.Command
 }
+type nestedCommand struct {
+	cmd *cobraalias.Command
+}
+type nestedHolder struct {
+	nestedCommand
+}
 
 func configure() {
 	alias := commandAlias{Run: handler}
 	alias.Run = handler
 	embedded := embeddedCommand{Command: cobraalias.Command{Run: handler}}
 	embedded.Run = handler
+	embedded.Command.Run = handler
+	nested := nestedHolder{}
+	nested.cmd.Run = handler
 }
 
 func handler(*cobraalias.Command, []string) {}
 `)
-	if got := len(runHandlers(file)); got != 4 {
-		t.Fatalf("Run handler findings = %d, want 4 for Cobra aliases and embedding", got)
+	if got := len(runHandlers(file)); got != 6 {
+		t.Fatalf("Run handler findings = %d, want 6 for Cobra aliases and embedding", got)
+	}
+}
+
+func TestRunEGuardFailsClosedForCrossFileDeclarations(t *testing.T) {
+	_, file := parseGoSource(t, `package command
+
+func configure() {
+	cmd.Run = handler
+	fromFactory := buildCommand()
+	fromFactory.Run = handler
+	fromMethod := builder.buildCommand()
+	fromMethod.Run = handler
+}
+`)
+	if got := len(runHandlers(file)); got != 3 {
+		t.Fatalf("Run handler findings = %d, want 3 for unresolved cross-file declarations", got)
+	}
+}
+
+func TestRunEGuardResolvesMultiResultFactories(t *testing.T) {
+	_, file := parseGoSource(t, `package command
+
+import cobraalias "github.com/spf13/cobra"
+
+func buildCommand() (error, *cobraalias.Command) {
+	return nil, &cobraalias.Command{}
+}
+
+func configure() {
+	_, cmd := buildCommand()
+	cmd.Run = handler
+}
+
+func handler(*cobraalias.Command, []string) {}
+`)
+	if got := len(runHandlers(file)); got != 1 {
+		t.Fatalf("Run handler findings = %d, want 1 for second factory result", got)
 	}
 }
 
@@ -338,7 +422,7 @@ func runHandlers(file *ast.File) []ast.Node {
 			if !ok || sel.Sel.Name != "Run" {
 				return true
 			}
-			if receiverIsProvablyNonCobra(sel.X, cobraNames, cobraDotImported) {
+			if expressionIsKnownNonCobraCommand(sel.X, cobraNames, cobraDotImported) {
 				return true
 			}
 			findings = append(findings, node)
@@ -423,64 +507,199 @@ func cobraCompositeElementType(expr ast.Expr, cobraNames map[string]bool, cobraD
 	return false
 }
 
-func receiverIsProvablyNonCobra(
+func expressionIsCobraCommand(
 	expr ast.Expr,
 	cobraNames map[string]bool,
 	cobraDotImported bool,
 ) bool {
-	receiver, ok := expr.(*ast.Ident)
-	if !ok || receiver.Obj == nil {
-		return false
-	}
-	switch decl := receiver.Obj.Decl.(type) {
-	case *ast.Field:
-		return isKnownNonCobraType(decl.Type, cobraNames, cobraDotImported)
-	case *ast.ValueSpec:
-		if decl.Type != nil {
-			return isKnownNonCobraType(decl.Type, cobraNames, cobraDotImported)
-		}
-		for i, ident := range decl.Names {
-			if ident.Obj == receiver.Obj && i < len(decl.Values) {
-				return isKnownNonCobraValue(decl.Values[i], cobraNames, cobraDotImported)
-			}
-		}
-	case *ast.AssignStmt:
-		for i, lhs := range decl.Lhs {
-			ident, ok := lhs.(*ast.Ident)
-			if ok && ident.Obj == receiver.Obj && i < len(decl.Rhs) {
-				return isKnownNonCobraValue(decl.Rhs[i], cobraNames, cobraDotImported)
-			}
-		}
-	}
-	return false
-}
-
-func isKnownNonCobraType(expr ast.Expr, cobraNames map[string]bool, cobraDotImported bool) bool {
 	if isCobraCommandType(expr, cobraNames, cobraDotImported) ||
 		isPointerToCobraCommand(expr, cobraNames, cobraDotImported) {
-		return false
-	}
-	switch typed := expr.(type) {
-	case *ast.StarExpr:
-		return isKnownNonCobraType(typed.X, cobraNames, cobraDotImported)
-	case *ast.Ident:
-		if typed.Obj == nil {
-			return true
-		}
-		spec, ok := typed.Obj.Decl.(*ast.TypeSpec)
-		return ok && isKnownNonCobraType(spec.Type, cobraNames, cobraDotImported)
-	case *ast.SelectorExpr, *ast.StructType:
 		return true
+	}
+	switch value := expr.(type) {
+	case *ast.UnaryExpr:
+		return value.Op == token.AND && expressionIsCobraCommand(value.X, cobraNames, cobraDotImported)
+	case *ast.CompositeLit:
+		return isCobraCommandType(value.Type, cobraNames, cobraDotImported)
+	case *ast.StarExpr:
+		return expressionIsCobraCommand(value.X, cobraNames, cobraDotImported)
+	case *ast.Ident:
+		if value.Obj == nil {
+			return false
+		}
+		switch decl := value.Obj.Decl.(type) {
+		case *ast.Field:
+			return expressionIsCobraCommand(decl.Type, cobraNames, cobraDotImported)
+		case *ast.ValueSpec:
+			if decl.Type != nil && expressionIsCobraCommand(decl.Type, cobraNames, cobraDotImported) {
+				return true
+			}
+			for i, ident := range decl.Names {
+				if ident.Obj == value.Obj && i < len(decl.Values) {
+					return expressionIsCobraCommand(decl.Values[i], cobraNames, cobraDotImported)
+				}
+			}
+		case *ast.AssignStmt:
+			for i, lhs := range decl.Lhs {
+				ident, ok := lhs.(*ast.Ident)
+				if ok && ident.Obj == value.Obj {
+					return expressionIsCobraCommand(assignedExpressionType(decl, i), cobraNames, cobraDotImported)
+				}
+			}
+		}
+	case *ast.CallExpr:
+		return expressionIsCobraCommand(callResultType(value, 0), cobraNames, cobraDotImported)
+	case *ast.SelectorExpr:
+		fieldType := selectedFieldType(value)
+		return fieldType != nil && expressionIsCobraCommand(fieldType, cobraNames, cobraDotImported)
 	}
 	return false
 }
 
-func isKnownNonCobraValue(expr ast.Expr, cobraNames map[string]bool, cobraDotImported bool) bool {
-	if unary, ok := expr.(*ast.UnaryExpr); ok && unary.Op == token.AND {
-		expr = unary.X
+func expressionIsKnownNonCobraCommand(
+	expr ast.Expr,
+	cobraNames map[string]bool,
+	cobraDotImported bool,
+) bool {
+	return !expressionIsCobraCommand(expr, cobraNames, cobraDotImported) &&
+		expressionDeclaredType(expr) != nil
+}
+
+func selectedFieldType(sel *ast.SelectorExpr) ast.Expr {
+	structType := resolvedStructType(expressionDeclaredType(sel.X))
+	if structType == nil {
+		return nil
 	}
-	lit, ok := expr.(*ast.CompositeLit)
-	return ok && isKnownNonCobraType(lit.Type, cobraNames, cobraDotImported)
+	return structFieldType(structType, sel.Sel.Name)
+}
+
+func structFieldType(structType *ast.StructType, fieldName string) ast.Expr {
+	for _, field := range structType.Fields.List {
+		for _, name := range field.Names {
+			if name.Name == fieldName {
+				return field.Type
+			}
+		}
+	}
+	for _, field := range structType.Fields.List {
+		if len(field.Names) != 0 {
+			continue
+		}
+		if embeddedFieldName(field.Type) == fieldName {
+			return field.Type
+		}
+		if embedded := resolvedStructType(field.Type); embedded != nil {
+			if nested := structFieldType(embedded, fieldName); nested != nil {
+				return nested
+			}
+		}
+	}
+	return nil
+}
+
+func embeddedFieldName(expr ast.Expr) string {
+	if pointer, ok := expr.(*ast.StarExpr); ok {
+		expr = pointer.X
+	}
+	switch typed := expr.(type) {
+	case *ast.Ident:
+		return typed.Name
+	case *ast.SelectorExpr:
+		return typed.Sel.Name
+	default:
+		return ""
+	}
+}
+
+func expressionDeclaredType(expr ast.Expr) ast.Expr {
+	switch value := expr.(type) {
+	case *ast.Ident:
+		if value.Obj == nil {
+			return nil
+		}
+		switch decl := value.Obj.Decl.(type) {
+		case *ast.Field:
+			return decl.Type
+		case *ast.ValueSpec:
+			if decl.Type != nil {
+				return decl.Type
+			}
+			for i, ident := range decl.Names {
+				if ident.Obj == value.Obj && i < len(decl.Values) {
+					return expressionDeclaredType(decl.Values[i])
+				}
+			}
+		case *ast.AssignStmt:
+			for i, lhs := range decl.Lhs {
+				ident, ok := lhs.(*ast.Ident)
+				if ok && ident.Obj == value.Obj {
+					return expressionDeclaredType(assignedExpressionType(decl, i))
+				}
+			}
+		}
+	case *ast.UnaryExpr:
+		return expressionDeclaredType(value.X)
+	case *ast.CompositeLit:
+		return value.Type
+	case *ast.CallExpr:
+		return callResultType(value, 0)
+	case *ast.SelectorExpr:
+		return selectedFieldType(value)
+	}
+	return nil
+}
+
+func assignedExpressionType(assign *ast.AssignStmt, index int) ast.Expr {
+	if index < len(assign.Rhs) {
+		return assign.Rhs[index]
+	}
+	if len(assign.Rhs) == 1 {
+		if call, ok := assign.Rhs[0].(*ast.CallExpr); ok {
+			return callResultType(call, index)
+		}
+	}
+	return nil
+}
+
+func callResultType(call *ast.CallExpr, index int) ast.Expr {
+	fn, ok := call.Fun.(*ast.Ident)
+	if !ok || fn.Obj == nil {
+		return nil
+	}
+	decl, ok := fn.Obj.Decl.(*ast.FuncDecl)
+	if !ok || decl.Type.Results == nil {
+		return nil
+	}
+	for _, result := range decl.Type.Results.List {
+		count := len(result.Names)
+		if count == 0 {
+			count = 1
+		}
+		if index < count {
+			return result.Type
+		}
+		index -= count
+	}
+	return nil
+}
+
+func resolvedStructType(expr ast.Expr) *ast.StructType {
+	switch typed := expr.(type) {
+	case *ast.StarExpr:
+		return resolvedStructType(typed.X)
+	case *ast.Ident:
+		if typed.Obj == nil {
+			return nil
+		}
+		spec, ok := typed.Obj.Decl.(*ast.TypeSpec)
+		if !ok {
+			return nil
+		}
+		return resolvedStructType(spec.Type)
+	case *ast.StructType:
+		return typed
+	}
+	return nil
 }
 
 func importedPackageNames(file *ast.File, importPath string) map[string]bool {
@@ -522,42 +741,80 @@ func TestCommandPackagesAvoidStoredContext(t *testing.T) {
 		}
 		for _, path := range paths {
 			fset, file := parseGo(t, path)
-			ast.Inspect(file, func(n ast.Node) bool {
-				ts, ok := n.(*ast.TypeSpec)
-				if !ok {
-					return true
-				}
-				st, ok := ts.Type.(*ast.StructType)
-				if !ok || st.Fields == nil {
-					return true
-				}
-				for _, field := range st.Fields.List {
-					// Limitation: only qualified context.Context field
-					// types are matched. A dot-imported, unqualified
-					// Context field would not be a SelectorExpr and
-					// would slip past — the project does not dot-import
-					// the context package, so this is not a real risk.
-					sel, ok := field.Type.(*ast.SelectorExpr)
-					if !ok {
-						continue
-					}
-					pkgIdent, ok := sel.X.(*ast.Ident)
-					if !ok {
-						continue
-					}
-					if pkgIdent.Name == "context" && sel.Sel.Name == "Context" {
-						pos := fset.Position(field.Pos())
-						t.Errorf("%s:%d: command package internal/cli/%s struct %s stores a context.Context field; pass context per call via cmd.Context()", path, pos.Line, dir, ts.Name.Name)
-					}
-				}
-				return true
-			})
+			for _, field := range storedContextFields(file) {
+				pos := fset.Position(field.Pos())
+				t.Errorf("%s:%d: command package internal/cli/%s stores a context.Context field; pass context per call via cmd.Context()", path, pos.Line, dir)
+			}
 		}
 	}
 }
 
-// isSelectorCall reports whether call is a call of the form pkg.Name(...).
-func isSelectorCall(call *ast.CallExpr, pkg, name string) bool {
+func TestStoredContextGuardResolvesAliasesAndShadowing(t *testing.T) {
+	_, file := parseGoSource(t, `package command
+
+import ctxpkg "context"
+
+type bad struct {
+	Ctx ctxpkg.Context
+}
+
+type localContext struct{}
+
+type allowed struct {
+	Ctx localContext
+}
+`)
+	if got := len(storedContextFields(file)); got != 1 {
+		t.Fatalf("stored-context findings = %d, want 1 aliased package field", got)
+	}
+
+	_, dotFile := parseGoSource(t, `package command
+
+import . "context"
+
+type bad struct {
+	Ctx Context
+}
+`)
+	if got := len(storedContextFields(dotFile)); got != 1 {
+		t.Fatalf("dot-imported stored-context findings = %d, want 1", got)
+	}
+}
+
+func storedContextFields(file *ast.File) []*ast.Field {
+	contextNames := importedPackageNames(file, "context")
+	contextDotImported := dotImportsPackage(file, "context")
+	var findings []*ast.Field
+	ast.Inspect(file, func(n ast.Node) bool {
+		typeSpec, ok := n.(*ast.TypeSpec)
+		if !ok {
+			return true
+		}
+		structType, ok := typeSpec.Type.(*ast.StructType)
+		if !ok {
+			return true
+		}
+		for _, field := range structType.Fields.List {
+			if ident, ok := field.Type.(*ast.Ident); ok &&
+				ident.Obj == nil && contextDotImported && ident.Name == "Context" {
+				findings = append(findings, field)
+				continue
+			}
+			sel, ok := field.Type.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "Context" {
+				continue
+			}
+			pkgIdent, ok := sel.X.(*ast.Ident)
+			if ok && pkgIdent.Obj == nil && contextNames[pkgIdent.Name] {
+				findings = append(findings, field)
+			}
+		}
+		return true
+	})
+	return findings
+}
+
+func isImportedSelectorCall(call *ast.CallExpr, packageNames map[string]bool, name string) bool {
 	sel, ok := call.Fun.(*ast.SelectorExpr)
 	if !ok {
 		return false
@@ -566,5 +823,5 @@ func isSelectorCall(call *ast.CallExpr, pkg, name string) bool {
 	if !ok {
 		return false
 	}
-	return ident.Name == pkg && sel.Sel.Name == name
+	return ident.Obj == nil && packageNames[ident.Name] && sel.Sel.Name == name
 }
