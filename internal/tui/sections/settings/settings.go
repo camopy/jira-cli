@@ -274,10 +274,11 @@ func (m *Model) saveRaw(text string) tea.Cmd {
 		m.fail = "refusing to write an empty config — esc to discard the edit instead"
 		return nil
 	}
-	if err := validate(text); err != nil {
+	cleanupErr, err := validate(text)
+	if err != nil {
 		// Keep the draft and the editor: the user fixes the line instead of
 		// losing the whole edit to a typo.
-		m.fail = err.Error()
+		m.fail = errors.Join(err, cleanupErr).Error()
 		return nil
 	}
 	if err := xos.AtomicWrite(path, []byte(text), 0o600); err != nil {
@@ -287,6 +288,9 @@ func (m *Model) saveRaw(text string) tea.Cmd {
 	m.editing = false
 	m.fail = ""
 	m.notice = "saved + reloaded " + time.Now().Format("15:04:05")
+	if cleanupErr != nil {
+		m.notice += "; " + cleanupErr.Error()
+	}
 	m.lastMod = m.mtime()
 	return m.reloadCmd()
 }
@@ -294,20 +298,24 @@ func (m *Model) saveRaw(text string) tea.Cmd {
 // validate round-trips the draft through the real loader — same strict
 // decode, same unknown-key rejection — via a temp file, so "it saved" always
 // means "it loads".
-func validate(text string) error {
+func validate(text string) (cleanupErr, validationErr error) {
 	tmp, err := os.CreateTemp("", "jira-config-*.toml")
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer os.Remove(tmp.Name()) //nolint:errcheck // validation temp-file cleanup is best-effort
+	defer func() {
+		if removeErr := os.Remove(tmp.Name()); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			cleanupErr = fmt.Errorf("remove validation temp file: %w", removeErr)
+		}
+	}()
 	if _, err := tmp.WriteString(text); err != nil {
-		return errors.Join(err, tmp.Close())
+		return nil, errors.Join(err, tmp.Close())
 	}
 	if err := tmp.Close(); err != nil {
-		return err
+		return nil, err
 	}
 	_, err = config.Load(config.WithPath(tmp.Name()))
-	return err
+	return nil, err
 }
 
 // Update handles the menu, both edit modes, the reload key, the heartbeat
