@@ -150,6 +150,10 @@ func TestCommentListReturnsEnvelopeWithPaginationAndOrdering(t *testing.T) {
 	}
 	env := decodeCommentEnvelope(t, stdout)
 
+	issue, _ := env.Data["issue"].(map[string]any)
+	if issue["key"] != "PROJ-1" {
+		t.Fatalf("data.issue = %v, want key PROJ-1: %s", issue, stdout)
+	}
 	comments, _ := env.Data["comments"].([]any)
 	if len(comments) != 2 {
 		t.Fatalf("comments len = %d; want 2: %s", len(comments), stdout)
@@ -181,6 +185,33 @@ func TestCommentListReturnsEnvelopeWithPaginationAndOrdering(t *testing.T) {
 
 	if len(cts.Requests()) != 1 {
 		t.Errorf("requests = %d; want 1", len(cts.Requests()))
+	}
+}
+
+func TestCommentListEmptyKeepsIssueAndNonNullComments(t *testing.T) {
+	srv, _ := newCommentServer(t, map[string]http.HandlerFunc{
+		"GET /rest/api/3/issue/EMPTY-1/comment": func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, `{"comments":[],"startAt":0,"maxResults":50,"total":0}`)
+		},
+	})
+
+	stdout, stderr, code := runJira(
+		t,
+		"--config", jiraConfig(t, srv.URL),
+		"--output=json",
+		"issue", "comment", "list", "EMPTY-1",
+	)
+	if code != 0 {
+		t.Fatalf("comment list exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	env := decodeCommentEnvelope(t, stdout)
+	issue, _ := env.Data["issue"].(map[string]any)
+	if issue["key"] != "EMPTY-1" {
+		t.Fatalf("data.issue = %v, want key EMPTY-1: %s", issue, stdout)
+	}
+	comments, ok := env.Data["comments"].([]any)
+	if !ok || comments == nil || len(comments) != 0 {
+		t.Fatalf("data.comments = %#v, want non-null empty array: %s", env.Data["comments"], stdout)
 	}
 }
 

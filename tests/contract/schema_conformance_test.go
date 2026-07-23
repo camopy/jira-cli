@@ -85,6 +85,44 @@ func TestEmittedEnvelopesConformToDeclaredSchemas(t *testing.T) {
 	}
 }
 
+func TestCommentListSchemaDeclaresCanonicalIssueAndFixedRows(t *testing.T) {
+	schema, ok := declaredOutputSchemas(t)["issue.comment.list"].(map[string]any)
+	if !ok {
+		t.Fatal("issue.comment.list output schema missing")
+	}
+	props, _ := schema["properties"].(map[string]any)
+	issue, _ := props["issue"].(map[string]any)
+	if issue["type"] != "object" {
+		t.Fatalf("issue schema = %#v, want object", issue)
+	}
+	if !schemaRequires(schema, "issue") {
+		t.Fatalf("issue must be required: %#v", schema["required"])
+	}
+	issueProps, _ := issue["properties"].(map[string]any)
+	if _, exists := issueProps["key"]; !exists || !schemaRequires(issue, "key") {
+		t.Fatalf("issue.key must be declared and required: %#v", issue)
+	}
+
+	comments, _ := props["comments"].(map[string]any)
+	items, _ := comments["items"].(map[string]any)
+	itemProps, _ := items["properties"].(map[string]any)
+	for _, name := range []string{"author", "body", "created", "id", "update_author", "updated", "visibility"} {
+		if _, exists := itemProps[name]; !exists {
+			t.Fatalf("comments[] schema missing %q: %#v", name, items)
+		}
+	}
+}
+
+func schemaRequires(schema map[string]any, name string) bool {
+	required, _ := schema["required"].([]any)
+	for _, field := range required {
+		if field == name {
+			return true
+		}
+	}
+	return false
+}
+
 // stubReadServer serves the minimal canned Jira responses the read-op
 // conformance cases need. Shapes mirror the fixtures the dedicated contract
 // tests use; a path with no handler 404s and fails the case loudly.

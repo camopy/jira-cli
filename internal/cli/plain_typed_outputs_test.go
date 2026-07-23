@@ -102,17 +102,50 @@ func TestCommentListPlainRendersTypedStructWithNativeADF(t *testing.T) {
 		Content: []adf.Node{{Type: "text", Text: "native adf preview survives"}},
 	}}}
 	got := renderCommand(t, "issue.comment.list", envelope.IssueCommentListOutput{
-		Comments: []map[string]any{{
-			"id":      "100",
-			"body":    body,
-			"author":  map[string]any{"display_name": "Alice"},
-			"created": "2026-07-01T10:00:00.000+0000",
-			"updated": "2026-07-01T10:00:00.000+0000",
+		Issue: envelope.IssueRef{Key: "PROJ-1"},
+		Comments: []envelope.CommentItem{{
+			ID:      "100",
+			Body:    body,
+			Author:  &envelope.CommentUser{DisplayName: "Alice"},
+			Created: "2026-07-01T10:00:00.000+0000",
+			Updated: "2026-07-01T10:00:00.000+0000",
 		}},
 	})
 	// The body preview proves the native adf.Document reached commentBodyText
 	// intact — a mapFromAny round-trip at the top would have dumped fields.
-	requireContains(t, got, "Comments", "#100", "Alice", "native adf preview survives")
+	requireContains(t, got, "Comments on PROJ-1", "#100", "Alice", "native adf preview survives")
+}
+
+func TestCommentListPlainUsesIssueHeadingAcrossTerminalModes(t *testing.T) {
+	data := map[string]any{
+		"issue":    map[string]any{"key": "PROJ-1"},
+		"comments": []any{},
+	}
+	for _, tty := range []bool{false, true} {
+		var buf bytes.Buffer
+		if err := WriteCommentListPlain(&buf, "issue.comment.list", data, WithPlainTTY(tty)); err != nil {
+			t.Fatalf("WriteCommentListPlain(tty=%v) error = %v", tty, err)
+		}
+		requireContains(t, buf.String(), "Comments on PROJ-1")
+	}
+}
+
+func TestCommentListPlainResultKeyTakesHeadingPrecedence(t *testing.T) {
+	data := map[string]any{
+		"issue":    map[string]any{"key": "WRONG-1"},
+		"comments": []any{},
+	}
+	var buf bytes.Buffer
+	if err := WriteCommentListPlain(
+		&buf,
+		"issue.comment.list",
+		data,
+		WithPlainResultKey("PROJ-2"),
+	); err != nil {
+		t.Fatalf("WriteCommentListPlain() error = %v", err)
+	}
+	requireContains(t, buf.String(), "Comments on PROJ-2")
+	requireNotContains(t, buf.String(), "WRONG-1")
 }
 
 func TestWatcherListPlainRendersTypedStruct(t *testing.T) {

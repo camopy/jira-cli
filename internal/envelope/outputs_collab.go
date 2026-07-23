@@ -14,18 +14,50 @@ import (
 	"github.com/matcra587/jira-cli/internal/jira"
 )
 
-// IssueCommentListOutput is `issue comment list`'s data. Single-key reads
-// carry only `comments` (pagination rides in meta); multi-key reads fold the
-// per-key pagination block and any lossy-ADF / rate-limit warnings into the
-// same object at results[].data. Comment bodies stay native ADF, so each
-// entry is an opaque object rather than a fixed struct.
+// CommentUser is the projected identity carried by a comment author.
+type CommentUser struct {
+	AccountID    string `json:"account_id,omitempty"`
+	DisplayName  string `json:"display_name,omitempty"`
+	EmailAddress string `json:"email_address,omitempty"`
+}
+
+// CommentItem is the fixed comment projection returned by comment list and
+// live comment edit. Body stays dynamic because Jira returns recursive ADF.
+type CommentItem struct {
+	Author       *CommentUser     `json:"author"`
+	Body         any              `json:"body"`
+	Created      string           `json:"created,omitempty"`
+	ID           string           `json:"id,omitempty"`
+	UpdateAuthor *CommentUser     `json:"update_author"`
+	Updated      string           `json:"updated,omitempty"`
+	Visibility   *jira.Visibility `json:"visibility"`
+}
+
+// IssueCommentListOutput is `issue comment list`'s data. The issue and
+// comments ride both single-key and keyed reads. Single-key pagination rides
+// in meta; keyed reads fold the per-key pagination block and any lossy-ADF or
+// rate-limit warnings into the same object at results[].data.
 type IssueCommentListOutput struct {
-	Comments   []map[string]any `json:"comments"`
+	Issue      IssueRef         `json:"issue"`
+	Comments   []CommentItem    `json:"comments"`
 	Pagination *Pagination      `json:"pagination,omitempty"`
 	Warnings   []map[string]any `json:"warnings,omitempty"`
 }
 
-var _ = register("issue.comment.list", IssueCommentListOutput{}, nil)
+var _ = register("issue.comment.list", IssueCommentListOutput{}, map[string]any{
+	"properties": map[string]any{
+		"comments": map[string]any{
+			"items": map[string]any{
+				"properties": map[string]any{
+					"body": map[string]any{
+						"type":        []string{"object", "null"},
+						"description": "The native recursive ADF document, or null when Jira returned no body.",
+					},
+				},
+			},
+		},
+	},
+})
 
 // IssueCommentAddOutput is `issue comment add`'s data (and the group alias
 // `issue comment`). `comment` is the created comment on the live path and a

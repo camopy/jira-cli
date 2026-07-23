@@ -55,15 +55,22 @@ func WriteCommentListPlain(w io.Writer, command string, data any, opts ...PlainO
 	// after a redundant re-parse. A keyed child arrives as a raw map (its body
 	// already a JSON map, folded by the parent's keyedResultRows walk) and a
 	// legacy caller may pass a map as well, so both fall to normalizeMapList.
-	var comments []map[string]any
+	var (
+		comments      []map[string]any
+		typedComments []envelope.CommentItem
+		issueKey      string
+	)
 	switch d := data.(type) {
 	case envelope.IssueCommentListOutput:
-		comments = d.Comments
+		typedComments = d.Comments
+		issueKey = d.Issue.Key
 	case map[string]any:
 		comments = normalizeMapList(d["comments"])
+		issueKey = stringFromMap(mapFromAny(d["issue"]), "key")
 	default:
 		if m := mapFromAny(data); m != nil {
 			comments = normalizeMapList(m["comments"])
+			issueKey = stringFromMap(mapFromAny(m["issue"]), "key")
 		} else {
 			return writeGenericPlain(logger, cfg, messageForCommand(command, data), data)
 		}
@@ -73,22 +80,50 @@ func WriteCommentListPlain(w io.Writer, command string, data any, opts ...PlainO
 	title := "Comments"
 	if cfg.resultKey != "" {
 		title += " on " + cfg.resultKey
+	} else if issueKey != "" {
+		title += " on " + issueKey
 	}
 	header := style.bold(title)
-	if count := len(comments); count > 0 {
+	count := len(comments) + len(typedComments)
+	if count > 0 {
 		header += style.dim("  (" + human.Pluralize(count, "comment", "comments") + ")")
 	}
 	logger.Info().Parts(clog.PartMessage).Msg(header)
 
-	if len(comments) == 0 {
+	if count == 0 {
 		logger.Info().Parts(clog.PartMessage).Msg(style.dim("  (no comments)"))
 		return nil
 	}
 
+	for _, c := range typedComments {
+		logger.Info().Parts(clog.PartMessage).Msg(typedCommentPlainLine(c, style))
+	}
 	for _, c := range comments {
 		logger.Info().Parts(clog.PartMessage).Msg(commentPlainLine(c, style))
 	}
 	return nil
+}
+
+func typedCommentPlainLine(c envelope.CommentItem, style authPlainStyle) string {
+	authorName := "(unknown)"
+	if c.Author != nil && !xstrings.IsBlank(c.Author.DisplayName) {
+		authorName = c.Author.DisplayName
+	}
+	parts := []string{
+		style.bold(padRight("#"+c.ID, 8)),
+		padRight(authorName, 18),
+		style.dim(padRight(c.Created, 26)),
+	}
+	if c.Updated != "" && c.Updated != c.Created {
+		parts = append(parts, style.dim("(edited)"))
+	}
+	if c.Visibility != nil && xstrings.AnyNonEmpty(c.Visibility.Type, c.Visibility.Value) {
+		parts = append(parts, style.warn("["+c.Visibility.Type+":"+c.Visibility.Value+"]"))
+	}
+	if preview := flattenPreview(commentBodyText(c.Body), 80); preview != "" {
+		parts = append(parts, preview)
+	}
+	return strings.Join(parts, "  ")
 }
 
 func commentPlainLine(c map[string]any, style authPlainStyle) string {

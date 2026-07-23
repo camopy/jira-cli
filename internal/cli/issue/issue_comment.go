@@ -201,6 +201,7 @@ func commentListEnvelopeData(ctx context.Context, svc jira.CommentService, key s
 	pagination := commentListPagination(lastResp, all, rateLimitHit)
 	commentsOut := commentListData(collected)
 	data := envelope.IssueCommentListOutput{
+		Issue:    cmdutil.IssueRef{Key: key},
 		Comments: commentsOut,
 	}
 
@@ -233,10 +234,52 @@ func commentListPagination(resp *jira.Response, all bool, rateLimitHit *jira.API
 // envelope-shapes.md. Bodies stay native ADF — read/reuse parity with
 // issue view, so mention accountIds, cards, and every other node survive;
 // the plain renderer flattens for human display.
-func commentListData(comments []*jira.Comment) []map[string]any {
-	out := make([]map[string]any, 0, len(comments))
+func commentListData(comments []*jira.Comment) []envelope.CommentItem {
+	out := make([]envelope.CommentItem, 0, len(comments))
 	for _, c := range comments {
-		out = append(out, commentToMap(c))
+		if c != nil {
+			out = append(out, commentToItem(c))
+		}
+	}
+	return out
+}
+
+func commentToItem(c *jira.Comment) envelope.CommentItem {
+	var body any
+	if c.Body != nil {
+		body = *c.Body
+	}
+	item := envelope.CommentItem{
+		Author:       commentUser(c.Author),
+		Body:         body,
+		UpdateAuthor: commentUser(c.UpdateAuthor),
+		Visibility:   c.Visibility,
+	}
+	if c.ID != nil {
+		item.ID = *c.ID
+	}
+	if c.Created != nil {
+		item.Created = *c.Created
+	}
+	if c.Updated != nil {
+		item.Updated = *c.Updated
+	}
+	return item
+}
+
+func commentUser(u *jira.User) *envelope.CommentUser {
+	if u == nil {
+		return nil
+	}
+	out := &envelope.CommentUser{}
+	if u.AccountID != nil {
+		out.AccountID = *u.AccountID
+	}
+	if u.DisplayName != nil {
+		out.DisplayName = *u.DisplayName
+	}
+	if u.EmailAddress != nil {
+		out.EmailAddress = *u.EmailAddress
 	}
 	return out
 }

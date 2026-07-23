@@ -151,6 +151,21 @@ func TestIssueKeyReadCommandsAcceptDoubleDotRangesAndParallelism(t *testing.T) {
 				len(env.Data.Results[0].Data) == 0 || len(env.Data.Results[1].Data) == 0 {
 				t.Fatalf("batch results = %+v", env.Data.Results)
 			}
+			if tt.name == "comment list" {
+				for _, result := range env.Data.Results {
+					var data struct {
+						Issue struct {
+							Key string `json:"key"`
+						} `json:"issue"`
+					}
+					if err := json.Unmarshal(result.Data, &data); err != nil {
+						t.Fatalf("decode %s data: %v\n%s", result.Key, err, result.Data)
+					}
+					if data.Issue.Key != result.Key {
+						t.Fatalf("%s data.issue.key = %q, want matching result key", result.Key, data.Issue.Key)
+					}
+				}
+			}
 			if requests.Load() != 2 {
 				t.Fatalf("requests = %d, want one request per expanded key", requests.Load())
 			}
