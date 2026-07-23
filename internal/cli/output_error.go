@@ -37,4 +37,4 @@ func (e *OutputError) Code() errtax.Code {
 	return errtax.CodeOutputWriteFailed
 }
 
-var _ errtax.Coded = (*OutputError)(nil)
+var _ errtax.Coded = (*OutputError)(nil) //nolint:errcheck // compile-time interface assertion

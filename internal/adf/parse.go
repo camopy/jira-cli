@@ -66,7 +66,7 @@ func (e *InvalidDocumentError) Error() string {
 // Code classifies the failure under the taxonomy's adf_invalid code.
 func (e *InvalidDocumentError) Code() errtax.Code { return errtax.CodeADFInvalid }
 
-var _ errtax.Coded = (*InvalidDocumentError)(nil)
+var _ errtax.Coded = (*InvalidDocumentError)(nil) //nolint:errcheck // compile-time interface assertion
 
 // Parse decodes ADF JSON into a typed Document and returns any best-effort
 // warnings collected during the decode. Unknown nodes/marks are preserved

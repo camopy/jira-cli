@@ -228,8 +228,8 @@ func drainAndClose(body io.ReadCloser) {
 	if body == nil {
 		return
 	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(body, maxDrainBytes))
-	_ = body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(body, maxDrainBytes)) //nolint:errcheck // best-effort drain only affects connection reuse
+	_ = body.Close()                                                //nolint:errcheck // retry proceeds on a new connection if close fails
 }
 
 // realSleep waits for d or the context, whichever comes first.

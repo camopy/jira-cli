@@ -73,7 +73,7 @@ func (e *JQEvalError) Error() string     { return "jq: " + e.Err.Error() }
 func (e *JQEvalError) Unwrap() error     { return e.Err }
 func (e *JQEvalError) Code() errtax.Code { return errtax.CodeJQEvalFailed }
 
-var _ errtax.Coded = (*JQEvalError)(nil)
+var _ errtax.Coded = (*JQEvalError)(nil) //nolint:errcheck // compile-time interface assertion
 
 // writeJQ runs the invocation's compiled filter over doc and writes the
 // results to w: string values print raw (jq -r style), every other value

@@ -37,4 +37,4 @@ func (e *NotFoundError) Unwrap() error { return e.Err }
 // Code is the stable not_found envelope code (exit 2).
 func (e *NotFoundError) Code() errtax.Code { return errtax.CodeNotFound }
 
-var _ errtax.Coded = (*NotFoundError)(nil)
+var _ errtax.Coded = (*NotFoundError)(nil) //nolint:errcheck // compile-time interface assertion

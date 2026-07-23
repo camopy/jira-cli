@@ -27,7 +27,7 @@ func RecordIssueKeys(cmd *cobra.Command, keys ...string) {
 			profile = p
 		}
 	}
-	_ = cache.RecordIssueKeys(CacheKeyForProfile(cmd, profile), keys)
+	_ = cache.RecordIssueKeys(CacheKeyForProfile(cmd, profile), keys) //nolint:errcheck // recency completion cache is best-effort
 }
 
 // RecordIssuesSeen records the keys of issues a list or search returned.

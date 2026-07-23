@@ -43,6 +43,6 @@ func (e *ReadOnlyError) Code() errtax.Code { return errtax.CodeReadOnly }
 func (e *DryRunBlockedError) Code() errtax.Code { return errtax.CodeDryRunBlocked }
 
 var (
-	_ errtax.Coded = (*ReadOnlyError)(nil)
-	_ errtax.Coded = (*DryRunBlockedError)(nil)
+	_ errtax.Coded = (*ReadOnlyError)(nil)      //nolint:errcheck // compile-time interface assertion
+	_ errtax.Coded = (*DryRunBlockedError)(nil) //nolint:errcheck // compile-time interface assertion
 )

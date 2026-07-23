@@ -862,7 +862,7 @@ func upstreamRequestID(res *http.Response) string {
 func parseRate(res *http.Response) Rate {
 	// Atoi returns zero for syntax errors and a clamped value for range errors;
 	// both are the established best-effort interpretation of this header.
-
+	//nolint:errcheck // the fallback value is the useful result for either error class
 	remaining, _ := strconv.Atoi(res.Header.Get("X-RateLimit-Remaining"))
 	now := time.Now()
 	return Rate{
@@ -1029,7 +1029,7 @@ func (e *APIError) Code() errtax.Code {
 	return CodeForStatus(e.StatusCode)
 }
 
-var _ errtax.Coded = (*APIError)(nil)
+var _ errtax.Coded = (*APIError)(nil) //nolint:errcheck // compile-time interface assertion
 
 // ClassifyStatus reports the error type for an HTTP status. It stays an
 // independent status→type switch (never derived from CodeForStatus plus the

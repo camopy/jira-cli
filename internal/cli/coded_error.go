@@ -31,7 +31,7 @@ func (e *CodedError) Code() errtax.Code { return e.code }
 
 func (e *CodedError) Unwrap() error { return e.err }
 
-var _ errtax.Coded = (*CodedError)(nil)
+var _ errtax.Coded = (*CodedError)(nil) //nolint:errcheck // compile-time interface assertion
 
 // AggregateCode is the errtax code a multi-key partial-failure should
 // carry, derived from the worst already-classified per-key failure rather

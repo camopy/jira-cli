@@ -223,7 +223,7 @@ func (r *results) handleFormSubmit(msg formSubmitMsg) tea.Cmd {
 		r.closeForm()
 		// Bulk dispatch only selects marked keys and parks a confirmation; its
 		// local error path is reserved for single-issue encoding.
-		cmd, _ := r.dispatchSubmit(msg.req)
+		cmd, _ := r.dispatchSubmit(msg.req) //nolint:errcheck // bulk arms cannot return a local error
 		return cmd
 	}
 	r.formWriting = true

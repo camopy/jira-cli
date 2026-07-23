@@ -58,6 +58,9 @@ linters:
             - pkg: "io/ioutil"
               desc: "deprecated since Go 1.16; use io and os packages"
 
+    errcheck:
+      check-blank: true
+
     gocritic:
       # gocritic is enabled solely to run the custom ruleguard rule. disable-all
       # turns off every built-in check (the team deferred gocritic's style /
@@ -117,6 +120,14 @@ linters:
 
   exclusions:
     rules:
+      # Tests remain fully linted; only deliberate explicit assignment of an
+      # error result to the blank identifier is excluded there. Production
+      # files receive no errcheck exclusion.
+      - path: '_test\.go$'
+        linters:
+          - errcheck
+        text: 'Error return value( of .*)? is not checked'
+        source: '[[:space:]]_[[:space:]]*:?='
       - path: '(.+_test\.go|^internal/testutil/|^tests/live/)'
         linters:
           - gosec

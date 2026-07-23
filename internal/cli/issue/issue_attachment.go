@@ -347,7 +347,7 @@ func openAttachmentFileSources(sources []attachmentFileSource) ([]jira.FileSourc
 	handles := make([]*os.File, 0, len(sources))
 	closeFiles := func() {
 		for _, h := range handles {
-			_ = h.Close()
+			_ = h.Close() //nolint:errcheck // cleanup after an earlier open failure is best-effort
 		}
 	}
 	fileSources := make([]jira.FileSource, 0, len(sources))

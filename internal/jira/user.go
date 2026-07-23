@@ -61,8 +61,8 @@ func (e *AmbiguousUserError) CandidateRows() []map[string]any {
 }
 
 var (
-	_ errtax.Coded      = (*AmbiguousUserError)(nil)
-	_ errtax.Candidated = (*AmbiguousUserError)(nil)
+	_ errtax.Coded      = (*AmbiguousUserError)(nil) //nolint:errcheck // compile-time interface assertion
+	_ errtax.Candidated = (*AmbiguousUserError)(nil) //nolint:errcheck // compile-time interface assertion
 )
 
 // CurrentUser is the authenticated account's identity from

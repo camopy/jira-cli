@@ -184,8 +184,8 @@ func (e *CredentialError) Code() ErrorCode { return e.ErrCode }
 func (e *CredentialError) FlagName() string { return e.Context.Flag }
 
 var (
-	_ errtax.Coded   = (*CredentialError)(nil)
-	_ errtax.Flagger = (*CredentialError)(nil)
+	_ errtax.Coded   = (*CredentialError)(nil) //nolint:errcheck // compile-time interface assertion
+	_ errtax.Flagger = (*CredentialError)(nil) //nolint:errcheck // compile-time interface assertion
 )
 
 // Retryable reports whether retrying the operation could succeed.

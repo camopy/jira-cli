@@ -64,7 +64,7 @@ func (KeyringStore) Put(_ context.Context, ref SecretRef, secret string) error {
 	if err := keyring.Set(keyringServiceName(), ref.KeyringName(), secret); err != nil {
 		return KeyringUnavailableError(fmt.Errorf("keyring set %q: %w", ref.Profile, err))
 	}
-	_ = keyringIndexAdd(ref)
+	_ = keyringIndexAdd(ref) //nolint:errcheck // credential is stored; the optional enumeration index is best-effort
 	return nil
 }
 
@@ -78,7 +78,7 @@ func (KeyringStore) Delete(_ context.Context, ref SecretRef) error {
 		// The index self-heals on every delete outcome, including
 		// not-found: a stale index row for an entry the user removed by
 		// hand disappears the next time logout touches it.
-		_ = keyringIndexRemove(ref)
+		_ = keyringIndexRemove(ref) //nolint:errcheck // stale enumeration metadata must not mask the credential result
 	}
 	if err == nil {
 		return nil

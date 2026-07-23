@@ -46,7 +46,7 @@ func RoundTripADF(ctx context.Context, opts RoundTripADFOptions) (adf.Document, 
 	cleanup := true
 	defer func() {
 		if cleanup {
-			_ = os.Remove(path)
+			_ = os.Remove(path) //nolint:errcheck // successful round-trip cleanup is best-effort
 		}
 	}()
 

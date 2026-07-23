@@ -51,7 +51,7 @@ func (e *ExpansionLimitError) Error() string {
 // Code classifies the failure under issue_key_expansion_limit.
 func (e *ExpansionLimitError) Code() errtax.Code { return errtax.CodeIssueKeyExpansionLimit }
 
-var _ errtax.Coded = (*ExpansionLimitError)(nil)
+var _ errtax.Coded = (*ExpansionLimitError)(nil) //nolint:errcheck // compile-time interface assertion
 
 // ParseExpressions expands issue-key expressions into canonical Jira keys.
 // Supported forms are single keys, comma lists, and inclusive ranges using

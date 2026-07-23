@@ -222,7 +222,7 @@ func (s *attachmentService) Download(ctx context.Context, attachmentID string) (
 		// mirror Client.Do's body cap to keep stderr / log output
 		// bounded.
 		body, _, readErr := readLimitedBody(res.Body, maxErrorBodyBytes)
-		_ = res.Body.Close()
+		_ = res.Body.Close() //nolint:errcheck // body is read; close failure only prevents connection reuse
 		if readErr != nil {
 			return nil, resp, &APIError{
 				StatusCode: res.StatusCode,

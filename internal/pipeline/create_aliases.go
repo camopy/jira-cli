@@ -89,7 +89,7 @@ func wireIdentity(wire any, keys []string) string {
 func NormalizeCreateAliases(fields map[string]any) map[string]any {
 	// The non-strict form resolves conflicts by keeping the explicit wire key,
 	// so its normalizer cannot return an error.
-
+	//nolint:errcheck // strict=false makes the helper's error path unreachable
 	out, _ := normalizeCreateAliases(fields, false)
 	return out
 }

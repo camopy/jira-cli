@@ -61,4 +61,4 @@ func (e *PromptError) Code() errtax.Code {
 	}
 }
 
-var _ errtax.Coded = (*PromptError)(nil)
+var _ errtax.Coded = (*PromptError)(nil) //nolint:errcheck // compile-time interface assertion

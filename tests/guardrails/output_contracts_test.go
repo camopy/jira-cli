@@ -8,9 +8,12 @@ package guardrails
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/matcra587/jira-cli/internal/cli"
+	"gopkg.in/yaml.v3"
 )
 
 // Empty lists MUST be a successful exit-0 result with an empty issues
@@ -74,5 +77,61 @@ func TestEnvelopeShapeIsStable(t *testing.T) {
 		if _, has := got[key]; !has {
 			t.Fatalf("envelope missing required key %q", key)
 		}
+	}
+}
+
+func TestLintChecksProductionBlankErrorsWithoutDisablingTestLint(t *testing.T) {
+	type exclusionRule struct {
+		Path    string   `yaml:"path"`
+		Linters []string `yaml:"linters"`
+		Source  string   `yaml:"source"`
+		Text    string   `yaml:"text"`
+	}
+	var cfg struct {
+		Run struct {
+			Tests bool `yaml:"tests"`
+		} `yaml:"run"`
+		Linters struct {
+			Settings struct {
+				Errcheck struct {
+					CheckBlank bool `yaml:"check-blank"`
+				} `yaml:"errcheck"`
+			} `yaml:"settings"`
+			Exclusions struct {
+				Rules []exclusionRule `yaml:"rules"`
+			} `yaml:"exclusions"`
+		} `yaml:"linters"`
+	}
+
+	raw, err := os.ReadFile(filepath.Join("..", "..", ".golangci.yml"))
+	if err != nil {
+		t.Fatalf("read .golangci.yml: %v", err)
+	}
+	if err := yaml.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("parse .golangci.yml: %v", err)
+	}
+	if !cfg.Run.Tests {
+		t.Fatal("golangci-lint run.tests = false, want tests linted")
+	}
+	if !cfg.Linters.Settings.Errcheck.CheckBlank {
+		t.Fatal("errcheck.check-blank = false, want production blank assignments checked")
+	}
+
+	const testPath = `_test\.go$`
+	var testBlankRule *exclusionRule
+	for i := range cfg.Linters.Exclusions.Rules {
+		rule := &cfg.Linters.Exclusions.Rules[i]
+		if len(rule.Linters) == 1 && rule.Linters[0] == "errcheck" {
+			if rule.Path != testPath {
+				t.Fatalf("errcheck exclusion path = %q, want only %q", rule.Path, testPath)
+			}
+			testBlankRule = rule
+		}
+	}
+	if testBlankRule == nil {
+		t.Fatal("missing narrow _test.go errcheck blank-assignment exclusion")
+	}
+	if testBlankRule.Source == "" || testBlankRule.Text == "" {
+		t.Fatalf("test errcheck exclusion is not limited by source and finding text: %#v", testBlankRule)
 	}
 }

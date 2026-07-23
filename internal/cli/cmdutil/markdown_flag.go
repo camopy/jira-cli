@@ -41,7 +41,7 @@ func AddMarkdownFlag(cmd *cobra.Command, p, file *string, usage, alias string) {
 		return
 	}
 	AddStringVar(cmd.Flags(), p, alias, "", usage, clib.FlagExtra{Group: "Input", Placeholder: "MARKDOWN"})
-	_ = cmd.Flags().MarkHidden(alias)
+	_ = cmd.Flags().MarkHidden(alias) //nolint:errcheck // alias was registered immediately above
 	cmd.MarkFlagsMutuallyExclusive("markdown", alias)
 	cmd.MarkFlagsMutuallyExclusive(alias, "json-input")
 	cmd.MarkFlagsMutuallyExclusive(alias, "markdown-file")

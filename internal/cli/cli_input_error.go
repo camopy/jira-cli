@@ -121,6 +121,6 @@ func (e *CLIInputError) Code() errtax.Code {
 func (e *CLIInputError) FlagName() string { return e.Flag }
 
 var (
-	_ errtax.Coded   = (*CLIInputError)(nil)
-	_ errtax.Flagger = (*CLIInputError)(nil)
+	_ errtax.Coded   = (*CLIInputError)(nil) //nolint:errcheck // compile-time interface assertion
+	_ errtax.Flagger = (*CLIInputError)(nil) //nolint:errcheck // compile-time interface assertion
 )
