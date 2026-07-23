@@ -26,7 +26,7 @@ paths:
 | Contract | `tests/contract/` | the built binary's agent contract: envelopes, exit codes, flag behavior |
 | Guardrails | `tests/guardrails/` | repo invariants (see below) |
 | Integration | `tests/integration/` | binary end-to-end against `httptest` (no build tag) |
-| Live | `tests/live/` | `//go:build live`; real tenant via `mise run test:live` + `JIRA_LIVETEST_PROJECT` (a dedicated probe project); excluded from `go test ./...` |
+| Live | `tests/live/` | `//go:build live`; real tenant via `mise run test:live` + `JIRA_LIVETEST_PROJECT` (a dedicated probe project); `JIRA_LIVETEST_BINARY` selects a frozen executable for comparisons; excluded from `go test ./...` |
 
 ## Contract tests are black-box
 

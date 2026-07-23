@@ -59,7 +59,7 @@ For tighter loops while editing:
 | `mise run check` | fmt-check + lint + rumdl + vet + unit tests |
 | `mise run test` | unit tests with coverage (fast) |
 | `mise run test:integration` | integration tests |
-| `mise run test:live` | live end-to-end suite against a real tenant; needs a configured profile and `JIRA_LIVETEST_PROJECT` (excluded from `go test ./...`) |
+| `mise run test:live` | live end-to-end suite against a real tenant; needs a configured profile and `JIRA_LIVETEST_PROJECT`; set `JIRA_LIVETEST_BINARY` to compare a prebuilt binary (excluded from `go test ./...`) |
 | `mise run fix` | auto-apply fmt + lint + rumdl fixes |
 
 Run a single package or test with `go test` directly:

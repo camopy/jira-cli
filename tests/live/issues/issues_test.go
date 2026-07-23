@@ -99,6 +99,7 @@ func TestLiveIssuesEndToEnd(t *testing.T) {
 			"description_markdown": "This dry-run issue must not exist.",
 		}))
 		assert.True(t, livekit.BoolField(t, env.Data, "dry_run"))
+		assertSemanticFieldPresence(t, env.Data, "validated_remotely")
 		assertNoIssueWithSummary(t, s, drySummary, searchToken)
 	})
 
@@ -109,11 +110,13 @@ func TestLiveIssuesEndToEnd(t *testing.T) {
 		drySummary := s.Marker + " dry-run edit should not persist"
 		env := s.Run(t, "issue", "edit", survivorKey, "--summary", drySummary, "--dry-run")
 		assert.True(t, livekit.BoolField(t, env.Data, "dry_run"))
+		assertSemanticFieldPresence(t, env.Data, "validated_remotely")
 		afterDryRun := s.Run(t, "issue", "view", survivorKey)
 		assert.NotEqual(t, drySummary, livekit.IssueSummary(afterDryRun))
 
 		editedSummary := livekit.SurvivorSummary(s.RunID) + " - summary edited"
-		s.Run(t, "issue", "edit", survivorKey, "--summary", editedSummary)
+		edited := s.Run(t, "issue", "edit", survivorKey, "--summary", editedSummary)
+		assertSemanticFieldPresence(t, edited.Data, "validated_remotely")
 		assert.Equal(t, editedSummary, livekit.IssueSummary(s.Run(t, "issue", "view", survivorKey)))
 
 		s.Run(t, "issue", "edit", survivorKey, "--json-input", s.WriteJSON(t, "edit-description.json", map[string]any{
@@ -152,9 +155,13 @@ func TestLiveIssuesEndToEnd(t *testing.T) {
 		require.NotEmpty(t, commentID)
 
 		list := s.Run(t, "issue", "comment", "list", survivorKey, "--all")
+		assertSemanticFieldPresence(t, list.Data, "issue")
 		assertCommentPresent(t, list, commentID)
 
 		edited := s.Run(t, "issue", "comment", "edit", survivorKey, commentID, "--markdown", "Edited comment for "+s.RunID)
+		for _, field := range []string{"comment_id", "body_adf_summary", "visibility_change"} {
+			assertSemanticFieldPresence(t, edited.Data, field)
+		}
 		assert.Equal(t, commentID, livekit.StringField(t, livekit.MapField(t, edited.Data, "comment"), "id"))
 
 		s.Run(t, "issue", "comment", "delete", survivorKey, commentID, "--force")
@@ -172,6 +179,7 @@ func TestLiveIssuesEndToEnd(t *testing.T) {
 		attachmentPath := filepath.Join(t.TempDir(), "jira-live-attachment.txt")
 		require.NoError(t, os.WriteFile(attachmentPath, []byte("jira-cli live attachment "+s.RunID+"\n"), 0o600))
 		added := s.Run(t, "issue", "attachment", "add", survivorKey, "--file", attachmentPath)
+		assertSemanticFieldPresence(t, added.Data, "files")
 		attachments := livekit.SliceField(t, added.Data, "attachments")
 		require.NotEmpty(t, attachments)
 		attachment, ok := attachments[0].(map[string]any)
@@ -179,11 +187,14 @@ func TestLiveIssuesEndToEnd(t *testing.T) {
 		attachmentID := livekit.StringField(t, attachment, "id")
 
 		list := s.Run(t, "issue", "attachment", "list", survivorKey, "--all")
+		assertSemanticFieldPresence(t, list.Data, "issue")
 		assertAttachmentPresent(t, list, attachmentID)
 
-		downloadPath := filepath.Join(t.TempDir(), "downloaded.txt")
-		downloaded := s.Run(t, "issue", "attachment", "download", survivorKey, attachmentID, "--to", downloadPath)
-		assert.Equal(t, downloadPath, livekit.StringField(t, downloaded.Data, "written_to"))
+		downloadDir := t.TempDir()
+		downloadPath := filepath.Join(downloadDir, "downloaded.txt")
+		downloaded := s.RunInDir(t, downloadDir, "issue", "attachment", "download", survivorKey, attachmentID, "--to", "downloaded.txt")
+		assertSemanticFieldPresence(t, downloaded.Data, "target")
+		assert.Equal(t, "downloaded.txt", livekit.StringField(t, downloaded.Data, "written_to"))
 		assert.FileExists(t, downloadPath)
 
 		s.Run(t, "issue", "attachment", "delete", survivorKey, attachmentID, "--force")
@@ -202,16 +213,25 @@ func TestLiveIssuesEndToEnd(t *testing.T) {
 
 	t.Run("watchers", func(t *testing.T) {
 		s.Run(t, "issue", "watch", survivorKey)
-		assert.True(t, livekit.BoolField(t, s.Run(t, "issue", "watchers", "list", survivorKey).Data, "is_watching"))
+		list := s.Run(t, "issue", "watchers", "list", survivorKey)
+		assertSemanticFieldPresence(t, list.Data, "issue")
+		assert.True(t, livekit.BoolField(t, list.Data, "is_watching"))
 
 		s.Run(t, "issue", "unwatch", survivorKey)
-		s.Run(t, "issue", "watchers", "add", survivorKey, "--user", "accountId:"+accountID)
+		added := s.Run(t, "issue", "watchers", "add", survivorKey, "--user", "accountId:"+accountID)
+		for _, field := range []string{"user", "user_resolved", "account_id_resolved"} {
+			assertSemanticFieldPresence(t, added.Data, field)
+		}
 		assertWatcherPresent(t, s.Run(t, "issue", "watchers", "list", survivorKey), accountID)
-		s.Run(t, "issue", "watchers", "remove", survivorKey, "--user", "accountId:"+accountID)
+		removed := s.Run(t, "issue", "watchers", "remove", survivorKey, "--user", "accountId:"+accountID)
+		for _, field := range []string{"user", "user_resolved", "account_id_resolved"} {
+			assertSemanticFieldPresence(t, removed.Data, field)
+		}
 	})
 
 	t.Run("weblink", func(t *testing.T) {
-		s.Run(t, "issue", "weblink", survivorKey, "--url", "https://example.com/jira-cli-live-"+s.RunID, "--title", "jira-cli live "+s.RunID)
+		created := s.Run(t, "issue", "weblink", survivorKey, "--url", "https://example.com/jira-cli-live-"+s.RunID, "--title", "jira-cli live "+s.RunID)
+		assertSemanticFieldPresence(t, created.Data, "url_remote_checked")
 	})
 
 	t.Run("list and mine", func(t *testing.T) {
@@ -232,6 +252,7 @@ func TestLiveIssuesEndToEnd(t *testing.T) {
 				"summary": cloneSummary,
 			},
 		}))
+		assertSemanticFieldPresence(t, clone.Data, "payload")
 		result := livekit.MapField(t, clone.Data, "result")
 		cloneKey := livekit.StringField(t, result, "key")
 		require.NotEmpty(t, cloneKey)
@@ -239,11 +260,12 @@ func TestLiveIssuesEndToEnd(t *testing.T) {
 		assert.Equal(t, cloneSummary, livekit.IssueSummary(s.Run(t, "issue", "view", cloneKey)))
 
 		movedSummary := livekit.SurvivorSummary(s.RunID) + " - moved via issue move"
-		s.Run(t, "issue", "move", survivorKey, "--force", "--json-input", s.WriteJSON(t, "move.json", map[string]any{
+		moved := s.Run(t, "issue", "move", survivorKey, "--force", "--json-input", s.WriteJSON(t, "move.json", map[string]any{
 			"fields": map[string]any{
 				"summary": movedSummary,
 			},
 		}))
+		assertSemanticFieldPresence(t, moved.Data, "payload")
 		assert.Equal(t, movedSummary, livekit.IssueSummary(s.Run(t, "issue", "view", survivorKey)))
 	})
 
@@ -323,6 +345,20 @@ func requireJiraCode(t *testing.T, env livekit.Envelope, wantCode string, wantHT
 	assert.Equal(t, wantHTTP, got.HTTPStatus, "http_status (full error: %+v)", got)
 	assert.False(t, got.Retryable, "a %d client error must not be retryable (full error: %+v)", wantHTTP, got)
 	assert.NotEmpty(t, got.Hint, "a %s failure must carry a remediation hint (full error: %+v)", wantCode, got)
+}
+
+func assertSemanticFieldPresence(t *testing.T, data map[string]any, field string) {
+	t.Helper()
+	switch mode := strings.TrimSpace(os.Getenv("JIRA_LIVETEST_SEMANTIC_OUTPUT")); mode {
+	case "":
+		return
+	case "before":
+		assert.NotContains(t, data, field, "pre-change binary unexpectedly emitted semantic field %q", field)
+	case "after":
+		assert.Contains(t, data, field, "candidate omitted semantic field %q", field)
+	default:
+		t.Fatalf("JIRA_LIVETEST_SEMANTIC_OUTPUT = %q, want before or after", mode)
+	}
 }
 
 func assertNoIssueWithSummary(t *testing.T, s *livekit.Suite, summary, searchToken string) {
@@ -456,7 +492,8 @@ func transitionToClosedState(t *testing.T, s *livekit.Suite, key string) {
 		id := livekit.StringField(t, transition, "id")
 		name := livekit.StringField(t, transition, "name")
 		t.Logf("transitioning %s using discovered transition id=%s name=%q", key, id, name)
-		s.Run(t, "issue", "transition", key, "--transition", id)
+		transitioned := s.Run(t, "issue", "transition", key, "--transition", id)
+		assertSemanticFieldPresence(t, transitioned.Data, "transition_validated")
 		status := livekit.IssueStatus(s.Run(t, "issue", "view", key))
 		if looksClosedStatus(status) {
 			t.Logf("issue %s reached closed-looking status %q from initial status %q", key, status, initialStatus)

@@ -21,9 +21,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// liveProjectEnv names the environment variable that must hold the Jira
-// project key the suites mutate. The harness refuses to run without it.
-const liveProjectEnv = "JIRA_LIVETEST_PROJECT"
+const (
+	// liveProjectEnv names the environment variable that must hold the Jira
+	// project key the suites mutate. The harness refuses to run without it.
+	liveProjectEnv = "JIRA_LIVETEST_PROJECT"
+	// liveBinaryEnv selects a prebuilt binary for frozen-version comparisons.
+	// When unset, the harness builds candidate HEAD as usual.
+	liveBinaryEnv = "JIRA_LIVETEST_BINARY"
+)
 
 // Envelope is the JSON envelope every jira command emits under
 // --output=json.
@@ -111,6 +116,24 @@ var (
 func BuildBinary(t *testing.T) string {
 	t.Helper()
 	jiraBinaryOnce.Do(func() {
+		if selected := strings.TrimSpace(os.Getenv(liveBinaryEnv)); selected != "" {
+			path, err := filepath.Abs(selected)
+			if err != nil {
+				jiraBinaryErr = fmt.Errorf("resolve %s: %w", liveBinaryEnv, err)
+				return
+			}
+			info, err := os.Stat(path)
+			if err != nil {
+				jiraBinaryErr = fmt.Errorf("inspect %s: %w", liveBinaryEnv, err)
+				return
+			}
+			if !info.Mode().IsRegular() || info.Mode()&0o111 == 0 {
+				jiraBinaryErr = fmt.Errorf("%s must name an executable regular file: %s", liveBinaryEnv, path)
+				return
+			}
+			jiraBinaryPath = path
+			return
+		}
 		if err := os.MkdirAll(goTmpDir(), 0o700); err != nil {
 			jiraBinaryErr = err
 			return
@@ -175,7 +198,15 @@ func newRunID(t *testing.T) string {
 // parsed envelope.
 func (s *Suite) Run(t *testing.T, args ...string) Envelope {
 	t.Helper()
-	stdout, stderr, err := s.RunRaw(t, append([]string{"--output=json", "--no-input", "--timeout=90s"}, args...)...)
+	return s.RunInDir(t, repoRoot(), args...)
+}
+
+// RunInDir executes a jira subcommand from dir, requires ok=true, and returns
+// the parsed envelope. It is used for commands whose safe relative paths are
+// intentionally resolved against their working directory.
+func (s *Suite) RunInDir(t *testing.T, dir string, args ...string) Envelope {
+	t.Helper()
+	stdout, stderr, err := s.runRawInDir(t, dir, append([]string{"--output=json", "--no-input", "--timeout=90s"}, args...)...)
 	require.NoError(t, err, "jira %s\nstdout:\n%s\nstderr:\n%s", strings.Join(args, " "), stdout, stderr)
 	var env Envelope
 	require.NoError(t, json.Unmarshal([]byte(stdout), &env), "jira %s returned non-JSON stdout:\n%s\nstderr:\n%s", strings.Join(args, " "), stdout, stderr)
@@ -188,10 +219,15 @@ func (s *Suite) Run(t *testing.T, args ...string) Envelope {
 // error without interpreting the result.
 func (s *Suite) RunRaw(t *testing.T, args ...string) (string, string, error) {
 	t.Helper()
+	return s.runRawInDir(t, repoRoot(), args...)
+}
+
+func (s *Suite) runRawInDir(t *testing.T, dir string, args ...string) (string, string, error) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, s.Bin, args...)
-	cmd.Dir = repoRoot()
+	cmd.Dir = dir
 	cmd.Env = liveEnv()
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
