@@ -59,13 +59,6 @@ nav = [
                 { "convert" = "reference/jira/adf/convert.md" },
                 { "render" = "reference/jira/adf/render.md" },
             ] },
-            { "agent" = [
-                "reference/jira/agent/index.md",
-                { "adf-matrix" = "reference/jira/agent/adf-matrix.md" },
-                { "fieldtypes" = "reference/jira/agent/fieldtypes.md" },
-                { "guide" = "reference/jira/agent/guide.md" },
-                { "schema" = "reference/jira/agent/schema.md" },
-            ] },
             { "alias" = [
                 "reference/jira/alias/index.md",
                 { "delete" = "reference/jira/alias/delete.md" },
@@ -119,6 +112,7 @@ nav = [
                 { "list" = "reference/jira/epic/list.md" },
                 { "remove" = "reference/jira/epic/remove.md" },
             ] },
+            { "guide" = "reference/jira/guide.md" },
             { "issue" = [
                 "reference/jira/issue/index.md",
                 { "attachment" = [
