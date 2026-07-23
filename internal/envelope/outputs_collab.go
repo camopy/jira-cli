@@ -78,26 +78,26 @@ var (
 	_ = register("issue.comment", IssueCommentAddOutput{}, nil)
 )
 
-// IssueCommentEditOutput is `issue comment edit`'s data. The dry-run preview
-// carries the validated body summary and the visibility change; the live
-// write echoes the updated comment instead. `comment_id` is present only on
-// the preview (the live path identifies the comment via the echoed body).
+// IssueCommentEditOutput is `issue comment edit`'s data. The validated body
+// summary, comment identity, and visibility change ride both paths; the live
+// write also carries the updated comment returned by Jira.
 type IssueCommentEditOutput struct {
 	Issue     IssueRef `json:"issue"`
-	CommentID string   `json:"comment_id,omitempty"`
-	// BodyADFSummary carries the validated *adf.Document on the dry-run path.
+	CommentID string   `json:"comment_id"`
+	// BodyADFSummary carries the validated *adf.Document on both paths.
 	// It is typed `any` (not *adf.Document) because ADF nodes nest
 	// recursively and the schema deriver walks types without a cycle guard;
 	// the object type is restored through the registration override below.
-	BodyADFSummary   any            `json:"body_adf_summary,omitempty"`
-	VisibilityChange string         `json:"visibility_change,omitempty"`
-	Comment          map[string]any `json:"comment,omitempty"`
-	DryRun           bool           `json:"dry_run"`
+	BodyADFSummary   any          `json:"body_adf_summary"`
+	VisibilityChange string       `json:"visibility_change"`
+	Comment          *CommentItem `json:"comment,omitempty"`
+	DryRun           bool         `json:"dry_run"`
 }
 
 var _ = register("issue.comment.edit", IssueCommentEditOutput{}, map[string]any{
 	"properties": map[string]any{
-		"body_adf_summary": map[string]any{"type": "object", "description": "Dry-run only: the validated ADF document that would be submitted."},
+		"body_adf_summary": map[string]any{"type": "object", "description": "The validated ADF document proposed or submitted by the command."},
+		"comment":          map[string]any{"description": "The updated comment returned by Jira after a successful live write."},
 	},
 })
 

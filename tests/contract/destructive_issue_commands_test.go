@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -87,11 +88,30 @@ func TestIssueMoveCanonicalProjectIssueTypePayloadBypassesSourceEditScreen(t *te
 	}
 	cmd := exec.Command(buildJiraBinary(t), "--config", jiraConfig(t, srv.URL), "issue", "move", "PROJ-1", "--force", "--no-input", "--json-input", input, "--output=json")
 	cmd.Env = append(os.Environ(), "JIRA_TOKEN_DEFAULT=test-token")
-	out, err := cmd.CombinedOutput()
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
 	if err != nil {
-		t.Fatalf("issue move canonical payload error = %v\n%s", err, out)
+		t.Fatalf("issue move canonical payload error = %v\nstdout:\n%s\nstderr:\n%s", err, stdout.Bytes(), stderr.Bytes())
 	}
 	if !updateCalled.Load() {
 		t.Fatal("issue move did not submit the canonical payload")
+	}
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &env); err != nil {
+		t.Fatalf("decode issue move envelope: %v\n%s", err, stdout.Bytes())
+	}
+	payload, ok := env.Data["payload"].(map[string]any)
+	if !ok {
+		t.Fatalf("live issue move omitted validated payload: %s", stdout.Bytes())
+	}
+	fields, _ := payload["fields"].(map[string]any)
+	project, _ := fields["project"].(map[string]any)
+	issueType, _ := fields["issuetype"].(map[string]any)
+	if project["key"] != "JCT" || issueType["name"] != "Task" {
+		t.Fatalf("live issue move payload lost submitted fields: %#v", payload)
 	}
 }

@@ -119,6 +119,18 @@ func TestTransitionWithScreenSubmitsPayload(t *testing.T) {
 			t.Fatalf("transition body missing %q:\n%s", want, body)
 		}
 	}
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(stdout, &env); err != nil {
+		t.Fatalf("decode transition envelope: %v\n%s", err, stdout)
+	}
+	if _, exists := env.Data["comment"]; !exists {
+		t.Fatalf("live transition omitted validated comment: %s", stdout)
+	}
+	if validated, exists := env.Data["transition_validated"]; !exists || validated != true {
+		t.Fatalf("transition_validated = %#v (present=%v), want true", validated, exists)
+	}
 }
 
 // A screenless transition refuses the payload outright: Jira would accept

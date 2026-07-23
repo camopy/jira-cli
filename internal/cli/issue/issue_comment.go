@@ -267,6 +267,14 @@ func commentToItem(c *jira.Comment) envelope.CommentItem {
 	return item
 }
 
+func commentItemPtr(c *jira.Comment) *envelope.CommentItem {
+	if c == nil {
+		return nil
+	}
+	item := commentToItem(c)
+	return &item
+}
+
 func commentUser(u *jira.User) *envelope.CommentUser {
 	if u == nil {
 		return nil
@@ -696,14 +704,15 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 	// Submit and preview the validated SubmitADF. ADFDoc was
 	// non-nil above, so the pipeline always sets SubmitADF.
 	submitDoc := pipeOut.SubmitADF
+	data := envelope.IssueCommentEditOutput{
+		Issue:            cmdutil.IssueRef{Key: key},
+		CommentID:        commentID,
+		BodyADFSummary:   submitDoc,
+		VisibilityChange: describeVisibilityChange(vis),
+		DryRun:           flags.dryRun,
+	}
 	if flags.dryRun {
-		return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.comment.edit", envelope.IssueCommentEditOutput{
-			Issue:            cmdutil.IssueRef{Key: key},
-			CommentID:        commentID,
-			BodyADFSummary:   submitDoc,
-			VisibilityChange: describeVisibilityChange(vis),
-			DryRun:           true,
-		}, pipeOut.Warnings)
+		return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.comment.edit", data, pipeOut.Warnings)
 	}
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
@@ -723,11 +732,9 @@ func runCommentEdit(cmd *cobra.Command, key, commentID string, flags commentEdit
 	}); err != nil {
 		return err
 	}
-	return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.comment.edit", envelope.IssueCommentEditOutput{
-		Issue:   cmdutil.IssueRef{Key: key},
-		Comment: commentToMap(comment),
-		DryRun:  false,
-	}, resp, pipeOut.Warnings)
+	data.Comment = commentItemPtr(comment)
+	data.DryRun = false
+	return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.comment.edit", data, resp, pipeOut.Warnings)
 }
 
 func describeVisibilityChange(vis jira.VisibilityChange) string {

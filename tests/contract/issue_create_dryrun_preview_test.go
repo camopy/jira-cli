@@ -39,6 +39,9 @@ func TestIssueCreateDryRunOmitsIssueAndPopulatesPreview(t *testing.T) {
 	if env.Data["dry_run"] != true {
 		t.Fatalf("dry_run = %#v, want true", env.Data["dry_run"])
 	}
+	if validated, exists := env.Data["validated_remotely"]; !exists || validated != false {
+		t.Fatalf("validated_remotely = %#v (present=%v), want explicit false", validated, exists)
+	}
 }
 
 func TestIssueCreateConvenienceFlagsPopulatePreview(t *testing.T) {

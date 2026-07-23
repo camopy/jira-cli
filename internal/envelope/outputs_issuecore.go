@@ -122,18 +122,25 @@ var (
 )
 
 // IssueCreateOutput is `issue create`'s envelope data across the dry-run
-// preview and the live write. dry_run rides both paths; issue is the created
-// issue on a live write, preview the would-be payload on a dry-run.
+// preview and the live write. The validated preview and validation provenance
+// ride both paths; issue is the created issue on a live write.
 type IssueCreateOutput struct {
 	Issue             *jira.Issue    `json:"issue,omitempty"`
-	Preview           map[string]any `json:"preview,omitempty"`
+	Preview           map[string]any `json:"preview"`
 	DryRun            bool           `json:"dry_run"`
-	ValidatedRemotely bool           `json:"validated_remotely,omitempty"`
+	ValidatedRemotely bool           `json:"validated_remotely"`
 	// Verification is the optional --verify re-fetch diff (issue.verificationResult).
 	Verification any `json:"verification,omitempty"`
 }
 
-var _ = register("issue.create", IssueCreateOutput{}, nil)
+var _ = register("issue.create", IssueCreateOutput{}, map[string]any{
+	"properties": map[string]any{
+		"issue":              map[string]any{"description": "The created issue on a successful live write."},
+		"preview":            map[string]any{"description": "The validated payload submitted by a live write or proposed by a dry-run."},
+		"validated_remotely": map[string]any{"description": "Whether Jira metadata was used to validate the payload."},
+		"verification":       map[string]any{"description": "The optional post-write verification result requested with --verify."},
+	},
+})
 
 // IssueEditOutput is `issue edit`'s envelope data. issue, dry_run, and the
 // validated fields echo ride every path; result is the updated issue on a
@@ -145,7 +152,7 @@ type IssueEditOutput struct {
 	DryRun            bool           `json:"dry_run"`
 	Fields            map[string]any `json:"fields"`
 	Update            map[string]any `json:"update,omitempty"`
-	ValidatedRemotely bool           `json:"validated_remotely,omitempty"`
+	ValidatedRemotely bool           `json:"validated_remotely"`
 	Verification      any            `json:"verification,omitempty"`
 	Warnings          []adf.Warning  `json:"warnings,omitempty"`
 }
@@ -154,8 +161,7 @@ var _ = register("issue.edit", IssueEditOutput{}, nil)
 
 // IssueTransitionOutput is `issue transition`'s envelope data when a target is
 // applied (or previewed). transition is the resolved id (or the requested
-// target on a bare dry-run); the payload sections and transition_validated
-// appear only on the dry-run preview paths.
+// target on a bare dry-run); supplied payload sections ride both paths.
 type IssueTransitionOutput struct {
 	Issue               IssueRef       `json:"issue"`
 	Transition          string         `json:"transition,omitempty"`
@@ -163,11 +169,18 @@ type IssueTransitionOutput struct {
 	Fields              map[string]any `json:"fields,omitempty"`
 	Comment             any            `json:"comment,omitempty"`
 	Update              map[string]any `json:"update,omitempty"`
-	TransitionValidated bool           `json:"transition_validated,omitempty"`
+	TransitionValidated bool           `json:"transition_validated"`
 	Warnings            []adf.Warning  `json:"warnings,omitempty"`
 }
 
-var _ = register("issue.transition", IssueTransitionOutput{}, nil)
+var _ = register("issue.transition", IssueTransitionOutput{}, map[string]any{
+	"properties": map[string]any{
+		"fields":               map[string]any{"description": "Validated field changes supplied with the transition."},
+		"comment":              map[string]any{"description": "The validated ADF comment supplied with the transition."},
+		"update":               map[string]any{"description": "Native Jira update operations supplied with the transition."},
+		"transition_validated": map[string]any{"description": "Whether the transition target was resolved against Jira."},
+	},
+})
 
 // IssueTransitionsOutput is the no-target `issue transition` read: the issue
 // and its available workflow transitions.
@@ -178,16 +191,22 @@ type IssueTransitionsOutput struct {
 
 var _ = register("issue.transitions", IssueTransitionsOutput{}, nil)
 
+// IssueFieldsPayload is the fixed payload shared by clone, move, and delete.
+// Fields is empty but present for mutations that submit no field changes.
+type IssueFieldsPayload struct {
+	Fields map[string]any `json:"fields"`
+}
+
 // IssueDestructiveOutput is the shared envelope data for the clone, move, and
-// delete mutations. payload previews the validated fields on a dry-run; result
+// delete mutations. payload carries the validated fields on both paths; result
 // is the resulting issue on a live clone/move (delete carries none). warnings
 // travels inside each key's data on a fan-out run.
 type IssueDestructiveOutput struct {
-	Issue    IssueRef       `json:"issue"`
-	Result   *jira.Issue    `json:"result,omitempty"`
-	Payload  map[string]any `json:"payload,omitempty"`
-	DryRun   bool           `json:"dry_run"`
-	Warnings []adf.Warning  `json:"warnings,omitempty"`
+	Issue    IssueRef           `json:"issue"`
+	Result   *jira.Issue        `json:"result,omitempty"`
+	Payload  IssueFieldsPayload `json:"payload"`
+	DryRun   bool               `json:"dry_run"`
+	Warnings []adf.Warning      `json:"warnings,omitempty"`
 }
 
 var (

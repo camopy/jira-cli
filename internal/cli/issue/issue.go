@@ -1059,16 +1059,16 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 			if descriptionPresent && pipeOut.SubmitADF != nil {
 				submitFields["description"] = *pipeOut.SubmitADF
 			}
+			preview, err := issueCreatePreview(submitFields, profile)
+			if err != nil {
+				return err
+			}
+			data := envelope.IssueCreateOutput{
+				Preview:           preview,
+				DryRun:            dryRun,
+				ValidatedRemotely: validateRemote || !dryRun,
+			}
 			if dryRun {
-				preview, err := issueCreatePreview(submitFields, profile)
-				if err != nil {
-					return err
-				}
-				data := envelope.IssueCreateOutput{
-					Preview:           preview,
-					DryRun:            true,
-					ValidatedRemotely: validateRemote,
-				}
 				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.create", data, pipeOut.Warnings)
 			}
 			// submitFields already carries project / issuetype / assignee
@@ -1091,7 +1091,8 @@ $ jira issue create --json-input issue-create.json --dry-run --output=json`,
 			}); err != nil {
 				return err
 			}
-			data := envelope.IssueCreateOutput{Issue: issue, DryRun: false}
+			data.Issue = issue
+			data.DryRun = false
 			warnings := pipeOut.Warnings
 			if verifyWrite {
 				createdKey := ""
@@ -1578,10 +1579,11 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 					return err
 				}
 				data := envelope.IssueEditOutput{
-					Issue:  cmdutil.IssueRef{Key: keys[0]},
-					Result: issue,
-					DryRun: false,
-					Fields: submitFields,
+					Issue:             cmdutil.IssueRef{Key: keys[0]},
+					Result:            issue,
+					DryRun:            false,
+					Fields:            submitFields,
+					ValidatedRemotely: true,
 				}
 				if len(updateSection) > 0 {
 					data.Update = updateSection
@@ -1597,15 +1599,13 @@ $ jira issue edit PROJ-1 PROJ-2 --json-input issue-edit.json --dry-run --output=
 				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.edit", data, resp, warnings)
 			}
 			data := envelope.IssueEditOutput{
-				Issue:  cmdutil.IssueRef{Key: keys[0]},
-				DryRun: true,
-				Fields: submitFields,
+				Issue:             cmdutil.IssueRef{Key: keys[0]},
+				DryRun:            true,
+				Fields:            submitFields,
+				ValidatedRemotely: validateRemote,
 			}
 			if len(updateSection) > 0 {
 				data.Update = updateSection
-			}
-			if validateRemote {
-				data.ValidatedRemotely = true
 			}
 			return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue.edit", data, pipeOut.Warnings)
 		},
@@ -1696,15 +1696,13 @@ func runIssueEditMany(cmd *cobra.Command, keys []string, parallelism int, in iss
 			submitFields["description"] = *pipeOut.SubmitADF
 		}
 		data := envelope.IssueEditOutput{
-			Issue:  cmdutil.IssueRef{Key: key},
-			DryRun: in.DryRun,
-			Fields: submitFields,
+			Issue:             cmdutil.IssueRef{Key: key},
+			DryRun:            in.DryRun,
+			Fields:            submitFields,
+			ValidatedRemotely: in.ValidateRemote || !in.DryRun,
 		}
 		if len(in.Update) > 0 {
 			data.Update = in.Update
-		}
-		if in.DryRun && in.ValidateRemote {
-			data.ValidatedRemotely = true
 		}
 		if len(pipeOut.Warnings) > 0 {
 			data.Warnings = pipeOut.Warnings
@@ -1935,7 +1933,7 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 				// list). --validate-remote opts into the read-only
 				// transitions fetch, resolving the target and running the
 				// screenless-payload refusal before any state change.
-				data := transitionDryRunData(key, target, submitFields, comment, payload.update)
+				data := transitionData(key, target, submitFields, comment, payload.update, true, false)
 				if validateRemote {
 					client, _, ok, cerr := cmdutil.JiraClientForCommand(cmd)
 					if cerr != nil {
@@ -2006,7 +2004,8 @@ $ jira issue transition PROJ-123 PROJ-124 Done --dry-run`,
 			}); err != nil {
 				return err
 			}
-			return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transition", envelope.IssueTransitionOutput{Issue: cmdutil.IssueRef{Key: key}, Transition: id, DryRun: false}, resp, pipeOut.Warnings)
+			data := transitionData(key, id, submitFields, comment, payload.update, false, true)
+			return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue.transition", data, resp, pipeOut.Warnings)
 		},
 	}
 	cmdutil.AddDryRunFlag(returnCmd.Flags(), &dryRun, "Preview mutation without submitting")
@@ -2325,11 +2324,21 @@ func transitionNames(transitions []*jira.Transition) string {
 	return strings.Join(names, ", ")
 }
 
-// transitionDryRunData assembles the per-issue dry-run preview: the
-// target (as requested, or resolved under --validate-remote) plus the
-// validated payload sections.
-func transitionDryRunData(key, target string, fields map[string]any, comment *adf.Document, update map[string]any) envelope.IssueTransitionOutput {
-	data := envelope.IssueTransitionOutput{Issue: cmdutil.IssueRef{Key: key}, Transition: target, DryRun: true}
+// transitionData assembles the stable per-issue context for both preview and
+// live transition output.
+func transitionData(
+	key, target string,
+	fields map[string]any,
+	comment *adf.Document,
+	update map[string]any,
+	dryRun, validated bool,
+) envelope.IssueTransitionOutput {
+	data := envelope.IssueTransitionOutput{
+		Issue:               cmdutil.IssueRef{Key: key},
+		Transition:          target,
+		DryRun:              dryRun,
+		TransitionValidated: validated,
+	}
 	if len(fields) > 0 {
 		data.Fields = fields
 	}
@@ -2385,8 +2394,7 @@ func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, 
 				if resolveErr != nil {
 					return envelope.IssueTransitionOutput{}, resolveErr
 				}
-				value := transitionDryRunData(key, id, submitFields, comment, payload.update)
-				value.TransitionValidated = true
+				value := transitionData(key, id, submitFields, comment, payload.update, true, true)
 				value.Warnings = pipeOut.Warnings
 				return value, nil
 			})
@@ -2396,7 +2404,7 @@ func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, 
 			return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.transition", results, func(_ string, data envelope.IssueTransitionOutput) any { return data })
 		}
 		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[envelope.IssueTransitionOutput] {
-			value := transitionDryRunData(key, target, submitFields, comment, payload.update)
+			value := transitionData(key, target, submitFields, comment, payload.update, true, false)
 			value.Warnings = pipeOut.Warnings
 			return cmdutil.KeyResult[envelope.IssueTransitionOutput]{Key: key, Value: value}
 		})
@@ -2420,12 +2428,9 @@ func runIssueTransitionMany(cmd *cobra.Command, keys []string, parallelism int, 
 		if _, err := service.Transition(ctx, key, &jira.TransitionRequest{ID: id, Fields: submitFields, Comment: comment, Update: payload.update}); err != nil {
 			return envelope.IssueTransitionOutput{}, err
 		}
-		return envelope.IssueTransitionOutput{
-			Issue:      cmdutil.IssueRef{Key: key},
-			Transition: id,
-			DryRun:     false,
-			Warnings:   pipeOut.Warnings,
-		}, nil
+		value := transitionData(key, id, submitFields, comment, payload.update, false, true)
+		value.Warnings = pipeOut.Warnings
+		return value, nil
 	})
 	if err != nil {
 		return err
@@ -2521,8 +2526,9 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 			if submitFields == nil {
 				submitFields = map[string]any{}
 			}
+			outputPayload := envelope.IssueFieldsPayload{Fields: submitFields}
 			if dryRun {
-				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue."+name, envelope.IssueDestructiveOutput{Issue: cmdutil.IssueRef{Key: keys[0]}, Payload: map[string]any{"fields": submitFields}, DryRun: true}, pipeOut.Warnings)
+				return cmdutil.WriteEnvelopeWithWarnings(cmd, "issue."+name, envelope.IssueDestructiveOutput{Issue: cmdutil.IssueRef{Key: keys[0]}, Payload: outputPayload, DryRun: true}, pipeOut.Warnings)
 			}
 			// Destructive op safety: in TTY mode (a human at the
 			// keyboard) require either --force OR an interactive
@@ -2571,7 +2577,7 @@ func destructiveIssueCommand(name, short string) *cobra.Command {
 				}); err != nil {
 					return err
 				}
-				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue."+name, envelope.IssueDestructiveOutput{Issue: cmdutil.IssueRef{Key: keys[0]}, Result: issue, DryRun: false}, resp, pipeOut.Warnings)
+				return cmdutil.WriteEnvelopeWithResponseAndWarnings(cmd, "issue."+name, envelope.IssueDestructiveOutput{Issue: cmdutil.IssueRef{Key: keys[0]}, Result: issue, Payload: outputPayload, DryRun: false}, resp, pipeOut.Warnings)
 			}
 			return fmt.Errorf("jira base URL is required for issue.%s", name)
 		},
@@ -2650,11 +2656,11 @@ func runDestructiveIssueMany(
 			submitFields = map[string]any{}
 		}
 		data := envelope.IssueDestructiveOutput{
-			Issue:  cmdutil.IssueRef{Key: key},
-			DryRun: in.DryRun,
+			Issue:   cmdutil.IssueRef{Key: key},
+			Payload: envelope.IssueFieldsPayload{Fields: submitFields},
+			DryRun:  in.DryRun,
 		}
 		if in.DryRun {
-			data.Payload = map[string]any{"fields": submitFields}
 			if len(pipeOut.Warnings) > 0 {
 				data.Warnings = pipeOut.Warnings
 			}

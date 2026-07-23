@@ -144,6 +144,14 @@ func TestLifecycleCommandsEmitMetaEnvelope(t *testing.T) {
 			if err := json.Unmarshal(stdout, &env); err != nil {
 				t.Fatalf("envelope not JSON: %v\n%s", err, stdout)
 			}
+			if tc.want == "issue.comment.edit" {
+				data, _ := env["data"].(map[string]any)
+				for _, field := range []string{"comment_id", "body_adf_summary", "visibility_change", "comment"} {
+					if _, exists := data[field]; !exists {
+						t.Errorf("live comment edit missing stable/outcome field %q: %s", field, stdout)
+					}
+				}
+			}
 			meta, ok := env["meta"].(map[string]any)
 			if !ok {
 				t.Fatalf("envelope.meta missing or wrong type: %s", stdout)

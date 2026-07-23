@@ -178,6 +178,42 @@ func TestAttachmentAndWatcherListSchemasDeclareCanonicalIssueAndFixedRows(t *tes
 	}
 }
 
+func TestCoreMutationSchemasDeclareStableContext(t *testing.T) {
+	schemas := declaredOutputSchemas(t)
+	cases := []struct {
+		operation string
+		required  []string
+	}{
+		{"issue.create", []string{"preview", "dry_run", "validated_remotely"}},
+		{"issue.edit", []string{"issue", "fields", "dry_run", "validated_remotely"}},
+		{"issue.comment.edit", []string{"issue", "comment_id", "body_adf_summary", "visibility_change", "dry_run"}},
+		{"issue.transition", []string{"issue", "dry_run", "transition_validated"}},
+		{"issue.clone", []string{"issue", "payload", "dry_run"}},
+		{"issue.move", []string{"issue", "payload", "dry_run"}},
+		{"issue.delete", []string{"issue", "payload", "dry_run"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.operation, func(t *testing.T) {
+			schema, ok := schemas[tc.operation].(map[string]any)
+			if !ok {
+				t.Fatalf("%s output schema missing", tc.operation)
+			}
+			props, _ := schema["properties"].(map[string]any)
+			for _, field := range tc.required {
+				if _, exists := props[field]; !exists || !schemaRequires(schema, field) {
+					t.Fatalf("%s field %q must be declared and required: %#v", tc.operation, field, schema)
+				}
+			}
+			if payload, ok := props["payload"].(map[string]any); ok {
+				payloadProps, _ := payload["properties"].(map[string]any)
+				if _, exists := payloadProps["fields"]; !exists || !schemaRequires(payload, "fields") {
+					t.Fatalf("%s payload.fields must be declared and required: %#v", tc.operation, payload)
+				}
+			}
+		})
+	}
+}
+
 func schemaRequires(schema map[string]any, name string) bool {
 	required, _ := schema["required"].([]any)
 	for _, field := range required {

@@ -423,6 +423,17 @@ func TestCommentEditPreservesAuthorAndPlumbsBody(t *testing.T) {
 	if upd == nil || upd["account_id"] != "caller" {
 		t.Errorf("envelope comment.update_author.account_id = %v; want caller", upd)
 	}
+	for field, want := range map[string]any{
+		"comment_id":        "55",
+		"visibility_change": "keep",
+	} {
+		if env.Data[field] != want {
+			t.Errorf("data.%s = %#v, want %#v", field, env.Data[field], want)
+		}
+	}
+	if _, exists := env.Data["body_adf_summary"].(map[string]any); !exists {
+		t.Errorf("live edit missing body_adf_summary: %s", stdout)
+	}
 }
 
 func TestCommentEditVisibilityReplaceOnSupply(t *testing.T) {
