@@ -270,8 +270,8 @@ func WriteHumanJSON(w io.Writer, data any, printTheme *clogtheme.Theme) error {
 func writeJSON(w io.Writer, data any, mode clog.JSONPrintMode, color clog.ColorMode, printTheme *clogtheme.Theme) error {
 	logger, ew := newPrintLogger(w, color, printTheme)
 	logger.Print().Mode(mode).JSON(data)
-	if ew.err != nil {
-		return NewOutputError(ew.err)
+	if err := ew.firstError(); err != nil {
+		return NewOutputError(err)
 	}
 	return nil
 }
@@ -285,8 +285,8 @@ func writeJSON(w io.Writer, data any, mode clog.JSONPrintMode, color clog.ColorM
 func WriteHumanTOML(w io.Writer, data any, printTheme *clogtheme.Theme) error {
 	logger, ew := newPrintLogger(w, resolvedColorMode, printTheme)
 	logger.Print().TOML(data)
-	if ew.err != nil {
-		return NewOutputError(ew.err)
+	if err := ew.firstError(); err != nil {
+		return NewOutputError(err)
 	}
 	return nil
 }

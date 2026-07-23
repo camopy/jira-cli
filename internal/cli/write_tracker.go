@@ -4,17 +4,53 @@ import (
 	"errors"
 	"io"
 	"os"
+	"sync"
 )
 
 // writeTracker records the first destination failure from output libraries
-// whose finalizers do not return write errors. It is command-local and
-// intentionally unsynchronized because rendering is sequential.
+// whose finalizers do not return write errors. It serializes writes because a
+// command-scoped tracker can be shared by concurrent progress renderers.
 type writeTracker struct {
+	mu  sync.Mutex
 	w   io.Writer
 	err error
 }
 
+// WriteTracker keeps a writer's first destination failure available after
+// libraries with void output finalisers have returned. Writer preserves file
+// descriptor capabilities used for terminal detection.
+type WriteTracker struct {
+	tracker *writeTracker
+	writer  io.Writer
+}
+
+// NewWriteTracker wraps w for a command-scoped sequence of writes.
+func NewWriteTracker(w io.Writer) *WriteTracker {
+	tracker, writer := newTrackedWriter(w)
+	return &WriteTracker{tracker: tracker, writer: writer}
+}
+
+// Writer returns the destination wrapper that records failed and short writes.
+func (t *WriteTracker) Writer() io.Writer {
+	return t.writer
+}
+
+// Err returns the recorded destination failure with the stable output
+// taxonomy, or nil when every write completed.
+func (t *WriteTracker) Err() error {
+	if t == nil || t.tracker == nil {
+		return nil
+	}
+	if err := t.tracker.firstError(); err != nil {
+		return NewOutputError(err)
+	}
+	return nil
+}
+
 func (t *writeTracker) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if t.err != nil {
 		return 0, t.err
 	}
@@ -26,6 +62,12 @@ func (t *writeTracker) Write(p []byte) (int, error) {
 		t.err = err
 	}
 	return n, err
+}
+
+func (t *writeTracker) firstError() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.err
 }
 
 // trackedWriter preserves file-descriptor behavior for output libraries that
@@ -46,13 +88,9 @@ func withTrackedWriter(w io.Writer, render func(io.Writer) error) error {
 // failure. A destination failure is returned as an OutputError while any
 // renderer error remains separately discoverable.
 func TrackWrites(w io.Writer, render func(io.Writer) error) error {
-	tracker, out := newTrackedWriter(w)
-	renderErr := render(out)
-	var outputErr error
-	if tracker.err != nil {
-		outputErr = NewOutputError(tracker.err)
-	}
-	return errors.Join(renderErr, outputErr)
+	tracker := NewWriteTracker(w)
+	renderErr := render(tracker.Writer())
+	return errors.Join(renderErr, tracker.Err())
 }
 
 type fdTrackedWriter struct {

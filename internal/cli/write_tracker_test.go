@@ -56,8 +56,8 @@ func TestWriteTrackerPreservesFirstFailure(t *testing.T) {
 	if _, err := tracker.Write([]byte("second")); !errors.Is(err, errWriteSentinel) {
 		t.Fatalf("second Write() error = %v, want sentinel", err)
 	}
-	if !errors.Is(tracker.err, errWriteSentinel) {
-		t.Fatalf("tracked error = %v, want sentinel", tracker.err)
+	if !errors.Is(tracker.firstError(), errWriteSentinel) {
+		t.Fatalf("tracked error = %v, want sentinel", tracker.firstError())
 	}
 	if dst.writes != 1 {
 		t.Fatalf("destination writes = %d, want 1 after first failure", dst.writes)
@@ -75,8 +75,8 @@ func TestWriteTrackerNormalizesShortWrite(t *testing.T) {
 	if !errors.Is(err, io.ErrShortWrite) {
 		t.Fatalf("Write() error = %v, want io.ErrShortWrite", err)
 	}
-	if !errors.Is(tracker.err, io.ErrShortWrite) {
-		t.Fatalf("tracked error = %v, want io.ErrShortWrite", tracker.err)
+	if !errors.Is(tracker.firstError(), io.ErrShortWrite) {
+		t.Fatalf("tracked error = %v, want io.ErrShortWrite", tracker.firstError())
 	}
 }
 
@@ -91,8 +91,8 @@ func TestWriteTrackerPreservesFailAfterError(t *testing.T) {
 	if !errors.Is(err, errWriteSentinel) {
 		t.Fatalf("Write() error = %v, want sentinel", err)
 	}
-	if !errors.Is(tracker.err, errWriteSentinel) {
-		t.Fatalf("tracked error = %v, want sentinel", tracker.err)
+	if !errors.Is(tracker.firstError(), errWriteSentinel) {
+		t.Fatalf("tracked error = %v, want sentinel", tracker.firstError())
 	}
 }
 

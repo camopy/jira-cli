@@ -186,6 +186,189 @@ func TestHumanCommandsNormalizeShortWrites(t *testing.T) {
 	}
 }
 
+func TestHelpOutputFailuresUseLocalIOTaxonomy(t *testing.T) {
+	writeErr := errors.New("stdout closed")
+	tests := []struct {
+		name      string
+		stdout    io.Writer
+		wantCause error
+		args      []string
+	}{
+		{
+			name:      "root failed write",
+			stdout:    &countingErrorWriter{err: writeErr},
+			wantCause: writeErr,
+			args:      []string{"--help"},
+		},
+		{
+			name:      "root short write",
+			stdout:    &countingShortWriter{},
+			wantCause: io.ErrShortWrite,
+			args:      []string{"--help"},
+		},
+		{
+			name:      "subcommand failed write",
+			stdout:    &countingErrorWriter{err: writeErr},
+			wantCause: writeErr,
+			args:      []string{"issue", "--help"},
+		},
+		{
+			name:      "subcommand short write",
+			stdout:    &countingShortWriter{},
+			wantCause: io.ErrShortWrite,
+			args:      []string{"issue", "--help"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stderr bytes.Buffer
+			root, _, err := NewRootCommandForTest(
+				runtime.WithStdout(tt.stdout),
+				runtime.WithStderr(&stderr),
+			)
+			if err != nil {
+				t.Fatalf("NewRootCommandForTest: %v", err)
+			}
+			finishOutputTracking := trackRootCommandOutput(root)
+			root.SetArgs(tt.args)
+
+			_, execErr := root.ExecuteContextC(context.Background())
+			execErr = finishOutputTracking(execErr)
+			if !errors.Is(execErr, tt.wantCause) {
+				t.Fatalf("ExecuteContextC() error = %v, want %v", execErr, tt.wantCause)
+			}
+			var outputErr *cli.OutputError
+			if !errors.As(execErr, &outputErr) {
+				t.Fatalf("ExecuteContextC() error type = %T, want *cli.OutputError", execErr)
+			}
+			if got := cli.MapError(execErr); got.Code != "output_write_failed" ||
+				got.Type != "io" || got.Retryable || cli.ExitCode(got) != 8 {
+				t.Fatalf("MapError() = %#v, want output_write_failed exit 8", got)
+			}
+			if stderr.Len() != 0 {
+				t.Fatalf("help failure wrote stderr = %q, want empty", stderr.String())
+			}
+		})
+	}
+}
+
+func TestDebugOutputFailuresUseLocalIOTaxonomy(t *testing.T) {
+	t.Cleanup(func() {
+		clog.SetVerbose(false)
+		clog.SetOutput(clog.NewOutput(os.Stderr, clog.ColorAuto))
+	})
+	writeErr := errors.New("stderr closed")
+	tests := []struct {
+		name      string
+		stderr    io.Writer
+		wantCause error
+	}{
+		{
+			name:      "failed write",
+			stderr:    &countingErrorWriter{err: writeErr},
+			wantCause: writeErr,
+		},
+		{
+			name:      "short write",
+			stderr:    &countingShortWriter{},
+			wantCause: io.ErrShortWrite,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout bytes.Buffer
+			root, _, err := NewRootCommandForTest(
+				runtime.WithStdout(&stdout),
+				runtime.WithStderr(tt.stderr),
+			)
+			if err != nil {
+				t.Fatalf("NewRootCommandForTest: %v", err)
+			}
+			finishOutputTracking := trackRootCommandOutput(root)
+			root.SetArgs([]string{"--debug", "version", "--output=json"})
+
+			_, execErr := root.ExecuteContextC(context.Background())
+			execErr = finishOutputTracking(execErr)
+			if !errors.Is(execErr, tt.wantCause) {
+				t.Fatalf("ExecuteContextC() error = %v, want %v", execErr, tt.wantCause)
+			}
+			var outputErr *cli.OutputError
+			if !errors.As(execErr, &outputErr) {
+				t.Fatalf("ExecuteContextC() error type = %T, want *cli.OutputError", execErr)
+			}
+			if got := cli.MapError(execErr); got.Code != "output_write_failed" ||
+				got.Type != "io" || got.Retryable || cli.ExitCode(got) != 8 {
+				t.Fatalf("MapError() = %#v, want output_write_failed exit 8", got)
+			}
+			if !strings.Contains(stdout.String(), `"version"`) {
+				t.Fatalf("successful command output = %q, want version payload", stdout.String())
+			}
+		})
+	}
+}
+
+func TestDistinctStdoutAndStderrFailuresRemainDiscoverable(t *testing.T) {
+	stdoutErr := errors.New("stdout closed")
+	stderrErr := errors.New("stderr closed")
+	root, _, err := NewRootCommandForTest(
+		runtime.WithStdout(&countingErrorWriter{err: stdoutErr}),
+		runtime.WithStderr(&countingErrorWriter{err: stderrErr}),
+	)
+	if err != nil {
+		t.Fatalf("NewRootCommandForTest: %v", err)
+	}
+	t.Cleanup(func() {
+		clog.SetVerbose(false)
+		clog.SetOutput(clog.NewOutput(os.Stderr, clog.ColorAuto))
+	})
+	finishOutputTracking := trackRootCommandOutput(root)
+	root.SetArgs([]string{"--debug", "version", "--output=json"})
+
+	_, execErr := root.ExecuteContextC(context.Background())
+	execErr = finishOutputTracking(execErr)
+	if !errors.Is(execErr, stdoutErr) {
+		t.Fatalf("ExecuteContextC() error = %v, want stdout failure", execErr)
+	}
+	if !errors.Is(execErr, stderrErr) {
+		t.Fatalf("ExecuteContextC() error = %v, want stderr failure", execErr)
+	}
+	if got := cli.MapError(execErr); got.Code != "output_write_failed" ||
+		got.Type != "io" || got.Retryable || cli.ExitCode(got) != 8 {
+		t.Fatalf("MapError() = %#v, want output_write_failed exit 8", got)
+	}
+}
+
+func TestCommandDiagnosticFailureIsAttachedOnce(t *testing.T) {
+	commandErr := errors.New("command failed")
+	stderrErr := errors.New("stderr closed")
+	root, _, err := NewRootCommandForTest(
+		runtime.WithStdout(&bytes.Buffer{}),
+		runtime.WithStderr(&countingErrorWriter{err: stderrErr}),
+	)
+	if err != nil {
+		t.Fatalf("NewRootCommandForTest: %v", err)
+	}
+	if err := root.PersistentFlags().Set("output", "human"); err != nil {
+		t.Fatalf("Set(output) error = %v", err)
+	}
+	finishOutputTracking := trackRootCommandOutput(root)
+
+	renderErr := writeCommandError(context.Background(), root, commandErr)
+	execErr := preserveCommandError(commandErr, renderErr)
+	execErr = finishOutputTracking(execErr)
+	if !errors.Is(execErr, commandErr) || !errors.Is(execErr, stderrErr) {
+		t.Fatalf("combined error = %v, want command and stderr failures", execErr)
+	}
+	if got := strings.Count(execErr.Error(), stderrErr.Error()); got != 1 {
+		t.Fatalf("combined error contains stderr failure %d times, want once: %v", got, execErr)
+	}
+	if got := cli.MapError(execErr); got.Code != "validation_failed" || cli.ExitCode(got) != 3 {
+		t.Fatalf("MapError() = %#v, want primary validation exit 3", got)
+	}
+}
+
 func TestDocentOutputTrackingPreservesInheritedWriter(t *testing.T) {
 	var first, second bytes.Buffer
 	root, _, err := NewRootCommandForTest(

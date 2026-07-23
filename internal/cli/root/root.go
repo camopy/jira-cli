@@ -471,7 +471,7 @@ func configureRootHelp(root *cobra.Command) {
 // ctx is the root context main owns (signal-aware via signal.NotifyContext).
 // Execute never calls os.Exit: a completion preflight that was fully
 // handled is reported back to main as ErrCompletionHandled.
-func Execute(ctx context.Context) error {
+func Execute(ctx context.Context) (resultErr error) {
 	rt, err := runtime.New()
 	if err != nil {
 		return err
@@ -482,6 +482,10 @@ func Execute(ctx context.Context) error {
 	// ExecuteContextC below. contextcheck cannot see that deferred handoff
 	// and flags the construction call as a missing context thread.
 	root := New(rt) //nolint:contextcheck // context flows via ExecuteContextC, not construction
+	finishOutputTracking := trackRootCommandOutput(root)
+	defer func() {
+		resultErr = finishOutputTracking(resultErr)
+	}()
 
 	if handled, err := handleCompletionPreflight(root); err != nil {
 		return preserveCommandError(err, writeCommandError(ctx, root, err))
@@ -549,6 +553,77 @@ func Execute(ctx context.Context) error {
 		return preserveCommandError(err, writeCommandError(ctx, root, err))
 	}
 	return nil
+}
+
+// trackRootCommandOutput closes the two Cobra output seams whose callback
+// contracts cannot return errors: Clog's void event finalisers on stderr and
+// Cobra's void help function on stdout. The returned finaliser folds either
+// destination failure into the command result while preserving an existing
+// command error as primary.
+func trackRootCommandOutput(root *cobra.Command) func(error) error {
+	stderr := cli.NewWriteTracker(root.ErrOrStderr())
+	trackedStderr := &commandStderrWriter{Writer: stderr.Writer()}
+	if _, ok := stderr.Writer().(interface{ Fd() uintptr }); ok {
+		root.SetErr(fdCommandStderrWriter{commandStderrWriter: trackedStderr})
+	} else {
+		root.SetErr(trackedStderr)
+	}
+
+	helpFunc := root.HelpFunc()
+	var helpErr error
+	root.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		renderErr := cli.TrackWrites(cmd.OutOrStdout(), func(out io.Writer) error {
+			trackedCmd := *cmd
+			trackedCmd.SetOut(out)
+			helpFunc(&trackedCmd, args)
+			return nil
+		})
+		helpErr = errors.Join(helpErr, renderErr)
+	})
+
+	return func(commandErr error) error {
+		stderrErr := stderr.Err()
+		var attachedStderrErr *commandStderrWriteError
+		if errors.As(commandErr, &attachedStderrErr) {
+			// A failed command diagnostic is already attached by
+			// writeCommandError through its render-local tracker. Do not add
+			// the same persistent stderr failure a second time.
+			stderrErr = nil
+		}
+		return preserveCommandError(commandErr, errors.Join(helpErr, stderrErr))
+	}
+}
+
+type commandStderrWriter struct {
+	io.Writer
+}
+
+func (w *commandStderrWriter) Write(p []byte) (int, error) {
+	n, err := w.Writer.Write(p)
+	if err != nil {
+		return n, &commandStderrWriteError{Err: err}
+	}
+	return n, nil
+}
+
+type fdCommandStderrWriter struct {
+	*commandStderrWriter
+}
+
+func (w fdCommandStderrWriter) Fd() uintptr {
+	return w.Writer.(interface{ Fd() uintptr }).Fd()
+}
+
+type commandStderrWriteError struct {
+	Err error
+}
+
+func (e *commandStderrWriteError) Error() string {
+	return e.Err.Error()
+}
+
+func (e *commandStderrWriteError) Unwrap() error {
+	return e.Err
 }
 
 // startUpdateNotify wires clive's passive "you're behind" check around one

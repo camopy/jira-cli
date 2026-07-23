@@ -256,6 +256,18 @@ func bad(cmd *cobra.Command) {
 	_, _ = cmd.OutOrStdout().Write([]byte("data"))
 }`,
 		},
+		{
+			name: "local stream alias",
+			source: `package command
+import (
+	"fmt"
+	"github.com/spf13/cobra"
+)
+func bad(cmd *cobra.Command) {
+	out := cmd.OutOrStdout()
+	_, _ = fmt.Fprintln(out, "data")
+}`,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, file := parseGoSource(t, tc.source)
@@ -275,6 +287,66 @@ func allowed(cmd local) {
 	if got := len(directCommandStreamWrites(file)); got != 0 {
 		t.Fatalf("direct command-stream findings = %d, want 0 for non-Cobra receiver", got)
 	}
+
+	for _, tc := range []struct {
+		name   string
+		source string
+		want   int
+	}{
+		{
+			name: "ordinary writer alias",
+			source: `package command
+import (
+	"fmt"
+	"os"
+)
+func allowed() {
+	out := os.Stdout
+	_, _ = fmt.Fprintln(out, "data")
+}`,
+		},
+		{
+			name: "shadowed command stream alias",
+			source: `package command
+import (
+	"bytes"
+	"fmt"
+	"github.com/spf13/cobra"
+)
+func oneFinding(cmd *cobra.Command) {
+	out := cmd.OutOrStdout()
+	_, _ = fmt.Fprintln(out, "data")
+	{
+		out := &bytes.Buffer{}
+		_, _ = fmt.Fprintln(out, "local")
+	}
+}`,
+			want: 1,
+		},
+		{
+			name: "tracked command stream alias",
+			source: `package command
+import (
+	"io"
+	"github.com/matcra587/jira-cli/internal/cli"
+	"github.com/spf13/cobra"
+)
+func allowed(cmd *cobra.Command) error {
+	out := cmd.OutOrStdout()
+	return cli.TrackWrites(out, func(tracked io.Writer) error {
+		_, err := tracked.Write([]byte("data"))
+		return err
+	})
+}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, file := parseGoSource(t, tc.source)
+			if got := len(directCommandStreamWrites(file)); got != tc.want {
+				t.Fatalf("direct command-stream findings = %d, want %d", got, tc.want)
+			}
+		})
+	}
 }
 
 func directCommandStreamWrites(file *ast.File) []*ast.CallExpr {
@@ -282,6 +354,7 @@ func directCommandStreamWrites(file *ast.File) []*ast.CallExpr {
 	ioNames := importedPackageNames(file, "io")
 	cobraNames := importedPackageNames(file, "github.com/spf13/cobra")
 	cobraDotImported := dotImportsPackage(file, "github.com/spf13/cobra")
+	streamAliases := commandStreamAliases(file, cobraNames, cobraDotImported)
 	var findings []*ast.CallExpr
 	ast.Inspect(file, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
@@ -292,13 +365,14 @@ func directCommandStreamWrites(file *ast.File) []*ast.CallExpr {
 		if !ok {
 			return true
 		}
-		if sel.Sel.Name == "Write" && isCommandStreamCall(sel.X, cobraNames, cobraDotImported) {
+		if sel.Sel.Name == "Write" &&
+			isCommandStreamExpr(sel.X, cobraNames, cobraDotImported, streamAliases) {
 			findings = append(findings, call)
 			return true
 		}
 		pkg, ok := sel.X.(*ast.Ident)
 		if !ok || pkg.Obj != nil || len(call.Args) == 0 ||
-			!isCommandStreamCall(call.Args[0], cobraNames, cobraDotImported) {
+			!isCommandStreamExpr(call.Args[0], cobraNames, cobraDotImported, streamAliases) {
 			return true
 		}
 		if fmtNames[pkg.Name] && strings.HasPrefix(sel.Sel.Name, "Fprint") {
@@ -312,11 +386,50 @@ func directCommandStreamWrites(file *ast.File) []*ast.CallExpr {
 	return findings
 }
 
-func isCommandStreamCall(
+func commandStreamAliases(
+	file *ast.File,
+	cobraNames map[string]bool,
+	cobraDotImported bool,
+) map[int]bool {
+	// This source guard follows local identifier aliases within one file. It
+	// deliberately does not claim package-wide type resolution; the direct
+	// call and imported-symbol checks remain the enforced production boundary.
+	aliases := map[int]bool{}
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch node := n.(type) {
+		case *ast.AssignStmt:
+			for i, lhs := range node.Lhs {
+				if i >= len(node.Rhs) ||
+					!isCommandStreamExpr(node.Rhs[i], cobraNames, cobraDotImported, aliases) {
+					continue
+				}
+				if ident, ok := lhs.(*ast.Ident); ok && ident.Obj != nil {
+					aliases[int(ident.Obj.Pos())] = true
+				}
+			}
+		case *ast.ValueSpec:
+			for i, name := range node.Names {
+				if i < len(node.Values) &&
+					isCommandStreamExpr(node.Values[i], cobraNames, cobraDotImported, aliases) &&
+					name.Obj != nil {
+					aliases[int(name.Obj.Pos())] = true
+				}
+			}
+		}
+		return true
+	})
+	return aliases
+}
+
+func isCommandStreamExpr(
 	expr ast.Expr,
 	cobraNames map[string]bool,
 	cobraDotImported bool,
+	aliases map[int]bool,
 ) bool {
+	if ident, ok := expr.(*ast.Ident); ok {
+		return ident.Obj != nil && aliases[int(ident.Obj.Pos())]
+	}
 	call, ok := expr.(*ast.CallExpr)
 	if !ok {
 		return false
