@@ -5,6 +5,7 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/cli/cache/registry"
 	"github.com/matcra587/jira-cli/internal/envelope"
+	"github.com/matcra587/jira-cli/internal/errtax"
 	"github.com/spf13/cobra"
 )
 
@@ -21,8 +22,18 @@ func outputSchemas() map[string]any {
 		"type":     "object",
 		"required": []string{"type", "code", "message", "hint", "retryable"},
 		"properties": map[string]any{
-			"type":                map[string]any{"type": "string"},
-			"code":                map[string]any{"type": "string"},
+			"type": map[string]any{
+				"type": "string",
+				"enum": []errtax.Type{
+					errtax.TypeAuth,
+					errtax.TypeNotFound,
+					errtax.TypeValidation,
+					errtax.TypeRateLimit,
+					errtax.TypeServer,
+					errtax.TypeIO,
+				},
+			},
+			"code":                map[string]any{"type": "string", "enum": errtax.Codes()},
 			"message":             map[string]any{"type": "string"},
 			"hint":                map[string]any{"type": "string"},
 			"retryable":           map[string]any{"type": "boolean"},

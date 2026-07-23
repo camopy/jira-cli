@@ -125,10 +125,95 @@ func TestCommandErrorsUseClogDiagnosticsOnStderr(t *testing.T) {
 		t.Fatalf("Set(output) error = %v", err)
 	}
 
-	writeCommandError(cmd.Context(), cmd, errors.New("jira API failed"))
+	if err := writeCommandError(cmd.Context(), cmd, errors.New("jira API failed")); err != nil {
+		t.Fatalf("writeCommandError() error = %v", err)
+	}
 	got := stderr.String()
 	if strings.Contains(got, `"errors"`) || strings.Contains(got, `"meta"`) || !strings.Contains(got, "jira API failed") {
 		t.Fatalf("command error did not emit clog diagnostic stderr:\n%s", got)
+	}
+}
+
+func TestCommandFailureRemainsPrimaryWhenErrorEnvelopeWriteFails(t *testing.T) {
+	commandErr := cli.NewCLIInputError(cli.InputCommandUnknown, `unknown command "lsit"`)
+	writeErr := errors.New("stdout closed")
+	stdout := &countingErrorWriter{err: writeErr}
+	cmd, _, _ := outputModeTestCommand(cli.ModeJSON)
+	cmd.SetOut(stdout)
+	cmd.Root().SetOut(stdout)
+
+	renderErr := writeCommandError(cmd.Context(), cmd, commandErr)
+	if !errors.Is(renderErr, writeErr) {
+		t.Fatalf("writeCommandError() error = %v, want writer failure", renderErr)
+	}
+	err := preserveCommandError(commandErr, renderErr)
+	if !errors.Is(err, commandErr) || !errors.Is(err, writeErr) {
+		t.Fatalf("combined error = %v, want command and writer causes", err)
+	}
+	var outputErr *cli.OutputError
+	if !errors.As(err, &outputErr) {
+		t.Fatalf("combined error type = %T, want discoverable *cli.OutputError", err)
+	}
+	mapped := outputErrorFor(err)
+	if mapped.Code != "command_unknown" || mapped.Type != "validation" {
+		t.Fatalf("combined error mapped as %#v, want original command taxonomy", mapped)
+	}
+	if got := ExitCode(err); got != 3 {
+		t.Fatalf("combined error exit = %d, want 3", got)
+	}
+	if stdout.writes != 1 {
+		t.Fatalf("stdout writes = %d, want one failed envelope attempt", stdout.writes)
+	}
+}
+
+func TestCommandFailureRemainsPrimaryWhenHumanDiagnosticWriteFails(t *testing.T) {
+	commandErr := &jira.APIError{
+		StatusCode: 503,
+		Type:       jira.ErrorTypeServer,
+		Message:    "Jira unavailable",
+	}
+	writeErr := errors.New("stderr closed")
+	stderr := &countingErrorWriter{err: writeErr}
+	cmd, _, _ := outputModeTestCommand(cli.ModePlain)
+	cmd.SetErr(stderr)
+	cmd.Root().SetErr(stderr)
+	if err := cmd.Root().PersistentFlags().Set("output", "human"); err != nil {
+		t.Fatalf("Set(output) error = %v", err)
+	}
+
+	renderErr := writeCommandError(cmd.Context(), cmd, commandErr)
+	if !errors.Is(renderErr, writeErr) {
+		t.Fatalf("writeCommandError() error = %v, want writer failure", renderErr)
+	}
+	err := preserveCommandError(commandErr, renderErr)
+	if !errors.Is(err, commandErr) || !errors.Is(err, writeErr) {
+		t.Fatalf("combined error = %v, want command and writer causes", err)
+	}
+	mapped := outputErrorFor(err)
+	if mapped.Code != "jira_server_error" || mapped.Type != "server" {
+		t.Fatalf("combined error mapped as %#v, want original Jira taxonomy", mapped)
+	}
+	if got := ExitCode(err); got != 5 {
+		t.Fatalf("combined error exit = %d, want 5", got)
+	}
+	if stderr.writes != 1 {
+		t.Fatalf("stderr writes = %d, want one failed diagnostic attempt", stderr.writes)
+	}
+}
+
+func TestExistingOutputFailureIsNotRenderedAgain(t *testing.T) {
+	writeErr := errors.New("stdout closed")
+	stdout := &countingErrorWriter{err: writeErr}
+	cmd, _, _ := outputModeTestCommand(cli.ModeJSON)
+	cmd.SetOut(stdout)
+	cmd.Root().SetOut(stdout)
+
+	err := writeCommandError(cmd.Context(), cmd, cli.NewOutputError(writeErr))
+	if err != nil {
+		t.Fatalf("writeCommandError() error = %v, want nil for an already reported output failure", err)
+	}
+	if stdout.writes != 0 {
+		t.Fatalf("stdout writes = %d, want no second write to failed output", stdout.writes)
 	}
 }
 
@@ -303,7 +388,9 @@ func TestCommandErrorDebugShowsTaxonomyFields(t *testing.T) {
 	if err := cmd.Root().PersistentFlags().Set("output", "human"); err != nil {
 		t.Fatalf("Set(output) error = %v", err)
 	}
-	writeCommandError(cmd.Context(), cmd, &jira.APIError{StatusCode: 503, Type: jira.ErrorTypeServer, Message: "upstream text"})
+	if err := writeCommandError(cmd.Context(), cmd, &jira.APIError{StatusCode: 503, Type: jira.ErrorTypeServer, Message: "upstream text"}); err != nil {
+		t.Fatalf("writeCommandError() error = %v", err)
+	}
 	got := stderr.String()
 	for _, want := range []string{"code=jira_server_error", "type=server", "retryable=true"} {
 		if !strings.Contains(got, want) {
@@ -320,7 +407,9 @@ func TestCommandErrorDebugShowsTaxonomyFields(t *testing.T) {
 	if err := cmd2.Root().PersistentFlags().Set("output", "human"); err != nil {
 		t.Fatalf("Set(output) error = %v", err)
 	}
-	writeCommandError(cmd2.Context(), cmd2, &jira.APIError{StatusCode: 404, Type: jira.ErrorTypeNotFound, Message: "upstream text"})
+	if err := writeCommandError(cmd2.Context(), cmd2, &jira.APIError{StatusCode: 404, Type: jira.ErrorTypeNotFound, Message: "upstream text"}); err != nil {
+		t.Fatalf("writeCommandError() error = %v", err)
+	}
 	got2 := stderr2.String()
 	for _, want := range []string{"code=jira_not_found", "type=not_found"} {
 		if !strings.Contains(got2, want) {
@@ -342,11 +431,13 @@ func TestCommandErrorSanitizesServerControlledText(t *testing.T) {
 	if err := cmd.Root().PersistentFlags().Set("output", "human"); err != nil {
 		t.Fatalf("Set(output) error = %v", err)
 	}
-	writeCommandError(cmd.Context(), cmd, &jira.APIError{
+	if err := writeCommandError(cmd.Context(), cmd, &jira.APIError{
 		StatusCode: 404,
 		Type:       jira.ErrorTypeNotFound,
 		Message:    "The attachment with id '9\x1b[31m9\x079' does not exist",
-	})
+	}); err != nil {
+		t.Fatalf("writeCommandError() error = %v", err)
+	}
 	got := stderr.String()
 	if strings.ContainsAny(got, "\x1b\x07\x00") {
 		t.Fatalf("server-controlled control bytes reached the terminal:\n%q", got)
@@ -365,7 +456,9 @@ func TestCommandErrorWithoutDebugStaysLean(t *testing.T) {
 	if err := cmd.Root().PersistentFlags().Set("output", "human"); err != nil {
 		t.Fatalf("Set(output) error = %v", err)
 	}
-	writeCommandError(cmd.Context(), cmd, &jira.APIError{StatusCode: 503, Type: jira.ErrorTypeServer, Message: "upstream text"})
+	if err := writeCommandError(cmd.Context(), cmd, &jira.APIError{StatusCode: 503, Type: jira.ErrorTypeServer, Message: "upstream text"}); err != nil {
+		t.Fatalf("writeCommandError() error = %v", err)
+	}
 	got := stderr.String()
 	if strings.Contains(got, "code=") || strings.Contains(got, "http_status=") {
 		t.Fatalf("non-debug ERR line leaked taxonomy fields:\n%s", got)
@@ -384,7 +477,9 @@ func TestCommandErrorRateLimitShowsRetryAfter(t *testing.T) {
 	if err := cmd.Root().PersistentFlags().Set("output", "human"); err != nil {
 		t.Fatalf("Set(output) error = %v", err)
 	}
-	writeCommandError(cmd.Context(), cmd, &jira.APIError{StatusCode: 429, Type: jira.ErrorTypeRateLimit, Message: "rate limited", RetryAfterSeconds: 42})
+	if err := writeCommandError(cmd.Context(), cmd, &jira.APIError{StatusCode: 429, Type: jira.ErrorTypeRateLimit, Message: "rate limited", RetryAfterSeconds: 42}); err != nil {
+		t.Fatalf("writeCommandError() error = %v", err)
+	}
 	got := stderr.String()
 	if !strings.Contains(got, "retry in 42s") {
 		t.Fatalf("rate-limit error missing the retry-in line:\n%s", got)

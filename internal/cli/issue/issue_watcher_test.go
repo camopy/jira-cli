@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,8 +16,19 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/spf13/cobra"
 )
+
+type watcherErrorWriter struct {
+	err    error
+	writes int
+}
+
+func (w *watcherErrorWriter) Write([]byte) (int, error) {
+	w.writes++
+	return 0, w.err
+}
 
 // newWatcherTestRoot wires a minimal cobra root + persistent flags so the
 // watcher commands resolve `cmdutil.JiraClientForCommand` via a temp config that
@@ -292,6 +304,30 @@ func TestWatchersAddAmbiguousEmitsCandidatesEnvelope(t *testing.T) {
 	cands, _ := first["candidates"].([]any)
 	if len(cands) != 2 {
 		t.Fatalf("candidates len = %d, want 2: %s", len(cands), stderr)
+	}
+}
+
+func TestWatcherAmbiguityPreservesWriterFailureWithoutClaimingEnvelope(t *testing.T) {
+	writeErr := errors.New("stdout closed")
+	stdout := &watcherErrorWriter{err: writeErr}
+	cmd := &cobra.Command{Use: "add"}
+	cmd.SetOut(stdout)
+	ambiguity := &jira.AmbiguousUserError{Query: "alice"}
+
+	err := handleResolveErr(cmd, "issue.watchers.add", ambiguity)
+	if !errors.Is(err, ambiguity) || !errors.Is(err, writeErr) {
+		t.Fatalf("handleResolveErr() error = %v, want ambiguity and writer causes", err)
+	}
+	var outputErr *cli.OutputError
+	if !errors.As(err, &outputErr) {
+		t.Fatalf("handleResolveErr() error type = %T, want *cli.OutputError", err)
+	}
+	var written cmdutil.EnvelopeWrittenError
+	if errors.As(err, &written) {
+		t.Fatalf("handleResolveErr() claimed a written envelope after writer failure: %v", err)
+	}
+	if stdout.writes != 1 {
+		t.Fatalf("stdout writes = %d, want one failed envelope attempt", stdout.writes)
 	}
 }
 

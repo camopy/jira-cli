@@ -137,7 +137,7 @@ func writeJQ(w io.Writer, doc any) error {
 	}
 	tracker := &writeTracker{w: w}
 	if _, err := tracker.Write(buf.Bytes()); err != nil {
-		return err
+		return NewOutputError(err)
 	}
 	return nil
 }

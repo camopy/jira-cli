@@ -706,8 +706,11 @@ func handleResolveErr(cmd *cobra.Command, command string, err error) error {
 		}
 		// Machine mode: the candidates envelope goes to stdout, the same stream
 		// as success, so a consumer parses one stream regardless of outcome.
-		_ = cli.WriteEnvelope(cmd.OutOrStdout(), env)
-		return cmdutil.EnvelopeWritten(fmt.Errorf("validation: %w", err))
+		ambiguityErr := fmt.Errorf("validation: %w", err)
+		if writeErr := cli.WriteEnvelope(cmd.OutOrStdout(), env); writeErr != nil {
+			return errors.Join(ambiguityErr, writeErr)
+		}
+		return cmdutil.EnvelopeWritten(ambiguityErr)
 	}
 	if errors.Is(err, jira.ErrUserNotFound) {
 		// Typed not_found (exit 2): the live /user/search genuinely found

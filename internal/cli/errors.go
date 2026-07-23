@@ -26,6 +26,7 @@ const (
 	ErrorTypeValidation = errtax.TypeValidation
 	ErrorTypeRateLimit  = errtax.TypeRateLimit
 	ErrorTypeServer     = errtax.TypeServer
+	ErrorTypeIO         = errtax.TypeIO
 )
 
 // newFromCode builds the envelope Error for a code, deriving type, hint,

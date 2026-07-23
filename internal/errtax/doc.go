@@ -11,5 +11,6 @@
 // Rows are declared once in a composite literal and never mutated. The
 // taxonomy guard test enumerates [Codes] and holds the registry to the
 // frozen, human-reviewed contract table, so a new code cannot ship without
-// a reviewed row.
+// a reviewed row. Local destination failures use the non-retryable IO type
+// and exit 8 because the Jira operation may already have completed.
 package errtax

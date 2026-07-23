@@ -463,16 +463,14 @@ func Execute(ctx context.Context) error {
 	root := New(rt) //nolint:contextcheck // context flows via ExecuteContextC, not construction
 
 	if handled, err := handleCompletionPreflight(root); err != nil {
-		writeCommandError(ctx, root, err)
-		return err
+		return preserveCommandError(err, writeCommandError(ctx, root, err))
 	} else if handled {
 		return ErrCompletionHandled
 	}
 
 	args, err := alias.ExpandAliasArgs(root, os.Args[1:])
 	if err != nil {
-		writeCommandError(ctx, root, err)
-		return err
+		return preserveCommandError(err, writeCommandError(ctx, root, err))
 	}
 	if args != nil {
 		root.SetArgs(args)
@@ -487,8 +485,7 @@ func Execute(ctx context.Context) error {
 	}
 	if cmd, cargs, ferr := root.Find(effectiveArgs); ferr != nil {
 		cerr := unknownCommandError(root, firstPositional(root, effectiveArgs))
-		writeCommandError(ctx, root, cerr)
-		return cerr
+		return preserveCommandError(cerr, writeCommandError(ctx, root, cerr))
 	} else if !cmd.Runnable() && cmd.HasSubCommands() {
 		// Cobra only errors for unknown commands at the root; on a group
 		// parent it accepts stray positionals and renders help, so a typo'd
@@ -499,8 +496,7 @@ func Execute(ctx context.Context) error {
 		// suggestions.
 		if tok := firstPositional(cmd, cargs); tok != "" {
 			cerr := unknownCommandError(cmd, tok)
-			writeCommandError(ctx, root, cerr)
-			return cerr
+			return preserveCommandError(cerr, writeCommandError(ctx, root, cerr))
 		}
 	}
 	// Passive update notify wraps command dispatch: Check schedules a
@@ -526,11 +522,10 @@ func Execute(ctx context.Context) error {
 	cmd, err := root.ExecuteContextC(ctx)
 	if err != nil {
 		if cmd != nil {
-			writeCommandError(cmd.Context(), cmd, err) //nolint:contextcheck // use command context seeded by PersistentPreRunE
-			return err
+			renderErr := writeCommandError(cmd.Context(), cmd, err) //nolint:contextcheck // use command context seeded by PersistentPreRunE
+			return preserveCommandError(err, renderErr)
 		}
-		writeCommandError(ctx, root, err)
-		return err
+		return preserveCommandError(err, writeCommandError(ctx, root, err))
 	}
 	return nil
 }
@@ -607,13 +602,19 @@ func timeoutFromArgs(args []string) time.Duration {
 	return *timeout
 }
 
-func writeCommandError(ctx context.Context, cmd *cobra.Command, err error) {
+func writeCommandError(ctx context.Context, cmd *cobra.Command, err error) error {
 	if err == nil {
-		return
+		return nil
 	}
 	var reported cmdutil.DiagnosticWrittenError
 	if errors.As(err, &reported) {
-		return
+		return nil
+	}
+	var outputErr *cli.OutputError
+	if errors.As(err, &outputErr) {
+		// The command already failed while writing its result. Re-rendering
+		// that failure would write to the same failed destination again.
+		return nil
 	}
 	if jsonEnvelopeRequested(cmd) {
 		// Machine mode (json/compact): a failure is a parseable JSON envelope on
@@ -626,48 +627,73 @@ func writeCommandError(ctx context.Context, cmd *cobra.Command, err error) {
 		// EnvelopeWritten wrapper; don't write a second one over it.
 		var ew cmdutil.EnvelopeWrittenError
 		if !errors.As(err, &ew) {
-			_ = writeErrorEnvelopeToStdout(cmd, err) //nolint:contextcheck // the jq filter runs under the command context captured at resolve time
+			return writeErrorEnvelopeToStdout(cmd, err) //nolint:contextcheck // the jq filter runs under the command context captured at resolve time
 		}
-		return
+		return nil
 	}
 	// Human mode: a single clog diagnostic on stderr, no JSON. A RunE that
 	// already rendered its own failure (EnvelopeWritten) still gets this concise
 	// summary line, matching prior behavior.
 	logger := clog.Ctx(ctx)
 	if logger == clog.Default {
-		logger = clog.New(clog.NewOutput(cmd.ErrOrStderr(), clog.ColorAuto))
+		logger = clog.New(clog.NewOutput(cmd.ErrOrStderr(), cli.ResolvedColorMode()))
 	}
-	cliErr := outputErrorFor(err)
-	// Human render boundary: the message (which may embed Jira's upstream
-	// text), the hint, and the suggestions are written through the terminal
-	// sanitizer so server-controlled bytes can never smuggle ANSI/control
-	// sequences onto the user's terminal. Machine modes are protected by
-	// the JSON encoder; this is the human-mode counterpart.
-	event := logger.Error().Err(errors.New(cli.SanitizeTerminalText(err.Error())))
-	if clog.IsVerbose() {
-		// Under --debug the ERR line also carries the classification an
-		// agent would read from the envelope. OmitZero keeps the line
-		// lean: retryable renders only when true. The HTTP status is
-		// deliberately absent — the message and the --debug traffic trace
-		// both already carry it.
-		event = event.OmitZero(true).Str("code", cliErr.Code).Str("type", cliErr.Type).Bool("retryable", cliErr.Retryable)
+	return cli.TrackWrites(cmd.ErrOrStderr(), func(out io.Writer) error {
+		renderLogger := logger.With().Logger()
+		renderLogger.SetOutput(clog.NewOutput(out, cli.ResolvedColorMode()))
+		cliErr := outputErrorFor(err)
+		// Human render boundary: the message (which may embed Jira's upstream
+		// text), the hint, and the suggestions are written through the terminal
+		// sanitizer so server-controlled bytes can never smuggle ANSI/control
+		// sequences onto the user's terminal. Machine modes are protected by
+		// the JSON encoder; this is the human-mode counterpart.
+		event := renderLogger.Error().Err(errors.New(cli.SanitizeTerminalText(err.Error())))
+		if clog.IsVerbose() {
+			// Under --debug the ERR line also carries the classification an
+			// agent would read from the envelope. OmitZero keeps the line
+			// lean: retryable renders only when true. The HTTP status is
+			// deliberately absent — the message and the --debug traffic trace
+			// both already carry it.
+			event = event.OmitZero(true).Str("code", cliErr.Code).Str("type", cliErr.Type).Bool("retryable", cliErr.Retryable)
+		}
+		event.Send()
+		// Surface the taxonomy's next-action hint to humans too. In machine mode
+		// the hint rides in the JSON envelope; here it renders as clog's dedicated
+		// Hint (💡) line so a human sees the same remediation an agent gets.
+		if cliErr.Hint != "" {
+			renderLogger.Hint().Msg(cli.SanitizeTerminalText(cliErr.Hint))
+		}
+		// A rate-limited call knows exactly how long to wait: render the
+		// per-instance figure on its own line under the static hint (only a
+		// 429 carries Retry-After, so a positive value scopes the line).
+		if cliErr.RetryAfterSeconds > 0 {
+			renderLogger.Hint().Msgf("retry in %ds", cliErr.RetryAfterSeconds)
+		}
+		if len(cliErr.Suggestions) > 0 {
+			renderLogger.Hint().Msgf("Did you mean %s?", cli.SanitizeTerminalText(strings.Join(cliErr.Suggestions, " or ")))
+		}
+		return nil
+	})
+}
+
+type commandOutputError struct {
+	command error
+	output  error
+}
+
+func (e *commandOutputError) Error() string {
+	return fmt.Sprintf("%v; reporting the error also failed: %v", e.command, e.output)
+}
+
+func (e *commandOutputError) Unwrap() []error {
+	return []error{e.command, e.output}
+}
+
+func preserveCommandError(commandErr, outputErr error) error {
+	if outputErr == nil {
+		return commandErr
 	}
-	event.Send()
-	// Surface the taxonomy's next-action hint to humans too. In machine mode
-	// the hint rides in the JSON envelope; here it renders as clog's dedicated
-	// Hint (💡) line so a human sees the same remediation an agent gets.
-	if cliErr.Hint != "" {
-		logger.Hint().Msg(cli.SanitizeTerminalText(cliErr.Hint))
-	}
-	// A rate-limited call knows exactly how long to wait: render the
-	// per-instance figure on its own line under the static hint (only a
-	// 429 carries Retry-After, so a positive value scopes the line).
-	if cliErr.RetryAfterSeconds > 0 {
-		logger.Hint().Msgf("retry in %ds", cliErr.RetryAfterSeconds)
-	}
-	if len(cliErr.Suggestions) > 0 {
-		logger.Hint().Msgf("Did you mean %s?", cli.SanitizeTerminalText(strings.Join(cliErr.Suggestions, " or ")))
-	}
+	return &commandOutputError{command: commandErr, output: outputErr}
 }
 
 // jsonEnvelopeRequested returns true when the resolved output mode is a
@@ -727,5 +753,9 @@ func ExitCode(err error) int {
 // errtax.Coded interface). There is no command-local
 // special case: every error envelope is built one way.
 func outputErrorFor(err error) cli.Error {
+	var combined *commandOutputError
+	if errors.As(err, &combined) {
+		return cli.MapError(combined.command)
+	}
 	return cli.MapError(err)
 }

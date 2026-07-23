@@ -45,6 +45,16 @@ func TestLookup(t *testing.T) {
 			t.Errorf("timeout spec = %+v, want exit 7 retryable", spec)
 		}
 	})
+	t.Run("output failure is local io", func(t *testing.T) {
+		t.Parallel()
+		spec, ok := errtax.Lookup(errtax.CodeOutputWriteFailed)
+		if !ok {
+			t.Fatal("output_write_failed is not registered")
+		}
+		if spec.Type != errtax.TypeIO || spec.Exit != 8 || spec.Retryable {
+			t.Errorf("output_write_failed spec = %+v, want io/8/non-retryable", spec)
+		}
+	})
 }
 
 // TestHintTotality is red-line #2 as a registry property: every registered
@@ -130,6 +140,7 @@ func TestExitFor(t *testing.T) {
 		errtax.TypeValidation: 3,
 		errtax.TypeRateLimit:  4,
 		errtax.TypeServer:     5,
+		errtax.TypeIO:         8,
 		errtax.TypeUnknown:    5,
 	}
 	for typ, want := range cases {
@@ -147,6 +158,7 @@ func TestDefaultCode(t *testing.T) {
 		errtax.TypeValidation: errtax.CodeValidationFailed,
 		errtax.TypeRateLimit:  errtax.CodeRateLimited,
 		errtax.TypeServer:     errtax.CodeServerError,
+		errtax.TypeIO:         errtax.CodeOutputWriteFailed,
 		errtax.TypeUnknown:    errtax.CodeServerError,
 	}
 	for typ, want := range cases {
@@ -177,8 +189,8 @@ func TestCodes(t *testing.T) {
 		t.Error("Codes() contains duplicates")
 	}
 	// The registered code count moves only when the taxonomy contract does.
-	if len(codes) != 60 {
-		t.Errorf("registry has %d codes, want 60 — update the contract and this count together", len(codes))
+	if len(codes) != 61 {
+		t.Errorf("registry has %d codes, want 61 — update the contract and this count together", len(codes))
 	}
 	// Codes() must be a fresh allocation each call: sorting or mutating one
 	// return value must not affect the next.

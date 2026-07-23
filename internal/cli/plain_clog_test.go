@@ -67,6 +67,10 @@ func TestWriteCommandPlainReturnsWriterFailure(t *testing.T) {
 			if !errors.Is(err, errWriteSentinel) {
 				t.Fatalf("WriteCommandPlain() error = %v, want sentinel", err)
 			}
+			var outputErr *OutputError
+			if !errors.As(err, &outputErr) {
+				t.Fatalf("WriteCommandPlain() error type = %T, want *OutputError", err)
+			}
 		})
 	}
 }
@@ -77,5 +81,9 @@ func TestWriteCommandPlainReturnsShortWrite(t *testing.T) {
 	})
 	if !errors.Is(err, io.ErrShortWrite) {
 		t.Fatalf("WriteCommandPlain() error = %v, want io.ErrShortWrite", err)
+	}
+	var outputErr *OutputError
+	if !errors.As(err, &outputErr) {
+		t.Fatalf("WriteCommandPlain() error type = %T, want *OutputError", err)
 	}
 }

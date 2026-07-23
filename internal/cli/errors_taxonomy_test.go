@@ -109,6 +109,8 @@ var taxonomyRegistry = map[string]struct {
 	"server_error":      {"server", 5},
 	"canceled":          {"server", 6},
 	"timeout":           {"server", 7},
+	// io (exit 8)
+	"output_write_failed": {"io", 8},
 }
 
 // boardAmbiguousStub mirrors boardscope.ValidationError: a Coded
@@ -205,6 +207,7 @@ func taxonomyCases() []struct {
 		{"profile incomplete", config.ProfileIncompleteError{Name: "half"}, "profile_incomplete", "Finish setting up the profile — run `jira auth login --profile <name>` to give it a base URL.", false},
 		{"context deadline", context.DeadlineExceeded, "timeout", "", false},
 		{"context canceled", context.Canceled, "canceled", "", false},
+		{"output write failed", NewOutputError(errors.New("write sentinel")), "output_write_failed", "", false},
 		{"jira 400", jiraStatusError(400), "jira_bad_request", "", true},
 		{"jira 401", jiraStatusError(401), "jira_unauthorized", "", true},
 		{"jira 403", jiraStatusError(403), "jira_forbidden", "", true},

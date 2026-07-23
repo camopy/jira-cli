@@ -10,7 +10,7 @@ import (
 // individual codes may pin their own exit in the registry.
 type Type string
 
-// The five envelope error types, plus the named zero value.
+// The six envelope error types, plus the named zero value.
 const (
 	// TypeUnknown is the zero value — never emitted; it marks an
 	// unclassified error before the registry resolves it.
@@ -20,6 +20,7 @@ const (
 	TypeValidation Type = "validation"
 	TypeRateLimit  Type = "rate_limit"
 	TypeServer     Type = "server"
+	TypeIO         Type = "io"
 )
 
 // Code is the stable snake_case error code the envelope's `code` field
@@ -183,6 +184,11 @@ const (
 	CodeTimeout     Code = "timeout"
 )
 
+// Local IO codes (exit 8).
+const (
+	CodeOutputWriteFailed Code = "output_write_failed"
+)
+
 // Spec is one registry row: everything the envelope derives from a code.
 type Spec struct {
 	// Type is the coarse classification the envelope's `type` field carries.
@@ -279,6 +285,8 @@ var registry = map[Code]Spec{
 	CodeServerError: {Type: TypeServer, Exit: 5, Hint: "Jira hit an unexpected error — wait a moment and try again.", Retryable: false},
 	CodeCanceled:    {Type: TypeServer, Exit: 6, Hint: "Run it again when you're ready.", Retryable: true},
 	CodeTimeout:     {Type: TypeServer, Exit: 7, Hint: "It ran past the `--timeout` deadline — raise `--timeout` or try again.", Retryable: true},
+	// io (exit 8)
+	CodeOutputWriteFailed: {Type: TypeIO, Exit: 8, Hint: "Check that the output destination is open and writable; the Jira operation may already have completed.", Retryable: false},
 }
 
 // Lookup returns the registry row for a code. ok is false for an
@@ -311,6 +319,8 @@ func ExitFor(t Type) int {
 		return 3
 	case TypeRateLimit:
 		return 4
+	case TypeIO:
+		return 8
 	default:
 		return 5
 	}
@@ -329,6 +339,8 @@ func DefaultCode(t Type) Code {
 		return CodeValidationFailed
 	case TypeRateLimit:
 		return CodeRateLimited
+	case TypeIO:
+		return CodeOutputWriteFailed
 	default:
 		return CodeServerError
 	}

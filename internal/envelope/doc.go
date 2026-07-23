@@ -4,5 +4,7 @@
 // cannot diverge. It sits below internal/cli in the import graph: wire-type
 // imports (internal/jira, internal/adf) are allowed, internal/cli is NOT —
 // cli imports this package (Pagination's canonical home is here, aliased
-// there), so an envelope→cli import closes a cycle.
+// there), so an envelope→cli import closes a cycle. The top-level failure
+// envelope and its local-output taxonomy remain owned by internal/cli and
+// internal/errtax rather than operation data structs.
 package envelope

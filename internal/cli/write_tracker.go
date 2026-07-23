@@ -39,9 +39,20 @@ func newTrackedWriter(w io.Writer) (*writeTracker, io.Writer) {
 }
 
 func withTrackedWriter(w io.Writer, render func(io.Writer) error) error {
+	return TrackWrites(w, render)
+}
+
+// TrackWrites runs render with a writer that records the first destination
+// failure. A destination failure is returned as an OutputError while any
+// renderer error remains separately discoverable.
+func TrackWrites(w io.Writer, render func(io.Writer) error) error {
 	tracker, out := newTrackedWriter(w)
 	renderErr := render(out)
-	return errors.Join(renderErr, tracker.err)
+	var outputErr error
+	if tracker.err != nil {
+		outputErr = NewOutputError(tracker.err)
+	}
+	return errors.Join(renderErr, outputErr)
 }
 
 type fdTrackedWriter struct {

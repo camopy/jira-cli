@@ -3,12 +3,24 @@ package root
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/gechr/clog"
+	"github.com/matcra587/jira-cli/internal/cli"
 	"github.com/matcra587/jira-cli/internal/cli/runtime"
 )
+
+type countingErrorWriter struct {
+	err    error
+	writes int
+}
+
+func (w *countingErrorWriter) Write([]byte) (int, error) {
+	w.writes++
+	return 0, w.err
+}
 
 // TestCommandOutputCaptureUsesInjectedStreams asserts a root command
 // built from a runtime with caller-supplied stdout/stderr buffers writes
@@ -36,6 +48,42 @@ func TestCommandOutputCaptureUsesInjectedStreams(t *testing.T) {
 	}
 	if !strings.Contains(got, "\"version\"") {
 		t.Fatalf("version output missing version payload on injected stream:\n%s", got)
+	}
+}
+
+func TestSuccessfulCommandOutputFailureUsesLocalIOTaxonomy(t *testing.T) {
+	writeErr := errors.New("stdout closed")
+	stdout := &countingErrorWriter{err: writeErr}
+	var stderr bytes.Buffer
+	root, _, err := NewRootCommandForTest(
+		runtime.WithStdout(stdout),
+		runtime.WithStderr(&stderr),
+	)
+	if err != nil {
+		t.Fatalf("NewRootCommandForTest: %v", err)
+	}
+
+	root.SetArgs([]string{"version", "--output=json"})
+	_, execErr := root.ExecuteContextC(context.Background())
+	if !errors.Is(execErr, writeErr) {
+		t.Fatalf("execute version error = %v, want writer failure", execErr)
+	}
+	var outputErr *cli.OutputError
+	if !errors.As(execErr, &outputErr) {
+		t.Fatalf("execute version error type = %T, want *cli.OutputError", execErr)
+	}
+	mapped := cli.MapError(execErr)
+	if mapped.Code != "output_write_failed" || mapped.Type != "io" || mapped.Retryable {
+		t.Fatalf("mapped output failure = %#v", mapped)
+	}
+	if got := cli.ExitCode(mapped); got != 8 {
+		t.Fatalf("output failure exit = %d, want 8", got)
+	}
+	if stdout.writes != 1 {
+		t.Fatalf("stdout writes = %d, want 1", stdout.writes)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("output failure wrote an unexpected diagnostic to stderr: %q", stderr.String())
 	}
 }
 

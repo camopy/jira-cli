@@ -49,6 +49,10 @@ func TestMachineRenderersReturnWriterFailure(t *testing.T) {
 				if !errors.Is(err, errWriteSentinel) {
 					t.Fatalf("render error = %v, want sentinel", err)
 				}
+				var outputErr *OutputError
+				if !errors.As(err, &outputErr) {
+					t.Fatalf("render error type = %T, want *OutputError", err)
+				}
 			})
 		}
 	}
@@ -58,5 +62,9 @@ func TestWriteEnvelopeReturnsShortWrite(t *testing.T) {
 	err := WriteEnvelope(shortWriter{}, outputEnvelopeFixture())
 	if !errors.Is(err, io.ErrShortWrite) {
 		t.Fatalf("WriteEnvelope() error = %v, want io.ErrShortWrite", err)
+	}
+	var outputErr *OutputError
+	if !errors.As(err, &outputErr) {
+		t.Fatalf("WriteEnvelope() error type = %T, want *OutputError", err)
 	}
 }

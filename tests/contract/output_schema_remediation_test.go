@@ -38,6 +38,12 @@ func TestOutputSchemasDescribeNestedEnvelopeAndIssueShapes(t *testing.T) {
 			t.Fatalf("error schema missing required %q: %+v", required, errSchema)
 		}
 	}
+	if !containsString(errSchema.Properties["type"].Enum, "io") {
+		t.Fatalf("error type schema missing io: %+v", errSchema.Properties["type"])
+	}
+	if !containsString(errSchema.Properties["code"].Enum, "output_write_failed") {
+		t.Fatalf("error code schema missing output_write_failed: %+v", errSchema.Properties["code"])
+	}
 
 	issueList := decodeSchemaObject(t, findSchemaCommand(root, "jira issue list").OutputSchema)
 	issues := issueList.Properties["issues"]
@@ -72,6 +78,7 @@ type schemaObject struct {
 	Required   []string                `json:"required"`
 	Properties map[string]schemaObject `json:"properties"`
 	Items      *schemaObject           `json:"items"`
+	Enum       []string                `json:"enum"`
 }
 
 // decodeSchemaObject round-trips a decoded map[string]any schema value
