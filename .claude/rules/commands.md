@@ -44,6 +44,13 @@ func NewCommand() *cobra.Command {
     issues"). A new command registers its verb and (if it has rich human output)
     its renderer. Always return or explicitly handle the helper's error; never
     discard it.
+*   Define and register the command's exported Output struct in
+    `internal/envelope` before wiring the writer. Fixed nested objects use
+    named structs. Keep maps only for tenant-defined Jira fields, recursive
+    ADF, or a documented polymorphic boundary; a genuinely shapeless
+    top-level output registers `envelope.Dynamic` with a specific reason.
+    Single-key and keyed builders emit the same operation object, placed at
+    `data` or `data.results[].data` respectively.
 *   Every authored handler uses `RunE`, including a handler that is infallible
     today. Output, cleanup and later command failures then retain a propagation
     path to root. The AST guardrail rejects `Run`.
@@ -190,7 +197,8 @@ and fails on any authored command missing one. House style, by field:
 ## Review points
 
 *   Verb registered in `verbs.go`; renderer in `registry.go` for rich output.
-*   Guide section + schema updated in the same PR as any behavior change.
+*   Output struct registration, guide section and schema description updated
+    in the same PR as any behavior change.
 *   Contract test covers the envelope; guardrail test for any new invariant.
 *   Dry-run checked before expensive work and before early returns.
 *   New flag group added to `flagGroupRank`.

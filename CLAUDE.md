@@ -23,7 +23,11 @@ alpha full-screen dashboard.
     `auto` resolves agent env → compact, non-TTY → json. Envelopes on stdout
     via `cli.WriteEnvelope` only; human status on stderr through clog. The
     ownership chain is command → cmdutil → cli → Cobra's `io.Writer`; every
-    layer returns destination failures.
+    layer returns destination failures. Each subcommand registers its own
+    concrete `data` shape in `internal/envelope`; fixed nested objects stay
+    typed, stable request context survives dry-run and live paths, and
+    server-only outcomes remain conditional. Multi-key output moves that same
+    object to `data.results[].data`.
 *   **`internal/jira/`** — REST client + typed services; read-only mode blocks
     writes at the transport. **`internal/adf/`** — registry-driven ADF
     parse/validate/render.

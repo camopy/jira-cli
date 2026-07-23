@@ -61,7 +61,7 @@ solely because its result could not be written. If a command error and its
 error renderer both fail, root keeps the command error primary and joins the
 write failure as secondary context; it does not try the failed stream again.
 
-## Envelope data conventions (contract v2)
+## Envelope data conventions (contract v3.2)
 
 *   **Issue identity is always an object.** Any issue-scoped `data.issue`
     (and link create's `inward_issue`/`outward_issue`) is a
@@ -69,13 +69,22 @@ write failure as secondary context; it does not try the failed stream again.
     never an ad-hoc `data.key`. `IssueRef.String()` renders the key for
     human/plain output; richer objects (`issue view`, create's POST echo)
     satisfy the same minimum by carrying `key` at the same place.
+*   **Each subcommand owns an extensible data object.** A new resource or
+    subcommand gets its own registered Output struct; adding its fields must
+    not widen a sibling operation. Fixed members and nested identities are
+    concrete structs. Tenant-defined Jira field/update maps and recursive or
+    genuinely polymorphic ADF values are the reviewed dynamic boundary.
 *   **Every mutation carries `dry_run` on both paths** — `true` on preview,
     `false` on the live write — including no-profile and `--no-readback`
-    variants. A live path never drops fields its dry-run counterpart
-    carries (identity included).
-*   **A new or changed `data` field must land in `outputSchemas()`
-    (`internal/cli/schema/schema.go`) in the same change** — conditional
-    fields too, with a description saying when they appear. The
+    variants. Validated request context and validation-status facts survive
+    the live write; server-created objects, readbacks, verification results
+    and file-write outcomes remain conditional.
+*   **Keyed output changes placement, not operation shape.** The object a
+    single-key command emits at `data` appears unchanged at
+    `data.results[].data` for each successful key.
+*   **A new or changed `data` field must land in the registered Output struct
+    in the same change.** Add a registration doc override when its conditional
+    meaning or outer schema cannot be expressed by Go tags alone. The
     conformance guardrail
     (`tests/contract/schema_conformance_test.go`) validates emitted
     envelopes against the published schemas and fails on an emitted
@@ -94,9 +103,8 @@ write failure as secondary context; it does not try the failed stream again.
     source scan finds at a `cmdutil.Write*Envelope` call; the conformance
     contract test validates emitted envelopes against the published
     schemas. Genuinely shapeless payloads register `envelope.Dynamic` with
-    a reason; a builder that must keep map emission (issue.list's
-    `--detail` polymorphism) keeps its registered struct as the schema
-    template and is a reviewed, commented exception.
+    a reason. The guardrail keeps the reviewed Dynamic inventory explicit and
+    rejects fixed members that regress to maps or `any`.
 
 *   Envelopes render through the clog printer path (`internal/cli/json.go`):
     `JSONFlat` for machine modes, `JSONPretty` retinted to the active theme

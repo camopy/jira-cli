@@ -75,12 +75,24 @@ The envelope, on stdout for success and failure alike:
     `upstream_request_id`, `upstream_messages`, `upstream_field_errors`.
 *   Issue identity is always an object — `{"key": …, "id": …, "self": …}` —
     never a bare string.
+*   Each subcommand owns its `data` object. Discover its fields and selectors
+    from `jira agent schema --path "issue create"` (replace the path with the
+    command you will run); the focused schema embeds that command's input and
+    output shapes. Do not infer fields from a sibling command.
+*   Mutation output separates stable request context from conditional server
+    outcomes. Validated fields, targets, files, users, and local/remote
+    validation facts stay present after a successful live write when the
+    dry-run carried them. Created or updated Jira objects, readbacks,
+    verification results, written paths, and byte counts appear only on the
+    paths that produce them.
 *   Every mutation carries `data.dry_run`: `true` on preview, `false` on the
     live write.
 *   Multi-key commands take key lists and ranges as positional arguments
     (`PROJ-1 PROJ-3`, `PROJ-1..PROJ-10`), expand them transparently, and
     return ordered `data.results[]` with per-key errors; successful keys
-    are never discarded by one failure.
+    are never discarded by one failure. The operation-specific object that a
+    single-key command places at `data` moves unchanged to
+    `data.results[].data`; selectors therefore gain only the keyed prefix.
 *   `warnings[]` carries coded, non-fatal signals — act on the code, not
     the text: `rate_limit_near` means throttle before the 429,
     `lossy_adf_conversion` means content was flattened.

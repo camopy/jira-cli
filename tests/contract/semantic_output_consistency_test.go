@@ -13,6 +13,167 @@ import (
 	"testing"
 )
 
+var semanticIdentityMatrix = []struct {
+	Operation  string
+	Collection string
+}{
+	{"issue.comment.list", "comments"},
+	{"issue.attachment.list", "attachments"},
+	{"issue.watchers.list", "watchers"},
+}
+
+var semanticParityMatrix = []struct {
+	Operation    string
+	StableFields []string
+}{
+	{"issue.create", []string{"preview", "validated_remotely"}},
+	{"issue.comment.edit", []string{"issue", "comment_id", "body_adf_summary", "visibility_change"}},
+	{"issue.transition", []string{"issue", "fields", "comment", "update", "transition_validated"}},
+	{"issue.clone", []string{"issue", "payload"}},
+	{"issue.move", []string{"issue", "payload"}},
+	{"issue.delete", []string{"issue", "payload"}},
+	{"issue.attachment.add", []string{"issue", "files"}},
+	{"issue.attachment.download", []string{"issue", "attachment_id", "mode", "target"}},
+	{"issue.watchers.add", []string{"issue", "user", "user_resolved", "account_id_resolved"}},
+	{"issue.watchers.remove", []string{"issue", "user", "user_resolved", "account_id_resolved"}},
+	{"issue.weblink", []string{"issue", "url", "title", "url_remote_checked"}},
+}
+
+var semanticExtensionMatrix = []struct {
+	Operation string
+	Field     string
+	Required  bool
+}{
+	{"issue.comment.list", "issue", true},
+	{"issue.attachment.list", "issue", true},
+	{"issue.watchers.list", "issue", true},
+	{"issue.create", "preview", true},
+	{"issue.create", "validated_remotely", true},
+	{"issue.comment.edit", "comment_id", true},
+	{"issue.comment.edit", "body_adf_summary", true},
+	{"issue.comment.edit", "visibility_change", true},
+	{"issue.transition", "transition_validated", true},
+	{"issue.clone", "payload", true},
+	{"issue.move", "payload", true},
+	{"issue.delete", "payload", true},
+	{"issue.attachment.add", "files", true},
+	{"issue.attachment.download", "target", true},
+	{"issue.watchers.add", "user", true},
+	{"issue.watchers.add", "user_resolved", true},
+	{"issue.watchers.add", "account_id_resolved", false},
+	{"issue.watchers.remove", "user", true},
+	{"issue.watchers.remove", "user_resolved", true},
+	{"issue.watchers.remove", "account_id_resolved", false},
+	{"issue.weblink", "url_remote_checked", true},
+}
+
+var semanticConditionalOutcomeMatrix = []struct {
+	Operation string
+	Fields    []string
+}{
+	{"issue.create", []string{"issue", "verification"}},
+	{"issue.comment.edit", []string{"comment"}},
+	{"issue.clone", []string{"result"}},
+	{"issue.move", []string{"result"}},
+	{"issue.delete", nil},
+	{"issue.attachment.add", []string{"attachments"}},
+	{"issue.attachment.download", []string{"written_to", "bytes"}},
+	{"issue.watchers.add", []string{"account_id", "attempted", "watchers", "is_watching", "watch_count", "was_already_watching"}},
+	{"issue.watchers.remove", []string{"account_id", "attempted", "watchers", "is_watching", "watch_count", "was_already_watching"}},
+}
+
+func TestSemanticContractTablesStayExplicit(t *testing.T) {
+	schemas := declaredOutputSchemas(t)
+	if got := identityOperations(); !reflect.DeepEqual(got, []string{
+		"issue.comment.list",
+		"issue.attachment.list",
+		"issue.watchers.list",
+	}) {
+		t.Fatalf("identity matrix operations = %v", got)
+	}
+	if got := parityOperations(); !reflect.DeepEqual(got, []string{
+		"issue.create",
+		"issue.comment.edit",
+		"issue.transition",
+		"issue.clone",
+		"issue.move",
+		"issue.delete",
+		"issue.attachment.add",
+		"issue.attachment.download",
+		"issue.watchers.add",
+		"issue.watchers.remove",
+		"issue.weblink",
+	}) {
+		t.Fatalf("parity matrix operations = %v", got)
+	}
+	for _, identity := range semanticIdentityMatrix {
+		schema, _ := schemas[identity.Operation].(map[string]any)
+		properties, _ := schema["properties"].(map[string]any)
+		if _, ok := properties["issue"]; !ok || !schemaRequires(schema, "issue") {
+			t.Fatalf("%s must declare required issue identity: %#v", identity.Operation, schema)
+		}
+		if _, ok := properties[identity.Collection]; !ok {
+			t.Fatalf("%s omits identity collection %q: %#v", identity.Operation, identity.Collection, schema)
+		}
+	}
+	for _, parity := range semanticParityMatrix {
+		schema, _ := schemas[parity.Operation].(map[string]any)
+		properties, _ := schema["properties"].(map[string]any)
+		for _, field := range parity.StableFields {
+			if _, ok := properties[field]; !ok {
+				t.Fatalf("%s omits stable field %q: %#v", parity.Operation, field, schema)
+			}
+		}
+	}
+	seen := map[string]bool{}
+	for _, extension := range semanticExtensionMatrix {
+		key := extension.Operation + "." + extension.Field
+		if extension.Operation == "" || extension.Field == "" || seen[key] {
+			t.Fatalf("invalid or duplicate extension row %q", key)
+		}
+		seen[key] = true
+		schema, _ := schemas[extension.Operation].(map[string]any)
+		properties, _ := schema["properties"].(map[string]any)
+		if _, ok := properties[extension.Field]; !ok {
+			t.Fatalf("%s is absent from the published schema", key)
+		}
+		if extension.Required != schemaRequires(schema, extension.Field) {
+			t.Fatalf("%s required = %v, want %v", key, schemaRequires(schema, extension.Field), extension.Required)
+		}
+	}
+	for _, outcome := range semanticConditionalOutcomeMatrix {
+		if outcome.Operation == "" {
+			t.Fatal("conditional-outcome matrix has a blank operation")
+		}
+		schema, _ := schemas[outcome.Operation].(map[string]any)
+		properties, _ := schema["properties"].(map[string]any)
+		for _, field := range outcome.Fields {
+			if _, ok := properties[field]; !ok {
+				t.Fatalf("%s omits conditional outcome %q: %#v", outcome.Operation, field, schema)
+			}
+			if schemaRequires(schema, field) {
+				t.Fatalf("%s outcome %q must stay conditional: %#v", outcome.Operation, field, schema)
+			}
+		}
+	}
+}
+
+func identityOperations() []string {
+	out := make([]string, 0, len(semanticIdentityMatrix))
+	for _, row := range semanticIdentityMatrix {
+		out = append(out, row.Operation)
+	}
+	return out
+}
+
+func parityOperations() []string {
+	out := make([]string, 0, len(semanticParityMatrix))
+	for _, row := range semanticParityMatrix {
+		out = append(out, row.Operation)
+	}
+	return out
+}
+
 func TestCommentListCarriesCanonicalIssueAndPreservesProjectedBytes(t *testing.T) {
 	page := `{
 		"comments": [{
@@ -481,11 +642,15 @@ func successfulData(t *testing.T, args ...string) map[string]any {
 		t.Fatalf("jira %v exit = %d\nstdout=%s\nstderr=%s", args, code, stdout, stderr)
 	}
 	var env struct {
+		Meta struct {
+			Command string `json:"command"`
+		} `json:"meta"`
 		Data map[string]any `json:"data"`
 	}
 	if err := json.Unmarshal(stdout, &env); err != nil {
 		t.Fatalf("decode envelope: %v\n%s", err, stdout)
 	}
+	requireSemanticDataConforms(t, env.Meta.Command, env.Data)
 	return env.Data
 }
 
@@ -501,12 +666,37 @@ func successfulDataInDir(t *testing.T, dir string, args ...string) map[string]an
 		t.Fatalf("jira %v error = %v\nstdout=%s\nstderr=%s", args, err, stdout.Bytes(), stderr.Bytes())
 	}
 	var env struct {
+		Meta struct {
+			Command string `json:"command"`
+		} `json:"meta"`
 		Data map[string]any `json:"data"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &env); err != nil {
 		t.Fatalf("decode envelope: %v\n%s", err, stdout.Bytes())
 	}
+	requireSemanticDataConforms(t, env.Meta.Command, env.Data)
 	return env.Data
+}
+
+func requireSemanticDataConforms(t *testing.T, operation string, data map[string]any) {
+	t.Helper()
+	schema, ok := declaredOutputSchemas(t)[operation].(map[string]any)
+	if !ok {
+		t.Fatalf("no declared output schema for %q", operation)
+	}
+	if results, keyed := data["results"].([]any); keyed {
+		for _, raw := range results {
+			result, _ := raw.(map[string]any)
+			value, _ := result["data"].(map[string]any)
+			if errs := conformanceErrors("data.results[].data", value, schema); len(errs) > 0 {
+				t.Fatalf("%s keyed envelope does not conform to its declared schema:\n%s", operation, errs)
+			}
+		}
+		return
+	}
+	if errs := conformanceErrors("data", data, schema); len(errs) > 0 {
+		t.Fatalf("%s envelope does not conform to its declared schema:\n%s", operation, errs)
+	}
 }
 
 func successfulKeyedData(t *testing.T, args ...string) map[string]map[string]any {

@@ -26,6 +26,7 @@ cmd/gen-docs         docs generation (reuses root.New — reference site
 internal/cli/*       cobra commands by domain (issue, epic, auth, config, …)
 internal/cli/cmdutil shared command helpers: flags, gates, envelope, fanout
 internal/cli/root    root wiring: PersistentPreRunE, help, completion
+internal/envelope    operation-owned Output structs and derived schema registry
    ↓
 internal/jira        REST client + typed services (+ customfield registry)
 internal/adf         ADF parse/validate/render/markdown (+ node registry)
@@ -46,6 +47,7 @@ Every package lives under `internal/` — this module exports no public API.
 | `internal/agentguides/` | the `//go:embed` docent guide set (`jira agent guide` / `jira guide`); contract-tested via `docenttest.Validate` |
 | `internal/cli/agent/` | the `agent adf-matrix` / `agent fieldtypes` registry commands, mounted under docent's agent group |
 | `internal/cli/cmdutil/` | flags+metadata helpers, gates, envelope, fanout, keyed results, help sections |
+| `internal/envelope/` | one registered data shape per operation; concrete fixed members, reviewed Dynamic exceptions, derived JSON Schemas |
 | `internal/cli/registry.go`, `verbs.go`, `plain_*.go` | human-mode renderer registry and verb phrases |
 | `internal/cli/errors.go`, `json.go`, `detector.go` | error mapping, envelope machinery, output-mode detection |
 | `internal/jira/customfield/` | field-type registry (encoders/validators) — never branch on field-type strings |
@@ -66,8 +68,9 @@ Every package lives under `internal/` — this module exports no public API.
     (detector), and seeds the context logger.
 4.  The command's `RunE` acquires services via `cmdutil`
     (`JiraClientForCommand`), gates dry-run/read-only/ADF-mode, does the
-    work behind a spinner, and returns through
-    `cmdutil.WriteEnvelope`.
+    work behind a spinner, builds its registered `internal/envelope` Output,
+    and returns through `cmdutil.WriteEnvelope`. Stable context is shared by
+    dry/live and single/keyed paths; only server outcomes are conditional.
 5.  Errors map through `internal/cli/errors.go` to stable codes and exit
     codes 0–8 (see [output.md](output.md)).
 
@@ -75,8 +78,9 @@ Bare `jira` is contract-aware: TTY → help, non-TTY/agent → JSON schema.
 
 ## Cross-cutting concerns (where each lives)
 
-*   **Output contract** — [output.md](output.md); user-facing spec in the
-    embedded guide.
+*   **Output contract** — operation shapes and schemas in `internal/envelope`;
+    rendering rules in [output.md](output.md); user-facing spec in the embedded
+    guide.
 *   **Mutations** — the validate-and-encode pipeline (`internal/pipeline`);
     `--dry-run` is local-only and never contacts Jira.
 *   **Errors** — typed errors + adapters in `internal/cli/errors.go` only.

@@ -13,6 +13,7 @@ package guardrails
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -106,5 +107,117 @@ func TestEveryEnvelopeCommandStringIsRegistered(t *testing.T) {
 		slices.Sort(missing)
 		t.Fatalf("%d envelope operations lack a typed-output registration:\n  %s",
 			len(missing), strings.Join(missing, "\n  "))
+	}
+}
+
+func TestRegisteredOutputsAreConcreteOrDocumentedDynamic(t *testing.T) {
+	outputs := envelope.Outputs()
+	registered := envelope.Registered()
+	if len(outputs) != len(registered) {
+		t.Fatalf("registration inventory differs: Outputs=%d Registered=%d", len(outputs), len(registered))
+	}
+
+	var dynamic []string
+	for _, op := range registered {
+		value, ok := outputs[op]
+		if !ok {
+			t.Fatalf("registered operation %q has no output value", op)
+		}
+		if exception, ok := value.(envelope.Dynamic); ok {
+			if strings.TrimSpace(exception.Reason) == "" {
+				t.Fatalf("dynamic output %q has no reason", op)
+			}
+			dynamic = append(dynamic, op)
+			continue
+		}
+		kind := reflect.TypeOf(value).Kind()
+		if kind == reflect.Map || kind == reflect.Interface {
+			t.Fatalf("fixed output %q uses top-level %s; use a concrete type or documented Dynamic", op, kind)
+		}
+	}
+
+	wantDynamic := []string{
+		"auth.status",
+		"cache.epics",
+		"cache.fields",
+		"cache.issuetypes",
+		"cache.labels",
+		"cache.linktypes",
+		"cache.priorities",
+		"cache.projects",
+		"cache.refresh",
+		"cache.resolutions",
+		"cache.statuses",
+		"release.notes",
+		"schema",
+	}
+	if !slices.Equal(dynamic, wantDynamic) {
+		t.Fatalf("dynamic exceptions changed without updating the reviewed inventory:\n got: %v\nwant: %v", dynamic, wantDynamic)
+	}
+}
+
+func TestSemanticOutputMembersStayConcrete(t *testing.T) {
+	checks := []struct {
+		operation string
+		path      []string
+	}{
+		{"issue.comment.list", []string{"Comments", "[]"}},
+		{"issue.comment.edit", []string{"Comment", "*"}},
+		{"issue.attachment.list", []string{"Attachments", "[]"}},
+		{"issue.attachment.add", []string{"Files", "[]"}},
+		{"issue.attachment.add", []string{"Attachments", "[]"}},
+		{"issue.watchers.list", []string{"Watchers", "[]"}},
+		{"issue.watchers.add", []string{"Watchers", "*", "[]"}},
+		{"issue.watchers.remove", []string{"Watchers", "*", "[]"}},
+		{"issue.clone", []string{"Payload"}},
+		{"issue.move", []string{"Payload"}},
+		{"issue.delete", []string{"Payload"}},
+	}
+	outputs := envelope.Outputs()
+	for _, check := range checks {
+		t.Run(check.operation+"."+strings.Join(check.path, "."), func(t *testing.T) {
+			typ := reflect.TypeOf(outputs[check.operation])
+			for _, step := range check.path {
+				switch step {
+				case "*":
+					if typ.Kind() != reflect.Pointer {
+						t.Fatalf("%s: got %s, want pointer", strings.Join(check.path, "."), typ)
+					}
+					typ = typ.Elem()
+				case "[]":
+					if typ.Kind() != reflect.Slice {
+						t.Fatalf("%s: got %s, want slice", strings.Join(check.path, "."), typ)
+					}
+					typ = typ.Elem()
+				default:
+					field, ok := typ.FieldByName(step)
+					if !ok {
+						t.Fatalf("%s has no field %s", typ, step)
+					}
+					typ = field.Type
+				}
+			}
+			if typ.Kind() == reflect.Map || typ.Kind() == reflect.Interface {
+				t.Fatalf("%s member regressed to %s", strings.Join(check.path, "."), typ)
+			}
+			if typ.Kind() != reflect.Struct {
+				t.Fatalf("%s member = %s, want a concrete struct", strings.Join(check.path, "."), typ)
+			}
+		})
+	}
+}
+
+func TestIssueIdentityDoesNotLeakIntoUnrelatedOutputs(t *testing.T) {
+	outputs := envelope.Outputs()
+	for _, operation := range []string{"boards.list", "cache.boards", "config.get", "user.search"} {
+		t.Run(operation, func(t *testing.T) {
+			typ := reflect.TypeOf(outputs[operation])
+			if typ.Kind() != reflect.Struct {
+				t.Fatalf("negative control %s is not a concrete struct: %s", operation, typ)
+			}
+			if _, exists := typ.FieldByName("Issue"); exists {
+				t.Fatalf("unrelated operation %s unexpectedly acquired issue identity", operation)
+			}
+		})
 	}
 }
