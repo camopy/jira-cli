@@ -111,6 +111,9 @@ func FromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
 	// error if the user explicitly asked for a board.
 	cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
 	if err != nil {
+		if boardIDSet || (boardNameSet && !xstrings.IsBlank(boardName)) {
+			return jira.BoardScope{}, precedenceFlag, err
+		}
 		cfg = nil
 	}
 	profile := config.Profile{}
