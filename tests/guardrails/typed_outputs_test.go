@@ -130,13 +130,15 @@ func TestRegisteredOutputsAreConcreteOrDocumentedDynamic(t *testing.T) {
 			dynamic = append(dynamic, op)
 			continue
 		}
-		kind := reflect.TypeOf(value).Kind()
-		if kind == reflect.Map || kind == reflect.Interface {
-			t.Fatalf("fixed output %q uses top-level %s; use a concrete type or documented Dynamic", op, kind)
+		typ := reflect.TypeOf(value)
+		if typ.Kind() != reflect.Struct || typ.Name() == "" {
+			t.Fatalf("fixed output %q uses top-level %s; use a named struct or documented Dynamic", op, typ)
 		}
 	}
 
 	wantDynamic := []string{
+		"agent.adf-matrix",
+		"agent.fieldtypes",
 		"auth.status",
 		"cache.epics",
 		"cache.fields",
@@ -162,10 +164,18 @@ func TestSemanticOutputMembersStayConcrete(t *testing.T) {
 		path      []string
 	}{
 		{"issue.comment.list", []string{"Comments", "[]"}},
+		{"issue.comment.list", []string{"Comments", "[]", "Author", "*"}},
+		{"issue.comment.list", []string{"Comments", "[]", "UpdateAuthor", "*"}},
+		{"issue.comment.list", []string{"Comments", "[]", "Visibility", "*"}},
 		{"issue.comment.edit", []string{"Comment", "*"}},
+		{"issue.comment.edit", []string{"Comment", "*", "Author", "*"}},
+		{"issue.comment.edit", []string{"Comment", "*", "UpdateAuthor", "*"}},
+		{"issue.comment.edit", []string{"Comment", "*", "Visibility", "*"}},
 		{"issue.attachment.list", []string{"Attachments", "[]"}},
+		{"issue.attachment.list", []string{"Attachments", "[]", "Author"}},
 		{"issue.attachment.add", []string{"Files", "[]"}},
 		{"issue.attachment.add", []string{"Attachments", "[]"}},
+		{"issue.attachment.add", []string{"Attachments", "[]", "Author"}},
 		{"issue.watchers.list", []string{"Watchers", "[]"}},
 		{"issue.watchers.add", []string{"Watchers", "*", "[]"}},
 		{"issue.watchers.remove", []string{"Watchers", "*", "[]"}},
@@ -202,6 +212,46 @@ func TestSemanticOutputMembersStayConcrete(t *testing.T) {
 			}
 			if typ.Kind() != reflect.Struct {
 				t.Fatalf("%s member = %s, want a concrete struct", strings.Join(check.path, "."), typ)
+			}
+		})
+	}
+}
+
+func TestSemanticDynamicMembersStayReviewed(t *testing.T) {
+	checks := []struct {
+		operation string
+		path      []string
+		kind      reflect.Kind
+	}{
+		{"issue.comment.list", []string{"Comments", "[]", "Body"}, reflect.Interface},
+		{"issue.comment.list", []string{"Warnings", "[]"}, reflect.Map},
+	}
+	outputs := envelope.Outputs()
+	for _, check := range checks {
+		t.Run(check.operation+"."+strings.Join(check.path, "."), func(t *testing.T) {
+			typ := reflect.TypeOf(outputs[check.operation])
+			for _, step := range check.path {
+				switch step {
+				case "*":
+					if typ.Kind() != reflect.Pointer {
+						t.Fatalf("%s: got %s, want pointer", strings.Join(check.path, "."), typ)
+					}
+					typ = typ.Elem()
+				case "[]":
+					if typ.Kind() != reflect.Slice {
+						t.Fatalf("%s: got %s, want slice", strings.Join(check.path, "."), typ)
+					}
+					typ = typ.Elem()
+				default:
+					field, ok := typ.FieldByName(step)
+					if !ok {
+						t.Fatalf("%s has no field %s", typ, step)
+					}
+					typ = field.Type
+				}
+			}
+			if typ.Kind() != check.kind {
+				t.Fatalf("%s member = %s, want reviewed dynamic %s", strings.Join(check.path, "."), typ, check.kind)
 			}
 		})
 	}

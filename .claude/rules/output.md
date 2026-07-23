@@ -79,9 +79,11 @@ write failure as secondary context; it does not try the failed stream again.
     variants. Validated request context and validation-status facts survive
     the live write; server-created objects, readbacks, verification results
     and file-write outcomes remain conditional.
-*   **Keyed output changes placement, not operation shape.** The object a
-    single-key command emits at `data` appears unchanged at
-    `data.results[].data` for each successful key.
+*   **Shared keyed-result output changes placement, not operation shape.**
+    The operation object appears at `data` for one key and
+    `data.results[].data` for each successful key. Preserve the documented
+    exceptions: multi-key `issue view` uses `data.results[].issue`, and keyed
+    pagination or warnings are folded into the child operation object.
 *   **A new or changed `data` field must land in the registered Output struct
     in the same change.** Add a registration doc override when its conditional
     meaning or outer schema cannot be expressed by Go tags alone. The

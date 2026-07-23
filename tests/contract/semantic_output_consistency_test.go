@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -27,6 +28,7 @@ var semanticParityMatrix = []struct {
 	StableFields []string
 }{
 	{"issue.create", []string{"preview", "validated_remotely"}},
+	{"issue.edit", []string{"issue", "fields", "update", "validated_remotely"}},
 	{"issue.comment.edit", []string{"issue", "comment_id", "body_adf_summary", "visibility_change"}},
 	{"issue.transition", []string{"issue", "fields", "comment", "update", "transition_validated"}},
 	{"issue.clone", []string{"issue", "payload"}},
@@ -49,6 +51,7 @@ var semanticExtensionMatrix = []struct {
 	{"issue.watchers.list", "issue", true},
 	{"issue.create", "preview", true},
 	{"issue.create", "validated_remotely", true},
+	{"issue.edit", "validated_remotely", true},
 	{"issue.comment.edit", "comment_id", true},
 	{"issue.comment.edit", "body_adf_summary", true},
 	{"issue.comment.edit", "visibility_change", true},
@@ -72,6 +75,7 @@ var semanticConditionalOutcomeMatrix = []struct {
 	Fields    []string
 }{
 	{"issue.create", []string{"issue", "verification"}},
+	{"issue.edit", []string{"result", "verification"}},
 	{"issue.comment.edit", []string{"comment"}},
 	{"issue.clone", []string{"result"}},
 	{"issue.move", []string{"result"}},
@@ -93,6 +97,7 @@ func TestSemanticContractTablesStayExplicit(t *testing.T) {
 	}
 	if got := parityOperations(); !reflect.DeepEqual(got, []string{
 		"issue.create",
+		"issue.edit",
 		"issue.comment.edit",
 		"issue.transition",
 		"issue.clone",
@@ -352,6 +357,55 @@ func TestCreateStableContextMatchesDryRunAndLive(t *testing.T) {
 	}
 	if _, exists := live["issue"]; !exists {
 		t.Fatalf("live create omitted its server issue: %#v", live)
+	}
+}
+
+func TestEditStableContextMatchesDryRunAndLive(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/editmeta"):
+			_, _ = io.WriteString(w, `{"fields":{"summary":{"name":"Summary","fieldId":"summary","required":true,"schema":{"type":"string"}}}}`)
+		case r.Method == http.MethodPut:
+			key := strings.TrimPrefix(r.URL.Path, "/rest/api/3/issue/")
+			_, _ = io.WriteString(w, `{"key":"`+key+`"}`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
+	payload := writeJSON(
+		t,
+		"edit-context.json",
+		`{"fields":{"summary":"Stable edit"},"update":{"labels":[{"add":"reviewed"}]}}`,
+	)
+
+	for _, keys := range [][]string{{"PROJ-1"}, {"PROJ-1", "PROJ-2"}} {
+		name := "single"
+		if len(keys) > 1 {
+			name = "multi"
+		}
+		t.Run(name, func(t *testing.T) {
+			base := []string{
+				"--config", jiraConfig(t, srv.URL),
+				"--output=json",
+				"issue", "edit",
+			}
+			base = append(base, keys...)
+			base = append(base, "--no-input", "--json-input", payload)
+			if len(keys) == 1 {
+				dry := successfulData(t, append(base, "--dry-run")...)
+				live := successfulData(t, base...)
+				requireEditStableContext(t, dry, live)
+				return
+			}
+			dry := successfulKeyedData(t, append(base, "--dry-run")...)
+			live := successfulKeyedData(t, base...)
+			for _, key := range keys {
+				requireEditStableContext(t, dry[key], live[key])
+			}
+		})
 	}
 }
 
@@ -720,6 +774,21 @@ func requireWatcherStableContext(t *testing.T, dry, live map[string]any) {
 	t.Helper()
 	for _, field := range []string{"issue", "user", "user_resolved", "account_id_resolved"} {
 		requireSameJSONField(t, dry, live, field)
+	}
+}
+
+func requireEditStableContext(t *testing.T, dry, live map[string]any) {
+	t.Helper()
+	for _, field := range []string{"issue", "fields", "update"} {
+		requireSameJSONField(t, dry, live, field)
+	}
+	requireJSONType(t, dry, "validated_remotely", "boolean")
+	requireJSONType(t, live, "validated_remotely", "boolean")
+	if _, exists := dry["result"]; exists {
+		t.Fatalf("dry-run fabricated an edit result: %#v", dry)
+	}
+	if _, exists := live["result"]; !exists {
+		t.Fatalf("live edit omitted its result: %#v", live)
 	}
 }
 

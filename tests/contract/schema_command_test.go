@@ -3,7 +3,6 @@ package contract
 import (
 	"encoding/json"
 	"os/exec"
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -227,9 +226,8 @@ func TestSchemaCommandIncludesCommandTree(t *testing.T) {
 func TestSchemaCommandReportsContractVersion(t *testing.T) {
 	root := loadAgentSchema(t)
 	version, _ := root.Extensions["contract_version"].(string)
-	semver := regexp.MustCompile(`^\d+\.\d+\.\d+$`)
-	if !semver.MatchString(version) {
-		t.Fatalf("extensions.contract_version = %q, want MAJOR.MINOR.PATCH semver", version)
+	if version != "3.2.0" {
+		t.Fatalf("extensions.contract_version = %q, want 3.2.0", version)
 	}
 }
 

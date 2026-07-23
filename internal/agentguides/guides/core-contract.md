@@ -90,9 +90,12 @@ The envelope, on stdout for success and failure alike:
 *   Multi-key commands take key lists and ranges as positional arguments
     (`PROJ-1 PROJ-3`, `PROJ-1..PROJ-10`), expand them transparently, and
     return ordered `data.results[]` with per-key errors; successful keys
-    are never discarded by one failure. The operation-specific object that a
-    single-key command places at `data` moves unchanged to
-    `data.results[].data`; selectors therefore gain only the keyed prefix.
+    are never discarded by one failure. For shared keyed-result operations,
+    the operation-specific object that a single-key command places at `data`
+    moves to `data.results[].data`. Two preserved exceptions are part of the
+    contract: multi-key `issue view` puts each issue at
+    `data.results[].issue`, while keyed pagination and warnings are folded
+    into the child operation object rather than top-level `meta`.
 *   `warnings[]` carries coded, non-fatal signals — act on the code, not
     the text: `rate_limit_near` means throttle before the 429,
     `lossy_adf_conversion` means content was flattened.

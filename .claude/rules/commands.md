@@ -49,8 +49,9 @@ func NewCommand() *cobra.Command {
     named structs. Keep maps only for tenant-defined Jira fields, recursive
     ADF, or a documented polymorphic boundary; a genuinely shapeless
     top-level output registers `envelope.Dynamic` with a specific reason.
-    Single-key and keyed builders emit the same operation object, placed at
-    `data` or `data.results[].data` respectively.
+    Shared single-key and keyed-result builders emit the same operation
+    object, placed at `data` or `data.results[].data` respectively. Preserve
+    the documented `issue view` and keyed pagination/warning exceptions.
 *   Every authored handler uses `RunE`, including a handler that is infallible
     today. Output, cleanup and later command failures then retain a propagation
     path to root. The AST guardrail rejects `Run`.

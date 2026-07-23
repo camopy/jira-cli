@@ -26,8 +26,10 @@ alpha full-screen dashboard.
     layer returns destination failures. Each subcommand registers its own
     concrete `data` shape in `internal/envelope`; fixed nested objects stay
     typed, stable request context survives dry-run and live paths, and
-    server-only outcomes remain conditional. Multi-key output moves that same
-    object to `data.results[].data`.
+    server-only outcomes remain conditional. Shared keyed-result commands
+    move that operation object to `data.results[].data`; `issue view` keeps
+    its documented `data.results[].issue` shape, and keyed pagination or
+    warnings remain folded into the child object.
 *   **`internal/jira/`** — REST client + typed services; read-only mode blocks
     writes at the transport. **`internal/adf/`** — registry-driven ADF
     parse/validate/render.
