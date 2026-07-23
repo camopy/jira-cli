@@ -219,9 +219,10 @@ const workdaySeconds = 8 * 60 * 60
 func (r *results) handleFormSubmit(msg formSubmitMsg) tea.Cmd {
 	if msg.req.Mode.Bulk() {
 		// The form dialog stays open until now so the overlay never blinks
-		// empty; swap it for the y/N confirmation the bulk write parks. The
-		// bulk arms never fail locally, so the error is always nil here.
+		// empty; swap it for the y/N confirmation the bulk write parks.
 		r.closeForm()
+		// Bulk dispatch only selects marked keys and parks a confirmation; its
+		// local error path is reserved for single-issue encoding.
 		cmd, _ := r.dispatchSubmit(msg.req)
 		return cmd
 	}
@@ -435,7 +436,7 @@ func (r *results) openInBrowser(key string) tea.Cmd {
 	}
 	base := r.ctx.Base
 	return func() tea.Msg {
-		_ = browser.Open(base, url)
+		browser.Open(base, url) //nolint:errcheck // browser launch is intentionally fire-and-forget
 		return nil
 	}
 }

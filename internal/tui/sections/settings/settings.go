@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -298,10 +299,9 @@ func validate(text string) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
+	defer os.Remove(tmp.Name()) //nolint:errcheck // validation temp-file cleanup is best-effort
 	if _, err := tmp.WriteString(text); err != nil {
-		_ = tmp.Close()
-		return err
+		return errors.Join(err, tmp.Close())
 	}
 	if err := tmp.Close(); err != nil {
 		return err

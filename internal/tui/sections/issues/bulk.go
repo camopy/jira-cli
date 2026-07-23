@@ -205,7 +205,7 @@ func runBulkPool(base context.Context, verb string, keys []string, apply func(ct
 			return nil
 		})
 	}
-	_ = g.Wait() // workers never return an error, so Wait cannot either
+	g.Wait() //nolint:errcheck // workers always return nil; failures are stored per key
 	return res
 }
 

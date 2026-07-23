@@ -98,7 +98,11 @@ func (r *results) loadIssueTypes(project string, update bool) tea.Cmd {
 			} else {
 				go func() {
 					defer close(done)
-					projects, _ = r.projectCache.Get(base, struct{}{})
+					var err error
+					projects, err = r.projectCache.Get(base, struct{}{})
+					if err != nil {
+						projects = nil
+					}
 				}()
 			}
 			types, err := r.issueTypeCache.Get(base, project)

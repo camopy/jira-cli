@@ -3,6 +3,7 @@ package editor
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -24,12 +25,14 @@ func WriteTemp(issueKey, fieldName, markdown string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer func() { _ = f.Close() }()
-	_, err = fmt.Fprintf(f, "---\nissue_key: %s\nfield_name: %s\n---\n\n%s\n", issueKey, fieldName, markdown)
-	if err != nil {
+	name := f.Name()
+	if _, err = fmt.Fprintf(f, "---\nissue_key: %s\nfield_name: %s\n---\n\n%s\n", issueKey, fieldName, markdown); err != nil {
+		return "", errors.Join(err, f.Close())
+	}
+	if err := f.Close(); err != nil {
 		return "", err
 	}
-	return f.Name(), nil
+	return name, nil
 }
 
 // ReadMarkdown reads path and returns its body with any leading frontmatter
@@ -87,7 +90,7 @@ func EditMarkdown(ctx context.Context, issueKey, fieldName, markdown, editorComm
 
 	// Safe to delete: editor blocked properly OR the user actually
 	// changed something.
-	defer func() { _ = os.Remove(path) }()
+	defer os.Remove(path) //nolint:errcheck // successful edit cleanup is best-effort
 	return stripFrontmatter(string(editedBytes)), nil
 }
 

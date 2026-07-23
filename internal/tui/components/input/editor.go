@@ -46,18 +46,20 @@ func Edit(id, initial string) tea.Cmd {
 	}
 	path := f.Name()
 	if _, err := f.WriteString(initial); err != nil {
-		_ = f.Close()
-		_ = os.Remove(path)
-		return func() tea.Msg { return EditorFinishedMsg{ID: id, Err: err} }
+		cleanupErr := errors.Join(f.Close(), os.Remove(path))
+		return func() tea.Msg { return EditorFinishedMsg{ID: id, Err: errors.Join(err, cleanupErr)} }
 	}
-	_ = f.Close()
+	if err := f.Close(); err != nil {
+		removeErr := os.Remove(path)
+		return func() tea.Msg { return EditorFinishedMsg{ID: id, Err: errors.Join(err, removeErr)} }
+	}
 
 	// ed is deliberately unquoted so values with flags ("nvim -f", "code -w")
 	// work; the trade-off is that an editor binary living at a path with
 	// spaces must be wrapped in quotes inside the variable itself, same as git.
 	cmd := exec.Command("sh", "-c", ed+" "+xshell.Quote(path)) //nolint:gosec // running the user's own $EDITOR is the feature; path is our quoted temp file
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
-		defer func() { _ = os.Remove(path) }()
+		defer os.Remove(path) //nolint:errcheck // completed editor cleanup is best-effort
 		if err != nil {
 			return EditorFinishedMsg{ID: id, Err: err}
 		}
