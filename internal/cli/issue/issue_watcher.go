@@ -195,7 +195,7 @@ $ jira issue watchers list PROJ-123 PROJ-124 --output=json`,
 				}); err != nil {
 					return err
 				}
-				return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.watchers.list", watcherListEnvelopeData(watchers), resp)
+				return cmdutil.WriteEnvelopeWithResponse(cmd, "issue.watchers.list", watcherListEnvelopeData(keys[0], watchers), resp)
 			}
 			results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (*jira.WatchersResponse, error) {
 				watchers, _, err := service.List(ctx, key)
@@ -204,8 +204,8 @@ $ jira issue watchers list PROJ-123 PROJ-124 --output=json`,
 			if err != nil {
 				return err
 			}
-			return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.watchers.list", results, func(_ string, watchers *jira.WatchersResponse) any {
-				return watcherListEnvelopeData(watchers)
+			return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.watchers.list", results, func(key string, watchers *jira.WatchersResponse) any {
+				return watcherListEnvelopeData(key, watchers)
 			})
 		},
 	}
@@ -213,16 +213,18 @@ $ jira issue watchers list PROJ-123 PROJ-124 --output=json`,
 	return cmd
 }
 
-func watcherListEnvelopeData(watchers *jira.WatchersResponse) envelope.IssueWatchersListOutput {
+func watcherListEnvelopeData(key string, watchers *jira.WatchersResponse) envelope.IssueWatchersListOutput {
 	if watchers == nil {
 		return envelope.IssueWatchersListOutput{
-			Watchers:   []map[string]any{},
+			Issue:      cmdutil.IssueRef{Key: key},
+			Watchers:   []envelope.WatcherItem{},
 			IsWatching: false,
 			WatchCount: 0,
 		}
 	}
 	return envelope.IssueWatchersListOutput{
-		Watchers:   watcherListData(watchers.Watchers),
+		Issue:      cmdutil.IssueRef{Key: key},
+		Watchers:   watcherItems(watchers.Watchers),
 		IsWatching: watchers.IsWatching,
 		WatchCount: watchers.WatchCount,
 	}
@@ -760,6 +762,25 @@ func watcherListData(users []*jira.User) []map[string]any {
 			entry["email_address"] = *u.EmailAddress
 		}
 		out = append(out, entry)
+	}
+	return out
+}
+
+func watcherItems(users []*jira.User) []envelope.WatcherItem {
+	out := make([]envelope.WatcherItem, 0, len(users))
+	for _, u := range users {
+		if u == nil {
+			continue
+		}
+		item := envelope.WatcherItem{
+			AccountID:   ptr.Deref(u.AccountID),
+			DisplayName: ptr.Deref(u.DisplayName),
+		}
+		if u.EmailAddress != nil {
+			email := *u.EmailAddress
+			item.EmailAddress = &email
+		}
+		out = append(out, item)
 	}
 	return out
 }

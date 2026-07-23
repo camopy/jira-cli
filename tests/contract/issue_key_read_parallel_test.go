@@ -151,7 +151,7 @@ func TestIssueKeyReadCommandsAcceptDoubleDotRangesAndParallelism(t *testing.T) {
 				len(env.Data.Results[0].Data) == 0 || len(env.Data.Results[1].Data) == 0 {
 				t.Fatalf("batch results = %+v", env.Data.Results)
 			}
-			if tt.name == "comment list" {
+			if tt.name == "comment list" || tt.name == "attachment list" || tt.name == "watchers list" {
 				for _, result := range env.Data.Results {
 					var data struct {
 						Issue struct {

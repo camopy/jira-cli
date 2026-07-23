@@ -73,6 +73,10 @@ func TestAttachmentListEnvelopeShape(t *testing.T) {
 	if !ok {
 		t.Fatalf("envelope.data not object: %s", out)
 	}
+	issue, _ := data["issue"].(map[string]any)
+	if issue["key"] != "PROJ-1" {
+		t.Fatalf("data.issue = %v, want key PROJ-1: %s", issue, out)
+	}
 	atts, _ := data["attachments"].([]any)
 	if len(atts) != 2 {
 		t.Fatalf("data.attachments length = %d, want 2", len(atts))
@@ -100,6 +104,44 @@ func TestAttachmentListEnvelopeShape(t *testing.T) {
 	}
 	if pagination["isLast"] != true || pagination["total"] != float64(2) {
 		t.Fatalf("complete set must report isLast:true with the known total: %v", pagination)
+	}
+}
+
+func TestAttachmentListEmptyKeepsIssueAndNonNullAttachments(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"key":"EMPTY-1","fields":{"attachment":[]}}`))
+	}))
+	defer srv.Close()
+
+	cfg := jiraConfig(t, srv.URL)
+	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
+	cmd := exec.Command(
+		buildJiraBinary(t),
+		"--config", cfg,
+		"--output=json",
+		"issue", "attachment", "list", "EMPTY-1",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("attachment list error = %v\n%s", err, out)
+	}
+	var env struct {
+		Data struct {
+			Issue struct {
+				Key string `json:"key"`
+			} `json:"issue"`
+			Attachments []json.RawMessage `json:"attachments"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(out, &env); err != nil {
+		t.Fatalf("decode envelope: %v\n%s", err, out)
+	}
+	if env.Data.Issue.Key != "EMPTY-1" {
+		t.Fatalf("data.issue.key = %q, want EMPTY-1\n%s", env.Data.Issue.Key, out)
+	}
+	if env.Data.Attachments == nil || len(env.Data.Attachments) != 0 {
+		t.Fatalf("data.attachments = %#v, want non-null empty array\n%s", env.Data.Attachments, out)
 	}
 }
 

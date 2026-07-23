@@ -93,6 +93,10 @@ func TestWatchersListEnvelopeShape(t *testing.T) {
 	if data == nil {
 		t.Fatalf("envelope missing data: %s", out)
 	}
+	issue, _ := data["issue"].(map[string]any)
+	if issue["key"] != "JCT-1" {
+		t.Fatalf("data.issue = %v, want key JCT-1: %s", issue, out)
+	}
 	watchers, _ := data["watchers"].([]any)
 	if len(watchers) != 3 {
 		t.Fatalf("watchers = %v, want 3 entries", watchers)
@@ -102,6 +106,86 @@ func TestWatchersListEnvelopeShape(t *testing.T) {
 	}
 	if c, _ := data["watch_count"].(float64); c != 3 {
 		t.Errorf("watch_count = %v, want 3", c)
+	}
+}
+
+func TestWatchersListEmptyKeepsIssueAndNonNullWatchers(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/rest/api/3/issue/EMPTY-1/watchers":
+			_, _ = w.Write([]byte(`{"isWatching":false,"watchCount":0,"watchers":[]}`))
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	out, err := runJiraWatchers(
+		t,
+		srv.URL,
+		"JIRA_TOKEN_DEFAULT=test-token",
+		"issue", "watchers", "list", "EMPTY-1",
+	)
+	if err != nil {
+		t.Fatalf("watchers list error = %v\n%s", err, out)
+	}
+	var env struct {
+		Data struct {
+			Issue struct {
+				Key string `json:"key"`
+			} `json:"issue"`
+			Watchers []json.RawMessage `json:"watchers"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(out, &env); err != nil {
+		t.Fatalf("decode envelope: %v\n%s", err, out)
+	}
+	if env.Data.Issue.Key != "EMPTY-1" {
+		t.Fatalf("data.issue.key = %q, want EMPTY-1\n%s", env.Data.Issue.Key, out)
+	}
+	if env.Data.Watchers == nil || len(env.Data.Watchers) != 0 {
+		t.Fatalf("data.watchers = %#v, want non-null empty array\n%s", env.Data.Watchers, out)
+	}
+}
+
+func TestWatchersListPreservesEmptyEmailPresence(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/rest/api/3/issue/JCT-1/watchers" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(`{"isWatching":false,"watchCount":2,"watchers":[` +
+			`{"accountId":"with-empty","displayName":"Empty","emailAddress":""},` +
+			`{"accountId":"without","displayName":"Missing"}]}`))
+	}))
+	defer srv.Close()
+
+	out, err := runJiraWatchers(
+		t,
+		srv.URL,
+		"JIRA_TOKEN_DEFAULT=test-token",
+		"issue", "watchers", "list", "JCT-1",
+	)
+	if err != nil {
+		t.Fatalf("watchers list error = %v\n%s", err, out)
+	}
+	var env struct {
+		Data struct {
+			Watchers []map[string]any `json:"watchers"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(out, &env); err != nil {
+		t.Fatalf("decode envelope: %v\n%s", err, out)
+	}
+	if email, exists := env.Data.Watchers[0]["email_address"]; !exists || email != "" {
+		t.Fatalf("present empty email = %#v, want explicit empty string", env.Data.Watchers[0])
+	}
+	if _, exists := env.Data.Watchers[1]["email_address"]; exists {
+		t.Fatalf("missing email must remain omitted: %#v", env.Data.Watchers[1])
 	}
 }
 

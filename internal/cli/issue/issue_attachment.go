@@ -116,7 +116,7 @@ $ jira issue attachment list PROJ-123 --output=json`,
 				}); err != nil {
 					return err
 				}
-				data, pagination := attachmentListEnvelopeData(attachments, limit, all)
+				data, pagination := attachmentListEnvelopeData(keys[0], attachments, limit, all)
 				return cmdutil.WriteEnvelopeWithPaginationAndRawWarnings(cmd, "issue.attachment.list", data, pagination, nil)
 			}
 			results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) ([]jira.Attachment, error) {
@@ -126,8 +126,8 @@ $ jira issue attachment list PROJ-123 --output=json`,
 			if err != nil {
 				return err
 			}
-			return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.attachment.list", results, func(_ string, attachments []jira.Attachment) any {
-				data, pagination := attachmentListEnvelopeData(attachments, limit, all)
+			return cmdutil.WriteKeyedResultsEnvelope(cmd, "issue.attachment.list", results, func(key string, attachments []jira.Attachment) any {
+				data, pagination := attachmentListEnvelopeData(key, attachments, limit, all)
 				data.Pagination = pagination
 				return data
 			})
@@ -139,7 +139,7 @@ $ jira issue attachment list PROJ-123 --output=json`,
 	return cmd
 }
 
-func attachmentListEnvelopeData(attachments []jira.Attachment, limit int, all bool) (envelope.IssueAttachmentListOutput, *cli.Pagination) {
+func attachmentListEnvelopeData(key string, attachments []jira.Attachment, limit int, all bool) (envelope.IssueAttachmentListOutput, *cli.Pagination) {
 	// Atlassian returns attachments oldest-first natively. Apply the requested
 	// page slice client-side: there is no dedicated /attachments list endpoint.
 	windowed := attachments
@@ -150,9 +150,9 @@ func attachmentListEnvelopeData(attachments []jira.Attachment, limit int, all bo
 	if !all && len(windowed) > pageSize {
 		windowed = windowed[:pageSize]
 	}
-	rows := make([]map[string]any, 0, len(windowed))
+	rows := make([]envelope.AttachmentItem, 0, len(windowed))
 	for _, a := range windowed {
-		rows = append(rows, attachmentToOutput(a))
+		rows = append(rows, attachmentToItem(a))
 	}
 	// The set arrives whole and the window is cut client-side, so total is
 	// always known. A truncated window is not resumable page-by-page —
@@ -163,7 +163,26 @@ func attachmentListEnvelopeData(attachments []jira.Attachment, limit int, all bo
 		Total:      cli.KnownTotal(len(attachments)),
 		IsLast:     all || len(attachments) <= pageSize,
 	}
-	return envelope.IssueAttachmentListOutput{Attachments: rows}, pagination
+	return envelope.IssueAttachmentListOutput{
+		Issue:       cmdutil.IssueRef{Key: key},
+		Attachments: rows,
+	}, pagination
+}
+
+func attachmentToItem(a jira.Attachment) envelope.AttachmentItem {
+	author := envelope.AttachmentAuthor{}
+	if a.Author != nil {
+		author.AccountID = ptr.Deref(a.Author.AccountID)
+		author.DisplayName = ptr.Deref(a.Author.DisplayName)
+	}
+	return envelope.AttachmentItem{
+		Author:   author,
+		Created:  ptr.Deref(a.Created),
+		Filename: ptr.Deref(a.Filename),
+		ID:       ptr.Deref(a.ID),
+		MIMEType: ptr.Deref(a.MimeType),
+		Size:     ptr.Deref(a.Size),
+	}
 }
 
 func issueAttachmentAddCommand() *cobra.Command {

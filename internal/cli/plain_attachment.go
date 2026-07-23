@@ -47,6 +47,8 @@ func WriteAttachmentListPlain(w io.Writer, command string, data any, opts ...Pla
 	title := "Attachments"
 	if cfg.resultKey != "" {
 		title += " on " + cfg.resultKey
+	} else if key := stringFromMap(mapFromAny(m["issue"]), "key"); key != "" {
+		title += " on " + key
 	}
 	header := style.bold(title) + style.dim("  ("+human.Pluralize(count, "attachment", "attachments")+")")
 	logger.Info().Parts(clog.PartMessage).Msg(header)

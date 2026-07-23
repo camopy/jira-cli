@@ -65,3 +65,42 @@ func TestMutationEnvelopesCarryIssueRefObject(t *testing.T) {
 		})
 	}
 }
+
+func TestIssueReadEnvelopesCarryIssueRefObject(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"issue.comment.list", []string{"issue", "comment", "list", "PROJ-1"}},
+		{"issue.attachment.list", []string{"issue", "attachment", "list", "PROJ-1"}},
+		{"issue.watchers.list", []string{"issue", "watchers", "list", "PROJ-1"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			srv := stubReadServer(t)
+			t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
+			args := append(
+				[]string{"--config", jiraConfig(t, srv.URL), "--output=json"},
+				c.args...,
+			)
+			stdout, stderr, code := runJira(t, args...)
+			if code != 0 {
+				t.Fatalf("%s exit = %d\nstdout=%s\nstderr=%s", c.name, code, stdout, stderr)
+			}
+			var env struct {
+				Data struct {
+					Issue struct {
+						Key string `json:"key"`
+					} `json:"issue"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(stdout, &env); err != nil {
+				t.Fatalf("%s envelope does not carry data.issue as an object: %v\nstdout=%s", c.name, err, stdout)
+			}
+			if env.Data.Issue.Key != "PROJ-1" {
+				t.Fatalf("%s data.issue.key = %q, want PROJ-1\nstdout=%s", c.name, env.Data.Issue.Key, stdout)
+			}
+		})
+	}
+}

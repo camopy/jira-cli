@@ -84,16 +84,31 @@ func TestLinkTypesPlainRendersTypedStruct(t *testing.T) {
 
 func TestAttachmentListPlainRendersTypedStruct(t *testing.T) {
 	got := renderCommand(t, "issue.attachment.list", envelope.IssueAttachmentListOutput{
-		Attachments: []map[string]any{{
-			"id":       "10",
-			"filename": "design.pdf",
-			"size":     int64(2048),
-			"created":  "2026-07-01T00:00:00.000+0000",
-			"author":   map[string]any{"display_name": "Alice"},
+		Issue: envelope.IssueRef{Key: "PROJ-1"},
+		Attachments: []envelope.AttachmentItem{{
+			ID:       "10",
+			Filename: "design.pdf",
+			Size:     2048,
+			Created:  "2026-07-01T00:00:00.000+0000",
+			Author:   envelope.AttachmentAuthor{DisplayName: "Alice"},
 		}},
 	})
-	requireContains(t, got, "Attachments", "design.pdf", "Alice")
+	requireContains(t, got, "Attachments on PROJ-1", "design.pdf", "Alice")
 	requireNotContains(t, got, "(no attachments)")
+}
+
+func TestAttachmentListPlainUsesIssueHeadingAcrossTerminalModes(t *testing.T) {
+	data := map[string]any{
+		"issue":       map[string]any{"key": "PROJ-1"},
+		"attachments": []any{},
+	}
+	for _, tty := range []bool{false, true} {
+		var buf bytes.Buffer
+		if err := WriteAttachmentListPlain(&buf, "issue.attachment.list", data, WithPlainTTY(tty)); err != nil {
+			t.Fatalf("WriteAttachmentListPlain(tty=%v) error = %v", tty, err)
+		}
+		requireContains(t, buf.String(), "Attachments on PROJ-1")
+	}
 }
 
 func TestCommentListPlainRendersTypedStructWithNativeADF(t *testing.T) {
@@ -150,17 +165,33 @@ func TestCommentListPlainResultKeyTakesHeadingPrecedence(t *testing.T) {
 
 func TestWatcherListPlainRendersTypedStruct(t *testing.T) {
 	got := renderCommand(t, "issue.watchers.list", envelope.IssueWatchersListOutput{
-		Watchers: []map[string]any{{
-			"display_name":  "Alice",
-			"account_id":    "5e0000000000000000000001",
-			"email_address": "alice@example.com",
-			"active":        true,
+		Issue: envelope.IssueRef{Key: "PROJ-1"},
+		Watchers: []envelope.WatcherItem{{
+			DisplayName:  "Alice",
+			AccountID:    "5e0000000000000000000001",
+			EmailAddress: ptr("alice@example.com"),
 		}},
 		IsWatching: true,
 		WatchCount: 1,
 	})
-	requireContains(t, got, "Watchers", "Alice", "(you are watching)")
+	requireContains(t, got, "Watchers on PROJ-1", "Alice", "(you are watching)")
 	requireNotContains(t, got, "(no watchers visible)")
+}
+
+func TestWatcherListPlainUsesIssueHeadingAcrossTerminalModes(t *testing.T) {
+	data := map[string]any{
+		"issue":       map[string]any{"key": "PROJ-1"},
+		"watchers":    []any{},
+		"is_watching": false,
+		"watch_count": 0,
+	}
+	for _, tty := range []bool{false, true} {
+		var buf bytes.Buffer
+		if err := WriteWatcherListPlain(&buf, "issue.watchers.list", data, WithPlainTTY(tty)); err != nil {
+			t.Fatalf("WriteWatcherListPlain(tty=%v) error = %v", tty, err)
+		}
+		requireContains(t, buf.String(), "Watchers on PROJ-1")
+	}
 }
 
 func TestIssueTransitionsPlainRendersTypedStruct(t *testing.T) {

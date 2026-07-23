@@ -177,12 +177,28 @@ type IssueWebLinkOutput struct {
 
 var _ = register("issue.weblink", IssueWebLinkOutput{}, nil)
 
-// IssueAttachmentListOutput is `issue attachment list`'s data. Single-key
-// reads carry only `attachments` (pagination in meta); multi-key reads fold
-// the per-key pagination block in. Each attachment is projected to a fixed
-// snake-case shape but kept as an opaque object here.
+// AttachmentAuthor is the fixed uploader identity projected on attachments.
+type AttachmentAuthor struct {
+	AccountID   string `json:"account_id"`
+	DisplayName string `json:"display_name"`
+}
+
+// AttachmentItem is the fixed attachment projection returned by list and add.
+type AttachmentItem struct {
+	Author   AttachmentAuthor `json:"author"`
+	Created  string           `json:"created"`
+	Filename string           `json:"filename"`
+	ID       string           `json:"id"`
+	MIMEType string           `json:"mime_type"`
+	Size     int64            `json:"size"`
+}
+
+// IssueAttachmentListOutput is `issue attachment list`'s data. The issue and
+// attachments ride both single-key and keyed reads. Single-key pagination
+// rides in meta; keyed reads fold the per-key pagination block into data.
 type IssueAttachmentListOutput struct {
-	Attachments []map[string]any `json:"attachments"`
+	Issue       IssueRef         `json:"issue"`
+	Attachments []AttachmentItem `json:"attachments"`
 	Pagination  *Pagination      `json:"pagination,omitempty"`
 }
 
@@ -228,12 +244,20 @@ type IssueAttachmentDownloadOutput struct {
 
 var _ = register("issue.attachment.download", IssueAttachmentDownloadOutput{}, nil)
 
-// IssueWatchersListOutput is `issue watchers list`'s data. Multi-key reads
-// carry the same object at results[].data.
+// WatcherItem is the fixed user projection returned by watcher reads.
+type WatcherItem struct {
+	AccountID    string  `json:"account_id"`
+	DisplayName  string  `json:"display_name"`
+	EmailAddress *string `json:"email_address,omitempty"`
+}
+
+// IssueWatchersListOutput is `issue watchers list`'s data. Single-key and
+// keyed reads carry the same issue-scoped object.
 type IssueWatchersListOutput struct {
-	Watchers   []map[string]any `json:"watchers"`
-	IsWatching bool             `json:"is_watching"`
-	WatchCount int              `json:"watch_count"`
+	Issue      IssueRef      `json:"issue"`
+	Watchers   []WatcherItem `json:"watchers"`
+	IsWatching bool          `json:"is_watching"`
+	WatchCount int           `json:"watch_count"`
 }
 
 var _ = register("issue.watchers.list", IssueWatchersListOutput{}, nil)

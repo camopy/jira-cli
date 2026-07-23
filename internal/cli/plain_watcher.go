@@ -44,6 +44,8 @@ func WriteWatcherListPlain(w io.Writer, command string, data any, opts ...PlainO
 	title := "Watchers"
 	if cfg.resultKey != "" {
 		title += " on " + cfg.resultKey
+	} else if key := stringFromMap(mapFromAny(m["issue"]), "key"); key != "" {
+		title += " on " + key
 	}
 	header := style.bold(title) + style.dim("  ("+human.Pluralize(count, "watcher", "watchers")+")")
 	if isWatching, _ := m["is_watching"].(bool); isWatching {

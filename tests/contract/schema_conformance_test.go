@@ -113,6 +113,71 @@ func TestCommentListSchemaDeclaresCanonicalIssueAndFixedRows(t *testing.T) {
 	}
 }
 
+func TestAttachmentAndWatcherListSchemasDeclareCanonicalIssueAndFixedRows(t *testing.T) {
+	schemas := declaredOutputSchemas(t)
+	cases := []struct {
+		operation  string
+		collection string
+		fields     []string
+	}{
+		{
+			operation:  "issue.attachment.list",
+			collection: "attachments",
+			fields:     []string{"author", "created", "filename", "id", "mime_type", "size"},
+		},
+		{
+			operation:  "issue.watchers.list",
+			collection: "watchers",
+			fields:     []string{"account_id", "display_name", "email_address"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.operation, func(t *testing.T) {
+			schema, ok := schemas[tc.operation].(map[string]any)
+			if !ok {
+				t.Fatalf("%s output schema missing", tc.operation)
+			}
+			props, _ := schema["properties"].(map[string]any)
+			issue, _ := props["issue"].(map[string]any)
+			if issue["type"] != "object" || !schemaRequires(schema, "issue") {
+				t.Fatalf("issue must be a required object: %#v", issue)
+			}
+			issueProps, _ := issue["properties"].(map[string]any)
+			if _, exists := issueProps["key"]; !exists || !schemaRequires(issue, "key") {
+				t.Fatalf("issue.key must be declared and required: %#v", issue)
+			}
+
+			collection, _ := props[tc.collection].(map[string]any)
+			items, _ := collection["items"].(map[string]any)
+			itemProps, _ := items["properties"].(map[string]any)
+			for _, name := range tc.fields {
+				if _, exists := itemProps[name]; !exists {
+					t.Fatalf("%s[] schema missing %q: %#v", tc.collection, name, items)
+				}
+			}
+			if tc.collection == "attachments" {
+				author, _ := itemProps["author"].(map[string]any)
+				authorProps, _ := author["properties"].(map[string]any)
+				for _, name := range []string{"account_id", "display_name"} {
+					if _, exists := authorProps[name]; !exists || !schemaRequires(author, name) {
+						t.Fatalf("attachment author %q must be declared and required: %#v", name, author)
+					}
+				}
+			}
+			if tc.collection == "watchers" {
+				for _, name := range []string{"account_id", "display_name"} {
+					if !schemaRequires(items, name) {
+						t.Fatalf("watcher %q must be required: %#v", name, items)
+					}
+				}
+				if schemaRequires(items, "email_address") {
+					t.Fatalf("watcher email_address must remain optional: %#v", items)
+				}
+			}
+		})
+	}
+}
+
 func schemaRequires(schema map[string]any, name string) bool {
 	required, _ := schema["required"].([]any)
 	for _, field := range required {
@@ -148,6 +213,9 @@ func stubReadServer(t *testing.T) *httptest.Server {
 			`"updateAuthor":{"accountId":"712020:abc","displayName":"Alice"},` +
 			`"created":"2026-07-01T10:00:00.000+0000","updated":"2026-07-01T10:00:00.000+0000"}],` +
 			`"startAt":0,"maxResults":50,"total":1}`))
+	})
+	mux.HandleFunc("GET /rest/api/3/issue/PROJ-1/watchers", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"isWatching":false,"watchCount":0,"watchers":[]}`))
 	})
 	mux.HandleFunc("GET /rest/api/3/issue/PROJ-1/worklog", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"worklogs":[{"id":"10169","timeSpentSeconds":3600,` +
