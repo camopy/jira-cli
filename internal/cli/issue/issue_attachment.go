@@ -9,6 +9,7 @@ package issue
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -538,7 +539,7 @@ $ jira issue attachment download PROJ-123 10500 --to ./report.pdf --dry-run`,
 			}); err != nil {
 				return err
 			}
-			defer func() { _ = body.Close() }()
+			defer body.Close() //nolint:errcheck // io.Copy reports transfer failures; close has no recovery action
 			// In TTY current-dir mode, derive the filename from
 			// the Content-Disposition the server sent. The name is
 			// base-named already; the same confinement check as --to
@@ -631,7 +632,7 @@ func confineDownloadTarget(target string) error {
 // writeDownloadFile streams body bytes to target via io.Copy. Uses
 // O_EXCL to enforce no-clobber and swaps to O_TRUNC under --force.
 // Returns bytes written.
-func writeDownloadFile(target string, body io.Reader, force bool) (int64, error) {
+func writeDownloadFile(target string, body io.Reader, force bool) (written int64, err error) {
 	flag := os.O_CREATE | os.O_WRONLY | os.O_EXCL
 	if force {
 		flag = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
@@ -640,7 +641,9 @@ func writeDownloadFile(target string, body io.Reader, force bool) (int64, error)
 	if err != nil {
 		return 0, err
 	}
-	defer func() { _ = dst.Close() }()
+	defer func() {
+		err = errors.Join(err, dst.Close())
+	}()
 	return io.Copy(dst, body)
 }
 

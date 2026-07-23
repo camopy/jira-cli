@@ -49,7 +49,7 @@ func discoverCloudID(ctx context.Context, siteBaseURL string, timeout time.Durat
 	if err != nil {
 		return "", err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close() //nolint:errcheck // body is consumed below; close has no recovery action
 	if resp.StatusCode != http.StatusOK {
 		// TrimSpace guards the unregistered-code case, where the reason phrase
 		// is empty and xhttp.Status would leave a trailing space.

@@ -492,7 +492,11 @@ func runWatcherAdd(cmd *cobra.Command, args watcherMutationArgs) error {
 func watcherAddData(ctx context.Context, watcherSvc jira.WatcherService, accountID string, args watcherMutationArgs) (envelope.IssueWatcherMutationOutput, error) {
 	var preState *jira.WatchersResponse
 	if !args.NoReadback {
-		preState, _, _ = watcherSvc.List(ctx, args.Key)
+		var err error
+		preState, _, err = watcherSvc.List(ctx, args.Key)
+		if err != nil {
+			preState = nil
+		}
 	}
 
 	if _, err := watcherSvc.Add(ctx, args.Key, accountID); err != nil {
@@ -562,7 +566,11 @@ func runWatcherRemove(cmd *cobra.Command, args watcherMutationArgs) error {
 func watcherRemoveData(ctx context.Context, watcherSvc jira.WatcherService, accountID string, args watcherMutationArgs) (envelope.IssueWatcherMutationOutput, error) {
 	var preState *jira.WatchersResponse
 	if !args.NoReadback {
-		preState, _, _ = watcherSvc.List(ctx, args.Key)
+		var err error
+		preState, _, err = watcherSvc.List(ctx, args.Key)
+		if err != nil {
+			preState = nil
+		}
 	}
 
 	if _, err := watcherSvc.Remove(ctx, args.Key, accountID); err != nil {

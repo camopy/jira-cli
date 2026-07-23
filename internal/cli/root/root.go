@@ -106,7 +106,7 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	}
 
 	pf := cmd.Root().PersistentFlags()
-	debug, _ := pf.GetBool("debug")
+	debug := cmdutil.BoolValue(pf, "debug")
 	clog.SetEnvPrefix("JIRA")
 	clog.SetVerbose(debug)
 
@@ -120,7 +120,7 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	// issue view, exported link helpers — in one place. SetHyperlinkEnabled runs
 	// after SetOutput so it pushes the switch onto the new output.
 	colorMode := clog.ColorAuto
-	if raw, _ := pf.GetString("color"); raw != "" {
+	if raw := cmdutil.StringValue(pf, "color"); raw != "" {
 		if err := colorMode.UnmarshalText([]byte(raw)); err != nil {
 			return fmt.Errorf("invalid color mode %q: must be \"auto\", \"always\" or \"never\"", raw)
 		}
@@ -136,7 +136,7 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	cli.SetResolvedColorMode(colorMode)
 	logger := clog.With().Logger()
 
-	outputRaw, _ := pf.GetString("output")
+	outputRaw := cmdutil.StringValue(pf, "output")
 	outputMode, err := cli.ParseOutputMode(outputRaw)
 	if err != nil {
 		return err
@@ -148,11 +148,11 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	// to JSON, so when the user has not pinned --output explicitly, honor
 	// --tsv by rendering the plain (human) TSV table.
 	if outputMode == cli.OutputAuto && cmd.Flags().Lookup("tsv") != nil {
-		if tsv, _ := cmd.Flags().GetBool("tsv"); tsv {
+		if cmdutil.BoolValue(cmd.Flags(), "tsv") {
 			det.Mode = cli.ModePlain
 		}
 	}
-	interactive, _ := pf.GetBool("interactive")
+	interactive := cmdutil.BoolValue(pf, "interactive")
 	if interactive {
 		det.Mode = cli.ModeTUI
 	}
@@ -161,7 +161,7 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	// fails validation; an explicit compact keeps compact (the filter then
 	// runs over the data document compact emits). The program compiles here
 	// so a bad expression fails fast, before any network work.
-	jqExpr, _ := pf.GetString("jq")
+	jqExpr := cmdutil.StringValue(pf, "jq")
 	cli.ClearJQProgram()
 	if jqExpr != "" {
 		// Every human surface conflicts the same way: the filter runs over
@@ -176,7 +176,7 @@ func rootPersistentPreRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 			conflict = "--interactive"
 		}
 		if conflict == "" && cmd.Flags().Lookup("tsv") != nil {
-			if tsv, _ := cmd.Flags().GetBool("tsv"); tsv {
+			if cmdutil.BoolValue(cmd.Flags(), "tsv") {
 				conflict = "--tsv"
 			}
 		}
@@ -255,7 +255,7 @@ func validateNumericFlags(cmd *cobra.Command) error {
 // pipe/agent.
 func rootRun(cmd *cobra.Command, rt *runtime.Runtime) error {
 	det := cmdutil.DetectorFromContext(cmd)
-	interactive, _ := cmd.Root().PersistentFlags().GetBool("interactive")
+	interactive := cmdutil.BoolValue(cmd.Root().PersistentFlags(), "interactive")
 	if interactive && !runtimeStdoutIsTTY(rt) {
 		return fmt.Errorf("tui requires an interactive terminal")
 	}
@@ -710,7 +710,7 @@ func preserveCommandError(commandErr, outputErr error) error {
 // no cmd.Context() setup is required.
 func jsonEnvelopeRequested(cmd *cobra.Command) bool {
 	pf := cmd.Root().PersistentFlags()
-	outputRaw, _ := pf.GetString("output")
+	outputRaw := cmdutil.StringValue(pf, "output")
 	mode, err := cli.ParseOutputMode(outputRaw)
 	if err != nil {
 		// An invalid --output value is itself a failure; emit the error

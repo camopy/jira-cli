@@ -191,7 +191,9 @@ func boardsCacheFileFromEntry(raw json.RawMessage, items []jira.Board) jira.Boar
 	// Best-effort: parse the wrapped envelope to recover truncation
 	// markers. If the on-disk shape is a bare array, the unmarshal
 	// noop's and Truncated/TruncatedReason stay false/"".
-	_ = json.Unmarshal(raw, &file)
+	if err := json.Unmarshal(raw, &file); err != nil {
+		file = jira.BoardsCacheFile{}
+	}
 	if items == nil {
 		items = []jira.Board{}
 	}

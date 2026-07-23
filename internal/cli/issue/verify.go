@@ -201,7 +201,9 @@ func verifyAppliedFields(requested map[string]any, issue *jira.Issue) verificati
 			raw, ok := fields.CustomFields[key]
 			var applied any
 			if ok {
-				_ = json.Unmarshal(raw, &applied)
+				if err := json.Unmarshal(raw, &applied); err != nil {
+					applied = nil
+				}
 			}
 			result.Applied[key] = applied
 			if applied == nil {

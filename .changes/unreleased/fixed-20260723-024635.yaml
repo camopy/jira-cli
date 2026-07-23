@@ -1,0 +1,3 @@
+kind: fixed
+body: Report data, file, and terminal failures instead of silently continuing.
+time: 2026-07-23T02:46:35.283847362-04:00

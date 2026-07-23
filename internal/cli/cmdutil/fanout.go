@@ -164,7 +164,7 @@ func fanOutKeysProgressVerb[T any](
 		// The group's aggregate error is deliberately discarded: per-key
 		// errors live in the fan-out results and fanErr is authoritative;
 		// a completion line here would double-report them.
-		_ = group.Wait().Silent()
+		group.Wait().Silent() //nolint:errcheck // per-key results and fanErr are authoritative
 	}()
 	tracked := func(ctx context.Context, key string) (T, error) {
 		value, err := traced(ctx, key)

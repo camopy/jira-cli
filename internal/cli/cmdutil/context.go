@@ -36,8 +36,7 @@ func DetectorFromContext(cmd *cobra.Command) cli.Detection {
 
 // ConfigPath returns the value of the root --config persistent flag.
 func ConfigPath(cmd *cobra.Command) string {
-	path, _ := cmd.Root().PersistentFlags().GetString("config")
-	return path
+	return StringValue(cmd.Root().PersistentFlags(), "config")
 }
 
 // NoInputRequested reports whether interactive prompts are off. It is the
@@ -55,7 +54,7 @@ func ConfigPath(cmd *cobra.Command) string {
 // flag while the handler read an unset local copy.
 func NoInputRequested(cmd *cobra.Command) bool {
 	pf := cmd.Root().PersistentFlags()
-	if v, _ := pf.GetBool("no-input"); v {
+	if BoolValue(pf, "no-input") {
 		return true
 	}
 	// The flag is false. An explicit --no-input=false wins (the caller wants

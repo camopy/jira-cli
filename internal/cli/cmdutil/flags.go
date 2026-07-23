@@ -31,6 +31,23 @@ import (
 // is portable: copy it (and the ruleguard rule) into any other clib-backed
 // cobra CLI to get the same "metadata is mandatory" guarantee.
 
+// BoolValue returns a registered bool flag's value. Missing flags and type
+// mismatches use the bool zero value, matching pflag's GetBool fallback.
+func BoolValue(fs *pflag.FlagSet, name string) bool {
+	value, err := fs.GetBool(name)
+	return err == nil && value
+}
+
+// StringValue returns a registered string flag's value. Missing flags and type
+// mismatches use the string zero value, matching pflag's GetString fallback.
+func StringValue(fs *pflag.FlagSet, name string) string {
+	value, err := fs.GetString(name)
+	if err != nil {
+		return ""
+	}
+	return value
+}
+
 // AddStringVar declares a string flag bound to p and attaches its clib metadata.
 func AddStringVar(fs *pflag.FlagSet, p *string, name, value, usage string, extra clib.FlagExtra) {
 	fs.StringVar(p, name, value, usage)

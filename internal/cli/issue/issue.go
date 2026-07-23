@@ -792,7 +792,7 @@ func issueListBuilderWithProfileDefaults(builder jql.BuildOptions, profile confi
 // tests produce identical list output.
 func IssueListOutputData(cmd *cobra.Command, issues any, detail bool, query string) map[string]any {
 	data := map[string]any{"issues": issues, "detail": detail}
-	if debug, _ := cmd.Root().PersistentFlags().GetBool("debug"); debug {
+	if cmdutil.BoolValue(cmd.Root().PersistentFlags(), "debug") {
 		data["jql"] = query
 	}
 	return data

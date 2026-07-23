@@ -3,6 +3,8 @@ package completion
 import (
 	"bytes"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -99,5 +101,20 @@ func TestHandlerReturnsFirstDynamicCandidateWriteFailure(t *testing.T) {
 	}
 	if stdout.writes != 1 {
 		t.Fatalf("stdout writes = %d, want one attempt after the first failure", stdout.writes)
+	}
+}
+
+func TestConfigKeyCandidatesFallBackToTemplatesWhenConfigCannotLoad(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yml")
+	if err := os.WriteFile(path, []byte("profiles: ["), 0o600); err != nil {
+		t.Fatalf("write invalid config: %v", err)
+	}
+	var stdout bytes.Buffer
+
+	if err := emitConfigKeys(&stdout, startup.Globals{ConfigPath: path}); err != nil {
+		t.Fatalf("emitConfigKeys: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "profiles.<profile>.base_url\t") {
+		t.Fatalf("template config keys missing from fallback output:\n%s", stdout.String())
 	}
 }

@@ -14,8 +14,7 @@ import (
 
 // RequestedProfile returns the value of the root --profile persistent flag.
 func RequestedProfile(cmd *cobra.Command) string {
-	profile, _ := cmd.Root().PersistentFlags().GetString("profile")
-	return profile
+	return StringValue(cmd.Root().PersistentFlags(), "profile")
 }
 
 // ActiveProfile returns the env-overlaid profile selected by the --profile
@@ -148,7 +147,7 @@ func JiraClientForProfileContext(ctx context.Context, cmd *cobra.Command, profil
 	if profile.BaseURL == "" {
 		return nil, profile, false, nil
 	}
-	debug, _ := cmd.Root().PersistentFlags().GetBool("debug")
+	debug := BoolValue(cmd.Root().PersistentFlags(), "debug")
 	opts := []jira.Option{
 		// ClientBaseURL is the site URL for a classic token and the Atlassian
 		// gateway (https://api.atlassian.com/ex/jira/<cloud_id>/) for a scoped

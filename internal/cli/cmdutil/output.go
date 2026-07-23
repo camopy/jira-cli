@@ -103,7 +103,7 @@ func PlainOptionsForCommand(cmd *cobra.Command) []cli.PlainOption {
 		cli.WithPlainTermWidth(terminal.Width(os.Stdout)),
 		cli.WithPlainGraphemeWidth(det.IsTTY && emulator.SupportsGraphemes()),
 	}
-	if debug, _ := cmd.Root().PersistentFlags().GetBool("debug"); debug {
+	if BoolValue(cmd.Root().PersistentFlags(), "debug") {
 		opts = append(opts, cli.WithPlainDebug(true))
 	}
 	if parallelism := commandParallelism(cmd); parallelism != defaultParallelism {
@@ -118,7 +118,7 @@ func PlainOptionsForCommand(cmd *cobra.Command) []cli.PlainOption {
 	// never when prompts are off — a pager waiting for keys would hang any
 	// non-interactive consumer. The renderer adds the overflow check.
 	if cmd.Flags().Lookup("no-pager") != nil {
-		noPager, _ := cmd.Flags().GetBool("no-pager")
+		noPager := BoolValue(cmd.Flags(), "no-pager")
 		if !noPager && det.IsTTY && !det.Agent && !NoInputRequested(cmd) {
 			opts = append(opts, cli.WithPlainPager(true))
 		}

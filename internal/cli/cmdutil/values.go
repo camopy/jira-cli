@@ -77,7 +77,7 @@ func ReadJSONFile(path string, dst any) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = r.Close() }()
+	defer r.Close() //nolint:errcheck // read-side close has no useful recovery after decoding
 	dec := json.NewDecoder(r)
 	if err := dec.Decode(dst); err != nil {
 		return err

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -101,8 +102,7 @@ func generatePages(tree *cobra.Command, docPath, llmsPath string, clean bool) er
 		return err
 	}
 	if err = docs.GenLLMsTxt(f); err != nil {
-		_ = f.Close()
-		return err
+		return errors.Join(err, f.Close())
 	}
 	return f.Close()
 }

@@ -41,10 +41,10 @@ func ConfiguredEditorFor(cmd *cobra.Command) string {
 // default (strict) when nothing else overrides.
 func ADFModeFor(cmd *cobra.Command, mutation bool) adfmode.Mode {
 	flag := adfmode.FlagUnset
-	if v, _ := cmd.Flags().GetBool("adf-strict"); v {
+	if BoolValue(cmd.Flags(), "adf-strict") {
 		flag |= adfmode.FlagStrict
 	}
-	if v, _ := cmd.Flags().GetBool("adf-best-effort"); v {
+	if BoolValue(cmd.Flags(), "adf-best-effort") {
 		flag |= adfmode.FlagBestEffort
 	}
 	env := os.Getenv("JIRA_ADF_STRICT")

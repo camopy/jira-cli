@@ -319,7 +319,10 @@ $ jira config set theme.name dracula --dry-run --output=json`,
 // expanded for each present profile) along with its description. Falls back
 // to template form when the config can't be loaded.
 func completeConfigKeys(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-	cfg, _ := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
+	cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
+	if err != nil {
+		cfg = nil
+	}
 	keys := config.Keys(cfg)
 	out := xslices.Map(keys, func(k config.KeyDesc) string { return k.Name + "\t" + k.Description })
 	return out, cobra.ShellCompDirectiveNoFileComp

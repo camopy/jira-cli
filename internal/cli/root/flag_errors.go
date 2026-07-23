@@ -198,7 +198,7 @@ func firstPositional(cmd *cobra.Command, args []string) string {
 	// would accept at its position.
 	cmd.PersistentFlags().VisitAll(register)
 	cmd.InheritedFlags().VisitAll(register)
-	_ = probe.Parse(args)
+	probe.Parse(args) //nolint:errcheck // partial parsing still identifies the first positional token
 	if probe.NArg() == 0 {
 		return ""
 	}

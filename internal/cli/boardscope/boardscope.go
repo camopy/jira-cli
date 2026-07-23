@@ -109,7 +109,10 @@ func FromFlags(cmd *cobra.Command) (jira.BoardScope, string, error) {
 	// fallthrough AND to drive the resolver. Failing config load is
 	// non-fatal here: we treat it as "no default" and only return an
 	// error if the user explicitly asked for a board.
-	cfg, _ := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
+	cfg, err := config.Load(config.WithPath(cmdutil.ConfigPath(cmd)))
+	if err != nil {
+		cfg = nil
+	}
 	profile := config.Profile{}
 	profileName := "default"
 	cacheProfile := cache.Key(profileName, "", cmdutil.CacheConfigPath(cmd))

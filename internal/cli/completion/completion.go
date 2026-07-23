@@ -136,7 +136,12 @@ func emitProfiles(w io.Writer, globals startup.Globals) error {
 }
 
 func emitConfigKeys(w io.Writer, globals startup.Globals) error {
-	cfg, _ := config.Load(config.WithPath(globals.ConfigPath))
+	cfg, err := config.Load(config.WithPath(globals.ConfigPath))
+	if err != nil {
+		// Template-backed keys remain useful even when the concrete config
+		// cannot load, matching the interactive config command's fallback.
+		cfg = nil
+	}
 	for _, k := range config.Keys(cfg) {
 		if _, err := fmt.Fprintf(w, "%s\t%s\n", k.Name, k.Description); err != nil {
 			return err
