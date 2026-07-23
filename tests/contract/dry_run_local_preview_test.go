@@ -245,6 +245,39 @@ func TestWeblinkDryRunStatesRemoteNotChecked(t *testing.T) {
 	}
 }
 
+func TestWeblinkLiveStatesRemoteNotChecked(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/rest/api/3/issue/JCT-1/remotelink" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
+
+	stdout, stderr, code := runJira(
+		t,
+		"--config", jiraConfig(t, srv.URL),
+		"--output=json",
+		"issue", "weblink", "JCT-1",
+		"--url", "https://example.com/page",
+	)
+	if code != 0 {
+		t.Fatalf("weblink live exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(stdout, &env); err != nil {
+		t.Fatalf("output not JSON: %v\n%s", err, stdout)
+	}
+	if checked, ok := env.Data["url_remote_checked"].(bool); !ok || checked {
+		t.Fatalf("live weblink must report url_remote_checked=false: %#v", env.Data)
+	}
+}
+
 // TestBoardsListRejectsDryRunFlag — `boards list` cannot honor a
 // --dry-run flag (it always does a live read + cache write), so the
 // flag is removed. An unknown flag is a usage error.

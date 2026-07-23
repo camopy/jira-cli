@@ -163,19 +163,22 @@ type IssueLinkTypesOutput struct {
 
 var _ = register("issue.link.types", IssueLinkTypesOutput{}, nil)
 
-// IssueWebLinkOutput is `issue weblink`'s data. `url_remote_checked` is
-// emitted (always false) only on the dry-run path, to state plainly that the
-// preview validated URL syntax locally and never fetched the target — a
-// pointer so its presence, not its value, marks the preview.
+// IssueWebLinkOutput is `issue weblink`'s data. url_remote_checked is always
+// false because both paths validate URL syntax locally without fetching the
+// target.
 type IssueWebLinkOutput struct {
 	Issue            IssueRef `json:"issue"`
 	URL              string   `json:"url"`
 	Title            string   `json:"title"`
+	URLRemoteChecked bool     `json:"url_remote_checked"`
 	DryRun           bool     `json:"dry_run"`
-	URLRemoteChecked *bool    `json:"url_remote_checked,omitempty"`
 }
 
-var _ = register("issue.weblink", IssueWebLinkOutput{}, nil)
+var _ = register("issue.weblink", IssueWebLinkOutput{}, map[string]any{
+	"properties": map[string]any{
+		"url_remote_checked": map[string]any{"description": "Whether the command fetched the target URL; always false."},
+	},
+})
 
 // AttachmentAuthor is the fixed uploader identity projected on attachments.
 type AttachmentAuthor struct {
@@ -204,17 +207,29 @@ type IssueAttachmentListOutput struct {
 
 var _ = register("issue.attachment.list", IssueAttachmentListOutput{}, nil)
 
-// IssueAttachmentAddOutput is `issue attachment add`'s data. The dry-run
-// preview lists the inferred `files`; the live upload lists the created
-// `attachments`. Exactly one is present per path.
+// AttachmentFile is the locally validated file metadata retained by both
+// attachment-add paths.
+type AttachmentFile struct {
+	MIMEInferred string `json:"mime_inferred"`
+	Path         string `json:"path"`
+	Size         int64  `json:"size"`
+}
+
+// IssueAttachmentAddOutput is `issue attachment add`'s data. files carries
+// the validated upload context on both paths; attachments is the live outcome.
 type IssueAttachmentAddOutput struct {
 	Issue       IssueRef         `json:"issue"`
-	Files       []map[string]any `json:"files,omitempty"`
-	Attachments []map[string]any `json:"attachments,omitempty"`
+	Files       []AttachmentFile `json:"files"`
+	Attachments []AttachmentItem `json:"attachments,omitempty"`
 	DryRun      bool             `json:"dry_run"`
 }
 
-var _ = register("issue.attachment.add", IssueAttachmentAddOutput{}, nil)
+var _ = register("issue.attachment.add", IssueAttachmentAddOutput{}, map[string]any{
+	"properties": map[string]any{
+		"files":       map[string]any{"description": "Locally validated files proposed or submitted by the command."},
+		"attachments": map[string]any{"description": "Attachments returned by Jira after a successful live upload."},
+	},
+})
 
 // IssueAttachmentDeleteOutput is `issue attachment delete`'s data. `deleted`
 // rides the live path only.
@@ -227,22 +242,27 @@ type IssueAttachmentDeleteOutput struct {
 
 var _ = register("issue.attachment.delete", IssueAttachmentDeleteOutput{}, nil)
 
-// IssueAttachmentDownloadOutput is `issue attachment download`'s data. The
-// dry-run preview reports the planned write `target` (present even when empty
-// in current-dir mode, so a pointer); the live path reports `written_to` and
-// the `bytes` written (a pointer so a zero-byte file still emits the count).
-// `mode` rides both paths.
+// IssueAttachmentDownloadOutput is `issue attachment download`'s data. target
+// retains the originally requested destination on both paths; written_to and
+// bytes report the live outcome. A zero-byte file still emits bytes via the
+// pointer.
 type IssueAttachmentDownloadOutput struct {
 	Issue        IssueRef `json:"issue"`
 	AttachmentID string   `json:"attachment_id"`
 	Mode         string   `json:"mode"`
-	Target       *string  `json:"target,omitempty"`
+	Target       string   `json:"target"`
 	WrittenTo    string   `json:"written_to,omitempty"`
 	Bytes        *int64   `json:"bytes,omitempty"`
 	DryRun       bool     `json:"dry_run"`
 }
 
-var _ = register("issue.attachment.download", IssueAttachmentDownloadOutput{}, nil)
+var _ = register("issue.attachment.download", IssueAttachmentDownloadOutput{}, map[string]any{
+	"properties": map[string]any{
+		"target":     map[string]any{"description": "The destination requested before any server-derived filename is applied."},
+		"written_to": map[string]any{"description": "The path written by a successful live download."},
+		"bytes":      map[string]any{"description": "The number of bytes written by a successful live download."},
+	},
+})
 
 // WatcherItem is the fixed user projection returned by watcher reads.
 type WatcherItem struct {
@@ -264,29 +284,39 @@ var _ = register("issue.watchers.list", IssueWatchersListOutput{}, nil)
 
 // IssueWatcherMutationOutput is the data for `issue watchers add` and
 // `issue watchers remove` (and the watch/unwatch shortcuts) — one shape, so
-// consumers never branch on which verb ran. Three code paths emit disjoint
-// key sets, and the pointer fields keep a false/zero/empty value present on
-// the path that carries it while staying absent on the others:
+// consumers never branch on which verb ran. User and resolution context ride
+// every path; the remaining pointer fields keep a false/zero/empty outcome
+// present on the path that carries it while staying absent on the others:
 //
 //   - dry-run:     issue, user, dry_run, user_resolved, account_id_resolved?
-//   - no-readback: issue, account_id, attempted, dry_run
-//   - readback:    issue, watchers, is_watching, watch_count,
+//   - no-readback: stable context plus account_id, attempted
+//   - readback:    stable context plus watchers, is_watching, watch_count,
 //     was_already_watching, dry_run
 type IssueWatcherMutationOutput struct {
-	Issue              IssueRef          `json:"issue"`
-	User               string            `json:"user,omitempty"`
-	UserResolved       *bool             `json:"user_resolved,omitempty"`
-	AccountIDResolved  string            `json:"account_id_resolved,omitempty"`
-	AccountID          string            `json:"account_id,omitempty"`
-	Attempted          bool              `json:"attempted,omitempty"`
-	Watchers           *[]map[string]any `json:"watchers,omitempty"`
-	IsWatching         *bool             `json:"is_watching,omitempty"`
-	WatchCount         *int              `json:"watch_count,omitempty"`
-	WasAlreadyWatching *bool             `json:"was_already_watching,omitempty"`
-	DryRun             bool              `json:"dry_run"`
+	Issue              IssueRef       `json:"issue"`
+	User               string         `json:"user"`
+	UserResolved       bool           `json:"user_resolved"`
+	AccountIDResolved  string         `json:"account_id_resolved,omitempty"`
+	AccountID          string         `json:"account_id,omitempty"`
+	Attempted          bool           `json:"attempted,omitempty"`
+	Watchers           *[]WatcherItem `json:"watchers,omitempty"`
+	IsWatching         *bool          `json:"is_watching,omitempty"`
+	WatchCount         *int           `json:"watch_count,omitempty"`
+	WasAlreadyWatching *bool          `json:"was_already_watching,omitempty"`
+	DryRun             bool           `json:"dry_run"`
 }
 
 var (
-	_ = register("issue.watchers.add", IssueWatcherMutationOutput{}, nil)
-	_ = register("issue.watchers.remove", IssueWatcherMutationOutput{}, nil)
+	watcherMutationDoc = map[string]any{
+		"properties": map[string]any{
+			"user":                map[string]any{"description": "The original user identifier supplied by the caller."},
+			"user_resolved":       map[string]any{"description": "Whether the user identifier was resolved to a Jira account ID."},
+			"account_id_resolved": map[string]any{"description": "The resolved Jira account ID, when resolution succeeded."},
+			"account_id":          map[string]any{"description": "Legacy no-readback outcome containing the attempted account ID."},
+			"attempted":           map[string]any{"description": "No-readback outcome confirming the mutation request was attempted."},
+			"watchers":            map[string]any{"description": "Watcher list returned by the optional post-mutation readback."},
+		},
+	}
+	_ = register("issue.watchers.add", IssueWatcherMutationOutput{}, watcherMutationDoc)
+	_ = register("issue.watchers.remove", IssueWatcherMutationOutput{}, watcherMutationDoc)
 )

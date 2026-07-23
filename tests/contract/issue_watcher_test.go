@@ -251,6 +251,9 @@ func TestWatchersAddPostsRawAccountIDStringAndReadsBack(t *testing.T) {
 	if _, hasFlag := data["was_already_watching"]; !hasFlag {
 		t.Errorf("readback path: data.was_already_watching missing: %s", out)
 	}
+	if data["user"] != "me" || data["user_resolved"] != true || data["account_id_resolved"] != "712020:test-user" {
+		t.Errorf("readback path lost stable user-resolution context: %#v", data)
+	}
 }
 
 // Idempotent: adding a user already watching → exit 0 with
@@ -342,6 +345,9 @@ func TestWatchersAddNoReadbackBareShape(t *testing.T) {
 	}
 	if v, _ := data["attempted"].(bool); !v {
 		t.Errorf("data.attempted = false, want true")
+	}
+	if data["user"] != "me" || data["user_resolved"] != true || data["account_id_resolved"] != "712020:test-user" {
+		t.Errorf("no-readback path lost stable user-resolution context: %#v", data)
 	}
 }
 

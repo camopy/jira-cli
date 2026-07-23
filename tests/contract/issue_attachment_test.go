@@ -214,6 +214,15 @@ func TestAttachmentAddMultipartContract(t *testing.T) {
 	if got, _ := first["id"].(string); got != "10044" {
 		t.Fatalf("data.attachments[0].id = %q, want 10044", got)
 	}
+	files, _ := data["files"].([]any)
+	if len(files) != 1 {
+		t.Fatalf("live response data.files length = %d, want 1", len(files))
+	}
+	file, _ := files[0].(map[string]any)
+	mimeInferred, _ := file["mime_inferred"].(string)
+	if file["path"] != tmp || mimeInferred == "" || file["size"] != float64(5) {
+		t.Fatalf("live response lost validated file context: %#v", file)
+	}
 }
 
 // 413 size-rejection bubbles up verbatim with exit 5. The CLI must
@@ -379,6 +388,9 @@ func TestAttachmentDownloadModesAndClobberProtect(t *testing.T) {
 		data, _ := env["data"].(map[string]any)
 		if got, _ := data["mode"].(string); got != "output" {
 			t.Fatalf("data.mode = %q, want output", got)
+		}
+		if got, _ := data["target"].(string); got != "local.png" {
+			t.Fatalf("data.target = %q, want originally requested local.png", got)
 		}
 		if got, _ := data["written_to"].(string); got != "local.png" {
 			t.Fatalf("data.written_to = %q, want local.png", got)

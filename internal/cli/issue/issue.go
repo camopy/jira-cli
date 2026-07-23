@@ -2837,17 +2837,13 @@ func runIssueWebLinkMany(cmd *cobra.Command, keys []string, parallelism int, in 
 }
 
 func issueWebLinkData(key string, in issueWebLinkInput, dryRun bool) envelope.IssueWebLinkOutput {
-	data := envelope.IssueWebLinkOutput{
-		Issue:  cmdutil.IssueRef{Key: key},
-		URL:    in.URL,
-		Title:  in.Title,
-		DryRun: dryRun,
+	return envelope.IssueWebLinkOutput{
+		Issue:            cmdutil.IssueRef{Key: key},
+		URL:              in.URL,
+		Title:            in.Title,
+		URLRemoteChecked: false,
+		DryRun:           dryRun,
 	}
-	if dryRun {
-		checked := false
-		data.URLRemoteChecked = &checked
-	}
-	return data
 }
 
 // validateWebLinkURL performs the local, offline syntax check the

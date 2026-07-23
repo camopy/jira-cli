@@ -222,14 +222,7 @@ $ jira issue attachment add PROJ-123 ./report.pdf --dry-run`,
 			if err != nil {
 				return err
 			}
-			previews := make([]map[string]any, 0, len(sources))
-			for _, src := range sources {
-				previews = append(previews, map[string]any{
-					"path":          src.Path,
-					"size":          src.Size,
-					"mime_inferred": inferAttachmentMime(src.Path),
-				})
-			}
+			previews := attachmentFiles(sources)
 			if dryRun {
 				if len(keys) > 1 {
 					return runAttachmentAddManyDryRun(cmd, keys, previews)
@@ -248,7 +241,7 @@ $ jira issue attachment add PROJ-123 ./report.pdf --dry-run`,
 				return fmt.Errorf("jira base URL is required for issue.attachment.add")
 			}
 			if len(keys) > 1 {
-				return runAttachmentAddMany(cmd, service, keys, sources, parallelism)
+				return runAttachmentAddMany(cmd, service, keys, sources, previews, parallelism)
 			}
 			fileSources, closeFiles, err := openAttachmentFileSources(sources)
 			if err != nil {
@@ -263,12 +256,13 @@ $ jira issue attachment add PROJ-123 ./report.pdf --dry-run`,
 			}); err != nil {
 				return err
 			}
-			rows := make([]map[string]any, 0, len(uploaded))
+			rows := make([]envelope.AttachmentItem, 0, len(uploaded))
 			for _, a := range uploaded {
-				rows = append(rows, attachmentToOutput(a))
+				rows = append(rows, attachmentToItem(a))
 			}
 			return cmdutil.WriteEnvelope(cmd, "issue.attachment.add", envelope.IssueAttachmentAddOutput{
 				Issue:       cmdutil.IssueRef{Key: keys[0]},
+				Files:       previews,
 				Attachments: rows,
 				DryRun:      false,
 			})
@@ -315,7 +309,7 @@ func attachmentAddKeysAndPaths(args, files []string) ([]string, []string, error)
 	return keys, paths, nil
 }
 
-func runAttachmentAddManyDryRun(cmd *cobra.Command, keys []string, previews []map[string]any) error {
+func runAttachmentAddManyDryRun(cmd *cobra.Command, keys []string, previews []envelope.AttachmentFile) error {
 	results := xslices.Map(keys, func(key string) cmdutil.KeyResult[envelope.IssueAttachmentAddOutput] {
 		return cmdutil.KeyResult[envelope.IssueAttachmentAddOutput]{
 			Key: key,
@@ -334,6 +328,7 @@ func runAttachmentAddMany(
 	service jira.AttachmentService,
 	keys []string,
 	sources []attachmentFileSource,
+	previews []envelope.AttachmentFile,
 	parallelism int,
 ) error {
 	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (envelope.IssueAttachmentAddOutput, error) {
@@ -346,12 +341,13 @@ func runAttachmentAddMany(
 		if err != nil {
 			return envelope.IssueAttachmentAddOutput{}, err
 		}
-		rows := make([]map[string]any, 0, len(uploaded))
+		rows := make([]envelope.AttachmentItem, 0, len(uploaded))
 		for _, a := range uploaded {
-			rows = append(rows, attachmentToOutput(a))
+			rows = append(rows, attachmentToItem(a))
 		}
 		return envelope.IssueAttachmentAddOutput{
 			Issue:       cmdutil.IssueRef{Key: key},
+			Files:       previews,
 			Attachments: rows,
 			DryRun:      false,
 		}, nil
@@ -389,6 +385,18 @@ func openAttachmentFileSources(sources []attachmentFileSource) ([]jira.FileSourc
 type attachmentFileSource struct {
 	Path string
 	Size int64
+}
+
+func attachmentFiles(sources []attachmentFileSource) []envelope.AttachmentFile {
+	files := make([]envelope.AttachmentFile, 0, len(sources))
+	for _, source := range sources {
+		files = append(files, envelope.AttachmentFile{
+			MIMEInferred: inferAttachmentMime(source.Path),
+			Path:         source.Path,
+			Size:         source.Size,
+		})
+	}
+	return files
 }
 
 func attachmentFileSources(paths []string) ([]attachmentFileSource, error) {
@@ -518,6 +526,7 @@ $ jira issue attachment download PROJ-123 10500 --to ./report.pdf --dry-run`,
 			}
 			attachmentID := args[1]
 			mode, target := resolveDownloadMode(output)
+			requestedTarget := target
 			// Path confinement, then clobber-protect, both BEFORE any
 			// HTTP call. A --to that escapes the working directory (via
 			// `..` traversal or an outside absolute path) is rejected —
@@ -538,7 +547,7 @@ $ jira issue attachment download PROJ-123 10500 --to ./report.pdf --dry-run`,
 					Issue:        cmdutil.IssueRef{Key: key},
 					AttachmentID: attachmentID,
 					Mode:         string(mode),
-					Target:       &target,
+					Target:       requestedTarget,
 					DryRun:       true,
 				})
 			}
@@ -586,6 +595,7 @@ $ jira issue attachment download PROJ-123 10500 --to ./report.pdf --dry-run`,
 			return cmdutil.WriteEnvelope(cmd, "issue.attachment.download", envelope.IssueAttachmentDownloadOutput{
 				Issue:        cmdutil.IssueRef{Key: key},
 				AttachmentID: attachmentID,
+				Target:       requestedTarget,
 				WrittenTo:    target,
 				Bytes:        &wrote,
 				Mode:         string(mode),
@@ -697,29 +707,4 @@ func inferAttachmentMime(path string) string {
 		return strings.SplitN(mt, ";", 2)[0]
 	}
 	return "application/octet-stream"
-}
-
-// attachmentToOutput projects pkg/jira.Attachment to the envelope shape
-// per envelope-shapes.md. Pointer-based source means we render empty
-// strings for nil fields rather than panicking.
-func attachmentToOutput(a jira.Attachment) map[string]any {
-	out := map[string]any{
-		"id":        ptr.Deref(a.ID),
-		"filename":  ptr.Deref(a.Filename),
-		"mime_type": ptr.Deref(a.MimeType),
-		"size":      ptr.Deref(a.Size),
-		"created":   ptr.Deref(a.Created),
-	}
-	out["author"] = attachmentUserToOutput(a.Author)
-	return out
-}
-
-func attachmentUserToOutput(u *jira.User) map[string]any {
-	if u == nil {
-		return map[string]any{"account_id": "", "display_name": ""}
-	}
-	return map[string]any{
-		"account_id":   ptr.Deref(u.AccountID),
-		"display_name": ptr.Deref(u.DisplayName),
-	}
 }

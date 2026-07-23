@@ -214,6 +214,50 @@ func TestCoreMutationSchemasDeclareStableContext(t *testing.T) {
 	}
 }
 
+func TestCollaborationMutationSchemasDeclareStableContext(t *testing.T) {
+	schemas := declaredOutputSchemas(t)
+	cases := []struct {
+		operation string
+		required  []string
+	}{
+		{"issue.attachment.add", []string{"issue", "files", "dry_run"}},
+		{"issue.attachment.download", []string{"issue", "attachment_id", "mode", "target", "dry_run"}},
+		{"issue.watchers.add", []string{"issue", "user", "user_resolved", "dry_run"}},
+		{"issue.watchers.remove", []string{"issue", "user", "user_resolved", "dry_run"}},
+		{"issue.weblink", []string{"issue", "url", "title", "url_remote_checked", "dry_run"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.operation, func(t *testing.T) {
+			schema, ok := schemas[tc.operation].(map[string]any)
+			if !ok {
+				t.Fatalf("%s output schema missing", tc.operation)
+			}
+			props, _ := schema["properties"].(map[string]any)
+			for _, field := range tc.required {
+				if _, exists := props[field]; !exists || !schemaRequires(schema, field) {
+					t.Fatalf("%s field %q must be declared and required: %#v", tc.operation, field, schema)
+				}
+			}
+			if files, ok := props["files"].(map[string]any); ok {
+				items, _ := files["items"].(map[string]any)
+				for _, field := range []string{"mime_inferred", "path", "size"} {
+					if !schemaRequires(items, field) {
+						t.Fatalf("%s files[] field %q must be required: %#v", tc.operation, field, items)
+					}
+				}
+			}
+			if watchers, ok := props["watchers"].(map[string]any); ok {
+				items, _ := watchers["items"].(map[string]any)
+				for _, field := range []string{"account_id", "display_name"} {
+					if !schemaRequires(items, field) {
+						t.Fatalf("%s watchers[] field %q must be required: %#v", tc.operation, field, items)
+					}
+				}
+			}
+		})
+	}
+}
+
 func schemaRequires(schema map[string]any, name string) bool {
 	required, _ := schema["required"].([]any)
 	for _, field := range required {

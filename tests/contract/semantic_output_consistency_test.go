@@ -1,10 +1,14 @@
 package contract
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -306,6 +310,170 @@ func TestDestructiveStableContextMatchesDryRunAndLive(t *testing.T) {
 	}
 }
 
+func TestAttachmentAddStableContextMatchesDryRunAndLive(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `[{"id":"200","filename":"stable.txt","mimeType":"text/plain","size":6,"author":{"accountId":"acc-a","displayName":"Alice"},"created":"2026-07-01T10:00:00.000+0000"}]`)
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
+	file := filepath.Join(t.TempDir(), "stable.txt")
+	if err := os.WriteFile(file, []byte("stable"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	cfg := jiraConfig(t, srv.URL)
+
+	for _, keys := range [][]string{{"PROJ-1"}, {"PROJ-1", "PROJ-2"}} {
+		keyMode := "single"
+		if len(keys) > 1 {
+			keyMode = "multi"
+		}
+		t.Run(keyMode, func(t *testing.T) {
+			base := []string{"--config", cfg, "--output=json", "issue", "attachment", "add"}
+			base = append(base, keys...)
+			base = append(base, "--file", file)
+			if len(keys) == 1 {
+				dry := successfulData(t, append(base, "--dry-run")...)
+				live := successfulData(t, base...)
+				requireSameJSONField(t, dry, live, "issue")
+				requireSameJSONField(t, dry, live, "files")
+				if _, exists := live["attachments"]; !exists {
+					t.Fatalf("live upload omitted attachments: %#v", live)
+				}
+				return
+			}
+			dry := successfulKeyedData(t, append(base, "--dry-run")...)
+			live := successfulKeyedData(t, base...)
+			for _, key := range keys {
+				requireSameJSONField(t, dry[key], live[key], "issue")
+				requireSameJSONField(t, dry[key], live[key], "files")
+				if _, exists := live[key]["attachments"]; !exists {
+					t.Fatalf("live upload for %s omitted attachments: %#v", key, live[key])
+				}
+			}
+		})
+	}
+}
+
+func TestAttachmentDownloadStableContextMatchesDryRunAndLive(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "stable download")
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
+	workDir := t.TempDir()
+	base := []string{
+		"--config", jiraConfig(t, srv.URL),
+		"--output=json",
+		"issue", "attachment", "download",
+		"PROJ-1", "200",
+		"--to", "stable.bin",
+	}
+	dry := successfulDataInDir(t, workDir, append(base, "--dry-run")...)
+	live := successfulDataInDir(t, workDir, base...)
+
+	for _, field := range []string{"issue", "attachment_id", "mode", "target"} {
+		requireSameJSONField(t, dry, live, field)
+	}
+	if _, exists := dry["written_to"]; exists {
+		t.Fatalf("dry-run fabricated written_to: %#v", dry)
+	}
+	if _, exists := live["written_to"]; !exists {
+		t.Fatalf("live download omitted written_to: %#v", live)
+	}
+}
+
+func TestWatcherMutationStableContextMatchesDryRunAndLive(t *testing.T) {
+	for _, operation := range []string{"add", "remove"} {
+		for _, noReadback := range []bool{false, true} {
+			for _, keys := range [][]string{{"PROJ-1"}, {"PROJ-1", "PROJ-2"}} {
+				name := operation
+				if noReadback {
+					name += "-no-readback"
+				}
+				if len(keys) == 1 {
+					name += "-single"
+				} else {
+					name += "-multi"
+				}
+				t.Run(name, func(t *testing.T) {
+					srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						w.Header().Set("Content-Type", "application/json")
+						switch r.Method {
+						case http.MethodGet:
+							_, _ = io.WriteString(w, `{"isWatching":true,"watchCount":1,"watchers":[{"accountId":"acc-a","displayName":"Alice"}]}`)
+						case http.MethodPost, http.MethodDelete:
+							w.WriteHeader(http.StatusNoContent)
+						default:
+							w.WriteHeader(http.StatusNotFound)
+						}
+					}))
+					t.Cleanup(srv.Close)
+					t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
+					base := []string{"--config", jiraConfig(t, srv.URL), "--output=json", "issue", "watchers", operation}
+					base = append(base, keys...)
+					base = append(base, "--user", "accountId:acc-a")
+					if noReadback {
+						base = append(base, "--no-readback")
+					}
+					if len(keys) == 1 {
+						dry := successfulData(t, append(base, "--dry-run")...)
+						live := successfulData(t, base...)
+						requireWatcherStableContext(t, dry, live)
+						requireWatcherOutcome(t, live, noReadback)
+						return
+					}
+					dry := successfulKeyedData(t, append(base, "--dry-run")...)
+					live := successfulKeyedData(t, base...)
+					for _, key := range keys {
+						requireWatcherStableContext(t, dry[key], live[key])
+						requireWatcherOutcome(t, live[key], noReadback)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestWebLinkStableContextMatchesDryRunAndLive(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("JIRA_TOKEN_DEFAULT", "test-token")
+	cfg := jiraConfig(t, srv.URL)
+	for _, keys := range [][]string{{"PROJ-1"}, {"PROJ-1", "PROJ-2"}} {
+		base := []string{"--config", cfg, "--output=json", "issue", "weblink"}
+		base = append(base, keys...)
+		base = append(base, "--url", "https://example.com/stable", "--title", "Stable link")
+		if len(keys) == 1 {
+			dry := successfulData(t, append(base, "--dry-run")...)
+			live := successfulData(t, base...)
+			for _, field := range []string{"issue", "url", "title", "url_remote_checked"} {
+				requireSameJSONField(t, dry, live, field)
+			}
+			continue
+		}
+		dry := successfulKeyedData(t, append(base, "--dry-run")...)
+		live := successfulKeyedData(t, base...)
+		for _, key := range keys {
+			for _, field := range []string{"issue", "url", "title", "url_remote_checked"} {
+				requireSameJSONField(t, dry[key], live[key], field)
+			}
+		}
+	}
+}
+
 func successfulData(t *testing.T, args ...string) map[string]any {
 	t.Helper()
 	stdout, stderr, code := runJira(t, args...)
@@ -319,6 +487,67 @@ func successfulData(t *testing.T, args ...string) map[string]any {
 		t.Fatalf("decode envelope: %v\n%s", err, stdout)
 	}
 	return env.Data
+}
+
+func successfulDataInDir(t *testing.T, dir string, args ...string) map[string]any {
+	t.Helper()
+	cmd := exec.Command(buildJiraBinary(t), args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "JIRA_TOKEN_DEFAULT=test-token")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("jira %v error = %v\nstdout=%s\nstderr=%s", args, err, stdout.Bytes(), stderr.Bytes())
+	}
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &env); err != nil {
+		t.Fatalf("decode envelope: %v\n%s", err, stdout.Bytes())
+	}
+	return env.Data
+}
+
+func successfulKeyedData(t *testing.T, args ...string) map[string]map[string]any {
+	t.Helper()
+	data := successfulData(t, args...)
+	results, ok := data["results"].([]any)
+	if !ok {
+		t.Fatalf("keyed result missing data.results: %#v", data)
+	}
+	out := make(map[string]map[string]any, len(results))
+	for _, raw := range results {
+		result, _ := raw.(map[string]any)
+		key, _ := result["key"].(string)
+		value, _ := result["data"].(map[string]any)
+		out[key] = value
+	}
+	return out
+}
+
+func requireWatcherStableContext(t *testing.T, dry, live map[string]any) {
+	t.Helper()
+	for _, field := range []string{"issue", "user", "user_resolved", "account_id_resolved"} {
+		requireSameJSONField(t, dry, live, field)
+	}
+}
+
+func requireWatcherOutcome(t *testing.T, live map[string]any, noReadback bool) {
+	t.Helper()
+	if noReadback {
+		for _, field := range []string{"account_id", "attempted"} {
+			if _, exists := live[field]; !exists {
+				t.Fatalf("no-readback outcome omitted %q: %#v", field, live)
+			}
+		}
+		return
+	}
+	for _, field := range []string{"watchers", "is_watching", "watch_count", "was_already_watching"} {
+		if _, exists := live[field]; !exists {
+			t.Fatalf("readback outcome omitted %q: %#v", field, live)
+		}
+	}
 }
 
 func requireSameJSONField(t *testing.T, dry, live map[string]any, field string) {
