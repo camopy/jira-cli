@@ -1,3 +1,0 @@
-kind: fixed
-body: Agent guide exports use jira-prefixed skill names, scoped exports can explicitly select Claude Code or Codex, and bundled guides accurately describe live and local behavior
-time: 2026-07-22T23:14:01-04:00

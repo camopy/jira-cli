@@ -1,6 +1,13 @@
 # Release Notes
 
 
+## [0.14.2](https://github.com/matcra587/jira-cli/releases/tag/v0.14.2) — 2026-07-22
+
+### Fixed
+
+- Shell completion offers values for the agent surface's guide-section, schema-path, export-format, and export-scope flags, which the clib-driven completion path previously left empty
+- Agent guide exports use jira-prefixed skill names, scoped exports can explicitly select Claude Code or Codex, and bundled guides accurately describe live and local behavior
+
 ## [0.14.1](https://github.com/matcra587/jira-cli/releases/tag/v0.14.1) — 2026-07-22
 
 ### Fixed
