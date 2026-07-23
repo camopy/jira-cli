@@ -200,13 +200,13 @@ func refreshResource(ctx context.Context, cacheKey string, client *jira.Client, 
 		if err != nil {
 			return refreshOutcome{}, err
 		}
-		entry, err := cache.Write(cacheKey, r.Name, data)
-		if err != nil {
-			return refreshOutcome{}, err
-		}
 		items, err := decodeCacheList(data)
 		if err != nil {
 			return refreshOutcome{}, fmt.Errorf("%s: decode refreshed cache data: %w", r.Name, err)
+		}
+		entry, err := cache.Write(cacheKey, r.Name, data)
+		if err != nil {
+			return refreshOutcome{}, err
 		}
 		count, fetchedAt = len(items), entry.FetchedAt
 	}
