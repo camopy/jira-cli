@@ -99,7 +99,7 @@ type issueService struct {
 	client *Client
 }
 
-var defaultIssueListFields = []string{"key", "summary", "status", "assignee", "priority", "updated"}
+var defaultIssueListFields = []string{"key", "summary", "status", "assignee", "priority", "created", "updated"}
 
 // IssueListFields is a package-level copy of the default issue-list field set,
 // exposed for callers that read the default without invoking a function. It is

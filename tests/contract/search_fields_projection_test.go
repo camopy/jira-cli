@@ -24,7 +24,7 @@ func searchProjectionServer(t *testing.T) *httptest.Server {
 			http.NotFound(w, r)
 			return
 		}
-		_, _ = w.Write([]byte(`{"isLast":true,"issues":[{"id":"10001","key":"PROJ-1","self":"http://example.invalid/rest/api/3/issue/10001","fields":{"summary":"Checkout returns 500","status":{"name":"Done","statusCategory":{"key":"done","colorName":"green"}},"priority":{"name":"High"},"updated":"2026-05-03T10:00:00Z"}}]}`))
+		_, _ = w.Write([]byte(`{"isLast":true,"issues":[{"id":"10001","key":"PROJ-1","self":"http://example.invalid/rest/api/3/issue/10001","fields":{"summary":"Checkout returns 500","status":{"name":"Done","statusCategory":{"key":"done","colorName":"green"}},"priority":{"name":"High"},"created":"2026-04-01T09:00:00Z","updated":"2026-05-03T10:00:00Z"}}]}`))
 	}))
 	t.Cleanup(srv.Close)
 	return srv
@@ -65,6 +65,7 @@ func TestSearchFieldsNarrowsSummaryProjection(t *testing.T) {
 		"status_color":    "green",
 		"assignee":        nil,
 		"priority":        "High",
+		"created":         "2026-04-01T09:00:00Z",
 		"updated":         "2026-05-03T10:00:00Z",
 	}
 	if !reflect.DeepEqual(byDefault, wantDefault) {

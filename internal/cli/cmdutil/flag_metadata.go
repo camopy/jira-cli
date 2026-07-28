@@ -95,8 +95,8 @@ func AddIssueColumnFlags(flags *pflag.FlagSet, columns *[]string, tsv *bool) {
 		Group:       "Output",
 		Placeholder: "COLS",
 		Terse:       "output columns",
-		Enum:        []string{"key", "summary", "status", "assignee", "priority", "updated"},
-		EnumTerse:   []string{"issue key", "title text", "workflow status", "assigned user", "priority level", "last-updated time"},
+		Enum:        []string{"key", "summary", "status", "assignee", "priority", "created", "updated"},
+		EnumTerse:   []string{"issue key", "title text", "workflow status", "assigned user", "priority level", "creation time", "last-updated time"},
 	})
 	ExtendFlag(flags, "tsv", clib.FlagExtra{Group: "Output"})
 }

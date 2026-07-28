@@ -34,7 +34,7 @@ jira search jql 'project = PROJ' --all --output=json
 ```
 
 The default projection is the flat per-issue summary — `key`, `summary`,
-`status`, `status_category`, `assignee`, `priority`, `updated`.
+`status`, `status_category`, `assignee`, `priority`, `created`, `updated`.
 `status_category` is the stable workflow bucket (`new`, `indeterminate`, or
 `done`), with a `status_color` field alongside when Jira reports the category's
 colour:
@@ -50,6 +50,7 @@ colour:
       "status_color": "blue-gray",
       "assignee": null,
       "priority": "Medium",
+      "created": "…",
       "updated": "…"
     }
   ]

@@ -112,7 +112,7 @@ func TestSearchCommandsRequestSummaryFieldsByDefaultAndFullOnDemand(t *testing.T
 			}
 		}
 	}
-	assertFields(0, []string{"key", "summary", "status", "assignee", "priority", "updated"})
+	assertFields(0, []string{"key", "summary", "status", "assignee", "priority", "created", "updated"})
 	assertFields(1, []string{"*all"})
 	assertFields(2, []string{"key", "summary"})
 }

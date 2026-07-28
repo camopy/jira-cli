@@ -378,10 +378,17 @@ func conformanceErrors(path string, value any, schema map[string]any) []string {
 	if !hasProps {
 		return errs
 	}
+	// additionalProperties: true is the published marker for a reviewed
+	// open boundary (envelope.OpenSchema — e.g. the issue fields block,
+	// where tenant customfield_* keys and unmodeled system fields ride
+	// beside the named members). Undeclared keys there are contract.
+	open, _ := schema["additionalProperties"].(bool)
 	for key, val := range obj {
 		sub, declared := props[key].(map[string]any)
 		if !declared {
-			errs = append(errs, fmt.Sprintf("%s.%s: emitted but not declared in the schema", path, key))
+			if !open {
+				errs = append(errs, fmt.Sprintf("%s.%s: emitted but not declared in the schema", path, key))
+			}
 			continue
 		}
 		errs = append(errs, conformanceErrors(path+"."+key, val, sub)...)

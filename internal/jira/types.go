@@ -2,6 +2,8 @@ package jira
 
 import (
 	"encoding/json"
+	"reflect"
+	"strings"
 
 	"github.com/matcra587/jira-cli/internal/adf"
 )
@@ -48,8 +50,11 @@ type Issue struct {
 // IssueFields is the fields object of an issue. System fields are modeled
 // explicitly; every customfield_* key Jira returns is captured into
 // CustomFields by the custom UnmarshalJSON (the `json:"-"` tag keeps the
-// standard decoder from touching it), and MarshalJSON splices them back so a
-// round-trip preserves custom-field values the struct has no named field for.
+// standard decoder from touching it), and every remaining unmodeled system
+// key (duedate, resolutiondate, votes, …) is captured into Extra the same
+// way. MarshalJSON splices both back so a round-trip preserves the whole
+// wire fields block, not just the keys the struct names — dropping the rest
+// is exactly the bug that made `created` unreachable before it was modeled.
 type IssueFields struct {
 	Summary      *string                    `json:"summary,omitempty"`
 	IssueType    *IssueType                 `json:"issuetype,omitempty"`
@@ -63,12 +68,14 @@ type IssueFields struct {
 	Parent       *Issue                     `json:"parent,omitempty"`
 	FixVersions  []Version                  `json:"fixVersions,omitempty"`
 	Versions     []Version                  `json:"versions,omitempty"`
+	Created      *string                    `json:"created,omitempty"`
 	Updated      *string                    `json:"updated,omitempty"`
 	Comment      *CommentPage               `json:"comment,omitempty"`
 	Worklog      *WorklogPage               `json:"worklog,omitempty"`
 	IssueLinks   []IssueLink                `json:"issuelinks,omitempty"`
 	Subtasks     []*Issue                   `json:"subtasks,omitempty"`
 	CustomFields map[string]json.RawMessage `json:"-"`
+	Extra        map[string]json.RawMessage `json:"-"`
 }
 
 // CommentPage is the paged comment container Jira nests under fields.comment on
@@ -283,10 +290,37 @@ type FieldSchema struct {
 	Custom string `json:"custom,omitempty"`
 }
 
+// OpenSchemaProperties marks the fields block as an open schema for the
+// envelope registry (envelope.OpenSchema): tenant-defined customfield_*
+// keys and raw unmodeled system fields legitimately ride beside the named
+// members, so the published schema carries additionalProperties: true and
+// the conformance guardrail treats undeclared keys here as contract, not
+// drift. The return value is documentation, not data.
+func (f *IssueFields) OpenSchemaProperties() string {
+	return "tenant-defined customfield_* keys and unmodeled Jira system fields"
+}
+
+// issueFieldsNamedKeys is the set of wire keys IssueFields models with a
+// named member, derived from the struct's json tags so it can never drift
+// from the struct itself. Keys in this set decode into their member; every
+// other key is captured raw (CustomFields / Extra).
+var issueFieldsNamedKeys = func() map[string]bool {
+	keys := map[string]bool{}
+	t := reflect.TypeOf(IssueFields{})
+	for i := range t.NumField() {
+		tag, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
+		if tag != "" && tag != "-" {
+			keys[tag] = true
+		}
+	}
+	return keys
+}()
+
 // UnmarshalJSON decodes the named system fields normally and, in a second
-// pass over the raw object, captures every customfield_* key into CustomFields
-// — the dynamic keys the struct cannot name. The `type known` alias sheds the
-// method set to avoid infinite recursion.
+// pass over the raw object, captures every unnamed key raw: customfield_*
+// into CustomFields (the keyed lookups the mutation pipeline uses) and every
+// other unmodeled key into Extra, so no wire field is silently dropped. The
+// `type known` alias sheds the method set to avoid infinite recursion.
 func (f *IssueFields) UnmarshalJSON(data []byte) error {
 	type known IssueFields
 	var raw map[string]json.RawMessage
@@ -299,18 +333,25 @@ func (f *IssueFields) UnmarshalJSON(data []byte) error {
 	}
 	*f = IssueFields(k)
 	f.CustomFields = map[string]json.RawMessage{}
+	f.Extra = map[string]json.RawMessage{}
 	for key, val := range raw {
-		if len(key) >= len("customfield_") && key[:len("customfield_")] == "customfield_" {
+		switch {
+		case strings.HasPrefix(key, "customfield_"):
 			f.CustomFields[key] = val
+		case !issueFieldsNamedKeys[key]:
+			f.Extra[key] = val
 		}
 	}
 	return nil
 }
 
-// MarshalJSON encodes the named fields, then splices the captured CustomFields
-// back in under their original customfield_* keys so a decode/encode round-trip
-// preserves custom-field values. The synthetic "CustomFields" key the alias
-// encode produces is dropped before the merge.
+// MarshalJSON encodes the named fields, then splices the captured
+// CustomFields and Extra back in under their original keys so a
+// decode/encode round-trip preserves the whole wire fields block. The
+// synthetic map keys the alias encode produces are dropped before the merge;
+// named members always win over a same-named raw capture (which cannot
+// happen for a decode this package performed, since capture excludes named
+// keys).
 func (f IssueFields) MarshalJSON() ([]byte, error) {
 	type known IssueFields
 	data, err := json.Marshal(known(f))
@@ -322,8 +363,14 @@ func (f IssueFields) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	delete(raw, "CustomFields")
+	delete(raw, "Extra")
 	for key, value := range f.CustomFields {
 		raw[key] = value
+	}
+	for key, value := range f.Extra {
+		if _, named := raw[key]; !named {
+			raw[key] = value
+		}
 	}
 	return json.Marshal(raw)
 }

@@ -901,6 +901,7 @@ type issueTableRow struct {
 	StatusColor string
 	Assignee    string
 	Priority    string
+	Created     string
 	Updated     string
 }
 
@@ -958,6 +959,14 @@ var issueColumnDefs = []issueColumn{
 		text:   func(r issueTableRow) string { return r.Priority },
 		cell: func(r issueTableRow, cfg plainConfig, _ *table.RenderContext) table.Cell {
 			return styledCell(priorityStyle(cfg, r.Priority), r.Priority)
+		},
+	},
+	{
+		name:   "created",
+		header: "CREATED",
+		text:   func(r issueTableRow) string { return r.Created },
+		cell: func(r issueTableRow, _ plainConfig, _ *table.RenderContext) table.Cell {
+			return table.TextCell(r.Created)
 		},
 	},
 	{
@@ -1020,6 +1029,7 @@ func buildIssueRows(issues []map[string]any) []issueTableRow {
 			StatusColor: formatHumanField(issue["status_color"]),
 			Assignee:    SanitizeTerminalBlock(formatAssignee(issue["assignee"])),
 			Priority:    formatHumanField(issue["priority"]),
+			Created:     formatHumanField(issue["created"]),
 			Updated:     formatHumanField(issue["updated"]),
 		})
 	}
@@ -1362,6 +1372,7 @@ func issueMapFromJiraIssue(issue *jira.Issue) map[string]any {
 		"status":   "",
 		"assignee": nil,
 		"priority": "",
+		"created":  "",
 		"updated":  "",
 	}
 	if issue == nil {
@@ -1395,6 +1406,9 @@ func issueMapFromJiraIssue(issue *jira.Issue) map[string]any {
 	}
 	if issue.Fields.Priority != nil && issue.Fields.Priority.Name != nil {
 		row["priority"] = *issue.Fields.Priority.Name
+	}
+	if issue.Fields.Created != nil {
+		row["created"] = *issue.Fields.Created
 	}
 	if issue.Fields.Updated != nil {
 		row["updated"] = *issue.Fields.Updated

@@ -30,6 +30,7 @@ var issueSummaryKeys = map[string][]string{
 	"status":   {"status", "status_category", "status_color"},
 	"assignee": {"assignee"},
 	"priority": {"priority"},
+	"created":  {"created"},
 	"updated":  {"updated"},
 }
 
@@ -90,8 +91,8 @@ func issueWireFields(issue *jira.Issue) map[string]any {
 }
 
 // IssueSummary projects an issue onto the stable compact field set
-// (key, summary, status, assignee, priority, updated). Null-safe: missing
-// fields keep their zero placeholder so the shape never varies.
+// (key, summary, status, assignee, priority, created, updated). Null-safe:
+// missing fields keep their zero placeholder so the shape never varies.
 func IssueSummary(issue *jira.Issue) map[string]any {
 	summary := map[string]any{
 		"key":             "",
@@ -100,6 +101,7 @@ func IssueSummary(issue *jira.Issue) map[string]any {
 		"status_category": "",
 		"assignee":        nil,
 		"priority":        nil,
+		"created":         "",
 		"updated":         "",
 	}
 	if issue == nil {
@@ -130,6 +132,9 @@ func IssueSummary(issue *jira.Issue) map[string]any {
 	}
 	if issue.Fields.Priority != nil && issue.Fields.Priority.Name != nil {
 		summary["priority"] = *issue.Fields.Priority.Name
+	}
+	if issue.Fields.Created != nil {
+		summary["created"] = *issue.Fields.Created
 	}
 	if issue.Fields.Updated != nil {
 		summary["updated"] = *issue.Fields.Updated

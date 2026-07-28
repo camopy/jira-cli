@@ -90,6 +90,7 @@ type IssueListRow struct {
 	StatusColor    string             `json:"status_color,omitempty"`
 	Assignee       *IssueListAssignee `json:"assignee,omitempty"`
 	Priority       *string            `json:"priority,omitempty"`
+	Created        string             `json:"created"`
 	Updated        string             `json:"updated"`
 }
 

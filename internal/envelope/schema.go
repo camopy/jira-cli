@@ -5,6 +5,15 @@ import (
 	"strings"
 )
 
+// OpenSchema marks a wire type whose JSON object legitimately carries keys
+// beyond its named members (a reviewed dynamic boundary, e.g. Jira's
+// tenant-defined fields block). SchemaOf publishes such a type with
+// `additionalProperties: true`, and the conformance guardrail accepts
+// undeclared keys inside it instead of reporting drift.
+type OpenSchema interface {
+	OpenSchemaProperties() string
+}
+
 // SchemaOf derives the published JSON-Schema map for an Output struct from
 // its type: object properties from exported fields' json tags, `required`
 // from fields without omitempty, recursion through structs and slices,
@@ -72,6 +81,14 @@ func schemaOfType(t reflect.Type, visited map[reflect.Type]bool) map[string]any 
 		required := []string{}
 		collectStructFields(t, properties, &required, visited)
 		schema := map[string]any{"type": "object", "properties": properties}
+		// A type that declares itself an open schema (jira.IssueFields:
+		// tenant-defined customfield_* keys plus raw unmodeled system
+		// fields ride beside the named members) publishes
+		// additionalProperties so the conformance walker and consumers
+		// know undeclared keys are contract, not drift.
+		if _, open := reflect.New(t).Interface().(OpenSchema); open {
+			schema["additionalProperties"] = true
+		}
 		if len(required) > 0 {
 			schema["required"] = required
 		}

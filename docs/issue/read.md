@@ -141,6 +141,7 @@ Each `data.issues[]` row carries the summary fields plus `status_category`
       "status_color": "yellow",
       "priority": "High",
       "assignee": null,
+      "created": "2026-05-28T09:14:03.512-0400",
       "updated": "2026-06-01T22:00:29.281-0400"
     }
   ]
