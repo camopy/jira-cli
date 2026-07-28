@@ -19,6 +19,7 @@ detail. To find the key first, use [`list`](#list) or [`mine`](#mine).
 
 ```sh
 jira issue view PROJ-123
+jira issue view PROJ-123 --fields summary,status,assignee
 jira issue view PROJ-123 --web
 jira issue view PROJ-1 PROJ-2 PROJ-3 -p 4 --output=json
 ```
@@ -63,6 +64,12 @@ Both `transitions` (the workflow moves valid from the current status) and
 `editmeta.fields` (editable fields with their `required` flag, `operations`, and
 `allowedValues`) ride the same read at no extra call — one `view` answers "what
 can I transition to" and "what may I edit" without a follow-up request.
+
+`--fields` narrows the fetched payload to the named fields — the same selector
+as [`search jql`](../search.md#projection-shapes), keeping the `data.issue` shape
+with the untouched fields omitted. A narrowed read is a deliberate slim
+fetch: it skips the `transitions`, `operations`, and `editmeta` expansions, so
+omit `--fields` when you need the edit context above.
 
 !!! warning "Raw Jira passthrough"
     `data.issue.fields` is Jira's own field shape: custom fields appear by their

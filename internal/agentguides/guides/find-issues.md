@@ -25,14 +25,19 @@ Three tiers, cheapest first:
 On `jira search jql`, narrow the payload deliberately: default fields
 are the working set, `--fields summary,status,assignee` trims further,
 `--full` fetches everything, and `--count` answers "how many" without
-fetching any issue. `jira issue view` and `jira issue list` take none of
-the field-selection flags: `issue list` supports `--count`, but narrows
-what is *displayed* with `--columns`, not the fetched payload.
+fetching any issue. `jira issue view` takes the same `--fields` selector;
+a narrowed view skips the transitions/operations/editmeta expansions, so
+omit it when you need the edit context. `jira issue list` supports
+`--count`, but narrows what is *displayed* with `--columns`, not the
+fetched payload.
 
 ## Run
 
 ```sh
 jira issue view PROJ-123
+
+# Narrow the fetched payload to the fields you need
+jira issue view PROJ-123 --fields summary,status,assignee
 
 # Flag-driven filtering; --jql escapes the flag grammar entirely
 jira issue list --project PROJ --status '<Done' --assignee me --updated=-7d

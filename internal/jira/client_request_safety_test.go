@@ -38,6 +38,25 @@ func TestIssueServiceGetEscapesIssueKeyPathSegment(t *testing.T) {
 	}
 }
 
+func TestIssueServiceGetEncodesFieldsAndExpandQuery(t *testing.T) {
+	var requestURI string
+	client := newHTTPHandlerClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestURI = r.RequestURI
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"key":"PROJ-1"}`))
+	}))
+
+	service := NewIssueService(client)
+	opts := &IssueGetOptions{Fields: []string{"summary", "status"}, Expand: []string{"renderedFields"}}
+	if _, _, err := service.Get(context.Background(), "PROJ-1", opts); err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	want := "/rest/api/3/issue/PROJ-1?expand=renderedFields&fields=summary%2Cstatus"
+	if requestURI != want {
+		t.Fatalf("request URI = %q, want %q", requestURI, want)
+	}
+}
+
 func TestIssueCreatePayloadDefensivelyCopiesFields(t *testing.T) {
 	nested := map[string]any{"value": "before"}
 	labels := []any{"one"}

@@ -123,6 +123,7 @@ $ jira issue mine --project PROJ --as-jql`,
 func issueViewCommand() *cobra.Command {
 	var parallelism int
 	var web bool
+	var fields []string
 	cmd := &cobra.Command{
 		Use:         "view KEY...",
 		Annotations: issueKeyArg,
@@ -130,10 +131,17 @@ func issueViewCommand() *cobra.Command {
 		Long: "Fetch one or more issues with rendered fields, names, schema, transitions, " +
 			"and operations expanded. Use it when you need the full issue context before " +
 			"editing, commenting, or transitioning.\n\n" +
+			"`--fields` narrows the fetched payload to the named fields, matching the " +
+			"selector on `jira search jql`. A narrowed read skips the transitions, " +
+			"operations, and editmeta expansions — omit `--fields` when you need the " +
+			"edit context.\n\n" +
 			"`--web` opens a single issue URL and does not call Jira beyond reading the " +
 			"configured base URL. Multiple issue keys are fetched with bounded parallelism " +
 			"and return partial results when some keys fail.",
 		Example: `$ jira issue view PROJ-123
+
+# Fetch only the fields you need
+$ jira issue view PROJ-123 --fields summary,status,assignee
 
 # View several issues, four requests at a time
 $ jira issue view PROJ-1 PROJ-2 PROJ-3 --parallelism 4
@@ -152,14 +160,17 @@ $ jira issue view PROJ-123 --web`,
 				}
 				return openIssueWeb(cmd, keys[0], "issue.view")
 			}
+			viewFields := jql.CompactStrings(fields)
 			if len(keys) == 1 {
-				return runIssueViewSingle(cmd, keys[0])
+				return runIssueViewSingle(cmd, keys[0], viewFields)
 			}
-			return runIssueViewMany(cmd, keys, parallelism)
+			return runIssueViewMany(cmd, keys, parallelism, viewFields)
 		},
 	}
 	cmdutil.AddParallelismFlag(cmd, &parallelism)
 	cmdutil.AddBoolVar(cmd.Flags(), &web, "web", false, "Open the issue in a browser instead of printing it", clib.FlagExtra{Group: "Output"})
+	cmdutil.AddStringSliceVar(cmd.Flags(), &fields, "fields", nil, "Narrow each issue to these fields, comma-separated [example: summary,status,assignee]", clib.FlagExtra{Group: "Output", Placeholder: "FIELD", Complete: "predictor=cachefield,comma"})
+	cmd.MarkFlagsMutuallyExclusive("fields", "web")
 	return cmd
 }
 
@@ -211,7 +222,7 @@ $ jira open PROJ-123 --output=json`,
 	return cmd
 }
 
-func runIssueViewSingle(cmd *cobra.Command, key string) error {
+func runIssueViewSingle(cmd *cobra.Command, key string, fields []string) error {
 	cmdutil.RecordIssueKeys(cmd, key)
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
@@ -224,7 +235,7 @@ func runIssueViewSingle(cmd *cobra.Command, key string) error {
 		)
 		if err := cmdutil.Spin(cmd, "issue.view", func(ctx context.Context) error {
 			var e error
-			issue, resp, e = cmdutil.ServicesForClient(client).Issue().Get(ctx, key, issueViewGetOptions())
+			issue, resp, e = cmdutil.ServicesForClient(client).Issue().Get(ctx, key, issueViewGetOptions(fields))
 			return e
 		}); err != nil {
 			return err
@@ -254,7 +265,7 @@ type issueViewResult struct {
 	Error *cli.Error  `json:"error,omitempty"`
 }
 
-func runIssueViewMany(cmd *cobra.Command, keys []string, parallelism int) error {
+func runIssueViewMany(cmd *cobra.Command, keys []string, parallelism int, fields []string) error {
 	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
 		return err
@@ -273,7 +284,7 @@ func runIssueViewMany(cmd *cobra.Command, keys []string, parallelism int) error 
 
 	service := cmdutil.ServicesForClient(client).Issue()
 	results, err := cmdutil.FanOutKeysProgress(cmd.Context(), "issue.view", keys, parallelism, func(ctx context.Context, key string) (*jira.Issue, error) {
-		issue, _, err := service.Get(ctx, key, issueViewGetOptions())
+		issue, _, err := service.Get(ctx, key, issueViewGetOptions(fields))
 		return issue, err
 	})
 	if err != nil {
@@ -293,7 +304,14 @@ func runIssueViewMany(cmd *cobra.Command, keys []string, parallelism int) error 
 	return cmdutil.WriteEnvelope(cmd, "issue.view", data)
 }
 
-func issueViewGetOptions() *jira.IssueGetOptions {
+func issueViewGetOptions(fields []string) *jira.IssueGetOptions {
+	// A --fields read is an explicit request for a slim payload: keep the
+	// render/interpretation expansions (Jira narrows them to the requested
+	// fields) and skip the edit-support ones, which ignore the fields
+	// parameter and would dominate the response.
+	if len(fields) > 0 {
+		return &jira.IssueGetOptions{Fields: fields, Expand: []string{"renderedFields", "names", "schema"}}
+	}
 	// transitions and editmeta ride the same GET and are surfaced in the
 	// issue payload (Issue.Transitions / Issue.EditMeta) so one read
 	// answers "what can I transition to" and "what may I edit".

@@ -132,9 +132,12 @@ type IssueListOptions struct {
 
 // IssueGetOptions is the input to Get. Expand names Jira expansions to include
 // (e.g. transitions, editmeta), which is how a single read can also answer
-// "what can I transition to / edit here".
+// "what can I transition to / edit here". Fields narrows the returned field
+// set via Jira's fields query parameter; empty means Jira's default (all
+// navigable fields).
 type IssueGetOptions struct {
 	Expand []string
+	Fields []string
 }
 
 // IssueCreateRequest is the input to Create. Project, IssueType, and Summary are
@@ -292,9 +295,14 @@ func (s *issueService) List(ctx context.Context, opts *IssueListOptions) ([]*Iss
 // one read can also carry the issue's valid transitions and edit metadata.
 func (s *issueService) Get(ctx context.Context, key string, opts *IssueGetOptions) (*Issue, *Response, error) {
 	path := RESTPath("issue", key)
-	if opts != nil && len(opts.Expand) > 0 {
+	if opts != nil && (len(opts.Expand) > 0 || len(opts.Fields) > 0) {
 		q := url.Values{}
-		q.Set("expand", strings.Join(opts.Expand, ","))
+		if len(opts.Expand) > 0 {
+			q.Set("expand", strings.Join(opts.Expand, ","))
+		}
+		if len(opts.Fields) > 0 {
+			q.Set("fields", strings.Join(opts.Fields, ","))
+		}
 		path = withQuery(path, q)
 	}
 	req, err := s.client.NewRequest(ctx, http.MethodGet, path, nil)

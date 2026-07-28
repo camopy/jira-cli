@@ -110,8 +110,9 @@ issue carries `id`, `key`, `self`, and a nested `fields` object. It asks for
 `*all` and returns every field on each issue — status,
 priority, reporter, description ADF, the comment block, the worklog, and every
 `customfield_*` on the project. This is **not** the same as
-[`issue view`](issue/read.md#view): `view` has no projection flag and returns a
-curated subset regardless of how many fields the project defines.
+[`issue view`](issue/read.md#view): `view` takes the same `--fields` selector,
+but it always returns the raw REST `data.issue` shape — narrowing trims which
+fields Jira sends back, it never switches projections.
 
 ### Pagination
 
