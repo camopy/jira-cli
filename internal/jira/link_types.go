@@ -18,6 +18,18 @@ type IssueLinkType struct {
 	Self    string `json:"self,omitempty"`
 }
 
+// PreviewSentences returns the sentence each endpoint's page will display
+// once a link of this type joins inwardKey and outwardKey. The mapping is
+// the crossover that makes link direction easy to get backwards: the inward
+// issue's page shows the type's OUTWARD phrase (the link points outward
+// from it toward the other issue), and the outward issue's page shows the
+// INWARD phrase. For Blocks (inward "is blocked by", outward "blocks"),
+// linking A to B renders "A blocks B" on A and "B is blocked by A" on B.
+func (t IssueLinkType) PreviewSentences(inwardKey, outwardKey string) (inwardIssueSentence, outwardIssueSentence string) {
+	return inwardKey + " " + t.Outward + " " + outwardKey,
+		outwardKey + " " + t.Inward + " " + inwardKey
+}
+
 // IssueLinkTypeService lists the link types configured on the instance,
 // typically to validate or complete a --type value before creating a link.
 type IssueLinkTypeService interface {

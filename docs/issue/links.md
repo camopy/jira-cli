@@ -52,17 +52,22 @@ Human output confirms the relationship that was recorded:
 SCS ✅ dry_run=false inward_issue=PROJ-123 outward_issue=PROJ-456 type=Blocks
 ```
 
-The `data` carries `inward_issue`, `outward_issue`, `type`, and `dry_run`. A
-multi-key run returns ordered `data.results[]`, each entry with its own `ok` and
-either the created link or an `error`.
+The `data` carries `inward_issue`, `outward_issue`, `type`, `dry_run`, and —
+whenever the link type's phrases are known — a `preview` object with
+`inward_issue_sentence` and `outward_issue_sentence`: the exact line each
+issue's page will render. A multi-key run returns ordered `data.results[]`,
+each entry with its own `ok` and either the created link or an `error`.
 
 !!! warning "Direction follows the link type, not the argument order"
     `--to` only labels the outward issue; what the link *means* comes from the
-    type. `Blocks` reads "outward: blocks / inward: is blocked by", so the
-    relationship may not point the way the command order suggests. Run
-    [`link types`](#link-types) and check the `inward`/`outward` labels before you
-    create a link where direction matters. `--dry-run` previews the request
-    locally and never contacts Jira.
+    type — and the phrases cross endpoints, so the inward issue's page shows
+    the type's *outward* phrase. For `Blocks` ("outward: blocks / inward: is
+    blocked by"), `jira issue link A --to B --type Blocks` renders "A blocks
+    B" on A's page. Read `data.preview` before trusting the direction: it is
+    always present on a live create, and on `--dry-run` whenever the
+    linktypes cache is primed (`jira cache linktypes`). `--dry-run` previews
+    the request locally and never contacts Jira; after a live create,
+    [`link list`](#link-list) shows the direction that actually landed.
 
 [Full flags & output fields →](../reference/jira/issue/link/index.md)
 

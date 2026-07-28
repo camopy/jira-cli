@@ -39,6 +39,19 @@ type IssueRef struct {
 	Status  string `json:"status,omitempty"`
 }
 
+// Sentence renders the line selfKey's page displays for this link: the
+// type's outward phrase when the link points outward from selfKey, the
+// inward phrase otherwise. It is the read-side twin of
+// IssueLinkType.PreviewSentences — the two must agree so a create preview
+// matches what `issue link list` later reports.
+func (v IssueLinkView) Sentence(selfKey string) string {
+	phrase := v.Type.Inward
+	if v.Direction == "outward" {
+		phrase = v.Type.Outward
+	}
+	return selfKey + " " + phrase + " " + v.OtherIssue.Key
+}
+
 type issueLinkService struct {
 	client *Client
 }

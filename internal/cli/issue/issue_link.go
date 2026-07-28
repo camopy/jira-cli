@@ -23,9 +23,11 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/matcra587/jira-cli/internal/adf"
+	"github.com/matcra587/jira-cli/internal/cache"
 	"github.com/matcra587/jira-cli/internal/cli"
 	cachereg "github.com/matcra587/jira-cli/internal/cli/cache/registry"
 	"github.com/matcra587/jira-cli/internal/cli/cmdutil"
+	"github.com/matcra587/jira-cli/internal/config"
 	"github.com/matcra587/jira-cli/internal/envelope"
 	"github.com/matcra587/jira-cli/internal/issuekey"
 	"github.com/matcra587/jira-cli/internal/jira"
@@ -48,7 +50,10 @@ func issueLinkSubCommand() *cobra.Command {
 			"subcommands for reads and deletes.\n\n" +
 			"For create, `KEY` is the inward issue and `--to` is the outward issue. Link " +
 			"type semantics come from Jira, so confirm the configured type names with " +
-			"`jira issue link types` when direction matters.\n\n" +
+			"`jira issue link types` when direction matters. The create output's " +
+			"`preview` sentences show the line each issue's page will render — the " +
+			"inward issue displays the type's outward phrase, not its inward one — so " +
+			"check them before trusting the direction.\n\n" +
 			"`--json-input` accepts the native POST /rest/api/3/issueLink body — `type`, " +
 			"`inwardIssue`, `outwardIssue`, and an optional `comment` — so an API-shaped " +
 			"payload needs no translation to flags.\n\n" +
@@ -92,15 +97,17 @@ $ jira issue link PROJ-123 --to PROJ-456 --type Blocks --dry-run`,
 				return runIssueLinkCreateMany(cmd, keys, parallelism, in)
 			}
 			if dryRun {
+				in.previewType = cachedLinkTypeForPreview(cmd, in)
 				return cmdutil.WriteEnvelope(cmd, "issue.link", issueLinkCreateData(keys[0], in, true))
 			}
-			client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+			client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 			if err != nil {
 				return err
 			}
 			if !ok {
 				return fmt.Errorf("jira base URL is required for issue.link")
 			}
+			in.previewType = liveLinkTypeForPreview(cmd, client, profile, in)
 			var resp *jira.Response
 			if err := cmdutil.Spin(cmd, "issue.link", func(ctx context.Context) error {
 				var e error
@@ -144,6 +151,10 @@ type issueLinkCreateInput struct {
 	Comment map[string]any
 	Command string
 	DryRun  bool
+	// previewType carries the resolved link type's phrase pair when it is
+	// known, so the create envelope can render the sentence each endpoint's
+	// page will display. nil degrades to no preview, never an error.
+	previewType *jira.IssueLinkType
 }
 
 // issueLinkRequestFor builds the wire request for one inward issue key.
@@ -246,18 +257,20 @@ func issueLinkEndpointKey(raw any) string {
 
 func runIssueLinkCreateMany(cmd *cobra.Command, keys []string, parallelism int, in issueLinkCreateInput) error {
 	if in.DryRun {
+		in.previewType = cachedLinkTypeForPreview(cmd, in)
 		results := xslices.Map(keys, func(key string) cmdutil.KeyResult[envelope.IssueLinkCreateOutput] {
 			return cmdutil.KeyResult[envelope.IssueLinkCreateOutput]{Key: key, Value: issueLinkCreateData(key, in, true)}
 		})
 		return cmdutil.WriteKeyedResultsEnvelope(cmd, in.Command, results, func(_ string, data envelope.IssueLinkCreateOutput) any { return data })
 	}
-	client, _, ok, err := cmdutil.JiraClientForCommand(cmd)
+	client, profile, ok, err := cmdutil.JiraClientForCommand(cmd)
 	if err != nil {
 		return err
 	}
 	if !ok {
 		return fmt.Errorf("jira base URL is required for %s", in.Command)
 	}
+	in.previewType = liveLinkTypeForPreview(cmd, client, profile, in)
 	service := cmdutil.ServicesForClient(client).IssueLink()
 	results, err := cmdutil.FanOutKeys(cmd.Context(), keys, parallelism, func(ctx context.Context, key string) (envelope.IssueLinkCreateOutput, error) {
 		if _, err := service.Create(ctx, issueLinkRequestFor(key, in)); err != nil {
@@ -284,7 +297,68 @@ func issueLinkCreateData(key string, in issueLinkCreateInput, dryRun bool) envel
 	if len(in.Comment) > 0 {
 		data.Comment = in.Comment
 	}
+	if in.previewType != nil {
+		inwardSentence, outwardSentence := in.previewType.PreviewSentences(key, in.To)
+		data.Preview = &envelope.IssueLinkPreview{
+			InwardIssueSentence:  inwardSentence,
+			OutwardIssueSentence: outwardSentence,
+		}
+	}
 	return data
+}
+
+// cachedLinkTypeForPreview resolves the link type's phrase pair from the
+// per-profile linktypes cache at any age — the offline lookup a --dry-run
+// is allowed. Phrase pairs change rarely enough that staleness is fine.
+// nil (unprimed cache, unknown type, unresolvable profile) means no
+// preview; the create itself is unaffected.
+func cachedLinkTypeForPreview(cmd *cobra.Command, in issueLinkCreateInput) *jira.IssueLinkType {
+	profile, err := cmdutil.ProfileForCommand(cmd)
+	if err != nil {
+		return nil
+	}
+	entry, ok, err := cache.ReadCachedOrEmpty(cmdutil.CacheKeyForProfile(cmd, profile), "linktypes")
+	if !ok || err != nil {
+		return nil
+	}
+	var types []jira.IssueLinkType
+	if json.Unmarshal(entry.Data, &types) != nil {
+		return nil
+	}
+	return matchLinkType(types, in.Type, in.TypeID)
+}
+
+// liveLinkTypeForPreview resolves the phrase pair on the live path: the
+// cache first, then one /issueLinkType fetch that also primes the cache.
+// Preview resolution is best-effort — a fetch failure degrades to no
+// preview rather than blocking the create.
+func liveLinkTypeForPreview(cmd *cobra.Command, client *jira.Client, profile config.Profile, in issueLinkCreateInput) *jira.IssueLinkType {
+	if t := cachedLinkTypeForPreview(cmd, in); t != nil {
+		return t
+	}
+	ttl := time.Duration(cachereg.TTLMinutesFor("linktypes")) * time.Minute
+	data, _, _, _, err := cmdutil.CacheReadOrFetch(cmdutil.CacheKeyForProfile(cmd, profile), "linktypes", ttl, false, func() (json.RawMessage, error) {
+		return fetchLinkTypesForCache(cmd, client)
+	})
+	if err != nil {
+		return nil
+	}
+	var types []jira.IssueLinkType
+	if json.Unmarshal(data, &types) != nil {
+		return nil
+	}
+	return matchLinkType(types, in.Type, in.TypeID)
+}
+
+// matchLinkType finds the requested type by id (exact) or name
+// (case-insensitive, matching Jira's own type-name handling).
+func matchLinkType(types []jira.IssueLinkType, name, id string) *jira.IssueLinkType {
+	for i := range types {
+		if (id != "" && types[i].ID == id) || (name != "" && strings.EqualFold(types[i].Name, name)) {
+			return &types[i]
+		}
+	}
+	return nil
 }
 
 // issueLinkListCommand wires `jira issue link list KEY`.

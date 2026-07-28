@@ -115,16 +115,34 @@ var _ = register("issue.comment.delete", IssueCommentDeleteOutput{}, nil)
 // IssueLinkCreateOutput is `issue link`'s create data. `type` is always
 // present (empty when the native body addressed the type by id only);
 // `type_id` and `comment` appear only when the native body supplied them.
+// `preview` renders the sentence each endpoint's page will display and
+// appears when the link type's phrase pair is known — always on a live
+// create (a cache miss triggers one /issueLinkType fetch), and from the
+// per-profile linktypes cache on `--dry-run`, which stays offline.
 type IssueLinkCreateOutput struct {
-	InwardIssue  IssueRef       `json:"inward_issue"`
-	OutwardIssue IssueRef       `json:"outward_issue"`
-	Type         string         `json:"type"`
-	TypeID       string         `json:"type_id,omitempty"`
-	Comment      map[string]any `json:"comment,omitempty"`
-	DryRun       bool           `json:"dry_run"`
+	InwardIssue  IssueRef          `json:"inward_issue"`
+	OutwardIssue IssueRef          `json:"outward_issue"`
+	Type         string            `json:"type"`
+	TypeID       string            `json:"type_id,omitempty"`
+	Comment      map[string]any    `json:"comment,omitempty"`
+	Preview      *IssueLinkPreview `json:"preview,omitempty"`
+	DryRun       bool              `json:"dry_run"`
 }
 
-var _ = register("issue.link", IssueLinkCreateOutput{}, nil)
+// IssueLinkPreview names the sentence each issue's own page will render once
+// the link exists. The field names anchor to the ISSUE, not the phrase: the
+// inward issue displays the type's outward phrase and vice versa, which is
+// exactly the crossover the preview exists to make visible before creating.
+type IssueLinkPreview struct {
+	InwardIssueSentence  string `json:"inward_issue_sentence"`
+	OutwardIssueSentence string `json:"outward_issue_sentence"`
+}
+
+var _ = register("issue.link", IssueLinkCreateOutput{}, map[string]any{
+	"properties": map[string]any{
+		"preview": map[string]any{"description": "Present when the link type's inward/outward phrases are known: always on a live create, and when the linktypes cache is primed (jira cache linktypes) on --dry-run. inward_issue_sentence is the line KEY's own page will show; outward_issue_sentence is the line the --to issue's page will show."},
+	},
+})
 
 // IssueLinkDeleteOutput is `issue link delete`'s data. `link_id` echoes the
 // supplied id verbatim (links are global); `deleted` rides the live path

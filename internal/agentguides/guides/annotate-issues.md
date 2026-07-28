@@ -17,8 +17,15 @@ Match the record to what you're adding:
 *   A file → attachment. A URL → weblink.
 *   A relationship between two issues → issue link. Direction matters:
     `KEY` is the inward issue, `--to` the outward one, and the type name
-    decides what that means. Check names with `jira issue link types`
-    before linking, not after.
+    decides what that means. The display phrases CROSS endpoints — each
+    issue's page shows the phrase pointing away from itself, so the inward
+    issue displays the type's *outward* phrase. For `Blocks` (inward "is
+    blocked by", outward "blocks"), `jira issue link A --to B --type
+    Blocks` renders "A blocks B" on A's page and "B is blocked by A" on
+    B's; if A should read "is blocked by", swap the arguments. The create
+    envelope's `data.preview` spells out both sentences — read it before
+    treating a dry run as validated. Check names with
+    `jira issue link types` before linking, not after.
 *   Someone who should follow the issue → watcher. `--user` takes
     `accountId:<id>` (the fast path), `me`, or a bare name/email (resolved
     via a live lookup).
@@ -44,8 +51,10 @@ jira worklog add PROJ-123 --time-spent 2h30m --markdown "Debugging" --no-input
 *   Comment and worklog ids — edits and deletes need them later.
 *   `comment list` returns oldest-first: the latest comment is the last
     entry of the last page, not the first.
-*   The link's `inward_issue` / `outward_issue` objects — proof the
-    direction landed the way you meant.
+*   The link's `data.preview` sentences — the exact line each issue's page
+    will render (present whenever the type's phrases are known; prime with
+    `jira cache linktypes` for offline dry runs). After a live create,
+    `jira issue link list KEY` verifies the direction landed.
 
 ## Preconditions
 

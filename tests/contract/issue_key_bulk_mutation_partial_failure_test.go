@@ -285,6 +285,13 @@ func bulkPartialIssueCloneHandler(t *testing.T, r *http.Request, body []byte, hi
 }
 
 func bulkPartialLinkCreateHandler(t *testing.T, r *http.Request, body []byte, hit func(string)) {
+	// The preview resolution fetches the link types once when the
+	// per-profile cache is cold; it is not a per-key hit.
+	if r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issueLinkType" {
+		_, _ = io.WriteString(r.Context().Value(httpResponseWriterKey{}).(http.ResponseWriter),
+			`{"issueLinkTypes":[{"id":"10000","name":"Blocks","inward":"is blocked by","outward":"blocks"}]}`)
+		return
+	}
 	if r.Method != http.MethodPost || r.URL.Path != "/rest/api/3/issueLink" {
 		bulkUnexpected(t, r)
 		return

@@ -209,6 +209,12 @@ func TestIssueLinkCreateBackCompat(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			return
 		}
+		// The preview resolution fetches the link types once when the
+		// per-profile cache is cold.
+		if r.Method == http.MethodGet && r.URL.Path == "/rest/api/3/issueLinkType" {
+			_, _ = w.Write([]byte(`{"issueLinkTypes":[{"id":"10000","name":"Blocks","inward":"is blocked by","outward":"blocks"}]}`))
+			return
+		}
 		t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 	}))
 	defer srv.Close()
