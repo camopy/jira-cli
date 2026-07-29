@@ -1,3 +1,0 @@
-kind: fixed
-body: Return the created timestamp everywhere it was silently dropped - full and *all payloads now round-trip every Jira system field, created joins the default list and search projection, and issue list gains a created column
-time: 2026-07-28T08:49:10.070310449-04:00

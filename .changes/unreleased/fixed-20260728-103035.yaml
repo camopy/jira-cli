@@ -1,3 +1,0 @@
-kind: fixed
-body: Accept --fields on jira issue view to fetch only the named fields, closing the selector parity gap with search jql
-time: 2026-07-28T10:30:35.073120636-04:00
