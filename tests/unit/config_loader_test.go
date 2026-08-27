@@ -3,6 +3,7 @@ package unit
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -89,6 +90,38 @@ func TestLoadDoesNotCreateDefaultConfigFile(t *testing.T) {
 // Load must reject a config file that carries an unknown key rather than
 // silently dropping it on the next Save. The error must name the
 // offending key so the user can fix the typo.
+func TestLoadDecodesTUICustomFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	body := `default_profile = "work"
+
+[[profiles]]
+name = "work"
+auth_type = "token"
+
+[[tui.custom_fields]]
+field = "Story Points"
+column = true
+label = "Points"
+
+[[tui.custom_fields]]
+field = "customfield_10140"
+`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	cfg, err := config.Load(config.WithPath(path))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	want := []config.TUICustomField{
+		{Field: "Story Points", Column: true, Label: "Points"},
+		{Field: "customfield_10140"},
+	}
+	if !reflect.DeepEqual(cfg.TUI.CustomFields, want) {
+		t.Fatalf("TUI.CustomFields = %#v, want %#v", cfg.TUI.CustomFields, want)
+	}
+}
+
 func TestLoadRejectsUnknownConfigKey(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	body := `default_profile = "work"

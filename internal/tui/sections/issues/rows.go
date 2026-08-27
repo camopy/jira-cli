@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	termansi "github.com/gechr/x/ansi"
 	xstrings "github.com/gechr/x/strings"
 
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/pill"
+	"github.com/matcra587/jira-cli/internal/tui/core"
 	"github.com/matcra587/jira-cli/internal/tui/icons"
 	"github.com/matcra587/jira-cli/internal/tui/theme"
 )
@@ -90,28 +92,66 @@ const (
 	ageCol      = 4
 	rowFixed    = 4 + keyCol + 2 + statusCol + 2
 	// minSummary is the narrowest summary worth keeping trailing columns for;
-	// below it they degrade (assignee first, then age) so the summary stays
-	// readable.
+	// below it trailing columns degrade so the summary stays readable.
 	minSummary = 8
 )
 
 // rowLayout is the per-width column plan shared by rowText and columnHeader:
 // which trailing columns fit and how wide the summary is. Columns degrade in
-// order — assignee first, then age — as the terminal narrows.
+// order: assignee, age, then configured fields from last to first.
 type rowLayout struct {
 	assignee bool
 	age      bool
+	custom   []core.CustomField
 	sumW     int
 }
 
-func layoutFor(width int) rowLayout {
-	if sumW := width - rowFixed - assigneeCol - 2 - ageCol - 2; sumW >= minSummary {
-		return rowLayout{assignee: true, age: true, sumW: sumW}
+func layoutFor(width int, fields ...core.CustomField) rowLayout {
+	custom := make([]core.CustomField, 0, len(fields))
+	for _, field := range fields {
+		if field.Column {
+			custom = append(custom, field)
+		}
 	}
-	if sumW := width - rowFixed - ageCol - 2; sumW >= minSummary {
-		return rowLayout{age: true, sumW: sumW}
+	layout := rowLayout{assignee: true, age: true, custom: custom}
+	if layout.fit(width) {
+		return layout
 	}
-	return rowLayout{sumW: width - rowFixed}
+	layout.assignee = false
+	if layout.fit(width) {
+		return layout
+	}
+	layout.age = false
+	if layout.fit(width) {
+		return layout
+	}
+	for len(layout.custom) > 0 {
+		layout.custom = layout.custom[:len(layout.custom)-1]
+		if layout.fit(width) {
+			return layout
+		}
+	}
+	layout.sumW = width - rowFixed
+	return layout
+}
+
+func (l *rowLayout) fit(width int) bool {
+	trailing := 0
+	if l.assignee {
+		trailing += assigneeCol + 2
+	}
+	if l.age {
+		trailing += ageCol + 2
+	}
+	for _, field := range l.custom {
+		trailing += customColumnWidth(field) + 2
+	}
+	l.sumW = width - rowFixed - trailing
+	return l.sumW >= minSummary
+}
+
+func customColumnWidth(field core.CustomField) int {
+	return min(max(lipgloss.Width(customFieldColumnLabel(field)), 6), 14)
 }
 
 // rowText renders one list row: a priority arrow, a fixed-width key, a colored
@@ -121,20 +161,27 @@ func layoutFor(width int) rowLayout {
 // degrade per layoutFor when it is too narrow. The colored cells carry ANSI
 // styling but a fixed display width, so listviewport (which measures display
 // width) keeps the columns aligned.
-func rowText(i *jira.Issue, width, statusW int, now time.Time) string {
+func rowText(i *jira.Issue, width, statusW int, now time.Time, fields ...core.CustomField) string {
 	key := fmt.Sprintf("%-*s", keyCol, xstrings.Truncate(issueKey(i), keyCol, "…"))
 	left := typeCell(i) + " " + priorityCell(i) + " " + key + "  " + statusCell(i, statusW) + "  "
-	l := layoutFor(width)
-	if !l.age {
-		return left + theme.CodeSpans(issueSummary(i))
+	l := layoutFor(width, fields...)
+	if !l.age && !l.assignee && len(l.custom) == 0 {
+		return termansi.Truncate(left+theme.CodeSpans(issueSummary(i)), max(width, 0), "")
 	}
 	// Truncate on the raw text, style after: CodeSpans keeps backticks, so
 	// the styled cell is exactly as wide as the budgeted one.
 	row := left + padRight(theme.CodeSpans(truncCells(issueSummary(i), l.sumW)), l.sumW)
+	for _, field := range l.custom {
+		value := customFieldValue(i, field)
+		row += "  " + padRight(truncCells(value, customColumnWidth(field)), customColumnWidth(field))
+	}
 	if l.assignee {
 		row += "  " + assigneeCell(i)
 	}
-	return row + "  " + fmt.Sprintf("%*s", ageCol, age(issueUpdated(i), now))
+	if l.age {
+		row += "  " + fmt.Sprintf("%*s", ageCol, age(issueUpdated(i), now))
+	}
+	return row
 }
 
 // assigneeCell renders the assignee in a fixed-width column, colored by name.
@@ -189,19 +236,25 @@ func statusPill(i *jira.Issue) string {
 // columnHeader is the dim heading row above the list, derived from the same
 // layoutFor plan as the rows so it can never drift out of alignment. The two
 // leading spaces align it under the selection-marker column the rows carry.
-func columnHeader(width int) string {
+func columnHeader(width int, fields ...core.CustomField) string {
 	h := fmt.Sprintf("  %s %s %-*s  %-*s  ", "T", "!", keyCol, "KEY", statusCol, "STATUS")
-	l := layoutFor(width)
-	if !l.age {
+	l := layoutFor(width, fields...)
+	if !l.age && !l.assignee && len(l.custom) == 0 {
 		h += "SUMMARY"
 	} else {
 		h += padRight("SUMMARY", l.sumW)
+		for _, field := range l.custom {
+			w := customColumnWidth(field)
+			h += "  " + padRight(truncCells(strings.ToUpper(customFieldColumnLabel(field)), w), w)
+		}
 		if l.assignee {
 			h += "  " + padRight("ASSIGNEE", assigneeCol)
 		}
-		h += "  " + fmt.Sprintf("%*s", ageCol, "AGE")
+		if l.age {
+			h += "  " + fmt.Sprintf("%*s", ageCol, "AGE")
+		}
 	}
-	return lipgloss.NewStyle().Faint(true).Render(h)
+	return termansi.Truncate(lipgloss.NewStyle().Faint(true).Render(h), max(width+2, 0), "")
 }
 
 // padRight pads s with spaces to w display cells. fmt's %-*s pads by bytes,

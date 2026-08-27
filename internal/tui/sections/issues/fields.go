@@ -4,18 +4,103 @@
 package issues
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
+	termansi "github.com/gechr/x/ansi"
 	"github.com/gechr/x/human"
 	"github.com/gechr/x/ptr"
 
 	"github.com/matcra587/jira-cli/internal/jira"
+	"github.com/matcra587/jira-cli/internal/tui/core"
 )
 
 // fetchFields are the issue fields the list+sidebar need; requesting a narrow
 // set keeps the response small. "description" feeds the sidebar detail pane.
 var fetchFields = []string{"summary", "issuetype", "status", "assignee", "reporter", "priority", "labels", "updated", "description"}
+
+func issueFetchFields(custom []core.CustomField) []string {
+	return append(append([]string(nil), fetchFields...), customFieldIDs(custom)...)
+}
+
+func customFieldIDs(custom []core.CustomField) []string {
+	ids := make([]string, len(custom))
+	for i, field := range custom {
+		ids[i] = field.ID
+	}
+	return ids
+}
+
+func customFieldValue(i *jira.Issue, field core.CustomField) string {
+	if i == nil || i.Fields == nil {
+		return "—"
+	}
+	raw, ok := i.Fields.CustomFields[field.ID]
+	if !ok {
+		return "—"
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return "—"
+	}
+	return truncCells(formatCustomFieldValue(value), 200)
+}
+
+func formatCustomFieldValue(value any) string {
+	switch v := value.(type) {
+	case nil:
+		return "—"
+	case string:
+		return sanitizeCustomFieldText(v)
+	case json.Number:
+		return v.String()
+	case bool:
+		return fmt.Sprint(v)
+	case []any:
+		parts := make([]string, len(v))
+		for i, item := range v {
+			parts[i] = formatCustomFieldValue(item)
+		}
+		return strings.Join(parts, ", ")
+	case map[string]any:
+		for _, key := range []string{"displayName", "name", "value", "key"} {
+			if item, ok := v[key]; ok {
+				return formatCustomFieldValue(item)
+			}
+		}
+		if data, err := json.Marshal(v); err == nil {
+			return string(data)
+		}
+	}
+	return fmt.Sprint(value)
+}
+
+func customFieldName(field core.CustomField) string {
+	return customFieldColumnLabel(field)
+}
+
+func customFieldColumnLabel(field core.CustomField) string {
+	return sanitizeCustomFieldText(field.ColumnLabel())
+}
+
+func sanitizeCustomFieldText(value string) string {
+	value = termansi.Strip(value)
+	value = strings.Map(func(r rune) rune {
+		if r == '\t' || r == '\n' || r == '\r' {
+			return ' '
+		}
+		if r < 0x20 || (r >= 0x7f && r <= 0x9f) {
+			return -1
+		}
+		return r
+	}, value)
+	return strings.Join(strings.Fields(value), " ")
+}
 
 func issueKey(i *jira.Issue) string { return ptr.Deref(i.Key) }
 

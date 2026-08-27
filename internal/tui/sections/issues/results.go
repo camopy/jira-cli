@@ -29,13 +29,15 @@ type (
 	// fetchResult delivers one page of issues plus the opaque continuation
 	// cursor, so the list can fetch more when the user scrolls to the bottom.
 	fetchResult struct {
-		issues []*jira.Issue
-		cursor jira.PageCursor
+		issues   []*jira.Issue
+		cursor   jira.PageCursor
+		fieldIDs []string
 	}
 	// fetchMoreResult appends a follow-up page to the existing result set.
 	fetchMoreResult struct {
-		issues []*jira.Issue
-		cursor jira.PageCursor
+		issues   []*jira.Issue
+		cursor   jira.PageCursor
+		fieldIDs []string
 	}
 	transitionsResult struct {
 		issueKey    string
@@ -295,7 +297,7 @@ func (r *results) applySize(reservedHeaderRows int) {
 	r.detail.SetWidth(r.detailWidth())
 	r.detail.SetHeight(dh)
 	if r.detailIssue != nil {
-		r.setDetailContent(renderDetail(r.detailIssue, r.detailLoading, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))
+		r.setDetailContent(renderDetail(r.detailIssue, r.detailLoading, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL, r.ctx.CustomFields...))
 	}
 	// Rows embed the width (right-aligned age column), so a resize must rebuild
 	// them. applyFilter's trailing refreshPreview() also re-sizes and re-renders
@@ -346,7 +348,7 @@ func (r *results) view(header string) string {
 	if r.detailing {
 		return lipgloss.JoinVertical(lipgloss.Left, header, r.detailPills(), r.detailHint(), r.detailBody())
 	}
-	main := lipgloss.JoinVertical(lipgloss.Left, header, r.statusLine(), columnHeader(r.ctx.MainWidth-3), r.list.View())
+	main := lipgloss.JoinVertical(lipgloss.Left, header, r.statusLine(), columnHeader(r.ctx.MainWidth-3, r.ctx.CustomFields...), r.list.View())
 
 	body := main
 	if r.ctx.SidebarOpen && r.ctx.PreviewWidth > 0 {
@@ -391,7 +393,7 @@ func (r *results) restyle() {
 	r.spin.Style = theme.StatusInProgress
 	r.applyFilter()
 	if r.detailIssue != nil {
-		r.setDetailContent(renderDetail(r.detailIssue, r.detailLoading, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))
+		r.setDetailContent(renderDetail(r.detailIssue, r.detailLoading, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL, r.ctx.CustomFields...))
 	}
 }
 

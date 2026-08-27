@@ -276,6 +276,35 @@ preview_size = 40      # percent of the split, 20–80
 side docks hide automatically when the window is too narrow for a
 usable split.
 
+## Custom fields
+
+Add read-only Jira custom fields to every issue preview and Overview:
+
+```toml
+[[tui.custom_fields]]
+field = "Story Points"
+column = true
+label = "Points"
+
+[[tui.custom_fields]]
+field = "customfield_10140"
+```
+
+`field` accepts a `customfield_NNNNN` API ID or an exact field name. IDs work
+without metadata. Names resolve case-insensitively through the existing
+14-day fields cache, which the TUI fills from Jira when needed. Duplicate names
+are rejected with their candidate IDs so the TUI never guesses.
+
+Every valid entry appears in the preview and Overview in config order. Set
+`column = true` to also show it in issue rows when space permits; `label` is an
+optional short display label used in details and column headings. As the terminal narrows, the list drops
+assignee, age, then custom columns from last to first. Missing or inapplicable
+values render as `—`.
+
+Custom-field errors do not block the dashboard. The TUI keeps valid entries and
+reports skipped, duplicate, or ambiguous entries in the status area. Editing
+this configuration hot-reloads the metadata and issue results.
+
 ## Refresh
 
 Every section refetches on a shared interval (`tui.refresh_interval`
@@ -340,7 +369,7 @@ saves; with `$JIRA_EDITOR`/`$EDITOR` set, `ctrl+e` continues the draft
 in your editor; `esc` on an edited buffer asks before discarding.
 
 Hot-apply covers the `[tui]` keys — lenses, sections, tabs, keybindings,
-preview, refresh interval, icons — and `theme.name`, which re-skins
+custom fields, preview, refresh interval, icons — and `theme.name`, which re-skins
 every view on the spot. External edits to the file are picked up on the
 refresh heartbeat too (never while you're mid-edit in the tab); `r`
 reloads immediately. Credentials changes still need a restart.
@@ -365,6 +394,7 @@ All keys live under `[tui]`:
 | `sections` | `[[tui.sections]]` — your own JQL tabs (`title` + `jql`) | none |
 | `lenses` | `[[tui.lenses]]` — replace the Issues quick-filters (`title` + `jql`) | built-ins |
 | `default_lens` | Landing lens by title, case-insensitive | first lens |
+| `custom_fields` | `[[tui.custom_fields]]` — read-only Jira custom fields (`field`, optional `column` and `label`) | none |
 | `preview` | Preview dock: `right`, `left`, `bottom`, `hidden`, `auto` | `auto` |
 | `preview_size` | Preview share of the split, percent (20–80) | `50` |
 | `keys` | `[tui.keys]` — rebind any action by name | defaults above |
@@ -387,6 +417,11 @@ jql = "project = JCT AND statusCategory != Done ORDER BY updated DESC"
 [[tui.lenses]]
 title = "Blocked"
 jql = "status = Blocked ORDER BY updated DESC"
+
+[[tui.custom_fields]]
+field = "Story Points"
+column = true
+label = "Points"
 
 [[tui.sections]]
 title = "Needs review"

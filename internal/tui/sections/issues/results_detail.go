@@ -59,7 +59,7 @@ func (r *results) detailBody() string { return vpContent(r.detailLines, r.detail
 func (r *results) setDetailTab(tab int) {
 	r.detailTab = ((tab % detailTabCount) + detailTabCount) % detailTabCount
 	if r.detailIssue != nil {
-		r.setDetailContent(renderDetail(r.detailIssue, r.detailLoading, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))
+		r.setDetailContent(renderDetail(r.detailIssue, r.detailLoading, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL, r.ctx.CustomFields...))
 		r.detail.GotoTop()
 	}
 }
@@ -143,7 +143,7 @@ func (r *results) syncPreviewContent(force bool) {
 	if !force && !changed && w == r.previewW {
 		return
 	}
-	r.setPreviewContent(sidebar(sel, w, r.md, r.ctx.BaseURL))
+	r.setPreviewContent(sidebar(sel, w, r.md, r.ctx.BaseURL, r.ctx.CustomFields...))
 	if changed {
 		r.preview.GotoTop()
 	}
@@ -161,17 +161,18 @@ func (r *results) openDetail(iss *jira.Issue) tea.Cmd {
 	r.detailIssue = iss
 	r.detail.SetWidth(r.detailWidth())
 	r.detail.GotoTop()
-	r.setDetailContent(renderDetail(iss, true, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))
+	r.setDetailContent(renderDetail(iss, true, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL, r.ctx.CustomFields...))
 	base := r.ctx.Base
 	svc := r.ctx.Services
 	key := issueKey(iss)
+	fields := append(issueFetchFields(r.ctx.CustomFields), "comment")
 	return tea.Batch(r.spin.Tick, r.ctx.StartTask(core.TaskSpec{
 		Scope: r.detailScope(),
 		Run: func() (any, error) {
 			if svc == nil {
 				return detailResult{issue: iss}, nil
 			}
-			full, _, err := svc.Issues().Get(base, key, &jira.IssueGetOptions{})
+			full, _, err := svc.Issues().Get(base, key, &jira.IssueGetOptions{Fields: fields})
 			if err != nil {
 				return nil, err
 			}

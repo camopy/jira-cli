@@ -84,6 +84,8 @@ type ProgramContext struct {
 	// DefaultLens names the landing lens by title (case-insensitive).
 	Lenses      []Lens
 	DefaultLens string
+	// CustomFields are resolved Jira custom fields shown by every issue view.
+	CustomFields []CustomField
 	// Recent is the app-wide recently-viewed issue jumplist (ctrl+o).
 	Recent *RecentList
 	// Activity is the app-wide record of user-facing mutations, surfaced in the
@@ -290,6 +292,22 @@ func (c *ProgramContext) RebindKeys(cfg *config.Config) error {
 	}
 	c.Keys = m
 	return nil
+}
+
+// CustomField is one resolved, read-only Jira custom field displayed by the TUI.
+type CustomField struct {
+	ID     string
+	Name   string
+	Label  string
+	Column bool
+}
+
+// ColumnLabel returns the configured short label or the Jira field name.
+func (f CustomField) ColumnLabel() string {
+	if f.Label != "" {
+		return f.Label
+	}
+	return f.Name
 }
 
 // Lens is a named quick-filter JQL for the issues section.

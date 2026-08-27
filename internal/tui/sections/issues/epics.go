@@ -6,6 +6,8 @@
 package issues
 
 import (
+	"slices"
+
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
@@ -95,32 +97,38 @@ func (m *EpicsModel) fetchEpics() tea.Cmd {
 	base := m.ctx.Base
 	svc := m.ctx.Services
 	jql := m.epicsJQL()
+	fieldIDs := customFieldIDs(m.ctx.CustomFields)
+	fields := append(append([]string(nil), fetchFields...), fieldIDs...)
 	return tea.Batch(m.spin.Tick, m.ctx.StartTask(core.TaskSpec{
 		Scope: m.epicsScope(),
 		Run: func() (any, error) {
 			if svc == nil {
-				return epicsResult{}, nil
+				return epicsResult{fieldIDs: fieldIDs}, nil
 			}
 			issues, _, err := jira.ListIssuesPage(base, svc.Issues(), &jira.IssueListOptions{
 				JQL:         jql,
-				Fields:      fetchFields,
+				Fields:      fields,
 				ListOptions: jira.ListOptions{MaxResults: epicFetchLimit},
 			}, jira.PageCursor{})
 			if err != nil {
-				return nil, err
+				return epicsResult{fieldIDs: fieldIDs}, err
 			}
-			return epicsResult{epics: issues}, nil
+			return epicsResult{epics: issues, fieldIDs: fieldIDs}, nil
 		},
 	}))
 }
 
 type epicsResult struct {
-	epics []*jira.Issue
+	epics    []*jira.Issue
+	fieldIDs []string
 }
 
 // applyEpics installs the fetched epics, keeping the active selection on the
 // same epic key across a refresh so a background reload never yanks the view.
 func (m *EpicsModel) applyEpics(res epicsResult) tea.Cmd {
+	if !slices.Equal(res.fieldIDs, customFieldIDs(m.ctx.CustomFields)) {
+		return m.fetchEpics()
+	}
 	prev := m.activeEpicKey()
 	m.epics = res.epics
 	m.epicsLoaded = true
@@ -152,6 +160,17 @@ func (m *EpicsModel) activeEpicKey() string {
 }
 
 // fetchChildren loads the active epic's children into the shared list.
+func (m *EpicsModel) reloadCustomFields() tea.Cmd {
+	if !m.canMutate() {
+		return nil
+	}
+	cmds := []tea.Cmd{m.fetchEpics()}
+	if m.detailing && m.detailIssue != nil {
+		cmds = append(cmds, m.openDetail(m.detailIssue))
+	}
+	return tea.Batch(cmds...)
+}
+
 func (m *EpicsModel) fetchChildren() tea.Cmd {
 	epic := m.activeEpicKey()
 	if epic == "" {
@@ -185,6 +204,9 @@ func (m *EpicsModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 			if msg.Err != nil {
 				m.loading = false
 				m.err = msg.Err
+				if res, ok := msg.Result.(epicsResult); ok && !slices.Equal(res.fieldIDs, customFieldIDs(m.ctx.CustomFields)) {
+					return m, m.fetchEpics()
+				}
 				return m, nil
 			}
 			if res, ok := msg.Result.(epicsResult); ok {
@@ -203,6 +225,8 @@ func (m *EpicsModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 		m.strip.InactiveStyle = m.ctx.Styles.TabInactive
 		m.restyle()
 		return m, nil
+	case core.ConfigReloadedMsg:
+		return m, m.reloadCustomFields()
 	case core.RefreshTickMsg:
 		// One fetch refreshes both layers: applyEpics chains the child fetch
 		// once the strip lands, so fetching children here too would run the

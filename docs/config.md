@@ -235,7 +235,7 @@ to read on both light and dark, so they stay legible regardless of detection. De
 | `queries_path` | Where [`search saved`](search.md) looks for `.jql` files |
 | `editor` | Default editor for `issue edit` (per-profile `editor` wins) |
 | `[theme]` | Output and TUI theme; see [Themes](#themes) |
-| `[tui]` | Dashboard config: tabs, lenses, sections, preview, keybindings — see [TUI](tui.md) |
+| `[tui]` | Dashboard config: tabs, lenses, sections, custom fields, preview, keybindings — see [TUI](tui.md) |
 | `[aliases]` | Command aliases; manage via [`jira alias`](alias.md), not by hand |
 
 ### Environment variables
@@ -301,6 +301,11 @@ editor          = "nvim --wait"
   title = "Team"
   jql = "project = ENG AND statusCategory != Done ORDER BY updated DESC"
 
+[[tui.custom_fields]]
+  field = "Story Points"
+  column = true
+  label = "Points"
+
 [[tui.sections]]
   title = "Needs review"
   jql = "status = 'In Review' ORDER BY updated DESC"
@@ -316,7 +321,7 @@ editor          = "nvim --wait"
 ## See also
 
 *   [Authenticate](auth.md) — API tokens, keyring vs 1Password vs env, `auth login` and `auth migrate`.
-*   [TUI](tui.md) — everything under `[tui]`: tabs, lenses, sections, preview, keybindings.
+*   [TUI](tui.md) — everything under `[tui]`: tabs, lenses, sections, custom fields, preview, keybindings.
 *   [Output and scripting](output.md) — `--output` shapes what every command
     emits; the `NO_COLOR` / `--color` precedence lives in the table above.
 *   [Cache](cache.md) — cached metadata lives under `~/.cache/jira-cli/<profile>-<hash>/`, scoped by profile, base URL, and config path.

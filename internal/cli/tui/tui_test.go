@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,7 +19,7 @@ import (
 // newApp must land on the issues triage view and expose the search view as the
 // next section, so `jira tui` opens on the working queue with JQL one tab away.
 func TestNewAppLandsOnIssuesAndReachesSearch(t *testing.T) {
-	app := newApp(nil, nil, config.Profile{}, context.Background(), "", "", "")
+	app := newApp(nil, nil, config.Profile{}, context.Background(), "", "", "", nil)
 	if got := app.CurrentSection().ID(); got != issues.ID {
 		t.Fatalf("landing section = %q, want %q", got, issues.ID)
 	}
@@ -32,9 +33,44 @@ func TestNewAppLandsOnIssuesAndReachesSearch(t *testing.T) {
 // A nil service (unconfigured profile) must not panic: the dashboard still opens
 // and renders, sections simply fetch nothing.
 func TestNewAppWithoutServicesRenders(t *testing.T) {
-	app := newApp(nil, nil, config.Profile{}, context.Background(), "", "", "")
+	app := newApp(nil, nil, config.Profile{}, context.Background(), "", "", "", nil)
 	if s := app.CurrentSection(); s == nil {
 		t.Fatal("current section is nil with no services")
+	}
+}
+
+func TestNewAppReloadsCustomFields(t *testing.T) {
+	calls := 0
+	load := func(cfg *config.Config) ([]core.CustomField, error) {
+		calls++
+		return []core.CustomField{{ID: cfg.TUI.CustomFields[0].Field}}, nil
+	}
+	initial := &config.Config{TUI: config.TUI{CustomFields: []config.TUICustomField{{Field: "customfield_10010"}}}}
+	app := newApp(nil, initial, config.Profile{}, context.Background(), "", "", "", load)
+	fresh := &config.Config{TUI: config.TUI{CustomFields: []config.TUICustomField{{Field: "customfield_10020"}}}}
+
+	model, cmd := app.Update(core.ConfigReloadedMsg{Config: fresh})
+	if calls != 2 {
+		t.Fatalf("field loader calls = %d, want startup + reload", calls)
+	}
+	if model == nil || cmd == nil {
+		t.Fatal("config reload must keep the app and schedule refreshed issue data")
+	}
+}
+
+func TestApplyCustomFieldsKeepsValidFieldsAndReportsErrors(t *testing.T) {
+	ctx := core.NewProgramContext(nil, nil)
+	loadErr := errors.New("ambiguous custom field")
+	load := func(*config.Config) ([]core.CustomField, error) {
+		return []core.CustomField{{ID: "customfield_10010", Name: "Story Points"}}, loadErr
+	}
+
+	applyCustomFields(ctx, &config.Config{}, load)
+	if len(ctx.CustomFields) != 1 || ctx.CustomFields[0].ID != "customfield_10010" {
+		t.Fatalf("CustomFields = %#v", ctx.CustomFields)
+	}
+	if ctx.Err == nil || !strings.Contains(ctx.Err.Error(), loadErr.Error()) {
+		t.Fatalf("Err = %v, want %v", ctx.Err, loadErr)
 	}
 }
 

@@ -20,6 +20,22 @@ jira cache fields --output=json
 The field cache helps completion and lets agents map human field names to
 `customfield_NNNN` keys before editing payloads.
 
+## TUI display
+
+Configure read-only fields under `[[tui.custom_fields]]`:
+
+```toml
+[[tui.custom_fields]]
+field = "Story Points"       # exact name or customfield_NNNNN
+column = true                # also show in issue rows when space permits
+label = "Points"             # optional display label
+```
+
+The TUI resolves names through the field cache and requests valid field IDs in
+its existing issue searches. Every configured field appears in previews and
+Overview; `column = true` also makes it eligible for the issue table. See
+[TUI custom fields](tui.md#custom-fields) for resolution and layout rules.
+
 ## Field-type registry
 
 The CLI recognizes these custom-field types. Where a type lifts a bare value, it

@@ -492,10 +492,6 @@ func (a App) applyConfig(msg ConfigReloadedMsg) (tea.Model, tea.Cmd) {
 		clear(a.started)
 	}
 	var cmds []tea.Cmd
-	// A reload may have rewritten the active lens's JQL out from under the
-	// cached rows; a refresh tick re-runs every section's current query so
-	// the list matches the header instead of waiting for the next interval.
-	cmds = append(cmds, func() tea.Msg { return RefreshTickMsg{} })
 	// Key overrides re-apply from defaults each reload (removals restore the
 	// default binding); a bad override keeps the current map and shows why.
 	// A clean reload supersedes any earlier failure still in the footer.

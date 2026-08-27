@@ -17,6 +17,7 @@ import (
 	"github.com/matcra587/jira-cli/internal/adf"
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui/components/markdown"
+	"github.com/matcra587/jira-cli/internal/tui/core"
 	"github.com/matcra587/jira-cli/internal/tui/theme"
 )
 
@@ -66,7 +67,7 @@ func detailHeading(i *jira.Issue, width int, now time.Time, baseURL string) stri
 // sidebar renders the detail of the selected issue into width columns. Comments
 // and the valid-transition list arrive with the action controller (which already
 // fetches transitions); this pane shows what the list fetch returns.
-func sidebar(i *jira.Issue, width int, md *markdown.Renderer, baseURL string) string {
+func sidebar(i *jira.Issue, width int, md *markdown.Renderer, baseURL string, customFields ...core.CustomField) string {
 	if i == nil {
 		return ""
 	}
@@ -87,6 +88,7 @@ func sidebar(i *jira.Issue, width int, md *markdown.Renderer, baseURL string) st
 	if labels := issueLabels(i); len(labels) > 0 {
 		fmt.Fprintf(&b, "Labels:    %s\n", strings.Join(labels, ", "))
 	}
+	writeCustomFields(&b, i, customFields)
 	if i.Fields != nil && i.Fields.Description != nil {
 		fmt.Fprintf(&b, "\n%s\n\n%s\n", theme.DetailHeader.Render("Description"), adfBody(md, issueKey(i)+":desc", i.Fields.Description, width))
 	}
@@ -114,7 +116,7 @@ const (
 // and metadata, then the active sub-tab's content — the description on
 // Overview, the comments (or a loading placeholder until the full fetch
 // lands) on Comments.
-func renderDetail(i *jira.Issue, loadingComments bool, width, tab int, md *markdown.Renderer, spin, baseURL string) string {
+func renderDetail(i *jira.Issue, loadingComments bool, width, tab int, md *markdown.Renderer, spin, baseURL string, customFields ...core.CustomField) string {
 	if i == nil {
 		return ""
 	}
@@ -145,6 +147,7 @@ func renderDetail(i *jira.Issue, loadingComments bool, width, tab int, md *markd
 		return b.String()
 	}
 
+	writeCustomFields(&b, i, customFields)
 	b.WriteString("\n" + theme.DetailHeader.Render("Description") + "\n\n")
 	if i.Fields != nil && i.Fields.Description != nil {
 		b.WriteString(adfBody(md, issueKey(i)+":desc", i.Fields.Description, width))
@@ -152,6 +155,12 @@ func renderDetail(i *jira.Issue, loadingComments bool, width, tab int, md *markd
 		b.WriteString(theme.DetailDim.Render("(no description)"))
 	}
 	return b.String()
+}
+
+func writeCustomFields(b *strings.Builder, issue *jira.Issue, fields []core.CustomField) {
+	for _, field := range fields {
+		fmt.Fprintf(b, "%s: %s\n", customFieldName(field), customFieldValue(issue, field))
+	}
 }
 
 // renderComments lists the issue's comments (author, timestamp, body).

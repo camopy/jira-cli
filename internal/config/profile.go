@@ -142,11 +142,21 @@ type TUI struct {
 	// DefaultLens names the lens (by title, case-insensitive) the issues tab
 	// lands on. Absent or unmatched falls back to the first lens.
 	DefaultLens string `koanf:"default_lens" toml:"default_lens"`
+	// CustomFields are read-only Jira custom fields shown in issue previews and
+	// detail views. Entries marked Column may also appear in issue rows.
+	CustomFields []TUICustomField `koanf:"custom_fields" toml:"custom_fields"`
 	// Icons picks the glyph set: "nerd" (Nerd Font codepoints), "unicode"
 	// (portable, the default look), or "auto" (Nerd only when the NERD_FONT
 	// environment convention says the font is installed). Applies on
 	// hot-reload.
 	Icons string `koanf:"icons" toml:"icons"`
+}
+
+// TUICustomField selects one read-only Jira custom field for the TUI.
+type TUICustomField struct {
+	Field  string `koanf:"field" toml:"field"`
+	Column bool   `koanf:"column" toml:"column"`
+	Label  string `koanf:"label" toml:"label"`
 }
 
 // TUISection is one configured dashboard tab: a title and the JQL it runs.

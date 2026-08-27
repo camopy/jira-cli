@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -97,15 +98,36 @@ func buildApp(cmd *cobra.Command) (core.App, error) {
 	if cfgPath == "" {
 		cfgPath = config.DefaultPath()
 	}
-	return newApp(svc, cfg, profile, cmd.Context(), cfgPath, boardTitle, boardJQL), nil
+	cacheKey := cmdutil.CacheKeyForProfile(cmd, profile)
+	initialFieldLoad := true
+	fieldLoader := func(fresh *config.Config) ([]core.CustomField, error) {
+		if fresh == nil {
+			return nil, nil
+		}
+		if initialFieldLoad && needsFieldMetadata(fresh.TUI.CustomFields) {
+			initialFieldLoad = false
+			var fields []core.CustomField
+			err := cmdutil.Spin(cmd, "cache.fields", func(ctx context.Context) error {
+				var loadErr error
+				fields, loadErr = loadCustomFields(ctx, fresh.TUI.CustomFields, cacheKey, client)
+				return loadErr
+			})
+			return fields, err
+		}
+		initialFieldLoad = false
+		return loadCustomFields(cmd.Context(), fresh.TUI.CustomFields, cacheKey, client)
+	}
+	return newApp(svc, cfg, profile, cmd.Context(), cfgPath, boardTitle, boardJQL, fieldLoader), nil
 }
+
+type customFieldLoader func(*config.Config) ([]core.CustomField, error)
 
 // newApp registers the dashboard's sections and returns the root model. Issues
 // is first, so it is the landing view. New sections (boards, epics, worklogs)
 // join by registering a factory here and appending to order — the App needs no
 // change. The profile supplies the footer context (profile name, default
 // project and board).
-func newApp(svc core.Services, cfg *config.Config, profile config.Profile, base context.Context, cfgPath, boardTitle, boardJQL string) core.App {
+func newApp(svc core.Services, cfg *config.Config, profile config.Profile, base context.Context, cfgPath, boardTitle, boardJQL string, fieldLoader customFieldLoader) core.App {
 	// Resolve and apply the configured clib theme ("auto" detects the
 	// terminal background) before any section derives styles from it — the
 	// glamour markdown style is built from this palette at section
@@ -148,6 +170,7 @@ func newApp(svc core.Services, cfg *config.Config, profile config.Profile, base 
 	if base != nil {
 		ctx.Base = base
 	}
+	applyCustomFields(ctx, cfg, fieldLoader)
 	registry := core.NewRegistry()
 	registry.Register(issues.ID, issues.New)
 	registry.Register(issues.SearchID, issues.NewSearch)
@@ -163,7 +186,8 @@ func newApp(svc core.Services, cfg *config.Config, profile config.Profile, base 
 	// its JQL may have changed — and refetches on rebuild. prev is captured so
 	// a shrinking section list still drops the orphaned tabs.
 	prev := queries
-	app.Reconfigure = func(_ *core.ProgramContext, reg *core.Registry, fresh *config.Config) ([]core.SectionID, []core.SectionID) {
+	app.Reconfigure = func(ctx *core.ProgramContext, reg *core.Registry, fresh *config.Config) ([]core.SectionID, []core.SectionID) {
+		applyCustomFields(ctx, fresh, fieldLoader)
 		invalidate := make([]core.SectionID, 0, len(prev))
 		for _, q := range prev {
 			invalidate = append(invalidate, q.id)
@@ -173,6 +197,19 @@ func newApp(svc core.Services, cfg *config.Config, profile config.Profile, base 
 		return resolveOrder(fresh, reg, next), invalidate
 	}
 	return app
+}
+
+func applyCustomFields(ctx *core.ProgramContext, cfg *config.Config, load customFieldLoader) {
+	ctx.CustomFields = nil
+	if load == nil {
+		return
+	}
+	fields, err := load(cfg)
+	ctx.CustomFields = fields
+	if err != nil {
+		err = errors.New(cli.SanitizeTerminalText(err.Error()))
+	}
+	ctx.Err = errors.Join(ctx.Err, err)
 }
 
 // querySection pairs a configured section's ID with its title for ordering and

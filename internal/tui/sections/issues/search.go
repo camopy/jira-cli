@@ -100,6 +100,7 @@ func (s *SearchModel) Init(ctx *core.ProgramContext) tea.Cmd {
 // search, so an invalid query surfaces an inline error instead of a failed
 // search request. Empty queries run nothing.
 func (s *SearchModel) fetch() tea.Cmd {
+	fieldIDs := customFieldIDs(s.ctx.CustomFields)
 	if s.jql == "" {
 		// Clear stale results and supersede any in-flight fetch (an empty-result
 		// task bumps the generation) so a late response can't repopulate.
@@ -108,7 +109,7 @@ func (s *SearchModel) fetch() tea.Cmd {
 		s.loading = false
 		return s.ctx.StartTask(core.TaskSpec{
 			Scope: s.fetchScope(),
-			Run:   func() (any, error) { return fetchResult{}, nil },
+			Run:   func() (any, error) { return fetchResult{fieldIDs: fieldIDs}, nil },
 		})
 	}
 	if s.jql != s.lastJQL {
@@ -121,28 +122,29 @@ func (s *SearchModel) fetch() tea.Cmd {
 	jql := s.jql
 	base := s.ctx.Base
 	svc := s.ctx.Services
+	fields := append(append([]string(nil), fetchFields...), fieldIDs...)
 	return tea.Batch(s.spin.Tick, s.ctx.StartTask(core.TaskSpec{
 		Scope: s.fetchScope(),
 		Run: func() (any, error) {
 			if svc == nil {
-				return fetchResult{}, nil
+				return fetchResult{fieldIDs: fieldIDs}, nil
 			}
 			parsed, _, err := svc.JQL().Parse(base, []string{jql}, "")
 			if err != nil {
-				return nil, err
+				return fetchResult{fieldIDs: fieldIDs}, err
 			}
 			if len(parsed) > 0 && len(parsed[0].Errors) > 0 {
-				return nil, errors.New(parsed[0].Errors[0])
+				return fetchResult{fieldIDs: fieldIDs}, errors.New(parsed[0].Errors[0])
 			}
 			issues, next, err := jira.ListIssuesPage(base, svc.Issues(), &jira.IssueListOptions{
 				JQL:         jql,
-				Fields:      fetchFields,
+				Fields:      fields,
 				ListOptions: jira.ListOptions{MaxResults: 50},
 			}, jira.PageCursor{})
 			if err != nil {
-				return nil, err
+				return fetchResult{fieldIDs: fieldIDs}, err
 			}
-			return fetchResult{issues: issues, cursor: next}, nil
+			return fetchResult{issues: issues, cursor: next, fieldIDs: fieldIDs}, nil
 		},
 	}))
 }
@@ -333,6 +335,8 @@ func (s *SearchModel) Update(msg tea.Msg) (core.Section, tea.Cmd) {
 	case core.RestyleMsg:
 		s.restyle()
 		return s, nil
+	case core.ConfigReloadedMsg:
+		return s, s.reloadCustomFields()
 	case core.RefreshTickMsg:
 		// Nothing to refresh until a query has been committed (an empty-JQL
 		// refetch would just churn tasks), and never mid-edit — the embedded

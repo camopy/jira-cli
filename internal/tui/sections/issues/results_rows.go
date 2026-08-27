@@ -32,7 +32,7 @@ func (r *results) rebuildRows() {
 		case r.changed[key] == changeUpdated:
 			marker = theme.StatusInProgress.Render("●") + " "
 		}
-		rows[i] = marker + rowText(iss, rowW, statusW, now)
+		rows[i] = marker + rowText(iss, rowW, statusW, now, r.ctx.CustomFields...)
 	}
 	r.list.SetRows(rows)
 }

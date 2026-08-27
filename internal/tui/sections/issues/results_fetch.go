@@ -5,6 +5,8 @@
 package issues
 
 import (
+	"slices"
+
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 
@@ -24,7 +26,7 @@ func (r *results) handleSpinner(msg spinner.TickMsg) tea.Cmd {
 	// The detail body is a cached viewport snapshot; while its comments are
 	// still loading, re-render so the embedded spinner actually animates.
 	if r.detailing && r.detailLoading {
-		r.setDetailContent(renderDetail(r.detailIssue, true, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))
+		r.setDetailContent(renderDetail(r.detailIssue, true, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL, r.ctx.CustomFields...))
 	}
 	return cmd
 }
@@ -43,21 +45,23 @@ func (r *results) runFetch(jql string) tea.Cmd {
 	r.lastJQL = jql
 	base := r.ctx.Base
 	svc := r.ctx.Services
+	fieldIDs := customFieldIDs(r.ctx.CustomFields)
+	fields := append(append([]string(nil), fetchFields...), fieldIDs...)
 	return tea.Batch(r.spin.Tick, r.ctx.StartTask(core.TaskSpec{
 		Scope: r.fetchScope(),
 		Run: func() (any, error) {
 			if svc == nil {
-				return fetchResult{}, nil
+				return fetchResult{fieldIDs: fieldIDs}, nil
 			}
 			issues, next, err := jira.ListIssuesPage(base, svc.Issues(), &jira.IssueListOptions{
 				JQL:         jql,
-				Fields:      fetchFields,
+				Fields:      fields,
 				ListOptions: jira.ListOptions{MaxResults: 50},
 			}, jira.PageCursor{})
 			if err != nil {
-				return nil, err
+				return fetchResult{fieldIDs: fieldIDs}, err
 			}
-			return fetchResult{issues: issues, cursor: next}, nil
+			return fetchResult{issues: issues, cursor: next, fieldIDs: fieldIDs}, nil
 		},
 	}))
 }
@@ -76,21 +80,23 @@ func (r *results) maybeFetchMore() tea.Cmd {
 	jql, cur := r.lastJQL, r.cursor
 	base := r.ctx.Base
 	svc := r.ctx.Services
+	fieldIDs := customFieldIDs(r.ctx.CustomFields)
+	fields := append(append([]string(nil), fetchFields...), fieldIDs...)
 	return tea.Batch(r.spin.Tick, r.ctx.StartTask(core.TaskSpec{
 		Scope: r.fetchScope(), // same scope: a new first-page fetch supersedes this
 		Run: func() (any, error) {
 			if svc == nil {
-				return fetchMoreResult{}, nil
+				return fetchMoreResult{fieldIDs: fieldIDs}, nil
 			}
 			issues, next, err := jira.ListIssuesPage(base, svc.Issues(), &jira.IssueListOptions{
 				JQL:         jql,
-				Fields:      fetchFields,
+				Fields:      fields,
 				ListOptions: jira.ListOptions{MaxResults: 50},
 			}, cur)
 			if err != nil {
-				return nil, err
+				return fetchMoreResult{fieldIDs: fieldIDs}, err
 			}
-			return fetchMoreResult{issues: issues, cursor: next}, nil
+			return fetchMoreResult{issues: issues, cursor: next, fieldIDs: fieldIDs}, nil
 		},
 	}))
 }
@@ -108,6 +114,9 @@ func (r *results) handleTask(msg core.TaskFinishedMsg) (tea.Cmd, bool) {
 		r.loadingMore = false
 		if msg.Err != nil {
 			r.err = msg.Err
+			if !slices.Equal(resultFieldIDs(msg.Result), customFieldIDs(r.ctx.CustomFields)) && r.refetch != nil {
+				return r.refetch(), true
+			}
 			return nil, true
 		}
 		r.err = nil
@@ -141,6 +150,9 @@ func (r *results) handleTask(msg core.TaskFinishedMsg) (tea.Cmd, bool) {
 			// Appending can't move existing rows, so the cursor stays put; the new
 			// rows simply extend the list below it.
 			r.applyFilter()
+		}
+		if !slices.Equal(resultFieldIDs(msg.Result), customFieldIDs(r.ctx.CustomFields)) && r.refetch != nil {
+			return r.refetch(), true
 		}
 		return nil, true
 	case r.createMetaScope():
@@ -235,11 +247,36 @@ func (r *results) handleTask(msg core.TaskFinishedMsg) (tea.Cmd, bool) {
 			// Re-touch with the fetched summary: a foreign-key jump opened a
 			// bare stub, and a rename since the last visit is stale otherwise.
 			r.ctx.Recent.Touch(issueKey(res.issue), issueSummary(res.issue))
-			r.setDetailContent(renderDetail(res.issue, false, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL))
+			r.setDetailContent(renderDetail(res.issue, false, r.detailWidth(), r.detailTab, r.md, r.spin.View(), r.ctx.BaseURL, r.ctx.CustomFields...))
 		}
 		return nil, true
 	}
 	return nil, false
+}
+
+func resultFieldIDs(result any) []string {
+	switch result := result.(type) {
+	case fetchResult:
+		return result.fieldIDs
+	case fetchMoreResult:
+		return result.fieldIDs
+	default:
+		return nil
+	}
+}
+
+// reloadCustomFields immediately re-fetches issue data with the newly resolved
+// projection. A mutation already schedules its own reconcile fetch, so let that
+// finish rather than replacing optimistic state underneath it.
+func (r *results) reloadCustomFields() tea.Cmd {
+	if r.refetch == nil || !r.canMutate() {
+		return nil
+	}
+	cmds := []tea.Cmd{r.refetch()}
+	if r.detailing && r.detailIssue != nil {
+		cmds = append(cmds, r.openDetail(r.detailIssue))
+	}
+	return tea.Batch(cmds...)
 }
 
 // autoRefresh refetches on the shared refresh tick. It deliberately skips when
