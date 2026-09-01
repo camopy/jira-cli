@@ -152,6 +152,28 @@ func TestStaleFieldProjectionRefetchesAfterHotReload(t *testing.T) {
 	}
 }
 
+func TestIssueFlaggedUsesRawConfiguredJiraField(t *testing.T) {
+	field := core.CustomField{ID: "customfield_10021", Name: "Flagged"}
+	for _, tc := range []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{name: "impediment option", raw: `[{"value":"Impediment"}]`, want: true},
+		{name: "null", raw: `null`, want: false},
+		{name: "empty array", raw: `[]`, want: false},
+		{name: "invalid json", raw: `{`, want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			issue := mkIssue("JCT-1", "To Do", tc.name)
+			issue.Fields.CustomFields = map[string]json.RawMessage{field.ID: json.RawMessage(tc.raw)}
+			if got := issueFlagged(issue, []core.CustomField{field}); got != tc.want {
+				t.Errorf("issueFlagged(%s) = %t, want %t", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestCustomFieldValueFormatsJiraShapes(t *testing.T) {
 	iss := mkIssue("JCT-1", "To Do", "summary")
 	iss.Fields.CustomFields = map[string]json.RawMessage{

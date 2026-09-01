@@ -6,6 +6,9 @@ package issues
 import (
 	"time"
 
+	termansi "github.com/gechr/x/ansi"
+
+	"github.com/matcra587/jira-cli/internal/tui/icons"
 	"github.com/matcra587/jira-cli/internal/tui/theme"
 )
 
@@ -22,7 +25,9 @@ func (r *results) rebuildRows() {
 	// the CLI's plain list applies.
 	statusW := widestStatus(r.shown)
 	rows := make([]string, len(r.shown))
+	flaggedRows := make([]int, 0)
 	for i, iss := range r.shown {
+		flagged := issueFlagged(iss, r.ctx.CustomFields)
 		marker := "  "
 		switch key := issueKey(iss); {
 		case r.marks[key]:
@@ -31,10 +36,22 @@ func (r *results) rebuildRows() {
 			marker = theme.StatusDone.Render("●") + " "
 		case r.changed[key] == changeUpdated:
 			marker = theme.StatusInProgress.Render("●") + " "
+		case flagged:
+			marker = icons.Active().Flagged + " "
 		}
-		rows[i] = marker + rowText(iss, rowW, statusW, now, r.ctx.CustomFields...)
+		row := marker + rowText(iss, rowW, statusW, now, r.ctx.CustomFields...)
+		if flagged {
+			// The viewport applies the warning background after full-width padding;
+			// strip cell colors here so their resets cannot punch holes in it.
+			row = termansi.Strip(row)
+			flaggedRows = append(flaggedRows, i)
+		}
+		rows[i] = row
 	}
 	r.list.SetRows(rows)
+	for _, i := range flaggedRows {
+		r.list.SetRowStyle(i, theme.FlaggedRow)
+	}
 }
 
 func (r *results) applyFilter() {

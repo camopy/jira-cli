@@ -1,6 +1,7 @@
 package issues
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -9,6 +10,8 @@ import (
 
 	"github.com/matcra587/jira-cli/internal/jira"
 	"github.com/matcra587/jira-cli/internal/tui/core"
+	"github.com/matcra587/jira-cli/internal/tui/icons"
+	"github.com/matcra587/jira-cli/internal/tui/theme"
 )
 
 // upIssue is mkIssue plus an updated timestamp, which change detection keys on.
@@ -127,6 +130,72 @@ func TestFetchMoreRegistersWithoutMarking(t *testing.T) {
 	)
 	if m.changed["JCT-2"] != changeNone {
 		t.Errorf("paged-in issue marked %v on refresh", m.changed["JCT-2"])
+	}
+}
+
+func TestFlaggedRowUsesFlagMarkerAndFinalRowStyle(t *testing.T) {
+	previous := theme.FlaggedRow
+	theme.FlaggedRow = previous.Underline(true) // observable regardless of test terminal color support
+	t.Cleanup(func() { theme.FlaggedRow = previous })
+
+	m := changeModel(t)
+	field := core.CustomField{ID: "customfield_10021", Name: "Flagged"}
+	m.ctx.CustomFields = []core.CustomField{field}
+	plain := upIssue("JCT-1", "To Do", "plain", "1")
+	flagged := upIssue("JCT-2", "To Do", "blocked", "2")
+	flagged.Fields.CustomFields = map[string]json.RawMessage{
+		field.ID: json.RawMessage(`[{"value":"Impediment"}]`),
+	}
+	land(m, plain, flagged)
+
+	assertFlaggedRow := func(raw string, selected bool) {
+		t.Helper()
+		for _, row := range strings.Split(raw, "\n") {
+			if !strings.Contains(ansi.Strip(row), "JCT-2") {
+				continue
+			}
+			if !strings.Contains(row, "\x1b[4;") {
+				t.Errorf("flagged row missing final row style: %q", row)
+			}
+			if !strings.HasPrefix(ansi.Strip(row), icons.Active().Flagged) {
+				t.Errorf("flagged row missing flag marker: %q", row)
+			}
+			if selected && !strings.Contains(row, "\x1b[7m") {
+				t.Errorf("selected flagged row missing cursor style: %q", row)
+			}
+			return
+		}
+		t.Fatal("flagged row not rendered")
+	}
+
+	assertFlaggedRow(m.list.View(), false)
+	m.list.SetCursor(1)
+	assertFlaggedRow(m.list.View(), true)
+}
+
+func TestChangeMarkOutranksFlagMarker(t *testing.T) {
+	m := changeModel(t)
+	field := core.CustomField{ID: "customfield_10021", Name: "Flagged"}
+	m.ctx.CustomFields = []core.CustomField{field}
+	flagged := upIssue("JCT-2", "To Do", "flagged", "2")
+	flagged.Fields.CustomFields = map[string]json.RawMessage{
+		field.ID: json.RawMessage(`[{"value":"Impediment"}]`),
+	}
+	land(m, upIssue("JCT-1", "To Do", "plain", "1"))
+	land(m, upIssue("JCT-1", "To Do", "plain", "1"), flagged)
+
+	found := false
+	for _, row := range strings.Split(ansi.Strip(m.list.View()), "\n") {
+		if !strings.Contains(row, "JCT-2") {
+			continue
+		}
+		found = true
+		if !strings.HasPrefix(row, "●") {
+			t.Errorf("flagged new row lost its change dot: %q", row)
+		}
+	}
+	if !found {
+		t.Fatal("flagged new row not rendered")
 	}
 }
 

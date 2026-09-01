@@ -299,7 +299,13 @@ Every valid entry appears in the preview and Overview in config order. Set
 `column = true` to also show it in issue rows when space permits; `label` is an
 optional short display label used in details and column headings. As the terminal narrows, the list drops
 assignee, age, then custom columns from last to first. Missing or inapplicable
-values render as `—`.
+values render as `—`. A configured field named `Flagged` also gives flagged
+issues a full-row warning tint and flag marker, matching Jira's board treatment:
+
+```toml
+[[tui.custom_fields]]
+field = "Flagged"
+```
 
 Custom-field errors do not block the dashboard. The TUI keeps valid entries and
 reports skipped, duplicate, or ambiguous entries in the status area. Editing

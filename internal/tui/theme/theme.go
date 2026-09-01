@@ -116,9 +116,17 @@ func StatusStyle(name string) lipgloss.Style {
 
 // Status flash styles for action feedback.
 var (
-	StatusOK  = lipgloss.NewStyle().Foreground(Theme.Green.GetForeground()).Bold(true)
-	StatusErr = lipgloss.NewStyle().Foreground(Theme.Red.GetForeground()).Bold(true)
+	StatusOK   = lipgloss.NewStyle().Foreground(Theme.Green.GetForeground()).Bold(true)
+	StatusErr  = lipgloss.NewStyle().Foreground(Theme.Red.GetForeground()).Bold(true)
+	FlaggedRow = flaggedRowStyle(Theme)
 )
+
+func flaggedRowStyle(t *clibtheme.Theme) lipgloss.Style {
+	if t.Background == clibtheme.BackgroundLight {
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#332B00")).Background(lipgloss.Color("#FFF3C4"))
+	}
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("#FFF2B2")).Background(lipgloss.Color("#4A3B00"))
+}
 
 // Pill styles for header counts.
 var (
@@ -240,6 +248,7 @@ func applyTheme(t *clibtheme.Theme) {
 
 	StatusOK = lipgloss.NewStyle().Foreground(t.Green.GetForeground()).Bold(true)
 	StatusErr = lipgloss.NewStyle().Foreground(t.Red.GetForeground()).Bold(true)
+	FlaggedRow = flaggedRowStyle(t)
 
 	PillDanger = Pill.Foreground(t.Red.GetForeground()).Bold(true)
 	PillWarning = Pill.Foreground(t.Yellow.GetForeground())

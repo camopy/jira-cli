@@ -34,15 +34,16 @@ type Set struct {
 	PriorityLow     string
 	PriorityLowest  string
 
-	// Chrome.
-	Paused string
+	// Chrome and row state.
+	Paused  string
+	Flagged string
 }
 
 // unicodeSet is the portable table — the glyphs the dashboard has always used.
 var unicodeSet = Set{
 	Epic: "◆", Story: "●", Task: "■", Subtask: "▸", Bug: "▲", UnknownType: "◇",
 	PriorityHighest: "↟", PriorityHigh: "↑", PriorityMedium: "=", PriorityLow: "↓", PriorityLowest: "↡",
-	Paused: "⏸",
+	Paused: "⏸", Flagged: "⚑",
 }
 
 // nerdSet uses classic Font Awesome codepoints from the Nerd Fonts range —
@@ -67,7 +68,8 @@ var nerdSet = Set{
 	PriorityLow:     "\uf107", // nf-fa-angle_down
 	PriorityLowest:  "\uf103", // nf-fa-angle_double_down
 
-	Paused: "\uf04c", // nf-fa-pause
+	Paused:  "\uf04c", // nf-fa-pause
+	Flagged: "\uf024", // nf-fa-flag
 }
 
 // For returns the glyph table for a mode.

@@ -2,7 +2,10 @@ package listviewport
 
 import (
 	"fmt"
+	"strings"
 	"testing"
+
+	"charm.land/lipgloss/v2"
 )
 
 func rows(n int) []string {
@@ -154,6 +157,26 @@ func TestScrollbarThumbTracksPosition(t *testing.T) {
 	col = m.scrollbarColumn()
 	if col[len(col)-1] != "█" {
 		t.Errorf("thumb not at bottom when scrolled to bottom: %v", col)
+	}
+}
+
+func TestRowStyleAppliesAfterPaddingAndSurvivesCursor(t *testing.T) {
+	m := New()
+	m.Scrollbar = false
+	m.SetSize(10, 2)
+	m.SetRows(rows(2))
+	style := lipgloss.NewStyle().Underline(true)
+	m.SetRowStyle(0, style)
+
+	line := strings.Split(m.View(), "\n")[0]
+	want := m.CursorStyle.Render(style.Render("row-0     "))
+	if line != want {
+		t.Fatalf("styled cursor row = %q, want %q", line, want)
+	}
+
+	m.SetRows(rows(2))
+	if strings.Contains(m.View(), "\x1b[4m") {
+		t.Error("SetRows did not clear stale row styles")
 	}
 }
 

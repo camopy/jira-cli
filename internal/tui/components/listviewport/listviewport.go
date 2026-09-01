@@ -17,11 +17,12 @@ var sgrPattern = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
 // Model is a list viewport over caller-rendered rows.
 type Model struct {
-	rows   []string
-	cursor int // selected row index, always within [0, len(rows))
-	offset int // index of the first visible row
-	width  int
-	height int // number of rows visible at once
+	rows      []string
+	rowStyles map[int]lipgloss.Style
+	cursor    int // selected row index, always within [0, len(rows))
+	offset    int // index of the first visible row
+	width     int
+	height    int // number of rows visible at once
 
 	// CursorStyle highlights the selected row. The zero value (reverse video)
 	// is usable without configuration.
@@ -43,7 +44,20 @@ func New() *Model {
 // the selection stays valid (and visible) when the data shrinks.
 func (m *Model) SetRows(rows []string) {
 	m.rows = rows
+	clear(m.rowStyles)
 	m.clamp()
+}
+
+// SetRowStyle applies a semantic style to row i during final rendering, after
+// width padding and before cursor highlighting. Out-of-range rows are ignored.
+func (m *Model) SetRowStyle(i int, style lipgloss.Style) {
+	if i < 0 || i >= len(m.rows) {
+		return
+	}
+	if m.rowStyles == nil {
+		m.rowStyles = make(map[int]lipgloss.Style)
+	}
+	m.rowStyles[i] = style
 }
 
 // SetSize sets the viewport dimensions and reclamps so the cursor stays visible.
@@ -176,6 +190,9 @@ func (m *Model) View() string {
 		}
 		if contentWidth > 0 {
 			row = rowStyle.Render(row)
+		}
+		if style, ok := m.rowStyles[i]; ok {
+			row = style.Render(row)
 		}
 		if i == m.cursor {
 			row = m.CursorStyle.Render(row)

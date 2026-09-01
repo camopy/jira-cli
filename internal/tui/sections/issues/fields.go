@@ -34,6 +34,24 @@ func customFieldIDs(custom []core.CustomField) []string {
 	return ids
 }
 
+func issueFlagged(i *jira.Issue, fields []core.CustomField) bool {
+	if i == nil || i.Fields == nil {
+		return false
+	}
+	for _, field := range fields {
+		if !strings.EqualFold(strings.TrimSpace(field.Name), "Flagged") {
+			continue
+		}
+		raw, ok := i.Fields.CustomFields[field.ID]
+		if !ok {
+			return false
+		}
+		var options []json.RawMessage
+		return json.Unmarshal(raw, &options) == nil && len(options) > 0
+	}
+	return false
+}
+
 func customFieldValue(i *jira.Issue, field core.CustomField) string {
 	if i == nil || i.Fields == nil {
 		return "—"
